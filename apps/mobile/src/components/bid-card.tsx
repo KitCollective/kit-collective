@@ -1,4 +1,5 @@
 import type { CollectionConversationMessage } from "@kit/api-contract";
+import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { StyleSheet, Text, View } from "react-native";
 import { bidCardAmountTypography } from "@/components/bid-card-amount";
 import { Button } from "@/components/ui";
@@ -9,11 +10,6 @@ import { useTheme } from "@/theme/use-theme";
 type BidCardProps = {
   message: CollectionConversationMessage;
   peerHandle: string;
-  jerseyContext?: {
-    clubLabel: string;
-    seasonLabel: string;
-    typeLabel: string;
-  };
   incomingPending?: boolean;
   onAccept?: () => void;
   onDecline?: () => void;
@@ -38,7 +34,6 @@ function bidStatusLabel(status: NonNullable<CollectionConversationMessage["bidSt
 export function BidCard({
   message,
   peerHandle,
-  jerseyContext,
   incomingPending = false,
   onAccept,
   onDecline,
@@ -51,8 +46,10 @@ export function BidCard({
     return null;
   }
 
-  const contextLine = jerseyContext
-    ? `${jerseyContext.clubLabel} · ${jerseyContext.seasonLabel} · ${jerseyContext.typeLabel}`
+  // One Conversation spans several UserJerseys, so the line is the Bud's own jersey.
+  const jersey = message.jersey;
+  const contextLine = jersey
+    ? `${jersey.clubLabel} · ${jersey.seasonLabel} · ${KIT_TYPE_LABELS_DA[jersey.type]}`
     : undefined;
   const body = contextLine
     ? `${peerHandle} bød på din ${contextLine}.`
@@ -60,6 +57,7 @@ export function BidCard({
 
   return (
     <View
+      testID="bid-card"
       style={[
         styles.card,
         {

@@ -5,6 +5,10 @@ on:
     branches: [development, staging, production]
   pull_request:
     branches: [development, staging, production]
+    # `edited` too: the write-scope step reads the PR description from the event that started the
+    # run, so a corrected description needs a run of its own. Without it a description fix cost a
+    # new commit, and a new head re-runs the Device flows on macOS (KIT-295, 2026-10-14).
+    types: [opened, synchronize, reopened, edited]
   merge_group:
 
 # A new push to a PR cancels its stale run. Lane pushes and merge-queue runs finish.

@@ -32,7 +32,7 @@ The harness needs a gh whose `pr checks` subcommand supports `--json`. This is a
 What the missing pieces mean in practice:
 
 - **No Postgres.** The `api` and `db` suites cannot run. `node scripts/verify.mjs --changed --capability <what this machine has>` skips them and ends `INCOMPLETE` (exit 3), which is never green. Route a slice whose tests need a database to the Mac.
-- **No simulator.** Device flows (`docs/agents/device-flows.md`) stay on the Mac.
+- **No simulator.** A slice's Device flow runs on a GitHub macOS runner instead (`node scripts/request-device-flows.mjs`, ADR-0059), so a mobile slice no longer needs the Mac. The local `device-run.sh`, with its before/after comparison, stays on the Mac (`docs/agents/device-flows.md`).
 
 ## Secrets
 
@@ -60,6 +60,8 @@ bb workflows validate --file .bb/workflows/kit-issue.js
 bb workflows run --file .bb/workflows/kit-issue.js --args '{"issue":"KIT-n"}'
 ```
 
+The path is the thread's own worktree copy: bb refuses a workflow file outside the thread's workspace ("Workflow scriptPath must stay inside the origin workspace"), so a thread cannot point at the main clone's file. The file is read when the run starts, so it must be current: a thread in a fresh worktree from `origin/development` is; a thread in an existing issue worktree merges `origin/development` into the branch and pushes before it starts the run. From that point on a stale copy stops itself: the run's first step compares the worktree's `scripts/`, `.bb/workflows/` and `factory.config.json` with `origin/development` and stops at `harness` when they differ (merge the lane into the branch and push, then run again). That stop does not count against the run cap. A branch older than that step has no such check, which is why the merge comes first.
+
 `validate` is read-only; run it after every change to the workflow file. `run` returns at once and starts a real run of the issue: do not use it as a test of the command, it would start a second run.
 
 The args are the `meta.inputSchema` of `.bb/workflows/kit-issue.js`:
@@ -67,23 +69,25 @@ The args are the `meta.inputSchema` of `.bb/workflows/kit-issue.js`:
 | Arg | Meaning |
 | --- | --- |
 | `issue` | Required. The issue key, `KIT-n`. |
-| `resume` | `true` to continue an issue that already has a branch and a PR. |
+| `resume` | `true` to continue an issue that already has a branch and a PR. When the last Engineer result was `ready`, no findings are open on the head and the pre-review gate is open, the run goes straight to the Reviewer (round 0) and spends no Engineer round. |
 | `skipLead` | `true` to skip the Lead, for a small issue. |
 | `maxRounds` | Total Engineer rounds, 1 to 3, default 2: the first build plus one fix round after a red review. |
 | `machine` | Only written to the run log; it routes nothing. |
 
-| `autoLand` | `true` to hand a green issue to `scripts/auto-land.mjs` (ADR-0059) instead of stopping at `Approval`. Default false; without it the workflow only asks whether `flow.autoLand.enabled` is on. |
+| `autoLand` | `true` to hand a green issue to `scripts/auto-land.mjs` (ADR-0060) instead of stopping at `Approval`. Default false; without it the workflow only asks whether `flow.autoLand.enabled` is on. |
 
 By default the run goes from the session check to `Approval` and stops there (ADR-0058). `Approval` is not merge permission: a person moves the issue to `Merging` and starts the land step. That human path is unchanged.
 
-With auto-land on (the `autoLand` arg, or `flow.autoLand.enabled` in `factory.config.json`) the normal path ends at `Done` and `Approval` is the exception exit. After the dry-run receipt the workflow runs `node scripts/auto-land.mjs start <pr> --issue KIT-n --handoff`, which itself re-checks the PR, the issue, the risk class, the independent reviewer, the `kc/audit` receipt (it posts it, through `audit-receipt.mjs`), the review gate, the runaway ceiling and the circuit breaker, takes the merge lock, syncs, sets `Merging` and enqueues; then `auto-land.mjs finish` waits for the merge and the integration check and sets `Done`. A refusal, an ejected PR or a red integration check moves the issue to `Approval` with `ready-for-human` and a comment naming the cause. The workflow itself never posts a receipt, sets `Merging` or merges; only `auto-land.mjs` does, from inside its own checks (ADR-0059). It is shipped off.
+With auto-land on (the `autoLand` arg, or `flow.autoLand.enabled` in `factory.config.json`) the normal path ends at `Done` and `Approval` is the exception exit. After the dry-run receipt the workflow runs `node scripts/auto-land.mjs start <pr> --issue KIT-n --handoff`, which itself re-checks the PR, the issue, the risk class, the independent reviewer, the `kc/audit` receipt (it posts it, through `audit-receipt.mjs`), the review gate, the runaway ceiling and the circuit breaker, takes the merge lock, syncs, sets `Merging` and enqueues; then `auto-land.mjs finish` waits for the merge and the integration check and sets `Done`. A refusal, an ejected PR or a red integration check moves the issue to `Approval` with `ready-for-human` and a comment naming the cause. The workflow itself never posts a receipt, sets `Merging` or merges; only `auto-land.mjs` does, from inside its own checks (ADR-0060). It is shipped off.
 
 **Switching auto-land on and off.** Any one stops it: the label `hold` on the issue; `touch .factory/auto-land.off` in the main checkout (delete the file to allow it again; it wins over everything); `flow.autoLand.enabled` false in `factory.config.json` and no `autoLand` arg. To turn it on for every run set `flow.autoLand.enabled` to true in the main checkout's `factory.config.json` (a PR cannot do it for itself: the script reads the main checkout's copy). `flow.autoLand.maxPerDay` (default 100) is only a runaway ceiling. The real brake is the circuit breaker: after `flow.autoLand.breakerAfter` (default 3) consecutive failed finishes `start` refuses with `breaker-open` until a person fixes the cause and runs `node scripts/auto-land.mjs reset`. Merges are serialised through the merge lock; a second `start` waits for it. `node scripts/auto-land.mjs start <pr> --issue KIT-n --dry-run` runs every check and changes nothing.
+
+An issue gets at most `flow.maxRunsPerDay` runs (factory.config.json, 3) in 24 hours, resumes included: the session check refuses the next one and names the cap. Raising it is a committed change by a person, never something a run does for itself.
 
 ## What the workflow cannot do
 
 - **No per-agent machine.** bb gives a workflow worker no machine, worktree or visibility option; every worker (Lead, Engineer, Reviewer, runners) runs in the environment of the thread that started the run. A run started on the container runs entirely there, so a slice that needs the Mac or Postgres cannot be split. The routing table in `.cursor/skills/bb-orchestrate/SKILL.md` applies to hand-driven runs only.
-- **Gate results are not merge-grade.** The exit codes and verdict lines of `scripts/gate.mjs` reach the workflow through a runner model that relays them. A relayed result is as reliable as that model. That is why nothing is merged on a relayed result: either a person re-runs `node scripts/gate.mjs review <pr> --issue KIT-n` and the audit receipt themselves, or `scripts/auto-land.mjs` re-reads everything itself right before it enqueues (ADR-0059).
+- **Gate results are not merge-grade.** The exit codes and verdict lines of `scripts/gate.mjs` reach the workflow through a runner model that relays them. A relayed result is as reliable as that model. That is why nothing is merged on a relayed result: either a person re-runs `node scripts/gate.mjs review <pr> --issue KIT-n` and the audit receipt themselves, or `scripts/auto-land.mjs` re-reads everything itself right before it enqueues (ADR-0060).
 - **It never merges.** It writes only `In Progress`, `In Review`, `Approval` and `Blocked`, runs no merge lock and no land step, and runs the receipt only as a dry run. With `autoLand` on, `scripts/auto-land.mjs` does the merge steps; the workflow still names no merge command and no merge state.
 
 The reasoning, and the other limits (self-reported thread ids, the model pairing, what was never verified against real threads), are in `docs/adr/0058-kit-issue-workflow-and-the-first-run-fixes.md`; who writes the run log is `docs/adr/0052-the-run-log-is-central-and-written-by-the-orchestrator-only.md`.

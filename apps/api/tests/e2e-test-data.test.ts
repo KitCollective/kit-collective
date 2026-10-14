@@ -21,7 +21,7 @@ import {
 } from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, or } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { createMemoryObjectStore } from "../dist/collection/object-store.js";
@@ -30,6 +30,7 @@ import {
   TEST_COLLECTOR_ID,
   TEST_DATA_CATALOG,
   TEST_PEER_ID,
+  TEST_UNANSWERED_BID,
 } from "../dist/e2e/test-data.fixture.js";
 import { applyTestData } from "../dist/e2e/test-data.js";
 import { assertTestDataDatabaseAllowed } from "../dist/e2e/test-data-guard.js";
@@ -115,6 +116,21 @@ async function snapshot(db: Db, userIds: string[]) {
       .from(collectionShortcut)
       .where(inArray(collectionShortcut.userId, userIds))
       .orderBy(asc(collectionShortcut.id)),
+    conversations: await db
+      .select()
+      .from(conversation)
+      .where(
+        or(
+          inArray(conversation.lowerCollectorId, userIds),
+          inArray(conversation.upperCollectorId, userIds),
+        ),
+      )
+      .orderBy(asc(conversation.id)),
+    messages: await db
+      .select()
+      .from(conversationMessage)
+      .where(inArray(conversationMessage.senderId, userIds))
+      .orderBy(asc(conversationMessage.id)),
   };
 }
 
@@ -125,6 +141,8 @@ const SNAPSHOT_KEYS = [
   "wishlist",
   "entitlements",
   "shortcuts",
+  "conversations",
+  "messages",
 ] as const;
 
 /** Row identity and content without the fields a re-run refreshes. */
@@ -201,6 +219,22 @@ describe("device-flow test data", () => {
       .from(entitlement)
       .where(eq(entitlement.userId, TEST_PEER_ID));
     expect(peerEntitlement).toMatchObject({ source: null, trialUsed: true });
+
+    // One Bud from the peer waits unanswered on the Collector's first jersey (KIT-286).
+    const bidThreads = await db.select().from(conversation);
+    expect(bidThreads).toHaveLength(1);
+    expect(bidThreads[0]).toMatchObject({ id: TEST_UNANSWERED_BID.conversationId });
+    expect(await db.select().from(conversationParticipant)).toHaveLength(2);
+    // The Bud, not the Conversation, carries the UserJersey (one Conversation per pair, KIT-295).
+    const bids = await db.select().from(conversationMessage);
+    expect(bids).toHaveLength(1);
+    expect(bids[0]).toMatchObject({
+      senderId: TEST_PEER_ID,
+      userJerseyId: TEST_UNANSWERED_BID.jerseyId,
+      kind: "bid",
+      bidAmountDkk: TEST_UNANSWERED_BID.amountDkk,
+      bidStatus: "pending",
+    });
   });
 
   it("is idempotent: a second run leaves the same rows", async () => {
@@ -245,21 +279,20 @@ describe("device-flow test data", () => {
       .select()
       .from(userJersey)
       .where(eq(userJersey.userId, TEST_PEER_ID));
-    const [lower, upper] = [TEST_COLLECTOR_ID, TEST_PEER_ID].sort();
-    const [thread] = await db
-      .insert(conversation)
-      .values({ userJerseyId: peerJersey!.id, lowerCollectorId: lower!, upperCollectorId: upper! })
-      .returning({ id: conversation.id });
-    await db.insert(conversationParticipant).values([
-      { conversationId: thread!.id, userId: TEST_COLLECTOR_ID },
-      { conversationId: thread!.id, userId: TEST_PEER_ID },
-    ]);
+    // The pair already has the fixture's Conversation, and a pair has one Conversation (KIT-295),
+    // so the flow's Bud lands in that one.
     await db.insert(conversationMessage).values({
-      conversationId: thread!.id,
+      conversationId: TEST_UNANSWERED_BID.conversationId,
       senderId: TEST_COLLECTOR_ID,
       kind: "bid",
       bidAmountDkk: 250,
       bidStatus: "pending",
+      userJerseyId: peerJersey!.id,
+      jerseyClubId: peerJersey!.clubId,
+      jerseyNationalTeamId: peerJersey!.nationalTeamId,
+      jerseySeasonId: peerJersey!.seasonId,
+      jerseyType: peerJersey!.type,
+      jerseySize: peerJersey!.size,
     });
     await db.insert(wishlistEntry).values({ userId: TEST_COLLECTOR_ID, type: "away" });
     await db
@@ -273,8 +306,13 @@ describe("device-flow test data", () => {
     for (const key of SNAPSHOT_KEYS) {
       expect(stable(after[key])).toEqual(stable(before[key]));
     }
-    expect(await db.select().from(conversation)).toHaveLength(0);
-    expect(await db.select().from(conversationMessage)).toHaveLength(0);
+    // The flow's own Bud is gone; only the fixture's Conversation and unanswered Bud are left.
+    expect(await db.select({ id: conversation.id }).from(conversation)).toEqual([
+      { id: TEST_UNANSWERED_BID.conversationId },
+    ]);
+    expect(await db.select({ id: conversationMessage.id }).from(conversationMessage)).toEqual([
+      { id: TEST_UNANSWERED_BID.messageId },
+    ]);
   });
 
   it("changes only the two test Collectors", async () => {

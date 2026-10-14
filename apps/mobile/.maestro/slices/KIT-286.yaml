@@ -1,0 +1,109 @@
+# Device flow for KIT-286: Samling with collection facts, view and sort (ADR-0049).
+# design-sections: Collection grid, Collection shortcuts (genveje), Jersey tile, Chip, Sheet, List row
+#
+# FIXTURE THIS FLOW NEEDS: the Test Collector's FC København jersey carries one unanswered Bud
+# from the test peer (apps/api/src/e2e/test-data.fixture.ts), so the n bud pill and the Med bud
+# view have something to show. The AGF jersey is private (the lock disc).
+appId: app.kitcollective.mobile
+name: kit-286
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-286
+# AC 1, 2, 3, 10, 11: facts block between two hairlines, the capture disc, the view-and-sort
+# control leading the chip row, tiles led by club, and one badge per tile (n bud, lock).
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-286__01-samling-facts-and-tiles
+# AC 4: Vis og sortér offers the four views with counts and the four sorts.
+- tapOn:
+    id: collection-view-control
+- extendedWaitUntil:
+    visible:
+      id: collection-view-option-bids
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-286__02-view-and-sort-sheet
+# AC 5, 7: a tap on Med bud applies it and closes the sheet; the control is now a primary chip
+# with the view name, its count and a clear cross.
+- tapOn:
+    id: collection-view-option-bids
+- extendedWaitUntil:
+    visible:
+      id: collection-view-clear
+    timeout: 10000
+- assertNotVisible:
+    id: collection-view-option-bids
+- runFlow: ../subflows/settle.yaml
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-286__03-view-with-bids
+# AC 7: the cross returns to Alle.
+- tapOn:
+    id: collection-view-clear
+- extendedWaitUntil:
+    notVisible:
+      id: collection-view-clear
+    timeout: 10000
+# AC 8: a view combines with a shortcut; the shortcut narrows first, the view filters the result.
+- tapOn:
+    id: shortcut-chip-e2e00000-0000-4000-8000-000000000401
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: collection-view-control
+- extendedWaitUntil:
+    visible:
+      id: collection-view-option-bids
+    timeout: 10000
+- tapOn:
+    id: collection-view-option-bids
+- extendedWaitUntil:
+    visible:
+      id: collection-view-clear
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-286__04-shortcut-and-view-combined
+- tapOn:
+    id: collection-view-clear
+- tapOn:
+    id: shortcut-chip-all
+- waitForAnimationToEnd:
+    timeout: 5000
+# AC 5, 9: a tap on Klub A–Å applies it and closes the sheet; tiles sit under a club heading
+# with a count and lead with the season.
+- tapOn:
+    id: collection-view-control
+- extendedWaitUntil:
+    visible:
+      id: collection-sort-option-club
+    timeout: 10000
+- tapOn:
+    id: collection-sort-option-club
+- extendedWaitUntil:
+    notVisible:
+      id: collection-sort-option-club
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-286__05-sorted-by-club
+# AC 6: the choice is remembered per account and restored when Samling opens again.
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-286__06-sort-restored-after-relaunch
+- stopRecording

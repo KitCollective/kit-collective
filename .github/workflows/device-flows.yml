@@ -1,7 +1,7 @@
 name: Device flows
 
-# DRAFT (KIT-267 follow-up). Runs the Maestro Device flows on a hosted iOS
-# Simulator so they do not have to run on the approver's Mac every time.
+# Runs the Maestro Device flows on a hosted iOS Simulator, so a slice's flow does
+# not need the approver's Mac (ADR-0059).
 #
 # It reuses the local scripts (ADR-0049) with the device lock switched off
 # (the runner is a fresh machine per run): build-local.sh for the cached native
@@ -9,16 +9,21 @@ name: Device flows
 # Postgres, run-local.sh for the flows. Screenshots and recordings are uploaded
 # as a run artifact.
 #
-# Deliberately NOT required and NOT the `Device flows` commit status (ADR-0048):
-# the status stays the local run's verdict. This workflow is the nightly
-# regression run and an on-request run, never a gate on every PR. It does not run
-# the Claude review or the Linear workpad step; those use the approver's login.
+# A slice run on a PR sets the `Device flows` commit status on the PR head
+# (pending, then success, failure or error), linked to this run. The pre-review
+# gate waits for that status when the PR holds the issue's slice flow. The status
+# is not a required check: it cannot be limited to mobile PRs (ADR-0048).
+#
+# Not done here: the before/after comparison, the Claude review, the PR comment
+# and the Linear workpad links of run-evidence.sh. They need the evidence bucket
+# and the approver's logins; a local `device-run.sh` still produces them.
 #
 # Triggers:
-#   - nightly: the five regression flows against `development`
+#   - nightly: the five regression flows against `development` (no status)
 #   - label `run-device-flows` on a PR: that issue's slice flow (issue key from the
-#     branch name, e.g. claude/kit-279-59e33d)
-#   - manual: pick regression or slice (and an issue key)
+#     branch name, e.g. claude/kit-279-59e33d). `node scripts/request-device-flows.mjs`
+#     sets the label; a new head needs the label set again.
+#   - manual: pick regression or slice (and an issue key; no status)
 
 on:
   schedule:
@@ -44,13 +49,16 @@ concurrency:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   ios:
     name: iOS Simulator
     if: github.event_name != 'pull_request' || github.event.label.name == 'run-device-flows'
     runs-on: macos-latest
-    timeout-minutes: 60
+    # A run that has to build the native binary took 41 minutes once and 58 the next time (the
+    # second one was cancelled at 60, in the flow step). A cache hit needs a fraction of this.
+    timeout-minutes: 90
     env:
       # Local-only test values (see apps/mobile/.maestro/local.env.sh); the database
       # is disposable and lives on this runner only.
@@ -60,7 +68,17 @@ jobs:
       E2E_ISSUE: ${{ inputs.issue }}
       LANG: en_US.UTF-8
       LC_ALL: en_US.UTF-8
+      GH_TOKEN: ${{ github.token }}
+      # Only a PR's slice run speaks for a head; the nightly and manual runs set no status.
+      STATUS_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      - name: Device flows status, pending
+        if: env.STATUS_SHA != ''
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$STATUS_SHA" -f context="Device flows" \
+            -f state=pending -f description="Running on the hosted iOS Simulator" -f target_url="$RUN_URL" >/dev/null
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -119,8 +137,11 @@ jobs:
           stamp="$(source ./source-stamp.sh && source ./native-cache.sh && native_stamp)"
           echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
 
+      # Restore and save are separate steps: `actions/cache` saves only when the whole
+      # job succeeds, so a red flow threw away a 40 minute native build every time.
       - name: Restore native binary
-        uses: actions/cache@v4
+        id: native-restore
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/kit-e2e/native
           key: kit-e2e-native-${{ runner.os }}-${{ steps.native.outputs.stamp }}
@@ -137,18 +158,43 @@ jobs:
           exit 1
 
       - name: Build the Simulator app
+        id: build
         run: apps/mobile/.maestro/build-local.sh
 
+      - name: Save native binary
+        if: always() && steps.build.outcome == 'success' && steps.native-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/kit-e2e/native
+          key: kit-e2e-native-${{ runner.os }}-${{ steps.native.outputs.stamp }}
+
       - name: Run the flows
+        id: flows
         run: apps/mobile/.maestro/run-local.sh
 
       - name: Upload screenshots and recordings
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: device-flows-${{ github.sha }}
+          # Named after the commit the flows ran on. On a PR run github.sha is the merge
+          # commit GitHub made, which no reviewer can know; the head is what the status names.
+          name: device-flows-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             apps/mobile/.maestro/out
             ${{ runner.temp }}/local-api.log
           retention-days: 14
           if-no-files-found: warn
+
+      # Always the last word: a run that stopped before the flows must not leave the head pending.
+      - name: Device flows status, verdict
+        if: always() && env.STATUS_SHA != ''
+        env:
+          FLOWS: ${{ steps.flows.outcome }}
+        run: |
+          case "$FLOWS" in
+            success) state=success; description="The slice flow passed on the hosted iOS Simulator" ;;
+            failure) state=failure; description="The slice flow failed; screenshots are in the run artifact" ;;
+            *) state=error; description="The run stopped before the flow finished" ;;
+          esac
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$STATUS_SHA" -f context="Device flows" \
+            -f state="$state" -f description="$description" -f target_url="$RUN_URL" >/dev/null

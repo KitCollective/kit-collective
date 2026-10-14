@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   changedFilesDiffArgs,
   findWriteScopeViolations,
@@ -11,17 +16,56 @@ import {
   shouldEnforceWriteScope,
 } from "../lib/pr-write-scope.mjs";
 
-test("changedFilesDiffArgs uses two-dot range so merge-commits from base are excluded", () => {
+test("changedFilesDiffArgs diffs from the merge base (three dots)", () => {
   assert.deepEqual(changedFilesDiffArgs("origin/development"), [
     "diff",
     "--name-only",
     "-z",
     "--no-renames",
     "--end-of-options",
-    "origin/development..HEAD",
+    "origin/development...HEAD",
   ]);
   assert.throws(() => changedFilesDiffArgs("--output=x"), /refused ref/);
-  assert.equal(changedFilesDiffArgs("origin/development").at(-1).includes("..."), false);
+});
+
+test("the branch's own files only: not the lane's later changes, also after the branch merged the lane", () => {
+  const dir = mkdtempSync(join(tmpdir(), "write-scope-"));
+  const git = (...args) =>
+    execFileSync("git", args, {
+      cwd: dir,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "t",
+        GIT_AUTHOR_EMAIL: "t@t",
+        GIT_COMMITTER_NAME: "t",
+        GIT_COMMITTER_EMAIL: "t@t",
+      },
+    });
+  const commit = (file, message) => {
+    mkdirSync(dirname(join(dir, file)), { recursive: true });
+    writeFileSync(join(dir, file), message);
+    git("add", "--", file);
+    git("commit", "-q", "-m", message);
+  };
+  const changed = () =>
+    git(...changedFilesDiffArgs("lane"))
+      .split("\0")
+      .filter(Boolean)
+      .sort();
+  git("init", "-q", "-b", "lane");
+  commit("README.md", "base");
+  git("checkout", "-q", "-b", "feature");
+  commit("apps/mobile/screen.tsx", "the slice");
+  git("checkout", "-q", "lane");
+  commit("scripts/gate.mjs", "a harness change on the lane");
+  git("checkout", "-q", "feature");
+  // Behind the lane: the tip-to-tip range used to list scripts/gate.mjs as the PR's.
+  assert.deepEqual(changed(), ["apps/mobile/screen.tsx"]);
+  assert.match(git("diff", "--name-only", "lane..HEAD"), /scripts\/gate\.mjs/);
+  // After merging the lane in, still only the branch's own file.
+  git("merge", "-q", "--no-edit", "lane");
+  assert.deepEqual(changed(), ["apps/mobile/screen.tsx"]);
 });
 
 test("parseWriteScopeGlobs extracts comma-separated globs", () => {
@@ -198,4 +242,17 @@ test("an escaped scope line still matches the files it names", () => {
   const globs = parseWriteScopeGlobs("write-scope: scripts/tests/\\*\\*");
   assert.deepEqual(findWriteScopeViolations(["scripts/tests/a.test.mjs"], globs), []);
   assert.deepEqual(findWriteScopeViolations(["apps/x.ts"], globs), ["apps/x.ts"]);
+});
+
+test("CI runs again when the PR description changes, since the scope step reads it from the event", () => {
+  const ci = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "../../.github/workflows/ci.yml"),
+    "utf8",
+  );
+  const pullRequest = /^ {2}pull_request:\n([\s\S]*?)^ {2}[a-z_]+:/m.exec(ci)?.[1] ?? "";
+  assert.match(pullRequest, /types: \[opened, synchronize, reopened, edited\]/);
+  assert.match(
+    ci,
+    /PR_BODY: \$\{\{ github\.event_name == 'pull_request' && github\.event\.pull_request\.body/,
+  );
 });

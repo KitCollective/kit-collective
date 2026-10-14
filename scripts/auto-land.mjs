@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Auto-land (ADR-0059): the one script besides a person that may set an issue to `Merging`.
+ * Auto-land (ADR-0060): the one script besides a person that may set an issue to `Merging`.
  * It enforces every condition itself, right before it enqueues, and trusts no result a model
  * relayed (ADR-0058): the checks below are read from GitHub, git, Linear and the run log here.
  *

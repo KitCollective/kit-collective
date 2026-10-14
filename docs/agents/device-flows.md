@@ -1,6 +1,6 @@
 # Device flows
 
-A slice that touches `apps/mobile/**` proves itself with **its own Device flow**, `apps/mobile/.maestro/slices/<KEY>.yaml`, written in the same PR and run on the approver's Mac against an iOS Simulator build. The five flows that used to be the gate are the **regression set** under `regression/`, run only on request. Decisions: `docs/adr/0048-device-flows-as-pr-evidence.md`, changed by `docs/adr/0049-slice-flows-queue-and-native-cache.md`. Terms (**Device flow**, **Test Collector**, **Evidence run**, **Design finding**): `CONTEXT.md`.
+A slice that touches `apps/mobile/**` proves itself with **its own Device flow**, `apps/mobile/.maestro/slices/<KEY>.yaml`, written in the same PR and run against an iOS Simulator build: by the hosted run on a GitHub macOS runner (what an issue session asks for, ADR-0059), or on the approver's Mac. The five flows that used to be the gate are the **regression set** under `regression/`, run only on request. Decisions: `docs/adr/0048-device-flows-as-pr-evidence.md`, changed by `docs/adr/0049-slice-flows-queue-and-native-cache.md`. Terms (**Device flow**, **Test Collector**, **Evidence run**, **Design finding**): `CONTEXT.md`.
 
 ## Write the slice flow
 
@@ -9,7 +9,8 @@ Copy `slices/TEMPLATE.yaml.example` to `slices/KIT-<n>.yaml` (`name: kit-<n>`). 
 - one `takeScreenshot` per Acceptance criterion that a screen can show, named `kc__kit-<n>__NN-what-it-shows`, with a comment above it naming the criterion;
 - reach the screen through `../subflows/sign-in.yaml` (Test Collector, data reset) or, for a signed-out slice, reset and launch with `clearState` as that subflow does; do not replay other issues' screens;
 - tap by `testID`; a control a step must tap gets its `testID` in this PR (not a UI change);
-- the header comment `# design-sections: Sheet, Button dock` names the `docs/design-system.md` sections the review reads besides Color, Typography, Spacing and Layout.
+- the header comment `# design-sections: Sheet, Button dock` names the `docs/design-system.md` sections the review reads besides Color, Typography, Spacing and Layout;
+- a flow that picks photos from the library names them in `# simulator-photos: <name>, <name>, ...`, chosen from `fixtures/photos/catalog.json` by what the flow must show (`fixtures/photos/README.md`). Without the line the library holds the one drawn shirt.
 
 A slice with no screen to show (API only, a reducer) has no slice flow and no `Device flows` status; say so in the PR. The checker reads the flow against the Acceptance criteria: a criterion a screen could show with no step behind it, or a step that screenshots a screen the slice did not change, is a Spec finding.
 
@@ -35,7 +36,7 @@ Not covered: Android, physical devices, the camera branch of Tilføj trøje, sho
 | `apps/mobile/.maestro/regression/` | the five regression flows |
 | `apps/mobile/.maestro/subflows/` | `sign-in.yaml` (reset, cold start, sign in), `settle.yaml` (a fixed pause for motion Maestro cannot see) |
 | `apps/mobile/.maestro/scripts/` | `reset-test-data.js`, the reset call the flows run first |
-| `apps/mobile/.maestro/fixtures/` | one drawn shirt photo for the simulator gallery |
+| `apps/mobile/.maestro/fixtures/` | one drawn shirt photo for the simulator gallery; `photos/` holds the real shirt photos a slice flow can ask for |
 | `apps/mobile/.maestro/design-sections.json` | which `docs/design-system.md` sections the review reads per flow |
 | `apps/mobile/.maestro/*.sh` | local API, build, run, publish evidence |
 | `apps/api/src/e2e/` | test data, its guard, the reset route |
@@ -56,7 +57,19 @@ When a slice adds a control a flow must tap, add the `testID` in the same PR. Ad
 
 ## Run the flow
 
-Everything runs on the approver's Mac. Needs Xcode with an iOS Simulator, CocoaPods, a Java runtime and the Maestro CLI (`brew install mobile-dev-inc/tap/maestro openjdk@17 cocoapods`), a local Postgres with a database whose name contains `test`, and `gh` signed in.
+### The hosted run (what a session uses)
+
+```bash
+node scripts/request-device-flows.mjs <pr> --issue KIT-<n>
+```
+
+It puts the `run-device-flows` label on the PR, which starts `.github/workflows/device-flows.yml` on a macOS runner: the same `local-api.sh`, `build-local.sh` and `run-local.sh` as below, on a fresh machine. The run sets the `Device flows` commit status on the PR head (pending, then success, failure or error) with a link to itself, and uploads `apps/mobile/.maestro/out` as the artifact `device-flows-<sha>`. The script asks for nothing when the PR has no slice flow for the issue or the head already has a pending, green or red status (an `error` status, a run that stopped before the flow finished, is asked for again); a new commit is a new head and needs a new request. The pre-review gate (`scripts/gate.mjs`) waits for the status with the checks whenever the PR head holds the slice flow, and the `kit-issue` workflow makes the request itself in front of that gate.
+
+What the hosted run does not do: the upload to the evidence bucket, the before/after comparison, the Claude review, the PR comment and the workpad links. Those need the bucket keys and the approver's logins, and no Actions secret holds them. A hosted run takes about 45 minutes when the native binary has to be built and far less on a cache hit; macOS minutes are billed at ten times the Linux rate.
+
+### On the approver's Mac
+
+The rest of this section runs on the approver's Mac, for the full evidence or while iterating on a flow. Needs Xcode with an iOS Simulator, CocoaPods, a Java runtime and the Maestro CLI (`brew install mobile-dev-inc/tap/maestro openjdk@17 cocoapods`), a local Postgres with a database whose name contains `test`, and `gh` signed in.
 
 ```bash
 # What an issue session runs: queue, API, app, flow, evidence. One command.
@@ -80,7 +93,7 @@ apps/mobile/.maestro/run-evidence.sh                   # the slice flow, plus pu
 
 `local-api.sh` drops and recreates `E2E_LOCAL_DATABASE_URL` (default `postgresql://kit:kit@localhost:5432/kit_e2e_test`) and adds the fixture catalog. It never reads a lane `DATABASE_URL`. The values in `local.env.sh` are local-only test values.
 
-The flows own a simulator, "KitCollective Device Flows", created on first use with exactly one photo in its library.
+The flows own a simulator, "KitCollective Device Flows", created on first use with exactly one photo in its library. A slice flow that needs other photos names them in its header (`# simulator-photos: fck-white-home-front, fck-white-home-back`), from the 131 real shirt photos in `apps/mobile/.maestro/fixtures/photos/` (`catalog.json`, `README.md` there); it then runs on a simulator of its own with exactly those photos, named after the list.
 
 `run-evidence.sh` refuses uncommitted changes under the app, API and package sources, the flows (`apps/mobile/.maestro`) and the evidence scripts (`scripts/e2e`), refuses a branch with no slice flow (unless `E2E_FLOWS=regression`), and refuses when the installed app or the running API was not built from this commit's sources. Evidence is keyed by commit. Then:
 
@@ -108,7 +121,7 @@ GitHub access is the `gh` login on the Mac. The review is a headless Claude Code
 
 R2 (Cloudflare dashboard, `kc-e2e-evidence`): public access through the r2.dev address, and one lifecycle rule that deletes objects after 30 days. The bucket holds test Collectors and drawn shirts only.
 
-GitHub: `development` has the `lane-development` ruleset (pull request required, `test` required). `Device flows` is not added to it, because a required status cannot be limited to PRs that touch `apps/mobile/**` and would block every other PR. It blocks through the checker, which fails a mobile PR whose head has no green `Device flows` status (`.cursor/agents/checker.md`).
+GitHub: `development` has the `lane-development` ruleset (pull request required, `test` required). `Device flows` is not added to it, because a required status cannot be limited to PRs that touch `apps/mobile/**` and would block every other PR. It blocks through the pre-review gate, which waits for the status when the PR head holds the issue's slice flow, and through the checker, which fails a mobile PR whose head has no green `Device flows` status (`.cursor/agents/checker.md`).
 
 ## Outside the local API
 

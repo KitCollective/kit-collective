@@ -64,6 +64,8 @@ type ButtonProps = PressableProps & {
   loading?: boolean;
   /** Optional leading glyph (e.g. a provider mark) rendered before the label. */
   leading?: ReactNode;
+  /** `danger` sets the label of a `secondary` Button in `danger` (Fotos uden trøje, **Slet**). The word still names the action; never colour alone. */
+  tone?: "neutral" | "danger";
 };
 
 export function Button({
@@ -72,6 +74,7 @@ export function Button({
   width = "hug",
   loading = false,
   leading,
+  tone = "neutral",
   disabled,
   ...props
 }: ButtonProps) {
@@ -79,7 +82,10 @@ export function Button({
   const typography = useTypography();
   const isDisabled = disabled || loading;
   const variantStyle = getVariantStyles(theme)[variant];
-  const labelStyle = getLabelStyles(theme)[variant];
+  const labelStyle =
+    tone === "danger" && variant === "secondary"
+      ? { color: theme.danger }
+      : getLabelStyles(theme)[variant];
 
   return (
     <Pressable

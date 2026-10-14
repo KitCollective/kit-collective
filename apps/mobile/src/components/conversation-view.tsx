@@ -1,5 +1,4 @@
 import type { CollectionConversationDetail } from "@kit/api-contract";
-import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -114,14 +113,6 @@ export function ConversationView({
     void loadConversation();
   }, [loadConversation]);
 
-  const jerseyContext = detail?.jerseyContext
-    ? {
-        clubLabel: detail.jerseyContext.clubLabel,
-        seasonLabel: detail.jerseyContext.seasonLabel,
-        typeLabel: KIT_TYPE_LABELS_DA[detail.jerseyContext.type],
-      }
-    : undefined;
-
   const timeline = detail ? buildTimeline(detail.messages) : [];
 
   const handleAttach = async () => {
@@ -208,10 +199,6 @@ export function ConversationView({
     );
   }
 
-  const contextLine = jerseyContext
-    ? `${jerseyContext.clubLabel} · ${jerseyContext.seasonLabel} · ${jerseyContext.typeLabel}`
-    : undefined;
-
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.canvas }]}
@@ -224,11 +211,6 @@ export function ConversationView({
           <Text style={[typography.headingSm, { color: theme.contentPrimary }]} numberOfLines={1}>
             {detail.peerHandle}
           </Text>
-          {contextLine ? (
-            <Text style={[typography.mono, { color: theme.contentMuted }]} numberOfLines={1}>
-              {contextLine}
-            </Text>
-          ) : null}
         </View>
         <IconButton name="Detaljer" icon="ellipsis-horizontal" onPress={onOpenDetails ?? onBack} />
       </View>
@@ -265,7 +247,6 @@ export function ConversationView({
               <BidCard
                 message={message}
                 peerHandle={detail.peerHandle}
-                jerseyContext={jerseyContext}
                 incomingPending={incomingPending}
                 responding={respondingBidId === message.id}
                 onAccept={
@@ -325,7 +306,6 @@ const styles = StyleSheet.create({
   },
   headerCenter: {
     flex: 1,
-    gap: 2,
   },
   listContent: {
     paddingVertical: space.insetMd,

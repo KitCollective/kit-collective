@@ -56,7 +56,9 @@ async function run({
       const lines = prompt
         .split("\n")
         .filter((l) => /^\d+\. /.test(l))
-        .map((l) => l.replace(/^\d+\. /, ""));
+        .map((l) => l.replace(/^\d+\. /, ""))
+        // Every command arrives wrapped so the shell prints its own exit code; the tests see the bare command.
+        .map((l) => /^\( (.*) \); echo "KIT-EXIT:\$\?"$/.exec(l)?.[1] ?? l);
       const results = [];
       for (const command of lines) {
         commands.push(command);
@@ -68,8 +70,9 @@ async function run({
           (command.includes("start-decision.mjs")
             ? { code: 0, line: JSON.stringify(decision) }
             : { code: 0, line: "OPEN: fine" });
-        results.push(result);
-        if (result.code !== 0 && !prompt.includes("Run every command")) break;
+        // A `shell` answer with its own `exit` plays a runner that did not relay the printed marker.
+        results.push({ exit: result.exit ?? `KIT-EXIT:${result.code}`, line: result.line });
+        if (result.code !== 0 && !prompt.includes("Run every command even when one fails.")) break;
       }
       return { results };
     }
@@ -257,8 +260,59 @@ test("session-check closed stops before anything else runs", async () => {
   });
   assert.equal(result.status, "stopped");
   assert.equal(result.stoppedAt, "session-check");
-  assert.equal(commands.length, 1);
+  // The harness comparison (two git commands) shares the session check's runner.
+  assert.equal(commands.length, 3);
   assert.equal(spawns.length, 1);
+});
+
+const isHarnessDiff = (c) => c.startsWith("git diff --quiet origin/development");
+
+test("a worktree whose harness differs from development stops before the session check counts a start (KIT-283)", async () => {
+  const { result, commands, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: (c) => (isHarnessDiff(c) ? { code: 1, line: "" } : undefined),
+  });
+  assert.equal(result.status, "stopped");
+  assert.equal(result.stoppedAt, "harness");
+  assert.match(
+    result.note,
+    /differs from origin\/development: merge origin\/development into the branch/,
+  );
+  assert.equal(commands[0], "git fetch --quiet origin development");
+  assert.match(
+    commands[1],
+    /^git diff --quiet origin\/development -- \.bb\/workflows scripts factory\.config\.json$/,
+  );
+  assert.ok(!commands.some((c) => c.includes("session-check.mjs")));
+  assert.ok(
+    !commands.some((c) => c.includes("run-log.mjs start")),
+    "no start is logged, so the run cap is not spent",
+  );
+  assert.equal(spawns.length, 1);
+});
+
+test("a harness comparison that could not run is a stop, not a pass", async () => {
+  const fetchFailed = await run({
+    shell: (c) =>
+      c.startsWith("git fetch") ? { code: 128, line: "fatal: unable to access" } : undefined,
+  });
+  assert.equal(fetchFailed.result.stoppedAt, "harness");
+  assert.match(fetchFailed.result.note, /could not compare the harness.*fatal: unable to access/);
+  const diffBroke = await run({
+    shell: (c) => (isHarnessDiff(c) ? { code: 129, line: "usage: git diff" } : undefined),
+  });
+  assert.equal(diffBroke.result.stoppedAt, "harness");
+  assert.match(diffBroke.result.note, /could not compare/);
+  assert.equal(agentSpawns(diffBroke.spawns).length, 0);
+});
+
+test("a current harness adds no runner: the comparison rides with the session check", async () => {
+  const { spawns } = await run();
+  const first = spawns[0];
+  assert.equal(first.options.label, "session-check");
+  const numbered = first.prompt.split("\n").filter((l) => /^\d+\. /.test(l));
+  assert.equal(numbered.length, 3);
+  assert.match(numbered[2], /session-check\.mjs KIT-9/);
 });
 
 test("a bad issue key is refused without spawning anything", async () => {
@@ -586,17 +640,47 @@ test("a short results array without a failing last entry counts as a runner fail
   assert.match(result.note, /runner-no-result/);
 });
 
+test("every runner command is wrapped so the shell prints its own exit code", async () => {
+  const { spawns } = await run();
+  const runner = spawns.find((s) => s.options.schema?.required?.includes("results")).prompt;
+  const numbered = runner.split("\n").filter((l) => /^\d+\. /.test(l));
+  assert.ok(numbered.length > 0);
+  for (const l of numbered) assert.match(l, /^\d+\. \( .* \); echo "KIT-EXIT:\$\?"$/);
+  assert.match(runner, /Never work out or guess the exit code/);
+});
+
+test("an exit code the runner made up is a runner failure, never a closed gate (KIT-295)", async () => {
+  const { result, commands } = await run({
+    shell: (c) =>
+      isPre(c) ? { exit: "-1", code: 0, line: "OPEN (review): checks clean" } : undefined,
+  });
+  assert.equal(result.stoppedAt, "pre-review gate");
+  assert.match(result.note, /runner-no-result/);
+  assert.equal(commands.filter(isPre).length, 2);
+  assert.ok(!commands.some((c) => c.includes("--code gate-closed")));
+});
+
 test("a runner failure is logged with a code the run log accepts", async () => {
   const { REASON_CODES } = await import("../lib/run-log.mjs");
   assert.ok(REASON_CODES.includes("runner-no-result"));
 });
 
 const lookup = (c) => c.includes("gh pr list");
+const isPoint = (c) => c.includes("resume-point.mjs");
+/** A resume on PR #55 whose resume point says build (`point` code 1) or review as it is (code 0). */
+const resumeShell = (point, more) => (c) =>
+  lookup(c)
+    ? { code: 0, line: "55" }
+    : isPoint(c)
+      ? { code: point, line: point === 0 ? "OPEN: review it as it is" : "CLOSED: build first" }
+      : more?.(c);
+const engineers = (spawns) =>
+  agentSpawns(spawns).filter((s) => s.options.label.startsWith("engineer:"));
 
 test("resume looks the PR up read-only and hands its number to the Engineer", async () => {
   const { result, commands, spawns } = await run({
     args: { issue: "KIT-9", resume: true },
-    shell: (c) => (lookup(c) ? { code: 0, line: "55" } : undefined),
+    shell: resumeShell(1),
     engineer: () => ({
       outcome: "ready",
       sentence: "done",
@@ -619,7 +703,7 @@ test("resume looks the PR up read-only and hands its number to the Engineer", as
 test("resume stops when the Engineer reports another PR than the existing one", async () => {
   const { result, commands } = await run({
     args: { issue: "KIT-9", resume: true },
-    shell: (c) => (lookup(c) ? { code: 0, line: "55" } : undefined),
+    shell: resumeShell(1),
     engineer: () => ({
       outcome: "ready",
       sentence: "done",
@@ -781,7 +865,7 @@ test("a fresh run never asks for the workpad plan, and skipLead still skips the 
   assert.ok(!skip.commands.some(planCheck));
 });
 
-// ---- autoLand (ADR-0059) --------------------------------------------------------------------------------
+// ---- autoLand (ADR-0060) --------------------------------------------------------------------------------
 
 const autoLandShell =
   ({
@@ -908,4 +992,324 @@ test("autoLand must be a boolean in the input schema, and never changes how the 
     assert.equal(spawn.options.provider, "claude-code");
     assert.match(spawn.options.model, /^claude-/);
   }
+});
+
+test("a resume whose head is ready goes straight to the Reviewer: no Engineer, no In Progress (KIT-295)", async () => {
+  const { result, commands, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(0),
+  });
+  assert.equal(engineers(spawns).length, 0);
+  assert.equal(result.status, "Approval");
+  assert.equal(result.prNumber, 55);
+  assert.equal(result.rounds, 0);
+  const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:"));
+  assert.equal(reviewer.options.label, "reviewer:KIT-9:r0");
+  assert.ok(!commands.some((c) => c.includes('state KIT-9 "In Progress"')));
+  assert.ok(commands.some((c) => c.includes("--code engineer-skipped")));
+  assert.equal(
+    commands.filter(isPre).length,
+    1,
+    "the pre-review gate runs once, before the Reviewer",
+  );
+  const receipt = commands.find((c) => c.includes("audit-receipt.mjs"));
+  assert.doesNotMatch(receipt, /--implementer-thread/);
+  const { REASON_CODES } = await import("../lib/run-log.mjs");
+  assert.ok(REASON_CODES.includes("engineer-skipped"));
+});
+
+test("a red review of a head reviewed as it is still leaves every Engineer round", async () => {
+  const { result, commands, spawns } = await run({
+    args: { issue: "KIT-9", resume: true, maxRounds: 1 },
+    shell: resumeShell(0),
+    engineer: () => ({
+      outcome: "ready",
+      sentence: "fixed",
+      threadId: ENGINEER_THREAD,
+      prNumber: 55,
+    }),
+    reviewer: (round) =>
+      round === 1
+        ? {
+            verdict: "red",
+            sha: SHA,
+            rows: ["spec"],
+            sentence: "AC 2 unmet",
+            threadId: REVIEWER_THREAD,
+          }
+        : undefined,
+  });
+  assert.equal(engineers(spawns).length, 1);
+  assert.match(engineers(spawns)[0].prompt, /The Reviewer returned red/);
+  assert.equal(result.status, "Approval");
+  assert.equal(result.rounds, 1);
+  assert.ok(commands.some((c) => c.includes("--step engineer") && c.includes("--mode fix")));
+  assert.ok(commands.some((c) => c.includes("--round 0")));
+});
+
+test("a resume whose pre-review gate is closed builds, with the gate line as the change request", async () => {
+  let gates = 0;
+  const { result, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(0, (c) => {
+      if (!isPre(c)) return undefined;
+      gates += 1;
+      return gates === 1 ? { code: 1, line: "CLOSED (review): scope" } : undefined;
+    }),
+    engineer: () => ({
+      outcome: "ready",
+      sentence: "done",
+      threadId: ENGINEER_THREAD,
+      prNumber: 55,
+    }),
+  });
+  assert.equal(engineers(spawns).length, 1);
+  assert.match(
+    engineers(spawns)[0].prompt,
+    /The pre-review gate is closed: CLOSED \(review\): scope/,
+  );
+  assert.equal(result.status, "Approval");
+});
+
+test("a resume point the runner could not read stops the run before any worker is spent", async () => {
+  const { result, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: (c) => (lookup(c) ? { code: 0, line: "55" } : isPoint(c) ? null : undefined),
+  });
+  assert.equal(result.stoppedAt, "resume-point");
+  assert.match(result.note, /runner-no-result/);
+  assert.equal(agentSpawns(spawns).length, 0);
+});
+
+test("a fresh run, and a resume without a PR, never ask for the resume point", async () => {
+  const fresh = await run();
+  assert.ok(!fresh.commands.some(isPoint));
+  const noPr = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: (c) => (lookup(c) ? { code: 0, line: "" } : undefined),
+  });
+  assert.ok(!noPr.commands.some(isPoint));
+  assert.equal(engineers(noPr.spawns).length, 1);
+});
+
+const runners = (spawns) => spawns.filter((s) => s.options.schema?.required?.includes("results"));
+const labels = (spawns) => runners(spawns).map((s) => s.options.label);
+
+test("a green run spends eight runners: the log lines ride with the gates", async () => {
+  const { result, commands, spawns } = await run();
+  assert.equal(result.status, "Approval");
+  assert.deepEqual(labels(spawns), [
+    "session-check",
+    "start",
+    "gate:pre-review",
+    "head-changed",
+    "linear:In Review",
+    "gate:review",
+    "receipt:dry-run",
+    "linear:Approval",
+  ]);
+  const at = (needle) => commands.findIndex((c) => c.includes(needle));
+  assert.ok(at("--step engineer --outcome ready") >= 0);
+  assert.ok(at("--step engineer --outcome ready") < at("gate.mjs pre-review"));
+  assert.ok(at("--step reviewer --outcome green") >= 0);
+  assert.ok(at("--step reviewer --outcome green") < at("gate.mjs review"));
+  assert.ok(
+    at("gate.mjs review") < at("audit-receipt.mjs"),
+    "the receipt reads a run log that has the reviewer",
+  );
+});
+
+test("a shared runner that comes back incomplete asks the gate once more alone and repeats no log line", async () => {
+  let calls = 0;
+  const { result, commands, spawns } = await run({
+    shell: (c) => {
+      if (!isPre(c)) return undefined;
+      calls += 1;
+      return calls === 1 ? null : undefined;
+    },
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(commands.filter((c) => c.includes("spawn --issue KIT-9 --step engineer")).length, 1);
+  assert.equal(labels(spawns).filter((l) => l === "gate:pre-review").length, 2);
+});
+
+test("a stop before a gate still writes the log lines that would have ridden with it", async () => {
+  const blocked = await run({
+    engineer: () => ({
+      outcome: "blocked",
+      sentence: "needs-human: widen the write-scope?",
+      threadId: ENGINEER_THREAD,
+      prNumber: 77,
+    }),
+  });
+  assert.ok(labels(blocked.spawns).includes("log:engineer"));
+  assert.ok(blocked.commands.some((c) => c.includes("--step engineer --outcome blocked")));
+  const amber = await run({
+    reviewer: () => ({
+      verdict: "amber",
+      sha: SHA,
+      sentence: "checks pending",
+      threadId: REVIEWER_THREAD,
+    }),
+  });
+  assert.equal(amber.result.verdict, "amber");
+  assert.ok(labels(amber.spawns).includes("log:reviewer"));
+  assert.ok(amber.commands.some((c) => c.includes("--step reviewer --outcome amber")));
+});
+
+test("a fix round opens without a runner of its own for In Progress", async () => {
+  const { result, commands, spawns } = await run({
+    reviewer: (round) =>
+      round === 1
+        ? {
+            verdict: "red",
+            sha: SHA,
+            rows: ["spec"],
+            sentence: "AC 2 unmet",
+            threadId: REVIEWER_THREAD,
+          }
+        : undefined,
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(result.rounds, 2);
+  assert.ok(!labels(spawns).includes("linear:In Progress"));
+  const red = runners(spawns).find((s) => s.options.label === "log:red").prompt;
+  assert.match(red, /run-log\.mjs audit .*--verdict red/);
+  assert.match(red, /linear\.mjs state KIT-9 "In Progress"/);
+  const states = commands
+    .filter((c) => /linear\.mjs state /.test(c))
+    .map((c) => /"([^"]+)"$/.exec(c)[1]);
+  assert.deepEqual(states, ["In Progress", "In Review", "In Progress", "In Review", "Approval"]);
+});
+
+test("the last red review of a run does not move the issue back to In Progress", async () => {
+  const { result, spawns } = await run({
+    args: { issue: "KIT-9", maxRounds: 1 },
+    reviewer: () => ({
+      verdict: "red",
+      sha: SHA,
+      rows: ["spec"],
+      sentence: "AC 2 unmet",
+      threadId: REVIEWER_THREAD,
+    }),
+  });
+  assert.equal(result.status, "Approval");
+  const red = runners(spawns).find((s) => s.options.label === "log:red").prompt;
+  assert.doesNotMatch(red, /"In Progress"/);
+});
+
+test("a resume that reviews the head as it is writes both skip lines on runners it needs anyway", async () => {
+  const { result, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    startDecision: { plan: true },
+    shell: resumeShell(0),
+  });
+  assert.equal(result.status, "Approval");
+  assert.deepEqual(labels(spawns), [
+    "session-check",
+    "start",
+    "pr-lookup",
+    "plan-check",
+    "resume-point",
+    "gate:pre-review",
+    "linear:In Review",
+    "gate:review",
+    "receipt:dry-run",
+    "linear:Approval",
+  ]);
+  const point = runners(spawns).find((s) => s.options.label === "resume-point").prompt;
+  assert.match(point, /--code lead-skipped/);
+  const review = runners(spawns).find((s) => s.options.label === "linear:In Review").prompt;
+  assert.match(review, /--code engineer-skipped/);
+});
+
+test("the hosted Device flows run is asked for in the pre-review gate's own runner, before the gate (ADR-0059)", async () => {
+  const { commands, spawns } = await run();
+  const request = commands.findIndex(
+    (c) => c === "node scripts/request-device-flows.mjs 77 --issue KIT-9",
+  );
+  assert.ok(request >= 0);
+  assert.ok(request < commands.findIndex(isPre));
+  const gate = runners(spawns).find((s) => s.options.label === "gate:pre-review").prompt;
+  assert.match(gate, /request-device-flows\.mjs 77 --issue KIT-9/);
+
+  const resumed = await run({ args: { issue: "KIT-9", resume: true }, shell: resumeShell(0) });
+  const asked = resumed.commands.findIndex((c) =>
+    c.includes("request-device-flows.mjs 55 --issue KIT-9"),
+  );
+  assert.ok(asked >= 0 && asked < resumed.commands.findIndex(isPre));
+});
+
+test("the runner and the Engineer are told to set the shell tool's timeout, which otherwise backgrounds a wait after 2 minutes (KIT-286)", async () => {
+  const { spawns } = await run();
+  const runner = spawns.find((s) => s.options.schema?.required?.includes("results")).prompt;
+  assert.match(runner, /set the tool's timeout to 600000 ms/);
+  const engineer = agentSpawns(spawns).find((s) => s.options.label.startsWith("engineer:")).prompt;
+  assert.match(engineer, /set the tool's timeout to 600000 ms/);
+});
+
+const isReceipt = (c) => c.includes("audit-receipt.mjs post");
+const NO_LINE =
+  "REFUSED (receipt): thread thr_reviewer01 did not end with an exact AUDIT-RESULT line (nothing else on the line or after it)";
+
+test("a receipt refused for a missing result line asks the Reviewer once, then tries again (KIT-283, KIT-286)", async () => {
+  let receipts = 0;
+  const { result, commands } = await run({
+    shell: (c) => {
+      if (!isReceipt(c)) return undefined;
+      receipts += 1;
+      return receipts === 1
+        ? { code: 1, line: NO_LINE }
+        : { code: 0, line: "WOULD POST (receipt): kc/audit success" };
+    },
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(commands.filter(isReceipt).length, 2);
+  const tell = commands.find((c) => c.startsWith("bb thread tell thr_reviewer01 "));
+  assert.ok(tell, "the Reviewer is asked for its line");
+  assert.match(tell, new RegExp(`AUDIT-RESULT KIT-9 green ${SHA}"$`));
+  const at = (needle) => commands.findIndex((c) => c.startsWith(needle));
+  assert.ok(at("bb thread unarchive thr_reviewer01") < at("bb thread tell"));
+  assert.ok(at("bb thread tell") < at("bb thread wait thr_reviewer01"));
+  assert.ok(commands.some((c) => c.includes("--code no-result-line")));
+});
+
+test("the Reviewer is asked only once, and other refusals are not retried", async () => {
+  const once = await run({ shell: (c) => (isReceipt(c) ? { code: 1, line: NO_LINE } : undefined) });
+  assert.equal(once.result.stoppedAt, "receipt");
+  assert.equal(once.commands.filter(isReceipt).length, 2);
+  assert.equal(once.commands.filter((c) => c.startsWith("bb thread tell")).length, 1);
+
+  const other = await run({
+    shell: (c) =>
+      isReceipt(c)
+        ? {
+            code: 1,
+            line: "REFUSED (receipt): reviewer runs on claude-code/x, the same as an engineer spawn",
+          }
+        : undefined,
+  });
+  assert.equal(other.result.stoppedAt, "receipt");
+  assert.equal(other.commands.filter(isReceipt).length, 1);
+  assert.ok(!other.commands.some((c) => c.startsWith("bb thread tell")));
+
+  const tellFailed = await run({
+    shell: (c) =>
+      isReceipt(c)
+        ? { code: 1, line: NO_LINE }
+        : c.startsWith("bb thread tell")
+          ? { code: 1, line: "HTTP 409" }
+          : undefined,
+  });
+  assert.equal(
+    tellFailed.commands.filter(isReceipt).length,
+    1,
+    "no second receipt when the ask failed",
+  );
+});
+
+test("the Reviewer prompt asks for the result line as its last text, after the workpad write", async () => {
+  const { spawns } = await run();
+  const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:")).prompt;
+  assert.match(reviewer, /write that line as your last text, after every other tool call/);
 });

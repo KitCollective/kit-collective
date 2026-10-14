@@ -5,6 +5,7 @@ import {
   addJerseyDraft,
   appendUnboundPhotos,
   bindPhoto,
+  bindUnboundPhotosToDraft,
   bindUnboundPhotoToDraft,
   branchFromPhotoCount,
   canAddPhotoToDraft,
@@ -12,8 +13,10 @@ import {
   catalogSideId,
   changeDraftPhotoRole,
   createCaptureSession,
+  createDraftFromUnbound,
   createMemoryCaptureSessionStore,
   discardUnboundPhoto,
+  discardUnboundPhotos,
   getActiveDraft,
   getDraft,
   nextAvailableRole,
@@ -609,5 +612,123 @@ describe("persistence", () => {
     expect(photoUriForRole(getDraft(reloaded, draftId), "front")).toBe(BULK_URIS[0]);
     expect(getDraft(reloaded, draftId).clubId).toBe(UUID);
     expect(getDraft(reloaded, draftId).kitType).toBe("away");
+  });
+});
+
+describe("sorting photos without a jersey", () => {
+  const PICKED = [BULK_URIS[5], BULK_URIS[2], BULK_URIS[8], BULK_URIS[0]].filter(
+    (uri): uri is string => uri !== undefined,
+  );
+
+  it("new from selection fills roles in pick order and reuses the empty draft", () => {
+    const session = createCaptureSession(BULK_URIS.slice(0, 9));
+    const emptyDraftId = getActiveDraft(session).id;
+
+    const next = createDraftFromUnbound(session, PICKED);
+    const draft = getActiveDraft(next);
+
+    expect(next.drafts).toHaveLength(1);
+    expect(draft.id).toBe(emptyDraftId);
+    expect(photoUriForRole(draft, "front")).toBe(PICKED[0]);
+    expect(photoUriForRole(draft, "back")).toBe(PICKED[1]);
+    expect(photoUriForRole(draft, "left")).toBe(PICKED[2]);
+    expect(photoUriForRole(draft, "right")).toBe(PICKED[3]);
+    expect(next.unboundUris).toEqual(session.unboundUris.filter((uri) => !PICKED.includes(uri)));
+    expect(next.orderedUris).toEqual(session.orderedUris);
+  });
+
+  it("new from selection adds a draft when every draft already holds photos", () => {
+    let session = createCaptureSession(BULK_URIS.slice(0, 9));
+    session = bindUnboundPhotoToDraft(session, BULK_URI_B, getActiveDraft(session).id);
+
+    const next = createDraftFromUnbound(session, PICKED.slice(0, 3), { defaultSize: "m" });
+
+    expect(next.drafts).toHaveLength(2);
+    expect(next.activeDraftId).toBe(next.drafts[1]?.id);
+    expect(getActiveDraft(next).photos).toHaveLength(3);
+    expect(getActiveDraft(next).size).toBe("m");
+    expect(next.drafts[0]?.photos).toHaveLength(1);
+  });
+
+  it("add to draft appends into the next free roles", () => {
+    let session = createCaptureSession(BULK_URIS.slice(0, 9));
+    const draftId = getActiveDraft(session).id;
+    session = bindUnboundPhotoToDraft(session, BULK_URI_B, draftId);
+
+    const next = bindUnboundPhotosToDraft(session, PICKED, draftId);
+    const draft = getDraft(next, draftId);
+
+    expect(photoUriForRole(draft, "front")).toBe(BULK_URI_B);
+    expect(photoUriForRole(draft, "back")).toBe(PICKED[0]);
+    expect(photoUriForRole(draft, "left")).toBe(PICKED[1]);
+    expect(photoUriForRole(draft, "right")).toBe(PICKED[2]);
+    expect(draft.photos.find((photo) => photo.uri === PICKED[3])?.role).toBe("other");
+  });
+
+  it("add to draft stops at the 10-photo cap and keeps the rest without a jersey", () => {
+    const uris = Array.from({ length: 12 }, (_, index) => `file:///photos/cap-add-${index}.jpg`);
+    let session = createCaptureSession(uris);
+    const draftId = getActiveDraft(session).id;
+    session = bindUnboundPhotosToDraft(session, uris.slice(0, 8), draftId);
+
+    const next = bindUnboundPhotosToDraft(session, uris.slice(8, 12), draftId);
+
+    expect(getDraft(next, draftId).photos).toHaveLength(10);
+    expect(next.unboundUris).toEqual(uris.slice(10, 12));
+    expect(next.orderedUris).toEqual(uris);
+  });
+
+  it("add to draft stops at the cap when universal roles are still free", () => {
+    const uris = Array.from({ length: 13 }, (_, index) => `file:///photos/cap-free-${index}.jpg`);
+    let session = createCaptureSession(uris);
+    const draftId = getActiveDraft(session).id;
+    session = bindUnboundPhotosToDraft(session, uris.slice(0, 9), draftId);
+    session = changeDraftPhotoRole(session, draftId, "back", "other");
+    session = changeDraftPhotoRole(session, draftId, "left", "other");
+    expect(photoUriForRole(getDraft(session, draftId), "back")).toBeNull();
+    expect(getDraft(session, draftId).photos).toHaveLength(9);
+
+    const next = bindUnboundPhotosToDraft(session, uris.slice(9, 12), draftId);
+
+    expect(getDraft(next, draftId).photos).toHaveLength(10);
+    expect(next.unboundUris).toEqual(uris.slice(10));
+  });
+
+  it("new from selection stops at the cap and keeps the rest without a jersey", () => {
+    const session = createCaptureSession(BULK_URIS);
+
+    const next = createDraftFromUnbound(session, BULK_URIS);
+
+    expect(getActiveDraft(next).photos).toHaveLength(10);
+    expect(next.unboundUris).toEqual(BULK_URIS.slice(10));
+  });
+
+  it("delete removes the selection and leaves the other photos", () => {
+    const session = createCaptureSession(BULK_URIS.slice(0, 9));
+
+    const next = discardUnboundPhotos(session, PICKED);
+
+    expect(next.unboundUris).toEqual(session.unboundUris.filter((uri) => !PICKED.includes(uri)));
+    expect(next.orderedUris).toEqual(session.orderedUris.filter((uri) => !PICKED.includes(uri)));
+  });
+
+  it("an empty selection changes nothing", () => {
+    const session = createCaptureSession(BULK_URIS.slice(0, 9));
+
+    expect(discardUnboundPhotos(session, [])).toBe(session);
+    expect(createDraftFromUnbound(session, [])).toBe(session);
+  });
+
+  it("each survives a store reload", () => {
+    const store = createMemoryCaptureSessionStore();
+    let session = createCaptureSession(BULK_URIS.slice(0, 9), { store });
+    session = createDraftFromUnbound(session, PICKED.slice(0, 2));
+    session = discardUnboundPhotos(session, PICKED.slice(2));
+
+    const reloaded = reloadCaptureSession(store);
+
+    expect(reloaded?.unboundUris).toEqual(session.unboundUris);
+    expect(reloaded?.orderedUris).toEqual(session.orderedUris);
+    expect(getActiveDraft(reloaded ?? session).photos).toHaveLength(2);
   });
 });

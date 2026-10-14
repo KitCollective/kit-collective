@@ -125,6 +125,19 @@ export const TEST_SHORTCUT: { id: string; name: string; side: FixtureSide } = {
   side: { kind: "club", label: "FC København" },
 };
 
+/**
+ * One Bud the test peer left on the Test Collector's FC København jersey and the Collector has
+ * not answered (KIT-286): Samling shows "1 bud" on that tile and the Med bud view has a result.
+ */
+export const TEST_UNANSWERED_BID = {
+  conversationId: "e2e00000-0000-4000-8000-000000000501",
+  messageId: "e2e00000-0000-4000-8000-000000000502",
+  jerseyId: TEST_JERSEYS[0]!.id,
+  bidderId: TEST_PEER_ID,
+  ownerId: TEST_COLLECTOR_ID,
+  amountDkk: 250,
+};
+
 /** What Vision suggests to the test Collector, every run. */
 export const FIXED_VISION_SUGGESTION: { side: FixtureSide; type: KitType } = {
   side: { kind: "club", label: "AaB" },
