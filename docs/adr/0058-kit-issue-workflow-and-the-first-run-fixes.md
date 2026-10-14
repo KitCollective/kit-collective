@@ -126,4 +126,10 @@ The first rule above, start the run from the main clone's file, cannot be follow
 
 Since the pre-review gate waits for the hosted Device flows run (ADR-0059), a gate slice can wait its full 480 s. The KIT-286 resume of 2026-10-14 lost both attempts of its pre-review gate that way: Claude Code's shell tool moves a command to the background after 2 minutes unless the caller sets a longer timeout, so the Haiku runner was left with a background task and ended its turn on prose ("runner-no-result"). The 10 minute foreground cap above is the tool's maximum, not its default. The runner prompt, and the Engineer's CI wait, now tell the worker to set the tool's timeout to 600000 ms on every command. Earlier runs never met it because their gates finished in under 2 minutes.
 
+## The Reviewer's result line (KIT-283, KIT-286; 2026-10-14)
+
+Two green reviews stopped at the receipt dry run: the receipt reads only the Reviewer thread's last text message, and both Reviewers wrote the verdict, then saved the matrix to the workpad and returned through the result tool, so their last text was "Writing it to the workpad now". Each time the orchestrator asked the Reviewer once for the line, as bb-orchestrate allows, and the receipt passed.
+
+The workflow now does that itself: when the dry run is refused for exactly that reason, it unarchives the Reviewer thread (bb archives a worker when it returns), asks it once with `bb thread tell` for `AUDIT-RESULT <issue> green <sha>`, waits, and runs the dry run again. The message is built from checked tokens only. Any other refusal is not retried, and a failed ask leaves the stop as it was. The Reviewer prompt also says to write the line as its last text, after every other tool call. The receipt's rule (the last line only, ADR-0056) is unchanged.
+
 Status: accepted; revisit after the next real `kit-issue` run.

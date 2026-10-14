@@ -1118,3 +1118,69 @@ test("the runner and the Engineer are told to set the shell tool's timeout, whic
   const engineer = agentSpawns(spawns).find((s) => s.options.label.startsWith("engineer:")).prompt;
   assert.match(engineer, /set the tool's timeout to 600000 ms/);
 });
+
+const isReceipt = (c) => c.includes("audit-receipt.mjs post");
+const NO_LINE =
+  "REFUSED (receipt): thread thr_reviewer01 did not end with an exact AUDIT-RESULT line (nothing else on the line or after it)";
+
+test("a receipt refused for a missing result line asks the Reviewer once, then tries again (KIT-283, KIT-286)", async () => {
+  let receipts = 0;
+  const { result, commands } = await run({
+    shell: (c) => {
+      if (!isReceipt(c)) return undefined;
+      receipts += 1;
+      return receipts === 1
+        ? { code: 1, line: NO_LINE }
+        : { code: 0, line: "WOULD POST (receipt): kc/audit success" };
+    },
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(commands.filter(isReceipt).length, 2);
+  const tell = commands.find((c) => c.startsWith("bb thread tell thr_reviewer01 "));
+  assert.ok(tell, "the Reviewer is asked for its line");
+  assert.match(tell, new RegExp(`AUDIT-RESULT KIT-9 green ${SHA}"$`));
+  const at = (needle) => commands.findIndex((c) => c.startsWith(needle));
+  assert.ok(at("bb thread unarchive thr_reviewer01") < at("bb thread tell"));
+  assert.ok(at("bb thread tell") < at("bb thread wait thr_reviewer01"));
+  assert.ok(commands.some((c) => c.includes("--code no-result-line")));
+});
+
+test("the Reviewer is asked only once, and other refusals are not retried", async () => {
+  const once = await run({ shell: (c) => (isReceipt(c) ? { code: 1, line: NO_LINE } : undefined) });
+  assert.equal(once.result.stoppedAt, "receipt");
+  assert.equal(once.commands.filter(isReceipt).length, 2);
+  assert.equal(once.commands.filter((c) => c.startsWith("bb thread tell")).length, 1);
+
+  const other = await run({
+    shell: (c) =>
+      isReceipt(c)
+        ? {
+            code: 1,
+            line: "REFUSED (receipt): reviewer runs on claude-code/x, the same as an engineer spawn",
+          }
+        : undefined,
+  });
+  assert.equal(other.result.stoppedAt, "receipt");
+  assert.equal(other.commands.filter(isReceipt).length, 1);
+  assert.ok(!other.commands.some((c) => c.startsWith("bb thread tell")));
+
+  const tellFailed = await run({
+    shell: (c) =>
+      isReceipt(c)
+        ? { code: 1, line: NO_LINE }
+        : c.startsWith("bb thread tell")
+          ? { code: 1, line: "HTTP 409" }
+          : undefined,
+  });
+  assert.equal(
+    tellFailed.commands.filter(isReceipt).length,
+    1,
+    "no second receipt when the ask failed",
+  );
+});
+
+test("the Reviewer prompt asks for the result line as its last text, after the workpad write", async () => {
+  const { spawns } = await run();
+  const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:")).prompt;
+  assert.match(reviewer, /write that line as your last text, after every other tool call/);
+});

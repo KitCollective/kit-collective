@@ -585,7 +585,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
       [
         `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run it on the PR's merge-base diff (this checkout is the PR head; confirm with git rev-parse HEAD).`,
         "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
-        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
+        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
       ].join("\n"),
       `reviewer:${issue}:r${round}`,
       "Reviewer",
@@ -655,10 +655,27 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     const state = await stopForHuman("Review gate", `needs-human: round cap reached after a ${review.verdict} review: ${why}`);
     return stopped("review gate", state, { prNumber, rounds, verdict: review.verdict, note: why });
   }
-  const dry = await sh("receipt:dry-run", "Review gate", [
-    // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.
-    `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread}${engineerThread ? ` --implementer-thread ${engineerThread}` : ""} --require-different-model --dry-run`,
-  ], false, true);
+  // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.
+  const receiptCmd = `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread}${engineerThread ? ` --implementer-thread ${engineerThread}` : ""} --require-different-model --dry-run`;
+  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd], false, true);
+  // A Reviewer that returned its verdict through the result tool can end on another sentence, and
+  // the receipt reads only the thread's last text (KIT-283 and KIT-286, 2026-10-14). The Reviewer
+  // is asked once for the line, as bb-orchestrate allows, and the receipt is tried again. The message
+  // is built from checked tokens only; the verdict is green, since only a green review gets here.
+  const reviewSha = /^[0-9a-f]{40}$/i.test(review.sha) ? review.sha.toLowerCase() : "";
+  if (dry[0]?.code !== 0 && !dry[0]?.runner && reviewSha && /did not end with an exact AUDIT-RESULT line/.test(dry[0]?.line ?? "")) {
+    await sh("log:no-result", "Review gate", [
+      logCmd("reason", `--issue ${issue} --code no-result-line`),
+      `bb thread unarchive ${rThread}`,
+    ], true);
+    const asked = await sh("reviewer:result-line", "Review gate", [
+      `bb thread tell ${rThread} "Your review ended without the result line. Do not review again and change nothing. If the head is still ${reviewSha} and your verdict stands, reply with exactly one line and nothing else: AUDIT-RESULT ${issue} green ${reviewSha}"`,
+      `bb thread wait ${rThread} --timeout 300`,
+    ]);
+    if (asked.length === 2 && asked.every((r) => r.code === 0)) {
+      dry = await sh("receipt:dry-run", "Review gate", [receiptCmd], false, true);
+    }
+  }
   receipt = dry[0]?.line ?? "no output from audit-receipt";
   if (dry.length === 0 || dry[0].code !== 0) {
     // A refused receipt (same model, no spawn logged, no AUDIT-RESULT line) is not a green review.
