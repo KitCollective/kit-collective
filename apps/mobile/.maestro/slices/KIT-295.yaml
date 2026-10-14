@@ -1,0 +1,140 @@
+# KIT-295: one Conversation per pair of Collectors (ADR-0049).
+#
+# design-sections: Inbox, Conversation, Thread row, Bid card, Tab bar
+#
+# The slice changes where the data comes from, not the screens: Indbakke and the thread are the
+# current ones. The Revision 2026-10-10 look of Inbox, Thread row and Bid card is KIT-296 and
+# KIT-297, so a difference from those Revisions on these screenshots is not this slice's.
+# The one difference this slice makes on a screen: the thread header no longer carries a jersey
+# line (Conversation, Composition 1); the jersey line now sits on each Bid card.
+#
+# The test data holds no Conversation, so the flow makes one: the Test Collector sends a Bud on
+# the second test Collector's jersey (the steps of regression/search-bid.yaml, no screenshots),
+# then the second test Collector signs in and reads it. That second sign-in is written out here
+# because ../subflows/sign-in.yaml resets the test data first, which would delete the Bud.
+#
+# Not shown by a screen and so proved by the API suites instead: criteria 1-10 and 12 (schema,
+# migration, merge, delete jersey, the pending-Bud rule), and two Buds on two jerseys in one
+# thread (the second test Collector owns one jersey that is open for Bud).
+#
+# One tap is not by testID: the Thread row. It has none, and it lives in
+# src/components/thread-row.tsx, outside this issue's write-scope. The flow matches the row's
+# accessibility name on the fixture Handle (test data, not UI copy) instead.
+appId: app.kitcollective.mobile
+name: kit-295
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-295
+# ---- The Test Collector sends a Bud on the second test Collector's jersey ----
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 15000
+- tapOn:
+    id: search-input
+# The second test Collector's jersey is on this catalog side.
+- inputText: OB
+- extendedWaitUntil:
+    visible:
+      id: typeahead-clubs
+    timeout: 15000
+- hideKeyboard
+- tapOn:
+    id: typeahead-club-row
+- extendedWaitUntil:
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    timeout: 15000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+- extendedWaitUntil:
+    visible:
+      id: send-bid-open
+    timeout: 15000
+- tapOn:
+    id: send-bid-open
+- extendedWaitUntil:
+    visible:
+      id: bid-amount
+    timeout: 15000
+# The amount field starts underneath the floating tab bar; scroll it clear first,
+# or the tap lands on the Søg tab and pops the stack.
+- scroll
+- runFlow: ../subflows/settle.yaml
+- tapOn:
+    id: bid-amount
+- inputText: "250"
+# The number pad has no return key and covers the form; a tap on the photo dismisses it.
+- tapOn:
+    point: 50%,25%
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: bid-submit
+# Sent: Send bud closes and the jersey is back.
+- extendedWaitUntil:
+    visible:
+      id: send-bid-open
+    timeout: 15000
+# ---- The second test Collector signs in (no data reset: the Bud must stay) ----
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-have-account
+    timeout: 90000
+- tapOn:
+    id: welcome-have-account
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 10000
+- tapOn:
+    id: door-email
+- inputText: ${MAESTRO_PEER_EMAIL}
+- tapOn:
+    id: door-submit
+- extendedWaitUntil:
+    visible:
+      id: code-screen
+    timeout: 10000
+- runScript:
+    file: ../scripts/sign-in-code.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+      EMAIL: ${MAESTRO_PEER_EMAIL}
+      EXPIRE: "false"
+- inputText: ${output.code}
+- extendedWaitUntil:
+    visible:
+      id: collection-add
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 5000
+# AC 11: the current Indbakke still shows the thread and its unread state. One Thread row for
+# the Test Collector, unread, with the Bud as its snippet; the Indbakke tab carries the count.
+- tapOn: Indbakke
+- extendedWaitUntil:
+    visible: "e2e_collector, .*, ulæst"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-295__01-indbakke-thread-unread
+# AC 11: the current thread screen still shows the Bud, and the Bid card's jersey line comes
+# from that Bud's own UserJersey (OB, the jersey the Bud was sent on).
+- tapOn: "e2e_collector, .*, ulæst"
+- extendedWaitUntil:
+    visible:
+      id: bid-card
+    timeout: 15000
+- assertVisible: "e2e_collector bød på din OB · .* · Hjemme\\..*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-295__02-thread-bud-with-jersey-line
+- stopRecording

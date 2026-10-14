@@ -836,6 +836,43 @@ describe("Collection /v1", () => {
     expect(inboxBody.conversations[0]?.snippet).toContain("350");
   });
 
+  it("shows the latest Bud amount of each UserJersey when one Conversation holds Buds on several", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-latest-bid@example.com");
+    const bidder = await registerSession(app, "bidder-latest-bid@example.com");
+    const firstJersey = await saveJerseyForUser(app, owner, fixture);
+    const secondJersey = await saveJerseyForUser(app, owner, fixture);
+    const untouchedJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const conversationIds: string[] = [];
+    for (const [jersey, amountDkk] of [
+      [firstJersey, 350],
+      [secondJersey, 500],
+    ] as const) {
+      await patchJerseyBidding(app, owner, jersey.id, true);
+      const bidResponse = await app.inject({
+        method: "POST",
+        url: `/v1/collection/jerseys/${jersey.id}/bids`,
+        headers: { authorization: `Bearer ${bidder.accessToken}` },
+        payload: { amountDkk },
+      });
+      expect(bidResponse.statusCode).toBe(201);
+      conversationIds.push(
+        collectionSendBidResponseSchema.parse(JSON.parse(bidResponse.body)).conversationId,
+      );
+    }
+    expect(conversationIds[1]).toBe(conversationIds[0]);
+
+    const latestBidOf = async (jerseyId: string) => {
+      const response = await getPeerJerseyRaw(app, bidder, jerseyId);
+      expect(response.statusCode).toBe(200);
+      return collectionPeerJerseySchema.parse(JSON.parse(response.body)).latestBidAmountDkk;
+    };
+    expect(await latestBidOf(firstJersey.id)).toBe(350);
+    expect(await latestBidOf(secondJersey.id)).toBe(500);
+    expect(await latestBidOf(untouchedJersey.id)).toBeNull();
+  });
+
   it("counts unanswered pending bids per jersey on GET /collection/jerseys", async () => {
     const fixture = await insertClubSeasonFixture();
     const owner = await registerSession(app, "unanswered-owner@example.com");

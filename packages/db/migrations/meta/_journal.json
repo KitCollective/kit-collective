@@ -267,6 +267,13 @@
       "when": 1788880000000,
       "tag": "0037_vision_improve",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788960000000,
+      "tag": "0038_conversation_per_pair",
+      "breakpoints": true
     }
   ]
 }

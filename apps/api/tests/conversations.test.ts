@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -14,6 +15,7 @@ import {
 import {
   catalogLabel,
   club,
+  conversationMessage,
   country,
   createDb,
   league,
@@ -23,8 +25,12 @@ import {
 } from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
+import { OBJECT_STORE } from "../dist/collection/collection.service.js";
+import type { ObjectStoreAdapter } from "../dist/collection/object-store.js";
+import { clearAuthThrottleHits } from "./helpers/auth-throttle.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -116,6 +122,7 @@ async function saveJerseyForUser(
   app: NestFastifyApplication,
   session: Awaited<ReturnType<typeof registerSession>>,
   fixture: Awaited<ReturnType<typeof insertClubSeasonFixture>>,
+  kit: { type: "home" | "away"; size: "m" | "l" } = { type: "home", size: "m" },
 ) {
   const response = await app.inject({
     method: "POST",
@@ -127,8 +134,8 @@ async function saveJerseyForUser(
     payload: {
       clubId: fixture.clubId,
       seasonId: fixture.seasonId,
-      type: "home",
-      size: "m",
+      type: kit.type,
+      size: kit.size,
       condition: "used",
       photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
     },
@@ -182,6 +189,10 @@ describe("Collection conversations /v1", () => {
 
   afterAll(async () => {
     await app.close();
+  });
+
+  beforeEach(async () => {
+    await clearAuthThrottleHits();
   });
 
   it("rejects unauthenticated conversation list with 401", async () => {
@@ -253,7 +264,7 @@ describe("Collection conversations /v1", () => {
     expect(detail.id).toBe(conversationId);
     expect(detail.messages.length).toBe(1);
     expect(detail.messages[0]?.kind).toBe("bid");
-    expect(detail.jerseyContext?.clubLabel).toBe("F.C. København");
+    expect(detail.messages[0]?.jersey?.clubLabel).toBe("F.C. København");
   });
 
   it("marks conversation read when opening detail and updates inbox unread", async () => {
@@ -505,6 +516,368 @@ describe("Collection conversations /v1", () => {
     });
     const activityAfterBody = collectionActivitySchema.parse(JSON.parse(activityAfter.body));
     expect(activityAfterBody.items[0]?.unread).toBe(false);
+  });
+
+  it("lands a Bud on a second UserJersey of the same owner in the existing Conversation", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-pair@example.com");
+    const bidder = await registerSession(app, "bidder-pair@example.com");
+    const homeJersey = await saveJerseyForUser(app, owner, fixture);
+    const awayJersey = await saveJerseyForUser(app, owner, fixture, { type: "away", size: "l" });
+    const bidderJersey = await saveJerseyForUser(app, bidder, fixture);
+
+    const first = await createBidConversation(app, owner, bidder, homeJersey.id);
+    const second = await createBidConversation(app, owner, bidder, awayJersey.id);
+    const reverse = await createBidConversation(app, bidder, owner, bidderJersey.id);
+
+    expect(second.conversationId).toBe(first.conversationId);
+    expect(reverse.conversationId).toBe(first.conversationId);
+
+    for (const session of [owner, bidder]) {
+      const inbox = await app.inject({
+        method: "GET",
+        url: "/v1/collection/conversations",
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      });
+      const inboxBody = collectionConversationsSchema.parse(JSON.parse(inbox.body));
+      expect(inboxBody.conversations.map((item) => item.id)).toEqual([first.conversationId]);
+    }
+  });
+
+  it("keeps one Conversation when two first Buds of a pair arrive at once", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-race@example.com");
+    const bidder = await registerSession(app, "bidder-race@example.com");
+    const homeJersey = await saveJerseyForUser(app, owner, fixture);
+    const awayJersey = await saveJerseyForUser(app, owner, fixture, { type: "away", size: "l" });
+
+    for (const jersey of [homeJersey, awayJersey]) {
+      await app.inject({
+        method: "PATCH",
+        url: `/v1/collection/jerseys/${jersey.id}/bidding`,
+        headers: { authorization: `Bearer ${owner.accessToken}` },
+        payload: { biddingEnabled: true },
+      });
+    }
+
+    const responses = await Promise.all(
+      [homeJersey, awayJersey].map((jersey) =>
+        app.inject({
+          method: "POST",
+          url: `/v1/collection/jerseys/${jersey.id}/bids`,
+          headers: { authorization: `Bearer ${bidder.accessToken}` },
+          payload: { amountDkk: 350 },
+        }),
+      ),
+    );
+    expect(responses.map((response) => response.statusCode)).toEqual([201, 201]);
+    const [first, second] = responses.map((response) =>
+      collectionSendBidResponseSchema.parse(JSON.parse(response.body)),
+    );
+
+    expect(second!.conversationId).toBe(first!.conversationId);
+
+    const detail = await app.inject({
+      method: "GET",
+      url: `/v1/collection/conversations/${first!.conversationId}`,
+      headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+    });
+    expect(detail.statusCode).toBe(200);
+    const detailBody = collectionConversationDetailSchema.parse(JSON.parse(detail.body));
+    expect(detailBody.messages.map((message) => message.id).sort()).toEqual(
+      [first!.messageId, second!.messageId].sort(),
+    );
+  });
+
+  it("refuses a second Bud on a UserJersey while one is pending and accepts a new one after a decline", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-pending@example.com");
+    const bidder = await registerSession(app, "bidder-pending@example.com");
+    const homeJersey = await saveJerseyForUser(app, owner, fixture);
+    const awayJersey = await saveJerseyForUser(app, owner, fixture, { type: "away", size: "l" });
+    const { conversationId, messageId } = await createBidConversation(
+      app,
+      owner,
+      bidder,
+      homeJersey.id,
+    );
+
+    const sendBid = (jerseyId: string) =>
+      app.inject({
+        method: "POST",
+        url: `/v1/collection/jerseys/${jerseyId}/bids`,
+        headers: { authorization: `Bearer ${bidder.accessToken}` },
+        payload: { amountDkk: 400 },
+      });
+    const messageCount = async () => {
+      const detail = await app.inject({
+        method: "GET",
+        url: `/v1/collection/conversations/${conversationId}`,
+        headers: { authorization: `Bearer ${bidder.accessToken}`, "accept-language": "da" },
+      });
+      return collectionConversationDetailSchema.parse(JSON.parse(detail.body)).messages.length;
+    };
+
+    expect((await sendBid(homeJersey.id)).statusCode).toBe(409);
+    expect(await messageCount()).toBe(1);
+
+    // The pending Bud blocks its own UserJersey only.
+    await createBidConversation(app, owner, bidder, awayJersey.id);
+    expect(await messageCount()).toBe(2);
+
+    const decline = await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/conversations/${conversationId}/messages/${messageId}/bid`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { decision: "decline" },
+    });
+    expect(decline.statusCode).toBe(200);
+
+    expect((await sendBid(homeJersey.id)).statusCode).toBe(201);
+    expect(await messageCount()).toBe(3);
+  });
+
+  it("exposes the UserJersey of each message in a thread that spans several jerseys", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-jersey@example.com");
+    const bidder = await registerSession(app, "bidder-jersey@example.com");
+    const homeJersey = await saveJerseyForUser(app, owner, fixture);
+    const awayJersey = await saveJerseyForUser(app, owner, fixture, { type: "away", size: "l" });
+    const homeBid = await createBidConversation(app, owner, bidder, homeJersey.id);
+    const awayBid = await createBidConversation(app, owner, bidder, awayJersey.id);
+
+    const sendText = async (text: string) => {
+      const response = await app.inject({
+        method: "POST",
+        url: `/v1/collection/conversations/${homeBid.conversationId}/messages`,
+        headers: { authorization: `Bearer ${bidder.accessToken}` },
+        payload: { text },
+      });
+      return collectionSendMessageResponseSchema.parse(JSON.parse(response.body)).messageId;
+    };
+    const plainTextId = await sendText("Hej");
+    const jerseyTextId = await sendText("Er den stadig til salg?");
+
+    // Nothing writes a UserJersey on an ordinary message yet; the read side already serves one.
+    const { db, pool } = createDb(DATABASE_URL);
+    await db
+      .update(conversationMessage)
+      .set({
+        userJerseyId: awayJersey.id,
+        jerseyClubId: fixture.clubId,
+        jerseySeasonId: fixture.seasonId,
+        jerseyType: "away",
+        jerseySize: "l",
+      })
+      .where(eq(conversationMessage.id, jerseyTextId));
+    await pool.end();
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/collection/conversations/${homeBid.conversationId}`,
+      headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+    });
+    expect(response.statusCode).toBe(200);
+    const detail = collectionConversationDetailSchema.parse(JSON.parse(response.body));
+    const jerseyOf = (messageId: string) =>
+      detail.messages.find((message) => message.id === messageId)?.jersey;
+
+    const awayJerseyCard = {
+      userJerseyId: awayJersey.id,
+      clubLabel: "F.C. København",
+      seasonLabel: "2023/24",
+      type: "away",
+      size: "l",
+    };
+    expect(jerseyOf(homeBid.messageId)).toEqual({
+      userJerseyId: homeJersey.id,
+      clubLabel: "F.C. København",
+      seasonLabel: "2023/24",
+      type: "home",
+      size: "m",
+    });
+    expect(jerseyOf(awayBid.messageId)).toEqual(awayJerseyCard);
+    expect(jerseyOf(jerseyTextId)).toEqual(awayJerseyCard);
+    expect(jerseyOf(plainTextId)).toBeUndefined();
+    expect(detail.jerseyContext).toBeUndefined();
+  });
+
+  it("keeps the Conversation and declines pending Buds when their UserJersey is deleted", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-delete@example.com");
+    const bidder = await registerSession(app, "bidder-delete@example.com");
+    const homeJersey = await saveJerseyForUser(app, owner, fixture);
+    const awayJersey = await saveJerseyForUser(app, owner, fixture, { type: "away", size: "l" });
+    const homeBid = await createBidConversation(app, owner, bidder, homeJersey.id);
+    const awayBid = await createBidConversation(app, owner, bidder, awayJersey.id);
+    await app.inject({
+      method: "POST",
+      url: `/v1/collection/conversations/${homeBid.conversationId}/messages`,
+      headers: { authorization: `Bearer ${bidder.accessToken}` },
+      payload: { text: "Hej" },
+    });
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/v1/collection/jerseys/${homeJersey.id}`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(deleteResponse.statusCode).toBe(204);
+
+    for (const session of [owner, bidder]) {
+      const inbox = await app.inject({
+        method: "GET",
+        url: "/v1/collection/conversations",
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      });
+      const inboxBody = collectionConversationsSchema.parse(JSON.parse(inbox.body));
+      expect(inboxBody.conversations.map((item) => item.id)).toEqual([homeBid.conversationId]);
+    }
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/collection/conversations/${homeBid.conversationId}`,
+      headers: { authorization: `Bearer ${bidder.accessToken}`, "accept-language": "da" },
+    });
+    const detail = collectionConversationDetailSchema.parse(JSON.parse(response.body));
+    expect(detail.messages).toHaveLength(3);
+
+    const deletedJerseyBid = detail.messages.find((message) => message.id === homeBid.messageId);
+    expect(deletedJerseyBid?.bidStatus).toBe("declined");
+    expect(deletedJerseyBid?.jersey).toEqual({
+      userJerseyId: null,
+      clubLabel: "F.C. København",
+      seasonLabel: "2023/24",
+      type: "home",
+      size: "m",
+    });
+
+    const otherJerseyBid = detail.messages.find((message) => message.id === awayBid.messageId);
+    expect(otherJerseyBid?.bidStatus).toBe("pending");
+    expect(otherJerseyBid?.jersey?.userJerseyId).toBe(awayJersey.id);
+  });
+
+  it("refuses a response to a Bud whose UserJersey is gone", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-gone@example.com");
+    const bidder = await registerSession(app, "bidder-gone@example.com");
+    const jersey = await saveJerseyForUser(app, owner, fixture);
+    const { conversationId, messageId } = await createBidConversation(
+      app,
+      owner,
+      bidder,
+      jersey.id,
+    );
+
+    // What the database does to the Bud when its UserJersey is removed outside the owner's delete.
+    const { db, pool } = createDb(DATABASE_URL);
+    await db
+      .update(conversationMessage)
+      .set({ userJerseyId: null })
+      .where(eq(conversationMessage.id, messageId));
+    await pool.end();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/conversations/${conversationId}/messages/${messageId}/bid`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { decision: "accept" },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("lists every Bud of a thread in activity with its own jersey line", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-lines@example.com");
+    const bidder = await registerSession(app, "bidder-lines@example.com");
+    const homeJersey = await saveJerseyForUser(app, owner, fixture);
+    const awayJersey = await saveJerseyForUser(app, owner, fixture, { type: "away", size: "l" });
+    const homeBid = await createBidConversation(app, owner, bidder, homeJersey.id);
+    const awayBid = await createBidConversation(app, owner, bidder, awayJersey.id);
+
+    const listActivity = async (session: typeof owner) => {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/collection/activity",
+        headers: { authorization: `Bearer ${session.accessToken}`, "accept-language": "da" },
+      });
+      expect(response.statusCode).toBe(200);
+      return collectionActivitySchema.parse(JSON.parse(response.body)).items;
+    };
+
+    const items = await listActivity(owner);
+    expect(items.map((item) => [item.id, item.kitLine, item.status, item.unread])).toEqual([
+      [awayBid.messageId, "F.C. København · 2023/24 · Ude", "pending", true],
+      [homeBid.messageId, "F.C. København · 2023/24 · Hjemme", "pending", true],
+    ]);
+    expect(items.map((item) => item.title)).toEqual([
+      "Nyt bud på din trøje",
+      "Nyt bud på din trøje",
+    ]);
+    expect((await listActivity(bidder)).map((item) => item.title)).toEqual([
+      "Dit bud afventer",
+      "Dit bud afventer",
+    ]);
+
+    const inbox = await app.inject({
+      method: "GET",
+      url: "/v1/collection/conversations",
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(collectionConversationsSchema.parse(JSON.parse(inbox.body)).unreadCount).toBe(1);
+
+    await app.inject({
+      method: "DELETE",
+      url: `/v1/collection/jerseys/${homeJersey.id}`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+
+    const afterDelete = await listActivity(owner);
+    expect(afterDelete.map((item) => [item.id, item.kitLine, item.status])).toEqual([
+      [awayBid.messageId, "F.C. København · 2023/24 · Ude", "pending"],
+      [homeBid.messageId, "F.C. København · 2023/24 · Hjemme", "declined"],
+    ]);
+  });
+
+  it("serves the photo of an image message whose bytes sit under another Conversation id", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-photo@example.com");
+    const bidder = await registerSession(app, "bidder-photo@example.com");
+    const outsider = await registerSession(app, "outsider-photo@example.com");
+    const jersey = await saveJerseyForUser(app, owner, fixture);
+    const { conversationId } = await createBidConversation(app, owner, bidder, jersey.id);
+
+    // A message of a merged thread keeps the key it was stored under.
+    const messageId = randomUUID();
+    const imageObjectKey = `conversation/${randomUUID()}/${messageId}.jpg`;
+    await app
+      .get<ObjectStoreAdapter>(OBJECT_STORE)
+      .putObject(imageObjectKey, Buffer.from(JPEG_BASE64, "base64"));
+    const { db, pool } = createDb(DATABASE_URL);
+    await db.insert(conversationMessage).values({
+      id: messageId,
+      conversationId,
+      senderId: bidder.user.id,
+      kind: "image",
+      imageObjectKey,
+    });
+    await pool.end();
+
+    const photoUrl = `/v1/collection/conversations/${conversationId}/messages/${messageId}/photo`;
+    const served = await app.inject({
+      method: "GET",
+      url: photoUrl,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(served.statusCode).toBe(200);
+    expect(served.headers["content-type"]).toContain("image/jpeg");
+
+    const refused = await app.inject({
+      method: "GET",
+      url: photoUrl,
+      headers: { authorization: `Bearer ${outsider.accessToken}` },
+    });
+    expect(refused.statusCode).toBe(404);
   });
 
   it("rejects unauthenticated activity list with 401", async () => {
