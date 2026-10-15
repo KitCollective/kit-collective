@@ -1309,3 +1309,140 @@ test("the Reviewer prompt asks for the result line as its last text, after the w
   const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:")).prompt;
   assert.match(reviewer, /write that line as your last text, after every other tool call/);
 });
+
+// ---- Scenario titles in the Engineer prompt (KIT-351) -----------------------------------------------
+
+const TITLES = [
+  "A Collector edits one fact on their own jersey",
+  "A Collector adds a home shirt from a photo",
+  "A Collector removes a shirt from the Collection",
+  "A Collector corrects a wrong season on a Kit",
+  "A Collector sees the Kit's labels after saving",
+  "A Collector adds a second photo to an existing Kit",
+  "A Collector opens the Collection with no Kits yet",
+];
+const TITLES_COMMAND = /^node scripts\/scenarios\.mjs titles --issue KIT-9$/;
+const titlesAnswer =
+  (answer, code = 0) =>
+  (command) =>
+    TITLES_COMMAND.test(command)
+      ? { code, line: typeof answer === "string" ? answer : JSON.stringify(answer) }
+      : undefined;
+const withTitles = (titles, extra = {}) => ({
+  verdict: "SCENARIOS titles holdout-scenarios/holdout.md: LEAK-VERDICT",
+  path: "holdout-scenarios/holdout.md",
+  titles,
+  ...extra,
+});
+const engineerPrompts = (spawns) =>
+  agentSpawns(spawns)
+    .filter((s) => s.options.label.startsWith("engineer:"))
+    .map((s) => s.prompt);
+const SECTION_TEXT = /### (Starting situation|Actions|End state)/;
+
+test("titles reach the Engineer prompt, in every round, and Scenario text never does", async () => {
+  const { result, commands, spawns } = await run({
+    shell: titlesAnswer(withTitles(TITLES)),
+    // A red review sends a second round to the Engineer: both prompts carry the titles.
+    reviewer: (round) => ({
+      verdict: round === 1 ? "red" : "green",
+      sha: SHA,
+      sentence: "x",
+      threadId: REVIEWER_THREAD,
+    }),
+  });
+  assert.ok(result.rounds >= 2, "the run did not reach a second Engineer round");
+  const prompts = engineerPrompts(spawns);
+  assert.ok(prompts.length >= 2);
+  for (const prompt of prompts) {
+    assert.match(prompt, /will be judged on these Scenarios \(titles only/);
+    for (const [i, title] of TITLES.entries()) {
+      assert.ok(prompt.includes(`${i + 1}. ${title}`), title);
+    }
+    assert.ok(!prompt.includes("LEAK-VERDICT"), "the CLI's verdict text entered the prompt");
+  }
+  for (const text of [...spawns.map((s) => s.prompt), ...commands]) {
+    assert.doesNotMatch(text, SECTION_TEXT);
+  }
+  // The titles command holds only the issue key, and `read` is never named in a command.
+  const titlesCommands = commands.filter((c) => c.includes("scenarios.mjs"));
+  assert.equal(titlesCommands.length, 1);
+  assert.match(titlesCommands[0], TITLES_COMMAND);
+  assert.ok(!commands.some((c) => c.includes("scenarios.mjs read")));
+  for (const title of TITLES) assert.ok(!commands.some((c) => c.includes(title)));
+});
+
+test("the titles command is the last of the start runner and a resume carries it too", async () => {
+  const fresh = await run({ shell: titlesAnswer(withTitles(TITLES)) });
+  const at = fresh.commands.findIndex((c) => TITLES_COMMAND.test(c));
+  assert.ok(at > fresh.commands.findIndex((c) => c.includes('state KIT-9 "In Progress"')));
+  const resumed = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(1, titlesAnswer(withTitles(TITLES))),
+    engineer: () => ({
+      outcome: "ready",
+      sentence: "done",
+      threadId: ENGINEER_THREAD,
+      prNumber: 55,
+    }),
+  });
+  assert.ok(resumed.commands.some((c) => TITLES_COMMAND.test(c)));
+  assert.ok(engineerPrompts(resumed.spawns)[0].includes(`1. ${TITLES[0]}`));
+});
+
+test("a milestone with no Holdout file gives 'no Scenarios' in the prompt and the run reaches Approval", async () => {
+  const empty = withTitles([], {
+    verdict: "SCENARIOS titles x/y.md: no Scenarios (no Holdout file)",
+  });
+  const { result, spawns } = await run({ shell: titlesAnswer(empty) });
+  assert.equal(result.status, "Approval");
+  assert.ok(engineerPrompts(spawns)[0].includes("Milestone Scenarios: no Scenarios."));
+  const none = await run({ shell: titlesAnswer({ ...empty, path: null }) });
+  assert.equal(none.result.status, "Approval");
+  assert.ok(engineerPrompts(none.spawns)[0].includes("Milestone Scenarios: no Scenarios."));
+});
+
+test("a title or answer that fails its pattern never enters a prompt or a command, and the run continues", async () => {
+  const long = "x".repeat(121);
+  const bad = {
+    newline: withTitles(["fine title", "two\nlines"]),
+    backtick: withTitles(["fine title", "run `id`"]),
+    long: withTitles(["fine title", long]),
+    control: withTitles(["fine title", "bell\u0007"]),
+    separator: withTitles(["fine title", "a b"]),
+    empty: withTitles(["fine title", ""]),
+    padded: withTitles(["fine title", " padded "]),
+    notString: withTitles(["fine title", 7]),
+    notArray: withTitles("a title"),
+    tooMany: withTitles(Array.from({ length: 21 }, (_, i) => `Title ${i}`)),
+    badPath: withTitles(["fine title"], { path: "../etc/passwd" }),
+    pathNotString: withTitles(["fine title"], { path: 5 }),
+    notJson: "SCENARIOS titles x/y.md: 2 Scenarios",
+    jsonNull: "null",
+    malformed: "MALFORMED: x/y.md: no Scenario",
+  };
+  for (const [name, answer] of Object.entries(bad)) {
+    const { result, commands, spawns } = await run({ shell: titlesAnswer(answer) });
+    assert.equal(result.status, "Approval", name);
+    const [prompt] = engineerPrompts(spawns);
+    assert.ok(prompt.includes("no usable answer"), `${name}: not marked unusable`);
+    assert.ok(!prompt.includes("fine title"), `${name}: part of a bad answer got through`);
+    assert.ok(!commands.some((c) => c.includes("fine title") || c.includes("passwd")), name);
+  }
+  // A failing exit code or a runner that dropped the command is the same: no usable answer, run goes on.
+  const failed = await run({ shell: titlesAnswer(withTitles(TITLES), 4) });
+  assert.equal(failed.result.status, "Approval");
+  assert.ok(engineerPrompts(failed.spawns)[0].includes("no usable answer"));
+  const dropped = await run({ shell: (c) => (TITLES_COMMAND.test(c) ? null : undefined) });
+  assert.equal(dropped.result.status, "Approval");
+  assert.ok(engineerPrompts(dropped.spawns)[0].includes("no usable answer"));
+});
+
+test("a failing titles command does not stop the start, and a failing start step still does", async () => {
+  const { result } = await run({ shell: titlesAnswer("boom", 4) });
+  assert.equal(result.status, "Approval");
+  const stop = await run({
+    shell: (c) => (c.includes("start-decision") ? { code: 4, line: "nope" } : undefined),
+  });
+  assert.equal(stop.result.stoppedAt, "start");
+});

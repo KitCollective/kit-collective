@@ -40,11 +40,14 @@ The Collection shows one Kit with the photo as its cover and the confirmed label
 
 ```bash
 node scripts/scenarios.mjs titles --project "Holdout Scenarios" --milestone "Holdout"
+node scripts/scenarios.mjs titles --issue KIT-288
 node scripts/scenarios.mjs read   --project "Holdout Scenarios" --milestone "Holdout"
 node scripts/scenarios.mjs put    --project "<project>" --milestone "<milestone>" --file <draft>
 ```
 
 - `titles` prints one title per line. `read` prints each Scenario in full. Both end with one verdict line, the last line on stdout.
+- `titles --issue <KEY>` is the form the AFK developer uses (`titles` only; `read` and `put` refuse `--issue`, and it cannot be combined with `--project`, `--milestone` or `--file`). The CLI reads the issue's Linear project and milestone itself (`scripts/linear.mjs issue`) and prints exactly one line of JSON, which is the last and only line on stdout, because a command runner relays only the last line: `{"verdict":"SCENARIOS titles <path>: <n> Scenarios","path":"<path>","titles":["..."]}`. An issue with no project or milestone gives `path: null` and `titles: []`; a milestone with no Holdout file gives `titles: []` and a verdict ending `no Scenarios (no Holdout file)`. Both are exit 0. A malformed file and an unreadable Linear or Holdout are the same one-line `MALFORMED:` / `UNKNOWN:` verdicts as below (not JSON), and no Scenario text is ever printed. Use `--dir` as with the other forms.
+- The AFK developer (`.bb/workflows/afk-developer.js`) runs `titles --issue <KEY>` as the last command of its start runner and puts the titles in the Engineer prompt of every round as what the milestone will be judged on (ADR-0058: the issue key is checked against a fixed pattern before it enters the command, and the answer's path and titles are checked against fixed patterns, at most 20 titles of 1 to 120 printable characters each with no backtick, before they enter the prompt; nothing from the answer enters a command). With no titles the prompt says "no Scenarios"; an answer that fails a pattern, or a failing command, gives "no Scenarios (the scenarios CLI gave no usable answer)". The run continues in all cases: the titles are guidance, not a gate. The Scenario text never enters a prompt; only the Scenario judge runs `read`.
 - `titles` is free: it writes nothing. `read` writes one run-log line first.
 - `put` is how Scenarios get in; `/to-spec` runs it after the human approves a milestone's Scenarios. It reads the draft from `--file` (required for `put`, refused for `titles` and `read`), checks it with the same parser as `read`, and creates `<project-slug>/<milestone-slug>.md`. It only creates: if the milestone already has a Holdout file it stops with `REFUSED` and writes nothing (replacing approved Scenarios is a human edit in the Holdout repo). A malformed draft writes nothing. `put` prints no Scenario text and writes no run-log line. Keep the draft in a temp file outside this repo and run `put` as a single command: chained to anything (a pipe, `&&`), it loses the guard's exemption for the CLI, and one call keeps the push auditable. The input is a file so nothing has to be piped in.
 - Without `--dir` it reads (and `put` writes, through a contents PUT) the file with `gh api` from `scenarios.holdoutRepo`. `--dir <path>` uses `<path>/<project-slug>/<milestone-slug>.md` in a local clone instead (`put` makes the project folder; the clone's commit and push stay with the human). Writing needs `contents: write` on the Holdout repo, which the read-only proof above does not cover.
@@ -54,11 +57,12 @@ node scripts/scenarios.mjs put    --project "<project>" --milestone "<milestone>
 | 0 | `SCENARIOS <command> <path>: <n> Scenarios` | Printed |
 | 0 | `SCENARIOS put <path>: <n> Scenarios` | `put` created the milestone's file |
 | 0 | `SCENARIOS <command> <path>: no Scenarios (no Holdout file)` | The milestone has no Holdout file. Not an error |
-| 2 | `USAGE: ...` | Unknown subcommand, a missing flag or a name with no letter or digit |
+| 0 | `{"verdict":"SCENARIOS titles <path>: <n> Scenarios","path":"<path>","titles":[...]}` | `titles --issue`: the one JSON line (its `verdict` ends `no Scenarios (no Holdout file)` and `titles` is `[]` for a milestone without a file; `path` is `null` and the verdict says `the issue has no project or milestone` when the issue has none) |
+| 2 | `USAGE: ...` | Unknown subcommand, a missing or repeated flag, a name with no letter or digit, or `--issue` with anything but `titles` and a key like `KIT-9` |
 | 2 | `MALFORMED: <path>: <first problem> (+n more)` | The file (or, for `put`, the draft) breaks the format. Nothing is printed or written |
 | 2 | `REFUSED: <path> already exists in the Holdout; ...` | `put` onto a milestone that already has a file. Nothing is written |
 | 2 | `UNREADABLE: cannot read <file>: <cause>` | `put`'s `--file` cannot be read |
-| 4 | `UNKNOWN: cannot read\|write <repo or file>: <cause>` | gh is down, the token has no access, the repo does not exist, `--dir` is not a directory, the milestone file exists but cannot be read, or `put` cannot write (no `contents: write`, a file that appeared since the check). Any other unexpected error is also exit 4 with one `UNKNOWN:` line, never a stack trace |
+| 4 | `UNKNOWN: cannot read\|write <repo or file>: <cause>` | gh is down, Linear cannot be read (`titles --issue`), the token has no access, the repo does not exist, `--dir` is not a directory, the milestone file exists but cannot be read, or `put` cannot write (no `contents: write`, a file that appeared since the check). Any other unexpected error is also exit 4 with one `UNKNOWN:` line, never a stack trace |
 
 The codes are ADR-0053's (`GATE_EXIT` in `scripts/lib/gates.mjs`). Exit 1 is not used: nothing here is a "no" verdict until the Scenario judge scores Satisfaction.
 

@@ -57,6 +57,12 @@ export const meta = {
 const ISSUE = /^[A-Z][A-Z0-9]*-\d+$/;
 const THREAD = /^thr_[a-z0-9]{4,32}$/;
 const ROW = /^[a-z0-9][a-z0-9-]{0,40}$/;
+// The scenarios CLI's `titles --issue` answer (KIT-351): a path and Scenario titles, shown to the
+// Engineer as prompt text. Neither enters a command; both are checked here before they enter a prompt.
+const SCENARIO_PATH = /^[a-z0-9]+(-[a-z0-9]+)*\/[a-z0-9]+(-[a-z0-9]+)*\.md$/;
+// One printable line, no control character, no line or paragraph separator, no backtick.
+const SCENARIO_TITLE = /^[^\u0000-\u001f\u007f-\u009f\u2028\u2029`]{1,120}$/;
+const MAX_SCENARIO_TITLES = 20;
 /** A value from agent text may enter a command only through one of these. */
 const pick = (value, allowed) => (allowed.includes(value) ? value : null);
 const issue = String(args.issue ?? "");
@@ -313,13 +319,18 @@ if (!fetched || fetched.code !== 0 || !same || same.code !== 0) {
 if (!session || session.code !== 0) {
   return stopped("session-check", "stopped", { note: session?.line ?? "no output from session-check" });
 }
+// The last command asks for the milestone's Scenario titles (KIT-351). Only the validated `issue`
+// enters it. Its answer is one JSON line (a runner relays only the last line) and is guidance, not a
+// gate: it can fail without stopping the run, so it is read apart from the start steps.
+const startSteps = resume ? 2 : 3;
 const begun = await sh("start", "Session", [
   logCmd("start", `--issue ${issue}`),
   `node scripts/start-decision.mjs --issue ${issue}`,
   ...(resume ? [] : [`node scripts/linear.mjs state ${issue} "In Progress"`]),
+  `node scripts/scenarios.mjs titles --issue ${issue}`,
 ]);
-if (begun.length < (resume ? 2 : 3) || begun.some((r) => r.code !== 0)) {
-  return stopped("start", "stopped", { note: begun.find((r) => r.code !== 0)?.line ?? "start step incomplete" });
+if (begun.length < startSteps || begun.slice(0, startSteps).some((r) => r.code !== 0)) {
+  return stopped("start", "stopped", { note: begun.slice(0, startSteps).find((r) => r.code !== 0)?.line ?? "start step incomplete" });
 }
 let decision;
 try {
@@ -346,6 +357,38 @@ if (resume) {
     return stopped("resume", "stopped", { note: `resume found more than one open PR (or an unreadable answer): ${answer.slice(0, 80)}. Close the extra one, then resume.` });
   }
 }
+
+/**
+ * The titles the scenarios CLI answered, or null when the answer is missing or fails a pattern.
+ * Nothing but accepted strings leaves this function, and they go into the Engineer prompt only.
+ */
+function scenarioTitles(result) {
+  if (!result || result.runner || result.code !== 0) {
+    return null;
+  }
+  let answer;
+  try {
+    answer = JSON.parse(result.line);
+  } catch (error) {
+    return null;
+  }
+  const { path, titles } = answer ?? {};
+  if (path !== null && !(typeof path === "string" && SCENARIO_PATH.test(path))) {
+    return null;
+  }
+  if (!Array.isArray(titles) || titles.length > MAX_SCENARIO_TITLES) {
+    return null;
+  }
+  const clean = titles.every((t) => typeof t === "string" && SCENARIO_TITLE.test(t) && t === t.trim());
+  return clean ? titles : null;
+}
+const milestoneTitles = scenarioTitles(begun[startSteps]);
+const scenarioLine =
+  milestoneTitles === null
+    ? "Milestone Scenarios: no Scenarios (the scenarios CLI gave no usable answer)."
+    : milestoneTitles.length === 0
+      ? "Milestone Scenarios: no Scenarios."
+      : `Your milestone will be judged on these Scenarios (titles only; the Scenario text is held back on purpose, so do not try to read it: \`scenarios.mjs read\` belongs to the Scenario judge): ${milestoneTitles.map((t, i) => `${i + 1}. ${t}`).join(" ")}`;
 const roles = Array.isArray(decision.roles) ? decision.roles.join(", ") : "";
 
 // ---- Lead ---------------------------------------------------------------------------------------
@@ -438,6 +481,7 @@ async function engineerPass(round, feedback, engineerModelAlias) {
         : "Branch from origin/development, one PR into development.";
   const prompt = [
     `You are the Engineer for ${issue}. Read .cursor/skills/implement/SKILL.md and follow it, with /tdd and the Roles it names. ${resumeNote}`,
+    scenarioLine,
     "Read `### Plan` in the workpad when there is one. Copy the issue's write-scope: line into the PR body (plain globs, no backslashes).",
     `Wait for CI only in the foreground, in slices (a foreground command is capped at 10 minutes, and your shell tool backgrounds it after 2 unless you set the tool's timeout to 600000 ms, so set it): \`node scripts/wait-for-checks.mjs <pr> --timeout ${GATE_SLICE_SECONDS}\`. On exit 2 (still pending) run the same command again in the same turn, up to ${GATE_SLICES} times in all; only after that end with \`blocked ci-pending\`. Exit 5 means gh is unusable: report \`blocked\` with the verdict line and do not retry. Never start it in the background and end your turn.`,
     "Never move the issue to Merging, Post-Merge or Done, never merge, never enable auto-merge, never post a kc/audit status. Move nothing in Linear except the workpad and your evidence comments.",

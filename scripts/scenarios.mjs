@@ -4,6 +4,9 @@
  * Usage:
  *   node scripts/scenarios.mjs titles --project "<name>" --milestone "<name>" [--dir <path>]
  *       print the Scenario titles of one milestone, one per line, then the verdict line
+ *   node scripts/scenarios.mjs titles --issue <KEY> [--dir <path>]
+ *       the same for the milestone of a Linear issue, as ONE JSON line (verdict, path, titles) so a
+ *       command runner that relays only the last line carries it all; no milestone or no file: titles []
  *   node scripts/scenarios.mjs read --project "<name>" --milestone "<name>" [--dir <path>]
  *       print every Scenario of one milestone in full, then the verdict line
  *   node scripts/scenarios.mjs put --project "<name>" --milestone "<name>" --file <draft> [--dir <path>]
@@ -20,7 +23,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { config } from "./lib/gate-io.mjs";
+import { config, linearIssue } from "./lib/gate-io.mjs";
 import { GATE_EXIT } from "./lib/gates.mjs";
 import { append, logPath } from "./lib/run-log.mjs";
 import {
@@ -28,7 +31,9 @@ import {
   parseArgs,
   putVerdict,
   refusedVerdict,
+  renderIssueTitles,
   renderResult,
+  scenarioPath,
 } from "./lib/scenarios.mjs";
 
 function finish({ code, lines }) {
@@ -163,7 +168,21 @@ if (args.error) {
 
 // Every path ends in one verdict line: an error nothing above expected is exit 4, never a stack trace.
 try {
-  const { command, path, dir } = args;
+  const { command, dir } = args;
+  let { path } = args;
+  if (args.issue) {
+    let linear;
+    try {
+      linear = await linearIssue(args.issue);
+    } catch (error) {
+      unknown(`cannot read ${args.issue} from Linear: ${error.message.split("\n")[0]}`);
+    }
+    path =
+      linear?.project && linear?.milestone ? scenarioPath(linear.project, linear.milestone) : null;
+    if (path === null) {
+      finish(renderIssueTitles({ path, text: null }));
+    }
+  }
   if (command === "put") {
     put(args);
   }
@@ -171,7 +190,7 @@ try {
     logRead(path);
   }
   const text = dir ? readFromDir(dir, path) : readFromGitHub(config().scenarios.holdoutRepo, path);
-  finish(renderResult({ command, path, text }));
+  finish(args.issue ? renderIssueTitles({ path, text }) : renderResult({ command, path, text }));
 } catch (error) {
   unknown(`scenarios: ${error.message.split("\n")[0]}`);
 }
