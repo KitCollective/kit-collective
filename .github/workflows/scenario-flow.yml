@@ -1,0 +1,77 @@
+name: Scenario flow
+
+# Turns a flow file into a named run artifact (KIT-352, ADR-0060), so the hosted
+# Device flows run can take it without the flow ever being committed:
+#
+#   jq -n --arg name scenario-smoke --rawfile flow flow.yaml '{name: $name, flow: $flow}' |
+#     gh workflow run scenario-flow.yml --ref development --json
+#
+# The artifact is `scenario-flow-<name>` and holds one file, `<name>.yaml`. Hand its
+# run id to `device-flows.yml` (flows: artifact). The flow text is never printed to
+# the log, but anyone who can read this repository can download the artifact and
+# read the dispatch inputs.
+#
+# Triggers:
+#   - manual: the flow text and its name
+#   - a PR that changes this file: one no-op job. GitHub only dispatches a workflow
+#     it has seen run, and before the first merge it has not seen this one; the PR
+#     run makes the branch's file dispatchable with `--ref <branch>`.
+
+run-name: ${{ inputs.name && format('Scenario flow {0}', inputs.name) || 'Scenario flow' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: Flow name, lower case letters, digits and hyphens (scenario-smoke)
+        required: true
+        type: string
+      flow:
+        description: The Maestro flow, the whole YAML file
+        required: true
+        type: string
+  pull_request:
+    paths:
+      - .github/workflows/scenario-flow.yml
+
+permissions:
+  contents: read
+
+jobs:
+  flow:
+    name: Flow artifact
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Write the flow
+        env:
+          NAME: ${{ inputs.name }}
+          FLOW: ${{ inputs.flow }}
+        run: |
+          if [[ ! "$NAME" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]]; then
+            echo "The name must be lower case letters, digits and hyphens, at most 63 characters." >&2
+            exit 2
+          fi
+          if ! grep -qE '^appId:[[:space:]]*app\.kitcollective\.mobile[[:space:]]*$' <<< "$FLOW"; then
+            echo "The flow has no 'appId: app.kitcollective.mobile' line; is it a Maestro flow for this app?" >&2
+            exit 2
+          fi
+          mkdir -p "$RUNNER_TEMP/scenario-flow"
+          printf '%s\n' "$FLOW" > "$RUNNER_TEMP/scenario-flow/$NAME.yaml"
+          echo "Wrote $NAME.yaml ($(wc -l < "$RUNNER_TEMP/scenario-flow/$NAME.yaml") lines)."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scenario-flow-${{ inputs.name }}
+          path: ${{ runner.temp }}/scenario-flow/${{ inputs.name }}.yaml
+          retention-days: 7
+          if-no-files-found: error
+
+  registered:
+    name: Dispatchable
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: echo "Scenario flow runs by workflow_dispatch only; this run lets GitHub dispatch the branch's file."
