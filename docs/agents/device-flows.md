@@ -67,6 +67,27 @@ It puts the `run-device-flows` label on the PR, which starts `.github/workflows/
 
 What the hosted run does not do: the upload to the evidence bucket, the before/after comparison, the Claude review, the PR comment and the workpad links. Those need the bucket keys and the approver's logins, and no Actions secret holds them. A hosted run takes about 45 minutes when the native binary has to be built and far less on a cache hit; macOS minutes are billed at ten times the Linux rate.
 
+### A flow from a run artifact
+
+The hosted run can also take one flow that is not in the repo, from a named run artifact: the Scenario judge's path (ADR-0060). Two workflows, both started by hand:
+
+```bash
+# 1. Put the flow into a run artifact, scenario-flow-<name>, holding <name>.yaml.
+jq -n --arg name scenario-smoke --rawfile flow flow.yaml '{name: $name, flow: $flow}' |
+  gh workflow run scenario-flow.yml --ref development --json
+sleep 5   # the newest run of the producer is this one
+run="$(gh run list --workflow scenario-flow.yml --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')"
+gh run watch "$run" --exit-status
+
+# 2. Run it on the hosted iOS Simulator against the commit on --ref.
+gh workflow run device-flows.yml --ref development -f flows=artifact \
+  -f flow_run="$run" -f flow_artifact=scenario-flow-scenario-smoke
+```
+
+`flow` names the file inside the artifact when it holds more than one. `device-flows.yml` downloads the artifact into `apps/mobile/.maestro/external/` (one level under `.maestro`, so `../subflows/sign-in.yaml` resolves), and from there it is a slice run: the same Postgres, local API, build and `run-local.sh`, signed in as the Test Collector, with the photos the flow's `# simulator-photos:` line names. Screenshots, recording and the API log are uploaded as `device-flows-<sha>`. It sets no `Device flows` status, has no permission to push and never commits the flow; several artifact runs on one commit do not cancel each other.
+
+The flow is never printed to a log, but anyone who can read the repository can download the artifact (kept 7 days) and read the dispatch inputs.
+
 ### On the approver's Mac
 
 The rest of this section runs on the approver's Mac, for the full evidence or while iterating on a flow. Needs Xcode with an iOS Simulator, CocoaPods, a Java runtime and the Maestro CLI (`brew install mobile-dev-inc/tap/maestro openjdk@17 cocoapods`), a local Postgres with a database whose name contains `test`, and `gh` signed in.

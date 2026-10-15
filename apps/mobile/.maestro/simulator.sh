@@ -13,16 +13,19 @@
 maestro_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # simulator_photos: the photo names the current slice flow asks for, one per line, or nothing.
+# A flow named by E2E_FLOW_FILE (a flow from a run artifact, KIT-352) is read instead of the slice flow.
 simulator_photos() {
   [[ "${E2E_FLOWS:-slice}" == regression ]] && return 0
-  local key="${E2E_ISSUE:-}" branch flow
-  if [[ -z "$key" ]]; then
-    branch="$(git -C "$maestro_dir" branch --show-current 2>/dev/null || true)"
-    [[ "$branch" =~ [Kk][Ii][Tt]-([0-9]+) ]] && key="KIT-${BASH_REMATCH[1]}"
+  local key="${E2E_ISSUE:-}" branch flow="${E2E_FLOW_FILE:-}"
+  if [[ -z "$flow" ]]; then
+    if [[ -z "$key" ]]; then
+      branch="$(git -C "$maestro_dir" branch --show-current 2>/dev/null || true)"
+      [[ "$branch" =~ [Kk][Ii][Tt]-([0-9]+) ]] && key="KIT-${BASH_REMATCH[1]}"
+    fi
+    [[ -n "$key" ]] || return 0
+    flow="$maestro_dir/slices/$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]').yaml"
   fi
-  key="$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')"
-  flow="$maestro_dir/slices/$key.yaml"
-  [[ -n "$key" && -f "$flow" ]] || return 0
+  [[ -f "$flow" ]] || return 0
   sed -n -E 's/^#[[:space:]]*simulator-photos:[[:space:]]*(.*)$/\1/p' "$flow" | head -1 |
     tr ',' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | grep -v '^$' || true
 }

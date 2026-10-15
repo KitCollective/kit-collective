@@ -24,6 +24,9 @@ name: Device flows
 #     branch name, e.g. claude/kit-279-59e33d). `node scripts/request-device-flows.mjs`
 #     sets the label; a new head needs the label set again.
 #   - manual: pick regression or slice (and an issue key; no status)
+#   - manual, flows: artifact: one flow taken from a named run artifact, for example
+#     one `scenario-flow.yml` made (KIT-352, ADR-0060). It runs exactly as a slice
+#     run does, sets no status and commits nothing; the flow is never in the repo.
 
 on:
   schedule:
@@ -33,23 +36,39 @@ on:
       flows:
         description: Which flows to run
         type: choice
-        options: [regression, slice]
+        options: [regression, slice, artifact]
         default: regression
       issue:
         description: Issue key for a slice run, for example KIT-279
+        required: false
+        type: string
+      flow_run:
+        description: For an artifact run, the id of the run that holds the flow
+        required: false
+        type: string
+      flow_artifact:
+        description: For an artifact run, the artifact's name, for example scenario-flow-scenario-smoke
+        required: false
+        type: string
+      flow:
+        description: For an artifact run, the flow file in the artifact; empty when it holds one
         required: false
         type: string
   pull_request:
     types: [labeled]
     branches: [development]
 
+# An artifact run is its own group: several runs of one flow on one commit (the
+# Scenario judge runs each Scenario more than once) must not cancel each other or the nightly.
 concurrency:
-  group: device-flows-${{ github.event.pull_request.number || github.ref }}
+  group: device-flows-${{ inputs.flows == 'artifact' && format('artifact-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
   statuses: write
+  # Reading another run's artifact (flows: artifact).
+  actions: read
 
 jobs:
   ios:
@@ -64,12 +83,13 @@ jobs:
       # is disposable and lives on this runner only.
       E2E_LOCK_HELD: "1"
       E2E_LOCAL_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_e2e_test
-      E2E_FLOWS: ${{ (github.event_name == 'schedule' || inputs.flows == 'regression') && 'regression' || 'slice' }}
+      E2E_FLOWS: ${{ (github.event_name == 'schedule' || inputs.flows == 'regression') && 'regression' || inputs.flows == 'artifact' && 'artifact' || 'slice' }}
       E2E_ISSUE: ${{ inputs.issue }}
       LANG: en_US.UTF-8
       LC_ALL: en_US.UTF-8
       GH_TOKEN: ${{ github.token }}
-      # Only a PR's slice run speaks for a head; the nightly and manual runs set no status.
+      # Only a PR's slice run speaks for a head; the nightly and manual runs (artifact runs
+      # included) set no status.
       STATUS_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
@@ -92,6 +112,53 @@ jobs:
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: git switch -c "$HEAD_REF"
+
+      # Before the API and the build, so a bad artifact fails in seconds. The flow sits one
+      # level under .maestro, like slices/, so `../subflows/sign-in.yaml` resolves.
+      - name: Check the flow artifact inputs
+        if: env.E2E_FLOWS == 'artifact'
+        env:
+          FLOW_RUN: ${{ inputs.flow_run }}
+          FLOW_ARTIFACT: ${{ inputs.flow_artifact }}
+          FLOW: ${{ inputs.flow }}
+        run: |
+          [[ "$FLOW_RUN" =~ ^[0-9]+$ ]] || { echo "flow_run must be a run id (digits)." >&2; exit 2; }
+          [[ "$FLOW_ARTIFACT" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "flow_artifact must be an artifact name." >&2; exit 2; }
+          [[ -z "$FLOW" || "$FLOW" =~ ^[a-z0-9][a-z0-9-]*\.ya?ml$ ]] || { echo "flow must be a file name like scenario-smoke.yaml." >&2; exit 2; }
+
+      - name: Download the flow artifact
+        if: env.E2E_FLOWS == 'artifact'
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.flow_run }}
+          name: ${{ inputs.flow_artifact }}
+          github-token: ${{ github.token }}
+          path: apps/mobile/.maestro/external
+
+      # build-local.sh (through simulator.sh) and run-local.sh read E2E_FLOW_FILE, so the app
+      # lands on the simulator the flow drives, with the photos the flow's header names.
+      - name: Name the flow file
+        if: env.E2E_FLOWS == 'artifact'
+        env:
+          FLOW: ${{ inputs.flow }}
+        run: |
+          dir="$GITHUB_WORKSPACE/apps/mobile/.maestro/external"
+          if [[ -z "$FLOW" ]]; then
+            # The macOS runner's /bin/bash is 3.2: no mapfile.
+            flows=()
+            while IFS= read -r found; do flows+=("$found"); done \
+              < <(find "$dir" -maxdepth 1 -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)
+            if [[ "${#flows[@]}" -ne 1 ]]; then
+              echo "The artifact holds ${#flows[@]} flow files; name one with the flow input." >&2
+              exit 2
+            fi
+            file="${flows[0]}"
+          else
+            file="$dir/$FLOW"
+          fi
+          [[ -f "$file" ]] || { echo "The artifact has no $FLOW." >&2; exit 2; }
+          echo "Flow from the artifact: ${file#"$dir"/}"
+          echo "E2E_FLOW_FILE=$file" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v4
 
@@ -170,7 +237,8 @@ jobs:
 
       - name: Run the flows
         id: flows
-        run: apps/mobile/.maestro/run-local.sh
+        # An artifact run names its one flow; the others pick theirs from E2E_FLOWS and the branch.
+        run: apps/mobile/.maestro/run-local.sh ${E2E_FLOW_FILE:+"$E2E_FLOW_FILE"}
 
       - name: Upload screenshots and recordings
         if: always()
