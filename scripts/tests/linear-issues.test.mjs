@@ -58,14 +58,27 @@ function matches(node, clause) {
 }
 
 /** A fake GraphQL transport over an in-memory team. */
-function fakeLinear(issues = []) {
+function fakeLinear(issues = [], { labelPageSize = 100 } = {}) {
   const calls = [];
   const created = [];
   async function gql(query, variables = {}) {
     calls.push({ query, variables });
     if (query.includes("teams(filter")) {
+      return { teams: { nodes: [{ id: "team-1" }] } };
+    }
+    if (query.includes("workflowStates(")) {
+      assert.equal(variables.id, "team-1");
+      return { workflowStates: { nodes: STATES } };
+    }
+    if (query.includes("issueLabels(")) {
+      const start = variables.after ? Number(variables.after) : 0;
+      const page = LABELS.slice(start, start + labelPageSize);
+      const next = start + labelPageSize;
       return {
-        teams: { nodes: [{ id: "team-1", states: { nodes: STATES }, labels: { nodes: LABELS } }] },
+        issueLabels: {
+          nodes: page,
+          pageInfo: { hasNextPage: next < LABELS.length, endCursor: String(next) },
+        },
       };
     }
     if (query.includes("issues(filter")) {
@@ -321,4 +334,10 @@ test("create refuses an unknown label, state or project before creating anything
     );
     assert.equal(fake.created.length, 0);
   }
+});
+
+test("labels are loaded page by page, so labels past the first page still resolve", async () => {
+  const fake = fakeLinear([issue("KIT-1", "To-do", { labels: ["bug"] })], { labelPageSize: 2 });
+  assert.deepEqual(names(await listIssues(fake.gql, ["--label", "bug"])), ["KIT-1"]);
+  assert.equal(fake.calls.filter((call) => call.query.includes("issueLabels(")).length, 3);
 });

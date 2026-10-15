@@ -11,7 +11,7 @@ export class LinearUsageError extends Error {}
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 250;
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 50;
 const TEAM_KEY = "KIT";
 const REFUSED_LABELS = new Map([
   ["signal-up", "use `signal-up` (it files into Triage, related to its origin, with its own cap)"],
@@ -45,18 +45,34 @@ function resolveName(nodes, name, kind) {
 
 async function loadTeam(gql) {
   const { teams } = await gql(
-    `query($key: String!) { teams(filter: { key: { eq: $key } }) { nodes {
-      id
-      states { nodes { id name type } }
-      labels(first: 250) { nodes { id name parent { id name } } }
-    } } }`,
+    "query($key: String!) { teams(filter: { key: { eq: $key } }) { nodes { id } } }",
     { key: TEAM_KEY },
   );
-  const team = teams.nodes[0];
-  if (!team) {
+  const id = teams.nodes[0]?.id;
+  if (!id) {
     throw new LinearUsageError(`team ${TEAM_KEY} not found`);
   }
-  return team;
+  const { workflowStates } = await gql(
+    "query($id: ID!) { workflowStates(first: 100, filter: { team: { id: { eq: $id } } }) { nodes { id name type } } }",
+    { id },
+  );
+  const labels = [];
+  let after = null;
+  for (;;) {
+    const { issueLabels } = await gql(
+      `query($key: String!, $after: String) { issueLabels(first: 100, after: $after, filter: { or: [{ team: { key: { eq: $key } } }, { team: { null: true } }] }) {
+        nodes { id name parent { id name } }
+        pageInfo { hasNextPage endCursor }
+      } }`,
+      { key: TEAM_KEY, after },
+    );
+    labels.push(...issueLabels.nodes);
+    if (!issueLabels.pageInfo.hasNextPage) {
+      break;
+    }
+    after = issueLabels.pageInfo.endCursor;
+  }
+  return { id, states: { nodes: workflowStates.nodes }, labels: { nodes: labels } };
 }
 
 function clampLimit(raw) {
@@ -76,8 +92,8 @@ const LIST_QUERY = `query($filter: IssueFilter, $first: Int!, $after: String) {
       identifier title url description
       state { name }
       project { name }
-      labels { nodes { name } }
-      inverseRelations { nodes { type issue { identifier state { name } } } }
+      labels(first: 20) { nodes { name } }
+      inverseRelations(first: 20) { nodes { type issue { identifier state { name } } } }
     }
     pageInfo { hasNextPage endCursor }
   }
