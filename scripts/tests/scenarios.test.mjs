@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { test } from "node:test";
@@ -51,12 +58,15 @@ function holdout(text) {
   return dir;
 }
 
+/** A fresh run-log path in a temp dir. `read` logs, so no test may reach the real log. */
+const tmpLog = () => join(mkdtempSync(join(tmpdir(), "scenarios-log-")), "run-log.jsonl");
+
 function run(args, { dir, env } = {}) {
   const argv = [CLI, ...args];
   if (dir) argv.push("--dir", dir);
   const result = spawnSync(process.execPath, argv, {
     encoding: "utf8",
-    env: { ...process.env, ...env },
+    env: { ...process.env, BB_THREAD_ID: "", KC_RUN_LOG: tmpLog(), ...env },
   });
   const lines = result.stdout.trimEnd().split("\n");
   return { ...result, lines, verdict: lines.at(-1) };
@@ -278,4 +288,76 @@ test("both config files hold the scenarios block: 3 runs, 2 to meet, the same Ho
   assert.equal(example.runsPerScenario, real.runsPerScenario);
   assert.equal(example.satisfiedToMeet, real.satisfiedToMeet);
   assert.equal(example.holdoutRepo, real.holdoutRepo);
+});
+
+const logLines = (path) =>
+  existsSync(path)
+    ? readFileSync(path, "utf8")
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => JSON.parse(l))
+    : [];
+
+test("read writes one run-log line naming the Holdout file and the reading thread", () => {
+  const log = tmpLog();
+  const dir = holdout(`${SCENARIO_A}\n${SCENARIO_B}`);
+  const result = run(["read", ...MILESTONE], {
+    dir,
+    env: { KC_RUN_LOG: log, BB_THREAD_ID: "thr_abcd1234" },
+  });
+  assert.equal(result.status, GATE_EXIT.open);
+  const lines = logLines(log);
+  assert.equal(lines.length, 1);
+  const { at, ...event } = lines[0];
+  assert.match(at, /^\d{4}-/);
+  assert.deepEqual(event, {
+    event: "holdout",
+    code: "holdout-read",
+    holdout: "holdout-scenarios/holdout.md",
+    thread: "thr_abcd1234",
+  });
+});
+
+test("read logs a line even when the milestone has no Holdout file; a human read has no thread", () => {
+  const log = tmpLog();
+  const result = run(["read", ...MILESTONE], { dir: holdout(), env: { KC_RUN_LOG: log } });
+  assert.equal(result.status, GATE_EXIT.open);
+  const lines = logLines(log);
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].holdout, "holdout-scenarios/holdout.md");
+  assert.equal("thread" in lines[0], false);
+});
+
+test("titles writes no run-log line", () => {
+  const log = tmpLog();
+  const result = run(["titles", ...MILESTONE], {
+    dir: holdout(SCENARIO_A),
+    env: { KC_RUN_LOG: log, BB_THREAD_ID: "thr_abcd1234" },
+  });
+  assert.equal(result.status, GATE_EXIT.open);
+  assert.equal(existsSync(log), false);
+});
+
+test("read that cannot log (malformed BB_THREAD_ID) is exit 4 and prints no Scenario text", () => {
+  const log = tmpLog();
+  const result = run(["read", ...MILESTONE], {
+    dir: holdout(SCENARIO_A),
+    env: { KC_RUN_LOG: log, BB_THREAD_ID: "not a thread" },
+  });
+  assert.equal(result.status, GATE_EXIT.unknown);
+  assert.match(result.verdict, /^UNKNOWN: cannot log the read: /);
+  assert.equal(result.lines.length, 1);
+  assert.ok(!result.stdout.includes("empty Collection"));
+  assert.equal(logLines(log).length, 0);
+});
+
+test("read with a usage error writes no line", () => {
+  const log = tmpLog();
+  const result = run(["read", "--project", "Holdout Scenarios"], {
+    dir: holdout(SCENARIO_A),
+    env: { KC_RUN_LOG: log },
+  });
+  assert.equal(result.status, GATE_EXIT.usage);
+  assert.equal(existsSync(log), false);
 });
