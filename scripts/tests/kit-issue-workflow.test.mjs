@@ -865,6 +865,131 @@ test("a fresh run never asks for the workpad plan, and skipLead still skips the 
   assert.ok(!skip.commands.some(planCheck));
 });
 
+// ---- autoLand (ADR-0061) --------------------------------------------------------------------------------
+
+const autoLandShell =
+  ({
+    start = { code: 0, line: "ENQUEUED (auto-land): PR 77" },
+    finish = { code: 0, line: "LANDED (auto-land): PR 77" },
+    enabled,
+  } = {}) =>
+  (command) => {
+    if (command.includes("auto-land.mjs enabled")) return enabled;
+    if (command.includes("auto-land.mjs start")) return start;
+    if (command.includes("auto-land.mjs finish")) return finish;
+    return undefined;
+  };
+
+test("autoLand off (the default): the run ends at Approval and only asks whether the config switch is on", async () => {
+  const { result, commands } = await run({ shell: autoLandShell() });
+  assert.equal(result.status, "Approval");
+  assert.equal(lastState(commands), "Approval");
+  assert.ok(!commands.some((c) => /auto-land\.mjs (start|finish)/.test(c)));
+  // A runner that answers anything but the exact line leaves the default.
+  const odd = await run({ shell: autoLandShell({ enabled: { code: 0, line: "OPEN: fine" } }) });
+  assert.equal(odd.result.status, "Approval");
+});
+
+test("autoLand true: green hands the issue to auto-land start with --force-enabled, then finish, and ends Done", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: autoLandShell(),
+  });
+  assert.equal(result.status, "Done");
+  assert.equal(result.stoppedAt, "done");
+  const start = commands.findIndex((c) =>
+    c.includes("auto-land.mjs start 77 --issue KIT-9 --handoff --force-enabled"),
+  );
+  const finish = commands.findIndex((c) => c.includes("auto-land.mjs finish 77 --issue KIT-9"));
+  assert.ok(start >= 0 && finish > start, "start, then finish");
+  assert.ok(commands.findIndex((c) => c.includes("audit-receipt.mjs post")) < start);
+  assert.notEqual(lastState(commands), "Approval", "Approval is the exception exit, not a step");
+  // The workflow itself still never merges, posts a receipt for real, or sets a merge state.
+  for (const command of commands) {
+    assert.doesNotMatch(command, /"(Merging|Post-Merge|Done)"/);
+    assert.doesNotMatch(command, /gh pr merge|merge-lock|sync-pr|--auto\b/);
+    if (command.includes("audit-receipt.mjs")) assert.match(command, /--dry-run/);
+  }
+});
+
+test("autoLand from the config: the script says AUTO-LAND ON, so start runs without --force-enabled", async () => {
+  const { result, commands } = await run({
+    shell: autoLandShell({ enabled: { code: 0, line: "AUTO-LAND ON" } }),
+  });
+  assert.equal(result.status, "Done");
+  const start = commands.find((c) => c.includes("auto-land.mjs start"));
+  assert.match(start, /--handoff$/);
+  assert.doesNotMatch(start, /--force-enabled/);
+});
+
+test("autoLand refused: the issue is moved to Approval, with the refusal in the note", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: autoLandShell({
+      start: { code: 1, line: "REFUSED (auto-land): needs-human: surface:mobile" },
+    }),
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(result.stoppedAt, "auto-land");
+  assert.match(result.note, /needs-human: surface:mobile/);
+  assert.equal(lastState(commands), "Approval");
+  assert.ok(!commands.some((c) => c.includes("auto-land.mjs finish")));
+});
+
+test("autoLand waiting: start repeats while the verdict is exit 3, five slices at most, and stops In Review", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: autoLandShell({ start: { code: 3, line: "WAITING (auto-land): checks pending" } }),
+  });
+  assert.equal(commands.filter((c) => c.includes("auto-land.mjs start")).length, 5);
+  assert.equal(result.status, "In Review");
+  assert.equal(lastState(commands), "In Review");
+  assert.match(result.note, /still waiting after 5 slices/);
+});
+
+test("autoLand finish alarm: the script already moved the issue to Approval; the workflow reports it", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: autoLandShell({ finish: { code: 1, line: "ALARM (auto-land): queue-ejected: ..." } }),
+  });
+  assert.equal(result.status, "Approval");
+  assert.match(result.note, /ALARM \(auto-land\): queue-ejected/);
+  assert.ok(!commands.some((c) => /state KIT-9 "(Done|Merging)"/.test(c)));
+});
+
+test("autoLand finish still waiting after the slices leaves the issue Merging and says how to go on", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: autoLandShell({ finish: { code: 3, line: "WAITING (auto-land): in the queue" } }),
+  });
+  assert.equal(commands.filter((c) => c.includes("auto-land.mjs finish")).length, 5);
+  assert.equal(result.status, "Merging");
+  assert.match(result.note, /run auto-land\.mjs finish again/);
+});
+
+test("a runner that returns nothing for auto-land start is never retried (the command is not idempotent) and the status is unknown", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: (c) => (c.includes("auto-land.mjs start") ? null : undefined),
+  });
+  assert.equal(commands.filter((c) => c.includes("auto-land.mjs start")).length, 1);
+  assert.equal(result.status, "unknown");
+  assert.match(result.note, /runner-no-result/);
+  assert.match(result.note, /may have enqueued/);
+});
+
+test("autoLand must be a boolean in the input schema, and never changes how the Reviewer or the receipt dry run work", async () => {
+  assert.match(SOURCE, /autoLand: \{ type: "boolean" \}/);
+  const { spawns } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: autoLandShell(),
+  });
+  for (const spawn of agentSpawns(spawns)) {
+    assert.equal(spawn.options.provider, "claude-code");
+    assert.match(spawn.options.model, /^claude-/);
+  }
+});
+
 test("a resume whose head is ready goes straight to the Reviewer: no Engineer, no In Progress (KIT-295)", async () => {
   const { result, commands, spawns } = await run({
     args: { issue: "KIT-9", resume: true },

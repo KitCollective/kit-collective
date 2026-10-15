@@ -1,7 +1,7 @@
 export const meta = {
   name: "kit-issue",
   description:
-    "One KIT issue from To-do to Approval: session-check, Lead, Engineer, pre-review gate, Reviewer, review gate, audit receipt dry-run. Never merges, never posts a receipt, never moves to Merging or Done (ADR-0058).",
+    "One KIT issue from To-do to Approval, or with autoLand on to Done: session-check, Lead, Engineer, pre-review gate, Reviewer, review gate, audit receipt dry-run, then Approval (default) or scripts/auto-land.mjs, the only thing that may post the receipt, set Merging and enqueue (ADR-0058, ADR-0061).",
   inputSchema: {
     type: "object",
     required: ["issue"],
@@ -12,6 +12,7 @@ export const meta = {
       skipLead: { type: "boolean" },
       maxRounds: { type: "integer", minimum: 1, maximum: 3 },
       machine: { type: "string" },
+      autoLand: { type: "boolean" },
     },
   },
   outputSchema: {
@@ -35,7 +36,8 @@ export const meta = {
     { title: "Pre-review gate", detail: "gate.mjs pre-review and head-changed, then In Review" },
     { title: "Reviewer", detail: "fresh thread, different model, writes the matrix" },
     { title: "Review gate", detail: "gate.mjs review, then the receipt as a dry run" },
-    { title: "Hand-over", detail: "Approval, or the stop state; never Merging" },
+    { title: "Hand-over", detail: "Approval, or the stop state; never Merging by itself" },
+    { title: "Auto-land", detail: "only when autoLand is on: scripts/auto-land.mjs start, then finish" },
   ],
 };
 
@@ -47,7 +49,10 @@ export const meta = {
 // per-agent machine, worktree or visibility option, so the machine and the worktree are the
 // ones of the thread that started the run (start it from a thread on the machine you want).
 // This workflow is the orchestrator of ADR-0052: its runner workers are the only writers of the
-// run log. It stops at Approval. Landing stays human-started (/issue-session -> Merging -> /land).
+// run log. By default it stops at Approval and landing stays human-started (/issue-session -> Merging -> /land).
+// With the `autoLand` arg (or flow.autoLand.enabled) it hands a green issue to scripts/auto-land.mjs, which
+// re-checks everything itself (ADR-0061). THIS SCRIPT STILL NEVER posts a receipt, sets Merging or Done, or
+// merges: MAY_SET has no such state and no command below names `gh pr merge`; only auto-land.mjs does those.
 
 const ISSUE = /^[A-Z][A-Z0-9]*-\d+$/;
 const THREAD = /^thr_[a-z0-9]{4,32}$/;
@@ -223,10 +228,10 @@ async function shAfter(before, label, phaseTitle, command) {
 }
 
 /** Runs one gate command in slices; `exhausted` is set when every slice still said waiting. `before` rides along with the first slice. */
-async function gateSlices(label, phaseTitle, command, before = []) {
+async function gateSlices(label, phaseTitle, command, before = [], retry = true) {
   let out = { code: 4, line: `no output from ${label}` };
   for (let slice = 1; slice <= GATE_SLICES; slice += 1) {
-    out = (slice === 1 ? await shAfter(before, label, phaseTitle, command) : (await sh(label, phaseTitle, [command], false, true))[0]) ?? out;
+    out = (slice === 1 && (before.length > 0 || retry) ? await shAfter(before, label, phaseTitle, command) : (await sh(label, phaseTitle, [command], false, retry))[0]) ?? out;
     if (out.code !== 3) {
       return out;
     }
@@ -657,7 +662,10 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
   }
   // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.
   const receiptCmd = `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread}${engineerThread ? ` --implementer-thread ${engineerThread}` : ""} --require-different-model --dry-run`;
-  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd], false, true);
+  // `auto-land.mjs enabled` rides in the same runner (it only reads the config and the kill file), so the default path spends no extra runner.
+  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd, "node scripts/auto-land.mjs enabled"], true, true);
+  const enabledAnswer = dry[1];
+  dry = dry.slice(0, 1);
   // A Reviewer that returned its verdict through the result tool can end on another sentence, and
   // the receipt reads only the thread's last text (KIT-283 and KIT-286, 2026-10-14). The Reviewer
   // is asked once for the line, as bb-orchestrate allows, and the receipt is tried again. The message
@@ -685,8 +693,17 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     return stopped("receipt", "In Review", { prNumber, rounds, verdict: "green", receipt, note: `the audit receipt dry run did not pass: ${receipt}` });
   }
 
-  // -- Hand-over: Approval, never Merging.
+  // -- Hand-over: Approval by default; with auto-land on, scripts/auto-land.mjs decides and acts.
   phase("Hand-over");
+  let autoLandOn = args.autoLand === true;
+  if (!autoLandOn) {
+    // The config switch is read by the script; only the exact line `AUTO-LAND ON` counts, so a runner
+    // that answers anything else leaves the default behaviour. auto-land re-checks it itself.
+    autoLandOn = enabledAnswer?.code === 0 && !enabledAnswer.runner && enabledAnswer.line === "AUTO-LAND ON";
+  }
+  if (autoLandOn) {
+    return autoLand(prNumber, rounds, receipt);
+  }
   await move("Hand-over", "Approval");
   return stopped("approval", "Approval", {
     prNumber,
@@ -695,6 +712,44 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     receipt,
     note: "Green and the review gate is open. Approval is not merge permission: a human moves the issue to Merging, then /land runs. The audit receipt was a dry run; post it with audit-receipt.mjs post.",
   });
+}
+
+// ---- Auto-land (ADR-0061) -------------------------------------------------------------------------
+// Everything that matters is enforced inside scripts/auto-land.mjs, which re-checks the issue, the PR, the
+// receipt and the gate itself. The workflow only starts it and reports; a runner that lies about an exit code
+// cannot cause a merge, and none of these commands is idempotent, so a runner that returns nothing is never retried.
+async function autoLand(pr, rounds, receipt) {
+  phase("Auto-land");
+  const force = args.autoLand === true ? " --force-enabled" : "";
+  const started = await gateSlices("auto-land:start", "Auto-land", `node scripts/auto-land.mjs start ${pr} --issue ${issue} --handoff${force}`, [], false);
+  const base = { prNumber: pr, rounds, verdict: "green", receipt };
+  if (started.runner) {
+    return stopped("auto-land", "unknown", { ...base, note: `${started.line}. auto-land may have enqueued the PR: check the PR and the issue, then run auto-land.mjs finish.` });
+  }
+  if (started.exhausted) {
+    await sh("log:auto-land", "Auto-land", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
+    return stopped("auto-land", "In Review", { ...base, note: started.line });
+  }
+  if (started.code === 1) {
+    // Refused: the script already handed the issue to a person (--handoff). Make Linear say so even if its write failed.
+    await move("Auto-land", "Approval");
+    return stopped("auto-land", "Approval", { ...base, note: `auto-land refused: ${started.line}` });
+  }
+  if (started.code !== 0) {
+    return stopped("auto-land", "In Review", { ...base, note: started.line });
+  }
+  const finished = await gateSlices("auto-land:finish", "Auto-land", `node scripts/auto-land.mjs finish ${pr} --issue ${issue}`, [], false);
+  if (finished.runner) {
+    return stopped("auto-land", "unknown", { ...base, note: `${finished.line}. Run auto-land.mjs finish again.` });
+  }
+  if (finished.code === 0) {
+    return stopped("done", "Done", { ...base, note: finished.line });
+  }
+  if (finished.code === 1) {
+    // The script's alarm already moved the issue to Approval with ready-for-human.
+    return stopped("auto-land", "Approval", { ...base, note: finished.line });
+  }
+  return stopped("auto-land", "Merging", { ...base, note: `${finished.line}. The PR is enqueued; run auto-land.mjs finish again.` });
 }
 
 return stopped("loop", "In Progress", { prNumber: prNumber ?? undefined, rounds, verdict: lastVerdict, note: "round cap reached" });
