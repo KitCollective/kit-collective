@@ -72,6 +72,8 @@ Every issue:
 - **Do not delegate. Do not set Linear Agent to Cursor.**
 - **Do not set Linear priority** unless the user named it. Default is None (`0`). The human sets Urgent/High/Medium/Low. Planner uses that as claim order.
 
+Without a Linear MCP, create each issue with `node scripts/linear.mjs create "<title>" --body-file <path> --state To-do --label ready-for-agent --project <name> [--blocked-by KIT-n]...`. It refuses `ready-for-agent` unless the body has a non-empty `write-scope:` line and an `## Acceptance criteria` section with at least one `- [ ]` item, refuses `signal-up` and `proposal`, and defaults to Backlog when `--state` is left out. `node scripts/linear.mjs list --state To-do --label ready-for-agent --unblocked` shows what the planner would claim. See `docs/agents/issue-tracker.md`.
+
 After publish: an unblocked `dispatch.state` issue with `ready-for-agent` is claimed by the planner cron. No Assignee → Agents click.
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
