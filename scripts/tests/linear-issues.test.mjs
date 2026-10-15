@@ -32,6 +32,7 @@ function issue(identifier, state, extra = {}) {
     description: extra.description ?? null,
     state: { name: state },
     project: extra.project ? { name: extra.project } : null,
+    projectMilestone: extra.milestone ? { name: extra.milestone } : null,
     labels: { nodes: (extra.labels ?? []).map((name) => ({ name })) },
     inverseRelations: {
       nodes: (extra.blockers ?? []).map(([id, blockerState]) => ({
@@ -47,6 +48,12 @@ function matches(node, clause) {
   if (clause.state) return clause.state.name.in.includes(node.state.name);
   if (clause.project) {
     return node.project?.name.toLowerCase() === clause.project.name.eqIgnoreCase.toLowerCase();
+  }
+  if (clause.projectMilestone) {
+    return (
+      node.projectMilestone?.name.toLowerCase() ===
+      clause.projectMilestone.name.eqIgnoreCase.toLowerCase()
+    );
   }
   if (clause.labels?.some) {
     return node.labels.nodes.some((label) => label.name === clause.labels.some.name.eq);
@@ -186,6 +193,7 @@ test("list parses write-scope, including markdown-escaped globs, or gives null",
     "blockedBy",
     "writeScope",
     "project",
+    "milestone",
     "url",
   ]);
 });
@@ -340,4 +348,22 @@ test("labels are loaded page by page, so labels past the first page still resolv
   const fake = fakeLinear([issue("KIT-1", "To-do", { labels: ["bug"] })], { labelPageSize: 2 });
   assert.deepEqual(names(await listIssues(fake.gql, ["--label", "bug"])), ["KIT-1"]);
   assert.equal(fake.calls.filter((call) => call.query.includes("issueLabels(")).length, 3);
+});
+
+test("list --milestone filters on the project milestone and the record names it", async () => {
+  const { gql, calls } = fakeLinear([
+    issue("KIT-1", "Done", { project: "Holdout Scenarios", milestone: "Fixture" }),
+    issue("KIT-2", "Canceled", { project: "Holdout Scenarios", milestone: "Holdout" }),
+    issue("KIT-3", "Done", { project: "Holdout Scenarios" }),
+  ]);
+  const items = await listIssues(gql, ["--project", "Holdout Scenarios", "--milestone", "fixture"]);
+  assert.deepEqual(names(items), ["KIT-1"]);
+  assert.equal(items[0].milestone, "Fixture");
+  const sent = calls.find((c) => c.query.includes("issues(filter")).variables.filter.and;
+  assert.deepEqual(
+    sent.find((c) => c.projectMilestone),
+    { projectMilestone: { name: { eqIgnoreCase: "fixture" } } },
+  );
+  const all = await listIssues(gql, []);
+  assert.equal(all.find((i) => i.identifier === "KIT-3").milestone, null);
 });

@@ -7,6 +7,8 @@
  *     [--thread thr_x] [--provider p] [--model m] [--outcome o] [--tokens-in n|null]
  *     [--tokens-out n|null] [--usage-thread thr_x] [--verdict v] [--round n] [--sha s]
  *     [--rows a,b] [--code c] [--gate g] [--mode m] [--machine host]
+ *   node scripts/run-log.mjs <start|spawn|result|reason> --milestone <project-slug>/<milestone-slug> ...
+ *     the same for a Milestone scenarios run (KIT-353), which belongs to a milestone, not an issue
  *   node scripts/run-log.mjs usage <thread>   print token usage of a bb thread as JSON
  *   node scripts/run-log.mjs report [--json]   rework share, rounds and tokens, with vs without Lead
  *   node scripts/run-log.mjs path               print the log file path

@@ -22,7 +22,8 @@ export const EVENTS = [
   "auto-land",
   "holdout",
 ];
-export const STEPS = ["lead", "engineer", "reviewer", "lander"];
+/** `scenario-judge` is the Milestone scenarios workflow's Scenario judge (KIT-353): flow writer and run judge. */
+export const STEPS = ["lead", "engineer", "reviewer", "lander", "scenario-judge"];
 export const MODES = ["start", "replan", "fix", "review"];
 export const OUTCOMES = [
   "plan",
@@ -37,6 +38,13 @@ export const OUTCOMES = [
   "merged",
   "landed",
   "none",
+  // The Scenario judge (KIT-353): a flow written or not, a run satisfied or not, a milestone met or not.
+  "written",
+  "cannot",
+  "satisfied",
+  "not-satisfied",
+  "met",
+  "not-met",
 ];
 export const GATES = ["review", "pre-review", "land", "session", "head", "scope", "checks"];
 export const GATE_OUTCOMES = ["open", "closed"];
@@ -85,6 +93,17 @@ export const REASON_CODES = [
   "integration-red",
   "land-gate-closed",
   "holdout-read",
+  // Milestone scenarios (KIT-353); the error codes are also `scenarios.mjs status --code` (ERROR_CODES).
+  "scenarios-refused",
+  "status-failed",
+  "hosted-run-error",
+  "development-moved",
+  "flow-not-written",
+  "producer-failed",
+  "dispatch-failed",
+  "judge-no-result",
+  "wait-exhausted",
+  "bad-answer",
   "unspecified",
 ];
 
@@ -93,12 +112,15 @@ const THREAD = /^thr_[a-z0-9]{4,32}$/;
 const WORD = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,59}$/;
 /** `<project-slug>/<milestone-slug>.md`, the Holdout file a read named (ADR-0060). */
 const HOLDOUT_FILE = /^[a-z0-9]+(-[a-z0-9]+)*\/[a-z0-9]+(-[a-z0-9]+)*\.md$/;
+/** `<project-slug>/<milestone-slug>`: the milestone a Milestone scenarios event belongs to (its Holdout file without `.md`). */
+const MILESTONE = /^[a-z0-9]+(-[a-z0-9]+)*\/[a-z0-9]+(-[a-z0-9]+)*$/;
 const SHA = /^[0-9a-f]{7,40}$/;
 const TOKENS = (v) => v === null || (Number.isInteger(v) && v >= 0);
 
 /** key -> validator. A key outside this table is refused, so nothing unvetted is written. */
 const FIELDS = {
   issue: (v) => typeof v === "string" && ISSUE.test(v),
+  milestone: (v) => typeof v === "string" && MILESTONE.test(v),
   step: (v) => STEPS.includes(v),
   mode: (v) => MODES.includes(v),
   thread: (v) => typeof v === "string" && THREAD.test(v),
@@ -117,6 +139,9 @@ const FIELDS = {
   code: (v) => REASON_CODES.includes(v),
   holdout: (v) => typeof v === "string" && HOLDOUT_FILE.test(v),
 };
+
+/** Events a milestone run writes: for these `milestone` stands in for `issue` (exactly one of the two). */
+const MILESTONE_EVENTS = ["start", "spawn", "result", "reason"];
 
 /** Fields each event requires; `gate` also takes an `outcome` of open or closed. */
 const REQUIRED = {
@@ -139,11 +164,23 @@ export function validateEvent(event) {
   if (!EVENTS.includes(event?.event)) {
     return [`event must be one of ${EVENTS.join(", ")}`];
   }
+  const byMilestone = MILESTONE_EVENTS.includes(event.event);
   for (const key of REQUIRED[event.event]) {
+    if (key === "issue" && byMilestone) {
+      if (event.issue === undefined && event.milestone === undefined) {
+        problems.push(`${event.event} needs issue or milestone`);
+      } else if (event.issue !== undefined && event.milestone !== undefined) {
+        problems.push(`${event.event} takes issue or milestone, not both`);
+      }
+      continue;
+    }
     // A breaker reset belongs to no issue.
     if (event[key] === undefined && !(event.outcome === "breaker-reset" && key === "issue")) {
       problems.push(`${event.event} needs ${key}`);
     }
+  }
+  if (!byMilestone && event.milestone !== undefined) {
+    problems.push(`${event.event} takes no milestone`);
   }
   for (const [key, value] of Object.entries(event)) {
     if (key === "event" || key === "at") {
