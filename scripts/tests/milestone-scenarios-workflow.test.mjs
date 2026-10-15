@@ -543,6 +543,63 @@ test("the run judge's prompt names the read command and its own evidence directo
   assert.ok(writers[0].prompt.includes("run it alone"));
 });
 
+test("the flow writer is asked for a screenshot after every Action and a simulator-photos line for library photos", async () => {
+  const { spawns } = await run();
+  const writers = agentSpawns(spawns).filter((s) => s.options.label.startsWith("flow-writer:"));
+  assert.equal(writers.length, 2);
+  for (const [k, { prompt }] of writers.entries()) {
+    const name = `scn-${NONCE}-${k + 1}`;
+    assert.match(prompt, /`takeScreenshot` after every Action/);
+    assert.ok(prompt.includes(`kc__${name}__NN-`), prompt);
+    assert.match(prompt, /`# simulator-photos: <name>, <name>, \.\.\.`/);
+    assert.ok(prompt.includes("apps/mobile/.maestro/fixtures/photos/catalog.json"));
+    assert.match(prompt, /picks? (a photo|photos) from the (photo )?library/);
+  }
+});
+
+test("the run judge is told the failure screenshot is the screen at the failing step, and still reads no flow file", async () => {
+  const outcome = (run) => (run % 2 === 0 ? "flow-failed" : "flow-passed");
+  const { spawns } = await run({
+    shell: (command) => {
+      if (!command.includes("scenarios.mjs wait")) return undefined;
+      const runs = command.split("--runs ")[1].split(" ")[0].split(",").map(Number);
+      return {
+        code: 0,
+        line: JSON.stringify({
+          verdict: "SCENARIOS wait",
+          runs: runs.map((r) => ({
+            run: r,
+            outcome: outcome(r),
+            evidence: `/x/${r}`,
+            frames: true,
+          })),
+        }),
+      };
+    },
+  });
+  const judges = agentSpawns(spawns).filter((s) => s.options.label.startsWith("judge:"));
+  assert.equal(judges.length, 6);
+  for (const { prompt, options } of judges) {
+    const run = Number(options.label.split(":")[2]);
+    assert.ok(prompt.includes("`kc__*__failure-NN.png`"), prompt);
+    if (outcome(run) === "flow-failed") {
+      assert.match(
+        prompt,
+        /highest-numbered `kc__\*__failure-NN\.png` is the screen at the failing step/,
+      );
+    } else {
+      assert.doesNotMatch(prompt, /screen at the failing step/);
+    }
+    // Rule 3 is unchanged: no flow file, nothing outside its evidence directory.
+    assert.ok(
+      prompt.includes(
+        "3. Read nothing else: never the diff or the code, no git history, no flow file, no other run's evidence, no PR and no issue.",
+      ),
+    );
+    assert.doesNotMatch(prompt, /apps\/|\.yaml|scenario-flows|catalog\.json|simulator-photos/);
+  }
+});
+
 test("it never moves an issue, merges, pushes or names a promotion lane in a command", async () => {
   const runs = [
     await run(),
