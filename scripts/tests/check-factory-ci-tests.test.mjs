@@ -105,3 +105,24 @@ test("coverage fails when the test gate stops waiting for a job", () => {
   const missing = missingFactoryCiCoverage(mutated);
   assert.ok(missing.some((item) => item.includes("jobs.test needs apps")));
 });
+
+for (const [file, needle] of [
+  ["scenarios", "scenarios.test"],
+  ["holdout-guard", "holdout-guard"],
+  ["milestone-scenarios-workflow", "milestone-scenarios-workflow"],
+]) {
+  test(`coverage fails when the test job omits ${file}.test.mjs`, () => {
+    const files = currentFiles();
+    const path = `scripts/tests/${file}.test.mjs`;
+    assert.ok(files.workflowSource.includes(path), `${path} is in ${CI_WORKFLOW_PATH}`);
+    const mutated = {
+      ...files,
+      workflowSource: files.workflowSource.replaceAll(path, "scripts/tests/omitted.test.mjs"),
+    };
+    const missing = missingFactoryCiCoverage(mutated);
+    assert.ok(
+      missing.some((item) => item === `${needle} via node --test`),
+      `missing: ${missing.join(", ")}`,
+    );
+  });
+}

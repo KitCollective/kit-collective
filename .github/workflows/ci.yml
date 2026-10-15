@@ -282,7 +282,7 @@ jobs:
         env:
           BASE_REF: origin/development
 
-      - name: Test review-loop scripts (matrix, fix diff, check wait, English, doc references)
+      - name: Test review-loop scripts (matrix, fix diff, check wait, English, doc references, Scenarios)
         run: >-
           node --test
           scripts/tests/check-code-english.test.mjs
@@ -304,6 +304,9 @@ jobs:
           scripts/tests/ref-injection.test.mjs
           scripts/tests/afk-developer-workflow.test.mjs
           scripts/tests/auto-land.test.mjs
+          scripts/tests/scenarios.test.mjs
+          scripts/tests/holdout-guard.test.mjs
+          scripts/tests/milestone-scenarios-workflow.test.mjs
 
       - name: Check PR write scope
         run: node scripts/check-pr-write-scope.mjs
