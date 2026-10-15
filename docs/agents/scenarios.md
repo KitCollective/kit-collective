@@ -1,6 +1,6 @@
 # Scenarios: the Holdout repo, the file format and the CLI
 
-Where the Holdout lives, how a milestone's Scenarios are written, and the one command that reads them. Terms (Scenario, Holdout, Scenario judge, AFK developer, Milestone scenarios) are in `CONTEXT.md`; the decisions are ADR-0060.
+Where the Holdout lives, how a milestone's Scenarios are written, and the one command that reads and writes them. Terms (Scenario, Holdout, Scenario judge, AFK developer, Milestone scenarios) are in `CONTEXT.md`; the decisions are ADR-0060.
 
 ## The Holdout repo
 
@@ -36,24 +36,29 @@ The Collection shows one Kit with the photo as its cover and the confirmed label
 
 ## The CLI
 
-`scripts/scenarios.mjs` is the only reader of the Holdout. A PreToolUse hook denies the other routes, and every `read` is logged (see "The guard and the read log").
+`scripts/scenarios.mjs` is the only way into and out of the Holdout. A PreToolUse hook denies the other routes, and every `read` is logged (see "The guard and the read log").
 
 ```bash
 node scripts/scenarios.mjs titles --project "Holdout Scenarios" --milestone "Holdout"
 node scripts/scenarios.mjs read   --project "Holdout Scenarios" --milestone "Holdout"
+node scripts/scenarios.mjs put    --project "<project>" --milestone "<milestone>" --file <draft>
 ```
 
 - `titles` prints one title per line. `read` prints each Scenario in full. Both end with one verdict line, the last line on stdout.
 - `titles` is free: it writes nothing. `read` writes one run-log line first.
-- Without `--dir` it reads the file with `gh api` from `scenarios.holdoutRepo`. `--dir <path>` reads `<path>/<project-slug>/<milestone-slug>.md` from a local clone instead.
+- `put` is how Scenarios get in; `/to-spec` runs it after the human approves a milestone's Scenarios. It reads the draft from `--file` (required for `put`, refused for `titles` and `read`), checks it with the same parser as `read`, and creates `<project-slug>/<milestone-slug>.md`. It only creates: if the milestone already has a Holdout file it stops with `REFUSED` and writes nothing (replacing approved Scenarios is a human edit in the Holdout repo). A malformed draft writes nothing. `put` prints no Scenario text and writes no run-log line. Keep the draft in a temp file outside this repo and run `put` as a single command: chained to anything (a pipe, `&&`), it loses the guard's exemption for the CLI, and one call keeps the push auditable. The input is a file so nothing has to be piped in.
+- Without `--dir` it reads (and `put` writes, through a contents PUT) the file with `gh api` from `scenarios.holdoutRepo`. `--dir <path>` uses `<path>/<project-slug>/<milestone-slug>.md` in a local clone instead (`put` makes the project folder; the clone's commit and push stay with the human). Writing needs `contents: write` on the Holdout repo, which the read-only proof above does not cover.
 
 | Exit | Verdict line | Meaning |
 | --- | --- | --- |
 | 0 | `SCENARIOS <command> <path>: <n> Scenarios` | Printed |
+| 0 | `SCENARIOS put <path>: <n> Scenarios` | `put` created the milestone's file |
 | 0 | `SCENARIOS <command> <path>: no Scenarios (no Holdout file)` | The milestone has no Holdout file. Not an error |
 | 2 | `USAGE: ...` | Unknown subcommand, a missing flag or a name with no letter or digit |
-| 2 | `MALFORMED: <path>: <first problem> (+n more)` | The file breaks the format. Nothing from it is printed |
-| 4 | `UNKNOWN: cannot read <repo or file>: <cause>` | gh is down, the token has no access, the repo does not exist, `--dir` is not a directory, or the milestone file exists but cannot be read. Any other unexpected error is also exit 4 with one `UNKNOWN:` line, never a stack trace |
+| 2 | `MALFORMED: <path>: <first problem> (+n more)` | The file (or, for `put`, the draft) breaks the format. Nothing is printed or written |
+| 2 | `REFUSED: <path> already exists in the Holdout; ...` | `put` onto a milestone that already has a file. Nothing is written |
+| 2 | `UNREADABLE: cannot read <file>: <cause>` | `put`'s `--file` cannot be read |
+| 4 | `UNKNOWN: cannot read\|write <repo or file>: <cause>` | gh is down, the token has no access, the repo does not exist, `--dir` is not a directory, the milestone file exists but cannot be read, or `put` cannot write (no `contents: write`, a file that appeared since the check). Any other unexpected error is also exit 4 with one `UNKNOWN:` line, never a stack trace |
 
 The codes are ADR-0053's (`GATE_EXIT` in `scripts/lib/gates.mjs`). Exit 1 is not used: nothing here is a "no" verdict until the Scenario judge scores Satisfaction.
 
