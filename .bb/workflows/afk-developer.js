@@ -1,5 +1,5 @@
 export const meta = {
-  name: "kit-issue",
+  name: "afk-developer",
   description:
     "One KIT issue from To-do to Approval, or with autoLand on to Done: session-check, Lead, Engineer, pre-review gate, Reviewer, review gate, audit receipt dry-run, then Approval (default) or scripts/auto-land.mjs, the only thing that may post the receipt, set Merging and enqueue (ADR-0058, ADR-0061).",
   inputSchema: {
@@ -89,7 +89,7 @@ function spawn(alias, prompt, label, phaseTitle, schema) {
   if (alias === "sonnet") {
     return agent(prompt, { label, phase: phaseTitle, schema, provider: "claude-code", model: "claude-sonnet-5-5", reasoningLevel: "high" });
   }
-  throw new Error(`kit-issue has no model for alias ${alias}`);
+  throw new Error(`afk-developer has no model for alias ${alias}`);
 }
 // The Reviewer never runs on the Engineer's model (audit-receipt --require-different-model).
 const reviewerAlias = (engineerAlias) => (engineerAlias === "opus" ? "fable" : "opus");
@@ -248,7 +248,7 @@ const requestDeviceFlows = (pr) => `node scripts/request-device-flows.mjs ${pr} 
 /** The one place a Linear state command is built, so no caller can write a state outside MAY_SET. */
 function stateCmd(state) {
   if (!MAY_SET.includes(state)) {
-    throw new Error(`kit-issue may not set ${state}`);
+    throw new Error(`afk-developer may not set ${state}`);
   }
   return `node scripts/linear.mjs state ${issue} "${state}"`;
 }

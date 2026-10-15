@@ -133,3 +133,5 @@ Two green reviews stopped at the receipt dry run: the receipt reads only the Rev
 The workflow now does that itself: when the dry run is refused for exactly that reason, it unarchives the Reviewer thread (bb archives a worker when it returns), asks it once with `bb thread tell` for `AUDIT-RESULT <issue> green <sha>`, waits, and runs the dry run again. The message is built from checked tokens only. Any other refusal is not retried, and a failed ask leaves the stop as it was. The Reviewer prompt also says to write the line as its last text, after every other tool call. The receipt's rule (the last line only, ADR-0056) is unchanged.
 
 Status: accepted; revisit after the next real `kit-issue` run.
+
+Renamed (KIT-350): the workflow this ADR calls `kit-issue` is now the AFK developer (the term in `CONTEXT.md`), `.bb/workflows/afk-developer.js` (`meta.name` `afk-developer`). Behaviour is unchanged; the body above keeps the old name as history.

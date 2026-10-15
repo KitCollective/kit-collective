@@ -1,6 +1,6 @@
-# The bb-harness machine and the kit-issue run
+# The bb-harness machine and the AFK developer run
 
-How the isolated machine that runs `kit-issue` is set up, and how a run is started. This page is a summary of facts that live elsewhere (`.cursor/skills/bb-orchestrate/SKILL.md`, `docs/adr/0058-kit-issue-workflow-and-the-first-run-fixes.md`); when they disagree with this page, they win and this page is stale. Values below were read from inside the container on 2026-10-12; re-read them with the command beside each before relying on them.
+How the isolated machine that runs the AFK developer (`afk-developer`) is set up, and how a run is started. This page is a summary of facts that live elsewhere (`.cursor/skills/bb-orchestrate/SKILL.md`, `docs/adr/0058-kit-issue-workflow-and-the-first-run-fixes.md`); when they disagree with this page, they win and this page is stale. Values below were read from inside the container on 2026-10-12; re-read them with the command beside each before relying on them.
 
 ## What the machine is
 
@@ -44,7 +44,7 @@ What the missing pieces mean in practice:
   ```
 
   It opens a secure form for the person; the values are typed into that form and never pass through the chat, a prompt or a command line. Existing assignments in the file are preserved.
-- Posting the `kc/audit` status needs "Commit statuses: Read and write"; the `kit-issue` run never posts it (the receipt runs only as a dry run), so the person who merges asks for that permission when they need it.
+- Posting the `kc/audit` status needs "Commit statuses: Read and write"; the AFK developer run never posts it (the receipt runs only as a dry run), so the person who merges asks for that permission when they need it.
 - The same `GH_TOKEN` reads the Holdout repo: `docs/agents/scenarios.md` has the format, the CLI and the command that proves a machine's read.
 - Nothing on this page, in a prompt or in a thread message carries a value. If a run needs a new secret, add its name to `bb.env` and request it with the command above.
 
@@ -57,15 +57,15 @@ The main clone is updated with the existing safe sync, not with a second procedu
 Both commands run from a bb project thread on the machine (`bb project list` shows the project, `kit-collective`):
 
 ```bash
-bb workflows validate --file .bb/workflows/kit-issue.js
-bb workflows run --file .bb/workflows/kit-issue.js --args '{"issue":"KIT-n"}'
+bb workflows validate --file .bb/workflows/afk-developer.js
+bb workflows run --file .bb/workflows/afk-developer.js --args '{"issue":"KIT-n"}'
 ```
 
 The path is the thread's own worktree copy: bb refuses a workflow file outside the thread's workspace ("Workflow scriptPath must stay inside the origin workspace"), so a thread cannot point at the main clone's file. The file is read when the run starts, so it must be current: a thread in a fresh worktree from `origin/development` is; a thread in an existing issue worktree merges `origin/development` into the branch and pushes before it starts the run. From that point on a stale copy stops itself: the run's first step compares the worktree's `scripts/`, `.bb/workflows/` and `factory.config.json` with `origin/development` and stops at `harness` when they differ (merge the lane into the branch and push, then run again). That stop does not count against the run cap. A branch older than that step has no such check, which is why the merge comes first.
 
 `validate` is read-only; run it after every change to the workflow file. `run` returns at once and starts a real run of the issue: do not use it as a test of the command, it would start a second run.
 
-The args are the `meta.inputSchema` of `.bb/workflows/kit-issue.js`:
+The args are the `meta.inputSchema` of `.bb/workflows/afk-developer.js`:
 
 | Arg | Meaning |
 | --- | --- |

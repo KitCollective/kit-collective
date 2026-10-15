@@ -5,13 +5,13 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 /**
- * The kit-issue workflow runs in bb's QuickJS sandbox, which this repo cannot start. These tests
+ * The AFK developer workflow runs in bb's QuickJS sandbox, which this repo cannot start. These tests
  * run the same source in a plain async function with `agent`, `phase` and `args` replaced by a
  * scripted fake: the fake plays the runner workers (it answers the numbered commands) and the
  * Lead, Engineer and Reviewer, and records every command and every spawn option.
  */
 const SOURCE = readFileSync(
-  join(fileURLToPath(new URL("../..", import.meta.url)), ".bb/workflows/kit-issue.js"),
+  join(fileURLToPath(new URL("../..", import.meta.url)), ".bb/workflows/afk-developer.js"),
   "utf8",
 );
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
