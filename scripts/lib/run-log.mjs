@@ -12,7 +12,7 @@ import { LOCK_ROWS } from "./review-matrix.mjs";
 
 export const DEFAULT_LOG_PATH = ".factory/run-log.jsonl";
 
-export const EVENTS = ["start", "spawn", "result", "gate", "audit", "reason"];
+export const EVENTS = ["start", "spawn", "result", "gate", "audit", "reason", "auto-land"];
 export const STEPS = ["lead", "engineer", "reviewer", "lander"];
 export const MODES = ["start", "replan", "fix", "review"];
 export const OUTCOMES = [
@@ -31,6 +31,8 @@ export const OUTCOMES = [
 ];
 export const GATES = ["review", "pre-review", "land", "session", "head", "scope", "checks"];
 export const GATE_OUTCOMES = ["open", "closed"];
+/** What `scripts/auto-land.mjs` logs (ADR-0061): `start` is an enqueue and is what the daily cap counts. */
+export const AUTO_LAND_OUTCOMES = ["start", "landed", "refused", "alarm", "breaker-reset"];
 
 /** Fixed reason codes. A row that failed an audit is `row-<lock row id>`. */
 export const REASON_CODES = [
@@ -53,6 +55,26 @@ export const REASON_CODES = [
   "scope-miss",
   "scope-missing-in-pr",
   "session-limit",
+  "kill-switch",
+  "head-mismatch",
+  "pr-not-ready",
+  "issue-not-ready",
+  "hold-label",
+  "oversize-diff",
+  "out-of-scope",
+  "no-independent-reviewer",
+  "same-model-reviewer",
+  "stale-audit",
+  "receipt-refused",
+  "review-gate-closed",
+  "daily-cap",
+  "breaker-open",
+  "sync-changed-head",
+  "lock-held",
+  "enqueue-failed",
+  "queue-ejected",
+  "integration-red",
+  "land-gate-closed",
   "unspecified",
 ];
 
@@ -73,7 +95,8 @@ const FIELDS = {
   machine: (v) => typeof v === "string" && WORD.test(v),
   tokensIn: TOKENS,
   tokensOut: TOKENS,
-  outcome: (v) => OUTCOMES.includes(v) || GATE_OUTCOMES.includes(v),
+  outcome: (v) =>
+    OUTCOMES.includes(v) || GATE_OUTCOMES.includes(v) || AUTO_LAND_OUTCOMES.includes(v),
   gate: (v) => GATES.includes(v),
   verdict: (v) => ["green", "amber", "red"].includes(v),
   round: (v) => Number.isInteger(v) && v >= 0 && v < 100,
@@ -90,6 +113,7 @@ const REQUIRED = {
   gate: ["issue", "gate", "outcome"],
   audit: ["issue", "verdict", "round", "sha"],
   reason: ["issue", "code"],
+  "auto-land": ["issue", "outcome"],
 };
 
 /**
@@ -102,7 +126,8 @@ export function validateEvent(event) {
     return [`event must be one of ${EVENTS.join(", ")}`];
   }
   for (const key of REQUIRED[event.event]) {
-    if (event[key] === undefined) {
+    // A breaker reset belongs to no issue.
+    if (event[key] === undefined && !(event.outcome === "breaker-reset" && key === "issue")) {
       problems.push(`${event.event} needs ${key}`);
     }
   }
@@ -127,6 +152,9 @@ export function validateEvent(event) {
   }
   if (event.event === "gate" && !GATE_OUTCOMES.includes(event.outcome)) {
     problems.push("gate outcome must be open or closed");
+  }
+  if (event.event === "auto-land" && !AUTO_LAND_OUTCOMES.includes(event.outcome)) {
+    problems.push(`auto-land outcome must be one of ${AUTO_LAND_OUTCOMES.join(", ")}`);
   }
   return problems;
 }

@@ -71,7 +71,7 @@ export function matchRoles(scope) {
 /**
  * @param {{ body?: string, labels?: string[], redAudits?: number, replan?: boolean }} issue
  * @returns {{ plan: boolean, planWhy: string, roles: string[],
- *   engineerModel: string, modelWhy: string }}
+ *   engineerModel: string, modelWhy: string, highRisk: boolean }}
  */
 export function startDecision({ body = "", labels = [], redAudits = 0, replan = false }) {
   const scope = parseWriteScope(body);
@@ -107,5 +107,12 @@ export function startDecision({ body = "", labels = [], redAudits = 0, replan = 
     engineerModel = MODELS.strong;
     modelWhy = "two red audits";
   }
-  return { plan, planWhy, roles: matchRoles(scope), engineerModel, modelWhy };
+  return {
+    plan,
+    planWhy,
+    roles: matchRoles(scope),
+    engineerModel,
+    modelWhy,
+    highRisk: highRiskPath,
+  };
 }

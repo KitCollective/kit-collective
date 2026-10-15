@@ -61,7 +61,9 @@
     ],
     "surfaces": ["mobile", "web", "admin", "api"],
     "extra": [
-      { "name": "seed", "group": "Work", "color": "#56ccf2", "description": "Seed / stamdata work." }
+      { "name": "seed", "group": "Work", "color": "#56ccf2", "description": "Seed / stamdata work." },
+      { "name": "hold", "group": "Work", "color": "#eb5757", "description": "Kill switch for auto-land (ADR-0061): the issue is never landed without a person." },
+      { "name": "no-device-needed", "group": "Work", "color": "#95a2b3", "description": "A surface:mobile issue that needs no simulator evidence, so auto-land may take it (ADR-0061)." }
     ],
     "adopt": [
       { "name": "Bug", "group": "Type" },
@@ -198,6 +200,11 @@
   },
   "flow": {
     "runLog": ".factory/run-log.jsonl",
+    "autoLand": {
+      "enabled": false,
+      "maxPerDay": 100,
+      "breakerAfter": 3
+    },
     "maxRunsPerDay": 3
   },
   "agent": {

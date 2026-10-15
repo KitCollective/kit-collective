@@ -303,6 +303,7 @@ jobs:
           scripts/tests/git-files.test.mjs
           scripts/tests/ref-injection.test.mjs
           scripts/tests/kit-issue-workflow.test.mjs
+          scripts/tests/auto-land.test.mjs
 
       - name: Check PR write scope
         run: node scripts/check-pr-write-scope.mjs

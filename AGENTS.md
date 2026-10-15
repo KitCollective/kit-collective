@@ -84,6 +84,10 @@ Lost? `/ask-me` maps the situation to a factory skill. It hints; it does not fir
 
 New or edited factory skill under `.cursor/skills/`. Not a domain helper. See `.cursor/skills/create-new-skill/SKILL.md`.
 
+### Auto-land
+
+`scripts/auto-land.mjs start|finish`: the one script besides a person that may set `Merging` (ADR-0061). It re-checks the PR, issue, risk class, independent reviewer, audit receipt, review gate and daily cap itself before it enqueues; `Approval` stays the exception exit. Shipped off (`flow.autoLand.enabled`, the `autoLand` workflow input, the `hold` label, the file `auto-land.off` in the gitignored `.factory` folder of the main checkout). See `docs/agents/bb-harness.md`.
+
 ### Reap worktree
 
 After land on `development`: verify merge on `origin/development`, remove the Desktop issue worktree, delete the merged remote branch. See `.cursor/skills/reap-worktree/SKILL.md`. Chained from `/land` and `/issue-session`.
