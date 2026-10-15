@@ -67,6 +67,7 @@ export function createR2ObjectStore(injectedClient?: R2Client): ObjectStoreAdapt
     },
     async getObject(key: string): Promise<Uint8Array | null> {
       try {
+        // SAFETY: client.send(GetObjectCommand) resolves to the S3 GetObject output, whose Body exposes transformToByteArray.
         const response = (await client.send(
           new GetObjectCommand({
             Bucket: bucket,

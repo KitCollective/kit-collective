@@ -2322,6 +2322,7 @@ describe("R2 object store content type", () => {
     const sent: Array<{ input: { ContentType?: string; Key?: string } }> = [];
     const client = {
       async send(command: unknown) {
+        // SAFETY: the store only sends PutObjectCommand here, whose `input` carries Key and ContentType.
         sent.push(command as (typeof sent)[number]);
         return {};
       },
