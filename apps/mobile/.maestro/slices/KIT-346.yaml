@@ -30,14 +30,19 @@ name: kit-346
 - tapOn: Fotos
 # The system photo picker has no stable ids: two cells, then confirm. Two photos go straight to
 # Confirm (three or fewer), so the draft holds a front and a back photo. The second cell is tapped
-# at 38%: the centre of the second column of a four-column grid and inside the second of three, where
-# 50% falls on the border of two cells in the four-column grid (the first hosted run picked one photo).
+# at 38%: the centre of the second column of a four-column grid and inside the second of three. The
+# picker settles after each tap before the next (the first hosted runs, tapping back to back, picked
+# one photo).
 - waitForAnimationToEnd:
     timeout: 8000
 - tapOn:
     point: 16%,25%
+- waitForAnimationToEnd:
+    timeout: 3000
 - tapOn:
     point: 38%,25%
+- waitForAnimationToEnd:
+    timeout: 3000
 - tapOn:
     point: 90%,12%
 - extendedWaitUntil:
