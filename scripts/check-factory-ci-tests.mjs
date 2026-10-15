@@ -34,6 +34,9 @@ export const FACTORY_NODE_TEST_NEEDLES = [
   "git-files",
   "ref-injection",
   "source-stamp",
+  "scenarios.test",
+  "holdout-guard",
+  "milestone-scenarios-workflow",
 ];
 
 export const MOBILE_CHECK_NEEDLES = [
