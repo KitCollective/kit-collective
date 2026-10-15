@@ -607,7 +607,7 @@ test("titles --issue writes no run-log line, and the --project form is unchanged
   ]);
 });
 
-test("the guard lets a lone `titles --issue` through and still denies it when chained", () => {
+test("the guard lets `titles --issue` through alone and runner-wrapped, and still denies a direct gh read of the Holdout", () => {
   const guard = join(ROOT, ".claude", "hooks", "holdout-guard.mjs");
   const verdict = (command) =>
     spawnSync(process.execPath, [guard], {
