@@ -662,7 +662,10 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
   }
   // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.
   const receiptCmd = `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread}${engineerThread ? ` --implementer-thread ${engineerThread}` : ""} --require-different-model --dry-run`;
-  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd], false, true);
+  // `auto-land.mjs enabled` rides in the same runner (it only reads the config and the kill file), so the default path spends no extra runner.
+  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd, "node scripts/auto-land.mjs enabled"], true, true);
+  const enabledAnswer = dry[1];
+  dry = dry.slice(0, 1);
   // A Reviewer that returned its verdict through the result tool can end on another sentence, and
   // the receipt reads only the thread's last text (KIT-283 and KIT-286, 2026-10-14). The Reviewer
   // is asked once for the line, as bb-orchestrate allows, and the receipt is tried again. The message
@@ -696,8 +699,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
   if (!autoLandOn) {
     // The config switch is read by the script; only the exact line `AUTO-LAND ON` counts, so a runner
     // that answers anything else leaves the default behaviour. auto-land re-checks it itself.
-    const asked = (await sh("auto-land:enabled", "Hand-over", ["node scripts/auto-land.mjs enabled"], false, true))[0];
-    autoLandOn = asked?.code === 0 && !asked.runner && asked.line === "AUTO-LAND ON";
+    autoLandOn = enabledAnswer?.code === 0 && !enabledAnswer.runner && enabledAnswer.line === "AUTO-LAND ON";
   }
   if (autoLandOn) {
     return autoLand(prNumber, rounds, receipt);

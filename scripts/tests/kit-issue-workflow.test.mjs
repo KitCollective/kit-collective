@@ -903,10 +903,6 @@ test("autoLand true: green hands the issue to auto-land start with --force-enabl
   const finish = commands.findIndex((c) => c.includes("auto-land.mjs finish 77 --issue KIT-9"));
   assert.ok(start >= 0 && finish > start, "start, then finish");
   assert.ok(commands.findIndex((c) => c.includes("audit-receipt.mjs post")) < start);
-  assert.ok(
-    !commands.some((c) => /auto-land\.mjs enabled/.test(c)),
-    "the arg answers; no config question",
-  );
   assert.notEqual(lastState(commands), "Approval", "Approval is the exception exit, not a step");
   // The workflow itself still never merges, posts a receipt for real, or sets a merge state.
   for (const command of commands) {
