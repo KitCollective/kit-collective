@@ -207,6 +207,11 @@
     },
     "maxRunsPerDay": 3
   },
+  "scenarios": {
+    "holdoutRepo": "KitCollective/kit-scenarios",
+    "runsPerScenario": 3,
+    "satisfiedToMeet": 2
+  },
   "agent": {
     "signalUpCapPerRun": 3,
     "workpadHeading": "## Agent Workpad"
