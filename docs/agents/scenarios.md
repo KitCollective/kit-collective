@@ -6,8 +6,8 @@ Where the Holdout lives, how a milestone's Scenarios are written, and the one co
 
 - A private GitHub repo, named by `scenarios.holdoutRepo` in `factory.config.json` (`KitCollective/kit-scenarios`). `factory.config.example.json` has the same block.
 - One Markdown file per milestone: `<project-slug>/<milestone-slug>.md`. A slug is the Linear name lowercased with each run of characters other than letters and digits turned into one `-` (`Holdout Scenarios` is `holdout-scenarios`).
-- `holdout-scenarios/fixture.md` is a fixture for tests and demos. It holds no real Scenarios. The setup for a fresh Holdout repo is `docs/agents/scenarios-repo-wizard.sh`.
-- Reading it needs the credential every machine already has: `GH_TOKEN` (`bb.env`) with the `repo` scope and access to the org. No new secret name. Prove a machine's read with `gh api repos/KitCollective/kit-scenarios/contents/holdout-scenarios/fixture.md -H "Accept: application/vnd.github.raw"`.
+- The milestone `Fixture` of the project `Holdout Scenarios` is a fixture file for tests and demos: `node scripts/scenarios.mjs titles --project "Holdout Scenarios" --milestone Fixture`. It holds no real Scenarios. The setup for a fresh Holdout repo is `docs/agents/scenarios-repo-wizard.sh`.
+- Reading it needs the credential every machine already has: `GH_TOKEN` (`bb.env`) with the `repo` scope and access to the org. No new secret name. Prove a machine's read with the fixture command above: it exits 0 and ends with `SCENARIOS titles ...: 2 Scenarios`, and exit 4 names the cause.
 - The `scenarios` block also holds `runsPerScenario` (3) and `satisfiedToMeet` (2): the Scenario judge runs each Scenario three times and a Scenario is met when two runs satisfy it.
 
 ## The Scenario file format
