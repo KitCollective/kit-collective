@@ -203,7 +203,9 @@ _max_token() {
 
 # _gql TOKEN QUERY [VARIABLES_JSON] — one GraphQL call, prints the JSON reply.
 _gql() {
-  python3 - "$1" "$2" "${3:-{\}}" <<'PY'
+  local vars="${3:-}"
+  [[ -n "$vars" ]] || vars='{}'
+  python3 - "$1" "$2" "$vars" <<'PY'
 import json, sys, urllib.request
 token, query, variables = sys.argv[1], sys.argv[2], json.loads(sys.argv[3])
 req = urllib.request.Request("https://api.linear.app/graphql",
