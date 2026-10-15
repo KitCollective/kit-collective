@@ -12,7 +12,16 @@ import { LOCK_ROWS } from "./review-matrix.mjs";
 
 export const DEFAULT_LOG_PATH = ".factory/run-log.jsonl";
 
-export const EVENTS = ["start", "spawn", "result", "gate", "audit", "reason", "auto-land"];
+export const EVENTS = [
+  "start",
+  "spawn",
+  "result",
+  "gate",
+  "audit",
+  "reason",
+  "auto-land",
+  "holdout",
+];
 export const STEPS = ["lead", "engineer", "reviewer", "lander"];
 export const MODES = ["start", "replan", "fix", "review"];
 export const OUTCOMES = [
@@ -75,12 +84,15 @@ export const REASON_CODES = [
   "queue-ejected",
   "integration-red",
   "land-gate-closed",
+  "holdout-read",
   "unspecified",
 ];
 
 const ISSUE = /^[A-Z][A-Z0-9]*-\d+$/;
 const THREAD = /^thr_[a-z0-9]{4,32}$/;
 const WORD = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,59}$/;
+/** `<project-slug>/<milestone-slug>.md`, the Holdout file a read named (ADR-0060). */
+const HOLDOUT_FILE = /^[a-z0-9]+(-[a-z0-9]+)*\/[a-z0-9]+(-[a-z0-9]+)*\.md$/;
 const SHA = /^[0-9a-f]{7,40}$/;
 const TOKENS = (v) => v === null || (Number.isInteger(v) && v >= 0);
 
@@ -103,6 +115,7 @@ const FIELDS = {
   sha: (v) => typeof v === "string" && SHA.test(v),
   rows: (v) => Array.isArray(v) && v.length <= 20 && v.every((r) => ROW_IDS.includes(r)),
   code: (v) => REASON_CODES.includes(v),
+  holdout: (v) => typeof v === "string" && HOLDOUT_FILE.test(v),
 };
 
 /** Fields each event requires; `gate` also takes an `outcome` of open or closed. */
@@ -114,6 +127,7 @@ const REQUIRED = {
   audit: ["issue", "verdict", "round", "sha"],
   reason: ["issue", "code"],
   "auto-land": ["issue", "outcome"],
+  holdout: ["code", "holdout"],
 };
 
 /**

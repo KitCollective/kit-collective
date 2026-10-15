@@ -234,3 +234,20 @@ test("an engineer or reviewer spawn must carry thread, provider and model; a lea
   }
   assert.deepEqual(validateEvent({ event: "spawn", issue: "KIT-1", step: "lead" }), []);
 });
+
+test("a holdout read event is valid; it needs the milestone path and a fixed reason code", () => {
+  const read = {
+    event: "holdout",
+    code: "holdout-read",
+    holdout: "holdout-scenarios/holdout.md",
+    thread: "thr_abcd1234",
+  };
+  assert.deepEqual(validateEvent(read), []);
+  const { thread: _thread, ...threadless } = read;
+  assert.deepEqual(validateEvent(threadless), []);
+  const { holdout: _holdout, ...noPath } = read;
+  assert.ok(validateEvent(noPath).includes("holdout needs holdout"));
+  assert.ok(validateEvent({ ...read, holdout: "../secret.md" }).includes("invalid holdout"));
+  assert.ok(validateEvent({ ...read, holdout: "some free text" }).includes("invalid holdout"));
+  assert.ok(validateEvent({ ...read, code: "he read it" }).includes("invalid code"));
+});
