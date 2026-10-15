@@ -134,4 +134,4 @@ The workflow now does that itself: when the dry run is refused for exactly that 
 
 Status: accepted; revisit after the next real `kit-issue` run.
 
-Renamed (KIT-350, ADR-0060): the workflow this ADR calls `kit-issue` is now the AFK developer, `.bb/workflows/afk-developer.js` (`meta.name` `afk-developer`). Behaviour is unchanged; the body above keeps the old name as history.
+Renamed (KIT-350): the workflow this ADR calls `kit-issue` is now the AFK developer (the term in `CONTEXT.md`), `.bb/workflows/afk-developer.js` (`meta.name` `afk-developer`). Behaviour is unchanged; the body above keeps the old name as history.
