@@ -6,6 +6,9 @@
  *       print the Scenario titles of one milestone, one per line, then the verdict line
  *   node scripts/scenarios.mjs read --project "<name>" --milestone "<name>" [--dir <path>]
  *       print every Scenario of one milestone in full, then the verdict line
+ * Every `read` first appends one `holdout` line to the run log (ADR-0052, ADR-0060) with the
+ * reading thread's `BB_THREAD_ID`; `titles` logs nothing. If the line cannot be written, `read`
+ * prints no Scenario text and exits 4.
  * The file is `<project-slug>/<milestone-slug>.md` in the Holdout repo (`scenarios.holdoutRepo` in
  * factory.config.json, read with gh), or in `--dir` (a local clone, and the tests).
  * Exit 0: Scenarios printed, or the milestone has no Holdout file. 2: usage or malformed file. 4: the
@@ -16,6 +19,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { config } from "./lib/gate-io.mjs";
 import { GATE_EXIT } from "./lib/gates.mjs";
+import { append, logPath } from "./lib/run-log.mjs";
 import { parseArgs, renderResult } from "./lib/scenarios.mjs";
 
 function finish({ code, lines }) {
@@ -64,6 +68,19 @@ function readFromGitHub(repo, path) {
   return null;
 }
 
+/** One run-log line per `read`, before anything is fetched. Exits 4 when it cannot be written. */
+function logRead(path) {
+  const thread = process.env.BB_THREAD_ID;
+  try {
+    append(
+      { event: "holdout", code: "holdout-read", holdout: path, ...(thread ? { thread } : {}) },
+      { path: logPath() },
+    );
+  } catch (error) {
+    unknown(`cannot log the read: ${error.message.split("\n")[0]}`);
+  }
+}
+
 const args = parseArgs(process.argv.slice(2));
 if (args.error) {
   finish({ code: GATE_EXIT.usage, lines: [args.error] });
@@ -72,6 +89,9 @@ if (args.error) {
 // Every path ends in one verdict line: an error nothing above expected is exit 4, never a stack trace.
 try {
   const { command, path, dir } = args;
+  if (command === "read") {
+    logRead(path);
+  }
   const text = dir ? readFromDir(dir, path) : readFromGitHub(config().scenarios.holdoutRepo, path);
   finish(renderResult({ command, path, text }));
 } catch (error) {
