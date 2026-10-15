@@ -108,7 +108,7 @@ Throwaway design question: `/prototype`. Visual lock: `/to-design`. Cited primar
 
 `/grill-with-docs` → `/to-design` (when UI needs shared rules) → `/to-spec` → `/to-tickets` → planner claims (`To-do` + `ready-for-agent` + unblocked) → `/implement` (`/tdd`) → checker → Auto-merge or Nicklas to Merging → `/land` into `development`. Milestone complete → staging. See `docs/agents/planning-stack.md`.
 
-**Runtime**: Desktop `/issue-session`, started by Nicklas for named issues. No dispatch worker runs: the PI worker was archived on 2026-09-01 (`docs/agents/pi-harness-archived.md`), so nothing claims `To-do` + `ready-for-agent` by itself. Worker-only steps in `WORKFLOW.md` and `docs/agents/automations.md` describe the archived worker. Coolify MCP and `kc_seed_mcp` are Desktop / Cloud Agent wiring. The isolated bb-harness machine and how a `kit-issue` run is started: `docs/agents/bb-harness.md`.
+**Runtime**: Desktop `/issue-session`, started by Nicklas for named issues. No dispatch worker runs: the PI worker was archived on 2026-09-01 (`docs/agents/pi-harness-archived.md`), so nothing claims `To-do` + `ready-for-agent` by itself. Worker-only steps in `WORKFLOW.md` and `docs/agents/automations.md` describe the archived worker. Coolify MCP and `kc_seed_mcp` are Desktop / Cloud Agent wiring. The isolated bb-harness machine and how an AFK developer (`afk-developer`) run is started: `docs/agents/bb-harness.md`.
 
 Linear Agent stays empty (Cursor skip). One role comment per factory transition. Checker pass ticks description AC.
 

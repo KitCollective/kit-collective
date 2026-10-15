@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Does the issue's workpad already hold a `### Plan` section? The kit-issue workflow asks before a
+ * Does the issue's workpad already hold a `### Plan` section? The AFK developer workflow asks before a
  * resume spawns the Lead, so a plan the Engineer built against is never overwritten.
  *
  * Usage: node scripts/workpad-has-plan.mjs <KIT-n>
