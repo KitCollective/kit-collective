@@ -1,6 +1,6 @@
 ---
 name: to-spec
-description: Turn the current conversation into a spec. Kickoff publishes a Linear project + milestones; feature publishes a document on an existing project. Use after grilling.
+description: Turn the current conversation into a spec. Kickoff publishes a Linear project + milestones; feature publishes a document on an existing project. Drafts each milestone's Scenarios and pushes the approved ones to the Holdout. Use after grilling.
 disable-model-invocation: true
 ---
 
@@ -18,9 +18,24 @@ This skill takes the current conversation context and codebase understanding and
 
 Check with the user that these seams match their expectations. Those seams become Testing Decisions — `/implement` and `/tdd` will not re-quiz them.
 
-3. Write the spec using the template below, then publish it. Next step is `/to-tickets`. Do not publish Linear **issues** from this skill. Do not delegate. Do not open a PR.
+3. **Draft the spec, unpublished.** Write the spec and its milestones with the template below to `{paths.specs}/<slug>/spec.md` only. Publish nothing to Linear yet.
 
-Write the spec to `{paths.specs}/<slug>/spec.md` as well as Linear.
+4. **Scenarios (fixed step, on the drafted milestones).** Draft the Scenarios of every milestone, show them in one quiz with the milestones, and push the approved ones to the Holdout. Inputs, all from the step 3 draft: the project name, each milestone's name and what "complete" means, the spec's user stories. Output: one approved Holdout file per milestone. Use only those inputs. Run it in Kickoff (all milestones) and in Feature whenever the spec adds a milestone (that one milestone); a Feature attached to an open milestone that already has a Holdout file adds none.
+
+   1. Draft **3 to 7 Scenarios per milestone**, in `CONTEXT.md` words and in what a Collector sees: a `## <title>` (names the story, gives nothing away, safe to show an Engineer), `### Starting situation` (which Test Collector, which data), `### Actions` (what the Collector does), `### End state` (what the Collector has and sees). The exact format and its limits are in [docs/agents/scenarios.md](../../../docs/agents/scenarios.md); follow it, do not restate it. Cover the milestone's demoable promise end to end, not one slice's internals. No selectors, test ids or file paths.
+   2. **One quiz.** Show the milestones and, under each, its Scenarios (titles with the three sections) together, and let the human approve, edit or drop. Nothing is pushed, saved or published before that approval. Re-draft and re-show until the human approves.
+   3. **Push only approved Scenarios, only through the CLI.** For each milestone write its approved file (all its Scenarios, format above) to a temp file **outside this repo**, then run it as one plain command, with no pipe, `&&`, `;` or `$(`: a chained command loses the Holdout guard's exemption for the CLI, and one call per milestone keeps the push auditable.
+
+      ```bash
+      node scripts/scenarios.mjs put --project "<project name>" --milestone "<milestone name>" --file <temp file>
+      ```
+
+      Act on the one verdict line: exit 0 `SCENARIOS put ...: <n> Scenarios` is done; exit 2 `MALFORMED` means fix the file and rerun, `REFUSED` means the milestone already has Scenarios in the Holdout, so stop and tell the human (`put` never replaces); exit 4 means stop and report the cause. Then delete the temp file. Confirm with `node scripts/scenarios.mjs titles --project ... --milestone ...`.
+   4. **Keep the text out of everything else.** Scenarios are never written to `{paths.specs}`, the spec, the Linear document, a milestone or project description, a comment or a PR. Record in the spec's `## Linear` section only the Scenario count per milestone. Never call `read`: only the Scenario judge reads the Holdout. `titles` is fine.
+
+5. Publish the approved spec, its milestones and the document (Kickoff or Feature below). Next step is `/to-tickets`. Do not publish Linear **issues** from this skill. Do not delegate. Do not open a PR.
+
+The spec lives in `{paths.specs}/<slug>/spec.md` as well as Linear. Order: draft (3), Scenario quiz and `put` (4), publish (5). The project, milestones and document are published only after the quiz is approved.
 
 Choose a **mode**. Ask if unclear.
 
@@ -127,7 +142,7 @@ A description of the things that are out of scope for this spec.
 - **Lead:** approver
 - **Priority:** value, or None (not named)
 - **Milestones** (each is one staging increment — a handful of issues, not the whole product):
-  1. Milestone name — what “complete” means (demoable; ready to promote integration → staging)
+  1. Milestone name — what “complete” means (demoable; ready to promote integration → staging) — N Scenarios in the Holdout
 
 ## Further Notes
 

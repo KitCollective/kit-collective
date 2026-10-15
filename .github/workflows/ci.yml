@@ -291,6 +291,7 @@ jobs:
           scripts/tests/fix-diff.test.mjs
           scripts/tests/pr-checks.test.mjs
           scripts/tests/linear-args.test.mjs
+          scripts/tests/linear-issues.test.mjs
           scripts/tests/start-decision.test.mjs
           scripts/tests/run-log.test.mjs
           scripts/tests/gates.test.mjs
@@ -301,7 +302,8 @@ jobs:
           scripts/tests/audit-result.test.mjs
           scripts/tests/git-files.test.mjs
           scripts/tests/ref-injection.test.mjs
-          scripts/tests/kit-issue-workflow.test.mjs
+          scripts/tests/afk-developer-workflow.test.mjs
+          scripts/tests/auto-land.test.mjs
 
       - name: Check PR write scope
         run: node scripts/check-pr-write-scope.mjs
@@ -334,6 +336,9 @@ jobs:
 
       - name: Test shared-db reset test hook
         run: node --test .cursor/hooks/tests/block-reset-database-test-on-shared-db.test.mjs
+
+      - name: Test push-behind-development hook
+        run: node --test .cursor/hooks/tests/block-push-behind-development.test.mjs
 
       - name: Check admin stamdata navigation
         run: node scripts/check-admin-stamdata-navigation.mjs

@@ -126,7 +126,7 @@ export function unescapeMarkdown(text) {
 }
 
 export function parseWriteScopeGlobs(text) {
-  const match = text.match(/^write-scope:\s*(.+)$/m);
+  const match = text.match(/^write-scope:[ \t]*(.+)$/m);
   if (!match) {
     return null;
   }

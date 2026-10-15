@@ -20,11 +20,25 @@
 //       a "related" link between two issues
 //   node scripts/linear.mjs project KIT-a KIT-b
 //       move KIT-a into KIT-b's project
+//   node scripts/linear.mjs list [--state <name>[,<name>]] [--label <name>] [--no-label <name>] [--project <name>] [--limit n] [--unblocked]
+//       one JSON array (default limit 50, max 250) of { identifier, title, state, labels, blockedBy,
+//       writeScope, project, url }; read-only. Dispatch query:
+//       list --state To-do --label ready-for-agent --unblocked
+//   node scripts/linear.mjs create "<title>" --body-file <path> [--state <name>] [--label <name>]...
+//       [--project <name>] [--parent KIT-n] [--blocked-by KIT-n]...
+//       new issue on team KIT (default state Backlog), prints `KIT-n <url>`. Refuses the labels
+//       signal-up and proposal, and ready-for-agent without a write-scope line and acceptance criteria
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { blockArgs, issueIdentifier, optionValue, swapLabelIds } from "./lib/linear-args.mjs";
+import {
+  createIssue,
+  LinearUsageError,
+  listIssues,
+  parseCreateArgs,
+} from "./lib/linear-issues.mjs";
 
 const API = "https://api.linear.app/graphql";
 
@@ -379,8 +393,31 @@ switch (command) {
     );
     break;
   }
+  case "list":
+    try {
+      process.stdout.write(`${JSON.stringify(await listIssues(gql, args))}\n`);
+    } catch (error) {
+      if (error instanceof LinearUsageError) fail(error.message);
+      throw error;
+    }
+    break;
+  case "create":
+    try {
+      const parsed = parseCreateArgs(args, (path) =>
+        existsSync(path) ? readFileSync(path, "utf8") : null,
+      );
+      const created = await createIssue(gql, parsed, {
+        loadIssueId: async (identifier) => (await loadIssue(identifier)).id,
+        block: blockIssue,
+      });
+      process.stdout.write(`${created.identifier} ${created.url}\n`);
+    } catch (error) {
+      if (error instanceof LinearUsageError) fail(error.message);
+      throw error;
+    }
+    break;
   default:
     fail(
-      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up, relate, block, project",
+      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up, relate, block, project, list, create",
     );
 }

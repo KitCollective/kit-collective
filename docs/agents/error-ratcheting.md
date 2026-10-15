@@ -18,7 +18,7 @@ This is not a memory store. Wrong lessons are reverted with git.
 | `.cursor/hooks/*.sh` | Command hooks (deny/allow) |
 | `.cursor/rules/*.mdc` | Always-applied agent rules |
 | `.pi/generated/implement-context.md` | Generated PI implement overlay from `.cursor` — edit sources, run `node scripts/generate-pi-implement-context.mjs`; never hand-edit |
-| `.claude/settings.json` + `.claude/hooks/cursor-ratchet.mjs` | Runs the same `.cursor/hooks.json` command hooks in Claude Code. One set of scripts: add a hook under `.cursor/hooks/`, never a copy under `.claude/` |
+| `.claude/settings.json` + `.claude/hooks/cursor-ratchet.mjs` | Runs the same `.cursor/hooks.json` command hooks in Claude Code. One set of scripts: add a hook under `.cursor/hooks/`, never a copy under `.claude/`. The one exception is `.claude/hooks/holdout-guard.mjs`: it is not a ratchet but the Holdout guard (`docs/agents/scenarios.md`), and it needs Read and Grep, which `beforeShellExecution` cannot see |
 | `.githooks/pre-commit` | Formats staged files with Biome before a commit (enabled by `pnpm install`) |
 | `biome.json` / `oxlint.config.ts` | Format, lint, and anti-slop gates run in CI |
 | `.pi/first-pass-classes.json` | Optional first-pass scanners (tighten only; empty `{ "classes": [] }` is the default) |
@@ -134,7 +134,7 @@ catches it in the API tests and the container smoke test.
 
 ### Push behind development ratchet (KIT-23)
 
-`.cursor/hooks/block-push-behind-development.sh` denies `git push` when the current branch is behind `origin/development`. Prevents repeating the KIT-23 checker fail (unmergeable PR because the feature branch was never rebased after `development` moved). Pushes to `development`, `staging`, and `production` are exempt. Tighten only.
+`.cursor/hooks/block-push-behind-development.sh` denies `git push` when the current branch is behind `origin/development`. Prevents repeating the KIT-23 checker fail (unmergeable PR because the feature branch was never rebased after `development` moved). Pushes to `development`, `staging`, and `production` are exempt. The hook evaluates the checkout and branch actually being pushed, not its own working directory: the hook input `cwd`, then `git -C <dir>` and `cd <dir> &&` prefixes, then a named refspec's source ref (no refspec = the directory's HEAD). When the directory cannot be determined with certainty it falls back to the base directory's HEAD, never to a more permissive result. The deny message names the directory and branch it checked. Fixed 2026-10-15: from a git worktree the hook used to check the main checkout, which blocked an up-to-date PR #313 branch and would have allowed a behind worktree branch. `.cursor/hooks/tests/block-push-behind-development.test.mjs` drives it against scratch repos. Tighten only.
 
 ### Seed DB proof evidence ratchet (KIT-34)
 
@@ -339,7 +339,7 @@ Prevents repeating the KIT-47 checker that reviewed a local `kit-47` cut from `d
 
 ### PR lane ratchet (KIT-102)
 
-`.cursor/hooks/block-pr-lane.sh` denies `gh pr create` without `--base development`, and denies `--base production` / `--base staging` except the promotion pairs (`--head development` → staging, `--head staging` → production). Prevents repeating the KIT-101/KIT-100 land onto `production` when that was the repo default. GitHub default branch is `development`; rulesets `lane-development` / `lane-staging` / `lane-production` require a PR (production also requires one approving review). Tighten only.
+`.cursor/hooks/block-pr-lane.sh` denies `gh pr create` without `--base development`, and denies `--base production` / `--base staging` except the promotion pairs (`--head development` → staging, `--head staging` → production). Prevents repeating the KIT-101/KIT-100 land onto `production` when that was the repo default. GitHub default branch is `development`; rulesets `lane-development` / `lane-staging` / `lane-production` require a PR (production also requires one approving review; `lane-staging` also requires the `test` and `Scenarios` checks, with no bypass actors, ADR-0060). Tighten only.
 
 ### Pi helper model pin (Kimi default)
 

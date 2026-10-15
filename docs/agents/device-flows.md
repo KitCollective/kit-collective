@@ -63,9 +63,33 @@ When a slice adds a control a flow must tap, add the `testID` in the same PR. Ad
 node scripts/request-device-flows.mjs <pr> --issue KIT-<n>
 ```
 
-It puts the `run-device-flows` label on the PR, which starts `.github/workflows/device-flows.yml` on a macOS runner: the same `local-api.sh`, `build-local.sh` and `run-local.sh` as below, on a fresh machine. The run sets the `Device flows` commit status on the PR head (pending, then success, failure or error) with a link to itself, and uploads `apps/mobile/.maestro/out` as the artifact `device-flows-<sha>`. The script asks for nothing when the PR has no slice flow for the issue or the head already has a pending, green or red status (an `error` status, a run that stopped before the flow finished, is asked for again); a new commit is a new head and needs a new request. The pre-review gate (`scripts/gate.mjs`) waits for the status with the checks whenever the PR head holds the slice flow, and the `kit-issue` workflow makes the request itself in front of that gate.
+It puts the `run-device-flows` label on the PR, which starts `.github/workflows/device-flows.yml` on a macOS runner: the same `local-api.sh`, `build-local.sh` and `run-local.sh` as below, on a fresh machine. The run sets the `Device flows` commit status on the PR head (pending, then success, failure or error) with a link to itself, and uploads `apps/mobile/.maestro/out` as the artifact `device-flows-<sha>`. The script asks for nothing when the PR has no slice flow for the issue or the head already has a pending, green or red status (an `error` status, a run that stopped before the flow finished, is asked for again); a new commit is a new head and needs a new request. The pre-review gate (`scripts/gate.mjs`) waits for the status with the checks whenever the PR head holds the slice flow, and the AFK developer workflow (`afk-developer`) makes the request itself in front of that gate.
 
 What the hosted run does not do: the upload to the evidence bucket, the before/after comparison, the Claude review, the PR comment and the workpad links. Those need the bucket keys and the approver's logins, and no Actions secret holds them. A hosted run takes about 45 minutes when the native binary has to be built and far less on a cache hit; macOS minutes are billed at ten times the Linux rate.
+
+### A flow from a run artifact
+
+The hosted run can also take one flow that is not in the repo, from a named run artifact: the Scenario judge's path (ADR-0060). Two workflows, each found by the run id its dispatch returns, never by "the newest run" (two dispatches a second apart would swap). The scenarios CLI does both, and the Milestone scenarios workflow uses it (`docs/agents/scenarios.md`):
+
+```bash
+# 1. Put the flow into a run artifact, scenario-flow-<name>, holding <name>.yaml. The CLI reads
+#    .factory/scenario-flows/<name>.yaml (and deletes it), sends it on stdin, waits for the run
+#    and prints {"name","run"}.
+mkdir -p .factory/scenario-flows && cp flow.yaml .factory/scenario-flows/scenario-smoke.yaml
+node scripts/scenarios.mjs flow --name scenario-smoke
+
+# 2. Run it on the hosted iOS Simulator against the commit on development; prints {"run"}.
+node scripts/scenarios.mjs run --flow-run <run from step 1> --name scenario-smoke
+
+# 3. Wait for it (exit 3 while it runs) and download its evidence to .factory/scenario-runs/<run>.
+node scripts/scenarios.mjs wait --runs <run from step 2> --sha "$(git rev-parse origin/development)" --timeout 480
+```
+
+Both dispatches go through `gh api --method POST .../actions/workflows/<file>/dispatches --input -` with `return_run_details: true`, so GitHub answers with the run's id. `scenario-flow.yml` also has a run name, `Scenario flow <name>`, to find its run by when an answer has no id; `device-flows.yml` has none, so there the CLI stops instead of guessing.
+
+`flow` names the file inside the artifact when it holds more than one. `device-flows.yml` downloads the artifact into `apps/mobile/.maestro/external/` (one level under `.maestro`, so `../subflows/sign-in.yaml` resolves), and from there it is a slice run: the same Postgres, local API, build and `run-local.sh`, signed in as the Test Collector, with the photos the flow's `# simulator-photos:` line names. Screenshots, recording and the API log are uploaded as `device-flows-<sha>`. It sets no `Device flows` status, has no permission to push and never commits the flow; several artifact runs on one commit do not cancel each other.
+
+The flow is never printed to a log, but anyone who can read the repository can download the artifact (kept 7 days) and read the dispatch inputs.
 
 ### On the approver's Mac
 

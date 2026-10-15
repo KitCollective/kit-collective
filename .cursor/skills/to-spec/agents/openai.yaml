@@ -1,5 +1,5 @@
 interface:
   display_name: "To Spec"
-  short_description: "Kickoff project+milestones, or a feature document"
+  short_description: "Kickoff project+milestones + Holdout Scenarios, or a feature document"
 policy:
   allow_implicit_invocation: false

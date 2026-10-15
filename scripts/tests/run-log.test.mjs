@@ -234,3 +234,88 @@ test("an engineer or reviewer spawn must carry thread, provider and model; a lea
   }
   assert.deepEqual(validateEvent({ event: "spawn", issue: "KIT-1", step: "lead" }), []);
 });
+
+test("a holdout read event is valid; it needs the milestone path and a fixed reason code", () => {
+  const read = {
+    event: "holdout",
+    code: "holdout-read",
+    holdout: "holdout-scenarios/holdout.md",
+    thread: "thr_abcd1234",
+  };
+  assert.deepEqual(validateEvent(read), []);
+  const { thread: _thread, ...threadless } = read;
+  assert.deepEqual(validateEvent(threadless), []);
+  const { holdout: _holdout, ...noPath } = read;
+  assert.ok(validateEvent(noPath).includes("holdout needs holdout"));
+  assert.ok(validateEvent({ ...read, holdout: "../secret.md" }).includes("invalid holdout"));
+  assert.ok(validateEvent({ ...read, holdout: "some free text" }).includes("invalid holdout"));
+  assert.ok(validateEvent({ ...read, code: "he read it" }).includes("invalid code"));
+});
+
+// ---- Milestone scenarios (KIT-353): events that belong to a milestone, not an issue ------------
+
+const MILESTONE = "holdout-scenarios/fixture";
+
+test("a milestone event stands in for the issue; neither, both, or a malformed milestone is refused", () => {
+  for (const event of [
+    { event: "start", milestone: MILESTONE },
+    {
+      event: "spawn",
+      milestone: MILESTONE,
+      step: "scenario-judge",
+      thread: "thr_judge001",
+      provider: "claude-code",
+      model: "claude-opus-5-5",
+    },
+    { event: "result", milestone: MILESTONE, step: "scenario-judge", outcome: "satisfied" },
+    { event: "result", milestone: MILESTONE, step: "scenario-judge", outcome: "not-satisfied" },
+    { event: "result", milestone: MILESTONE, step: "scenario-judge", outcome: "written" },
+    {
+      event: "result",
+      milestone: MILESTONE,
+      step: "scenario-judge",
+      outcome: "not-met",
+      sha: "a".repeat(40),
+    },
+    { event: "reason", milestone: MILESTONE, code: "development-moved" },
+    { event: "reason", milestone: MILESTONE, code: "runner-no-result" },
+  ]) {
+    assert.deepEqual(validateEvent(event), [], JSON.stringify(event));
+  }
+  assert.ok(validateEvent({ event: "start" }).includes("start needs issue or milestone"));
+  assert.ok(
+    validateEvent({ event: "start", issue: "KIT-1", milestone: MILESTONE }).includes(
+      "start takes issue or milestone, not both",
+    ),
+  );
+  for (const bad of ["holdout-scenarios/fixture.md", "../x/y", "Holdout Scenarios/Fixture", "x"]) {
+    assert.ok(validateEvent({ event: "start", milestone: bad }).includes("invalid milestone"), bad);
+  }
+  // Gates, audits and auto-land stay per issue.
+  assert.ok(
+    validateEvent({
+      event: "gate",
+      milestone: MILESTONE,
+      gate: "review",
+      outcome: "open",
+    }).includes("gate needs issue"),
+  );
+});
+
+test("the run-log CLI writes milestone events, and the report ignores them", () => {
+  const path = tmp();
+  const env = { ...process.env, KC_RUN_LOG: path };
+  const cli = (...args) => spawnSync("node", [CLI, ...args], { env, encoding: "utf8" });
+  assert.equal(cli("start", "--milestone", MILESTONE).status, 0);
+  assert.equal(
+    cli("result", "--milestone", MILESTONE, "--step", "scenario-judge", "--outcome", "satisfied")
+      .status,
+    0,
+  );
+  assert.equal(cli("start").status, 2);
+  const events = readEvents(path);
+  assert.equal(events.length, 2);
+  assert.equal(events[0].milestone, MILESTONE);
+  const withMilestone = buildReport([...sample(), ...events]);
+  assert.deepEqual(withMilestone, buildReport(sample()));
+});

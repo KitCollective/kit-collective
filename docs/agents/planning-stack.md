@@ -30,14 +30,14 @@ Keep `/to-tickets` (Matt’s name). It slices vertical issues onto a **milestone
 | --- | --- |
 | `/grill-with-docs` | Shared understanding. Terms in `CONTEXT.md` Language. Sparse ADRs. |
 | `/to-design` | AI-ready visual lock in `docs/design-system.md`. HITL. Skip when the work is not visual. |
-| `/to-spec` | Spec file + Linear project/milestones (kickoff: summary, description, lead, `craft:*`) or document ± milestone (feature). Seams confirmed. |
+| `/to-spec` | Spec file + Linear project/milestones (kickoff: summary, description, lead, `craft:*`) or document ± milestone (feature). Seams confirmed. 3–7 Scenarios per milestone drafted, approved in the same quiz as the milestones and pushed to the Holdout with `scripts/scenarios.mjs put` (never into this repo or Linear). |
 | `/to-tickets` | Vertical Linear issues on **one milestone each**, `dispatch.state`, `ready-for-agent`, `blockedBy`. **Not** Linear Agent = Cursor. |
 | Planner | Cron. Claims every eligible `dispatch.state` issue → `In Progress` by `ready-for-agent` + `blockedBy` + Linear priority. No concurrency cap. No code. |
 | `/implement` | Wakes on `In Progress`. Branch + PR + Linear evidence → `In Review`. Mobile/EAS slices load `.cursor/skills/expo/`. |
 | Checker | Wakes on `In Review`. Judge-only `/code-review` + GitHub CI/CD. Mobile/EAS diffs include Expo vendor skills on Standards. Pass + checks green → `Approval`. Fail → `In Progress` + `### Review feedback` (same branch). |
 | Approver | Reads the GitHub PR. Linear `Merging` **is** merge approval. Land moves to `Post-Merge` on merge and to `Done` only after `gate.mjs land` is open. |
 | `/land` | Merge to integration only. |
-| Staging | When **that milestone’s** issues are all Done or Canceled. |
+| Staging | When **that milestone’s** issues are all Done or Canceled and Milestone scenarios has posted a green `Scenarios` on the promotion PR; a person merges it (`docs/agents/automations.md` section 4). |
 
 ## Router
 

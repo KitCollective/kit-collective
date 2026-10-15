@@ -5,13 +5,13 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 /**
- * The kit-issue workflow runs in bb's QuickJS sandbox, which this repo cannot start. These tests
+ * The AFK developer workflow runs in bb's QuickJS sandbox, which this repo cannot start. These tests
  * run the same source in a plain async function with `agent`, `phase` and `args` replaced by a
  * scripted fake: the fake plays the runner workers (it answers the numbered commands) and the
  * Lead, Engineer and Reviewer, and records every command and every spawn option.
  */
 const SOURCE = readFileSync(
-  join(fileURLToPath(new URL("../..", import.meta.url)), ".bb/workflows/kit-issue.js"),
+  join(fileURLToPath(new URL("../..", import.meta.url)), ".bb/workflows/afk-developer.js"),
   "utf8",
 );
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
@@ -865,6 +865,131 @@ test("a fresh run never asks for the workpad plan, and skipLead still skips the 
   assert.ok(!skip.commands.some(planCheck));
 });
 
+// ---- autoLand (ADR-0061) --------------------------------------------------------------------------------
+
+const autoLandShell =
+  ({
+    start = { code: 0, line: "ENQUEUED (auto-land): PR 77" },
+    finish = { code: 0, line: "LANDED (auto-land): PR 77" },
+    enabled,
+  } = {}) =>
+  (command) => {
+    if (command.includes("auto-land.mjs enabled")) return enabled;
+    if (command.includes("auto-land.mjs start")) return start;
+    if (command.includes("auto-land.mjs finish")) return finish;
+    return undefined;
+  };
+
+test("autoLand off (the default): the run ends at Approval and only asks whether the config switch is on", async () => {
+  const { result, commands } = await run({ shell: autoLandShell() });
+  assert.equal(result.status, "Approval");
+  assert.equal(lastState(commands), "Approval");
+  assert.ok(!commands.some((c) => /auto-land\.mjs (start|finish)/.test(c)));
+  // A runner that answers anything but the exact line leaves the default.
+  const odd = await run({ shell: autoLandShell({ enabled: { code: 0, line: "OPEN: fine" } }) });
+  assert.equal(odd.result.status, "Approval");
+});
+
+test("autoLand true: green hands the issue to auto-land start with --force-enabled, then finish, and ends Done", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: autoLandShell(),
+  });
+  assert.equal(result.status, "Done");
+  assert.equal(result.stoppedAt, "done");
+  const start = commands.findIndex((c) =>
+    c.includes("auto-land.mjs start 77 --issue KIT-9 --handoff --force-enabled"),
+  );
+  const finish = commands.findIndex((c) => c.includes("auto-land.mjs finish 77 --issue KIT-9"));
+  assert.ok(start >= 0 && finish > start, "start, then finish");
+  assert.ok(commands.findIndex((c) => c.includes("audit-receipt.mjs post")) < start);
+  assert.notEqual(lastState(commands), "Approval", "Approval is the exception exit, not a step");
+  // The workflow itself still never merges, posts a receipt for real, or sets a merge state.
+  for (const command of commands) {
+    assert.doesNotMatch(command, /"(Merging|Post-Merge|Done)"/);
+    assert.doesNotMatch(command, /gh pr merge|merge-lock|sync-pr|--auto\b/);
+    if (command.includes("audit-receipt.mjs")) assert.match(command, /--dry-run/);
+  }
+});
+
+test("autoLand from the config: the script says AUTO-LAND ON, so start runs without --force-enabled", async () => {
+  const { result, commands } = await run({
+    shell: autoLandShell({ enabled: { code: 0, line: "AUTO-LAND ON" } }),
+  });
+  assert.equal(result.status, "Done");
+  const start = commands.find((c) => c.includes("auto-land.mjs start"));
+  assert.match(start, /--handoff$/);
+  assert.doesNotMatch(start, /--force-enabled/);
+});
+
+test("autoLand refused: the issue is moved to Approval, with the refusal in the note", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: autoLandShell({
+      start: { code: 1, line: "REFUSED (auto-land): needs-human: surface:mobile" },
+    }),
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(result.stoppedAt, "auto-land");
+  assert.match(result.note, /needs-human: surface:mobile/);
+  assert.equal(lastState(commands), "Approval");
+  assert.ok(!commands.some((c) => c.includes("auto-land.mjs finish")));
+});
+
+test("autoLand waiting: start repeats while the verdict is exit 3, five slices at most, and stops In Review", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: autoLandShell({ start: { code: 3, line: "WAITING (auto-land): checks pending" } }),
+  });
+  assert.equal(commands.filter((c) => c.includes("auto-land.mjs start")).length, 5);
+  assert.equal(result.status, "In Review");
+  assert.equal(lastState(commands), "In Review");
+  assert.match(result.note, /still waiting after 5 slices/);
+});
+
+test("autoLand finish alarm: the script already moved the issue to Approval; the workflow reports it", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: autoLandShell({ finish: { code: 1, line: "ALARM (auto-land): queue-ejected: ..." } }),
+  });
+  assert.equal(result.status, "Approval");
+  assert.match(result.note, /ALARM \(auto-land\): queue-ejected/);
+  assert.ok(!commands.some((c) => /state KIT-9 "(Done|Merging)"/.test(c)));
+});
+
+test("autoLand finish still waiting after the slices leaves the issue Merging and says how to go on", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: autoLandShell({ finish: { code: 3, line: "WAITING (auto-land): in the queue" } }),
+  });
+  assert.equal(commands.filter((c) => c.includes("auto-land.mjs finish")).length, 5);
+  assert.equal(result.status, "Merging");
+  assert.match(result.note, /run auto-land\.mjs finish again/);
+});
+
+test("a runner that returns nothing for auto-land start is never retried (the command is not idempotent) and the status is unknown", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: (c) => (c.includes("auto-land.mjs start") ? null : undefined),
+  });
+  assert.equal(commands.filter((c) => c.includes("auto-land.mjs start")).length, 1);
+  assert.equal(result.status, "unknown");
+  assert.match(result.note, /runner-no-result/);
+  assert.match(result.note, /may have enqueued/);
+});
+
+test("autoLand must be a boolean in the input schema, and never changes how the Reviewer or the receipt dry run work", async () => {
+  assert.match(SOURCE, /autoLand: \{ type: "boolean" \}/);
+  const { spawns } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    shell: autoLandShell(),
+  });
+  for (const spawn of agentSpawns(spawns)) {
+    assert.equal(spawn.options.provider, "claude-code");
+    assert.match(spawn.options.model, /^claude-/);
+  }
+});
+
 test("a resume whose head is ready goes straight to the Reviewer: no Engineer, no In Progress (KIT-295)", async () => {
   const { result, commands, spawns } = await run({
     args: { issue: "KIT-9", resume: true },
@@ -1183,4 +1308,141 @@ test("the Reviewer prompt asks for the result line as its last text, after the w
   const { spawns } = await run();
   const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:")).prompt;
   assert.match(reviewer, /write that line as your last text, after every other tool call/);
+});
+
+// ---- Scenario titles in the Engineer prompt (KIT-351) -----------------------------------------------
+
+const TITLES = [
+  "A Collector edits one fact on their own jersey",
+  "A Collector adds a home shirt from a photo",
+  "A Collector removes a shirt from the Collection",
+  "A Collector corrects a wrong season on a Kit",
+  "A Collector sees the Kit's labels after saving",
+  "A Collector adds a second photo to an existing Kit",
+  "A Collector opens the Collection with no Kits yet",
+];
+const TITLES_COMMAND = /^node scripts\/scenarios\.mjs titles --issue KIT-9$/;
+const titlesAnswer =
+  (answer, code = 0) =>
+  (command) =>
+    TITLES_COMMAND.test(command)
+      ? { code, line: typeof answer === "string" ? answer : JSON.stringify(answer) }
+      : undefined;
+const withTitles = (titles, extra = {}) => ({
+  verdict: "SCENARIOS titles holdout-scenarios/holdout.md: LEAK-VERDICT",
+  path: "holdout-scenarios/holdout.md",
+  titles,
+  ...extra,
+});
+const engineerPrompts = (spawns) =>
+  agentSpawns(spawns)
+    .filter((s) => s.options.label.startsWith("engineer:"))
+    .map((s) => s.prompt);
+const SECTION_TEXT = /### (Starting situation|Actions|End state)/;
+
+test("titles reach the Engineer prompt, in every round, and Scenario text never does", async () => {
+  const { result, commands, spawns } = await run({
+    shell: titlesAnswer(withTitles(TITLES)),
+    // A red review sends a second round to the Engineer: both prompts carry the titles.
+    reviewer: (round) => ({
+      verdict: round === 1 ? "red" : "green",
+      sha: SHA,
+      sentence: "x",
+      threadId: REVIEWER_THREAD,
+    }),
+  });
+  assert.ok(result.rounds >= 2, "the run did not reach a second Engineer round");
+  const prompts = engineerPrompts(spawns);
+  assert.ok(prompts.length >= 2);
+  for (const prompt of prompts) {
+    assert.match(prompt, /will be judged on these Scenarios \(titles only/);
+    for (const [i, title] of TITLES.entries()) {
+      assert.ok(prompt.includes(`${i + 1}. ${title}`), title);
+    }
+    assert.ok(!prompt.includes("LEAK-VERDICT"), "the CLI's verdict text entered the prompt");
+  }
+  for (const text of [...spawns.map((s) => s.prompt), ...commands]) {
+    assert.doesNotMatch(text, SECTION_TEXT);
+  }
+  // The titles command holds only the issue key, and `read` is never named in a command.
+  const titlesCommands = commands.filter((c) => c.includes("scenarios.mjs"));
+  assert.equal(titlesCommands.length, 1);
+  assert.match(titlesCommands[0], TITLES_COMMAND);
+  assert.ok(!commands.some((c) => c.includes("scenarios.mjs read")));
+  for (const title of TITLES) assert.ok(!commands.some((c) => c.includes(title)));
+});
+
+test("the titles command is the last of the start runner and a resume carries it too", async () => {
+  const fresh = await run({ shell: titlesAnswer(withTitles(TITLES)) });
+  const at = fresh.commands.findIndex((c) => TITLES_COMMAND.test(c));
+  assert.ok(at > fresh.commands.findIndex((c) => c.includes('state KIT-9 "In Progress"')));
+  const resumed = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(1, titlesAnswer(withTitles(TITLES))),
+    engineer: () => ({
+      outcome: "ready",
+      sentence: "done",
+      threadId: ENGINEER_THREAD,
+      prNumber: 55,
+    }),
+  });
+  assert.ok(resumed.commands.some((c) => TITLES_COMMAND.test(c)));
+  assert.ok(engineerPrompts(resumed.spawns)[0].includes(`1. ${TITLES[0]}`));
+});
+
+test("a milestone with no Holdout file gives 'no Scenarios' in the prompt and the run reaches Approval", async () => {
+  const empty = withTitles([], {
+    verdict: "SCENARIOS titles x/y.md: no Scenarios (no Holdout file)",
+  });
+  const { result, spawns } = await run({ shell: titlesAnswer(empty) });
+  assert.equal(result.status, "Approval");
+  assert.ok(engineerPrompts(spawns)[0].includes("Milestone Scenarios: no Scenarios."));
+  const none = await run({ shell: titlesAnswer({ ...empty, path: null }) });
+  assert.equal(none.result.status, "Approval");
+  assert.ok(engineerPrompts(none.spawns)[0].includes("Milestone Scenarios: no Scenarios."));
+});
+
+test("a title or answer that fails its pattern never enters a prompt or a command, and the run continues", async () => {
+  const long = "x".repeat(121);
+  const bad = {
+    newline: withTitles(["fine title", "two\nlines"]),
+    backtick: withTitles(["fine title", "run `id`"]),
+    long: withTitles(["fine title", long]),
+    control: withTitles(["fine title", "bell\u0007"]),
+    separator: withTitles(["fine title", "a b"]),
+    empty: withTitles(["fine title", ""]),
+    padded: withTitles(["fine title", " padded "]),
+    notString: withTitles(["fine title", 7]),
+    notArray: withTitles("a title"),
+    tooMany: withTitles(Array.from({ length: 21 }, (_, i) => `Title ${i}`)),
+    badPath: withTitles(["fine title"], { path: "../etc/passwd" }),
+    pathNotString: withTitles(["fine title"], { path: 5 }),
+    notJson: "SCENARIOS titles x/y.md: 2 Scenarios",
+    jsonNull: "null",
+    malformed: "MALFORMED: x/y.md: no Scenario",
+  };
+  for (const [name, answer] of Object.entries(bad)) {
+    const { result, commands, spawns } = await run({ shell: titlesAnswer(answer) });
+    assert.equal(result.status, "Approval", name);
+    const [prompt] = engineerPrompts(spawns);
+    assert.ok(prompt.includes("no usable answer"), `${name}: not marked unusable`);
+    assert.ok(!prompt.includes("fine title"), `${name}: part of a bad answer got through`);
+    assert.ok(!commands.some((c) => c.includes("fine title") || c.includes("passwd")), name);
+  }
+  // A failing exit code or a runner that dropped the command is the same: no usable answer, run goes on.
+  const failed = await run({ shell: titlesAnswer(withTitles(TITLES), 4) });
+  assert.equal(failed.result.status, "Approval");
+  assert.ok(engineerPrompts(failed.spawns)[0].includes("no usable answer"));
+  const dropped = await run({ shell: (c) => (TITLES_COMMAND.test(c) ? null : undefined) });
+  assert.equal(dropped.result.status, "Approval");
+  assert.ok(engineerPrompts(dropped.spawns)[0].includes("no usable answer"));
+});
+
+test("a failing titles command does not stop the start, and a failing start step still does", async () => {
+  const { result } = await run({ shell: titlesAnswer("boom", 4) });
+  assert.equal(result.status, "Approval");
+  const stop = await run({
+    shell: (c) => (c.includes("start-decision") ? { code: 4, line: "nope" } : undefined),
+  });
+  assert.equal(stop.result.stoppedAt, "start");
 });

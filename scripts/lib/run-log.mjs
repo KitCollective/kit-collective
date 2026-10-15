@@ -12,8 +12,18 @@ import { LOCK_ROWS } from "./review-matrix.mjs";
 
 export const DEFAULT_LOG_PATH = ".factory/run-log.jsonl";
 
-export const EVENTS = ["start", "spawn", "result", "gate", "audit", "reason"];
-export const STEPS = ["lead", "engineer", "reviewer", "lander"];
+export const EVENTS = [
+  "start",
+  "spawn",
+  "result",
+  "gate",
+  "audit",
+  "reason",
+  "auto-land",
+  "holdout",
+];
+/** `scenario-judge` is the Milestone scenarios workflow's Scenario judge (KIT-353): flow writer and run judge. */
+export const STEPS = ["lead", "engineer", "reviewer", "lander", "scenario-judge"];
 export const MODES = ["start", "replan", "fix", "review"];
 export const OUTCOMES = [
   "plan",
@@ -28,9 +38,18 @@ export const OUTCOMES = [
   "merged",
   "landed",
   "none",
+  // The Scenario judge (KIT-353): a flow written or not, a run satisfied or not, a milestone met or not.
+  "written",
+  "cannot",
+  "satisfied",
+  "not-satisfied",
+  "met",
+  "not-met",
 ];
 export const GATES = ["review", "pre-review", "land", "session", "head", "scope", "checks"];
 export const GATE_OUTCOMES = ["open", "closed"];
+/** What `scripts/auto-land.mjs` logs (ADR-0061): `start` is an enqueue and is what the daily cap counts. */
+export const AUTO_LAND_OUTCOMES = ["start", "landed", "refused", "alarm", "breaker-reset"];
 
 /** Fixed reason codes. A row that failed an audit is `row-<lock row id>`. */
 export const REASON_CODES = [
@@ -53,18 +72,61 @@ export const REASON_CODES = [
   "scope-miss",
   "scope-missing-in-pr",
   "session-limit",
+  "kill-switch",
+  "head-mismatch",
+  "pr-not-ready",
+  "issue-not-ready",
+  "hold-label",
+  "oversize-diff",
+  "out-of-scope",
+  "no-independent-reviewer",
+  "same-model-reviewer",
+  "stale-audit",
+  "receipt-refused",
+  "review-gate-closed",
+  "daily-cap",
+  "breaker-open",
+  "sync-changed-head",
+  "lock-held",
+  "enqueue-failed",
+  "queue-ejected",
+  "integration-red",
+  "land-gate-closed",
+  "holdout-read",
+  // Milestone scenarios (KIT-353). Every `scenarios.mjs status --code` (ERROR_CODES in
+  // scripts/lib/scenarios.mjs) is here too, so the workflow's `reason` line for it is never refused;
+  // a test reads the workflow's list. `scenarios-refused` is a refused check, `status-failed` an
+  // error status that could not be posted.
+  "scenarios-refused",
+  "status-failed",
+  "stopped",
+  "bad-command",
+  "github-unreachable",
+  "hosted-run-error",
+  "development-moved",
+  "flow-not-written",
+  "producer-failed",
+  "dispatch-failed",
+  "judge-no-result",
+  "wait-exhausted",
+  "bad-answer",
   "unspecified",
 ];
 
 const ISSUE = /^[A-Z][A-Z0-9]*-\d+$/;
 const THREAD = /^thr_[a-z0-9]{4,32}$/;
 const WORD = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,59}$/;
+/** `<project-slug>/<milestone-slug>.md`, the Holdout file a read named (ADR-0060). */
+const HOLDOUT_FILE = /^[a-z0-9]+(-[a-z0-9]+)*\/[a-z0-9]+(-[a-z0-9]+)*\.md$/;
+/** `<project-slug>/<milestone-slug>`: the milestone a Milestone scenarios event belongs to (its Holdout file without `.md`). */
+const MILESTONE = /^[a-z0-9]+(-[a-z0-9]+)*\/[a-z0-9]+(-[a-z0-9]+)*$/;
 const SHA = /^[0-9a-f]{7,40}$/;
 const TOKENS = (v) => v === null || (Number.isInteger(v) && v >= 0);
 
 /** key -> validator. A key outside this table is refused, so nothing unvetted is written. */
 const FIELDS = {
   issue: (v) => typeof v === "string" && ISSUE.test(v),
+  milestone: (v) => typeof v === "string" && MILESTONE.test(v),
   step: (v) => STEPS.includes(v),
   mode: (v) => MODES.includes(v),
   thread: (v) => typeof v === "string" && THREAD.test(v),
@@ -73,14 +135,19 @@ const FIELDS = {
   machine: (v) => typeof v === "string" && WORD.test(v),
   tokensIn: TOKENS,
   tokensOut: TOKENS,
-  outcome: (v) => OUTCOMES.includes(v) || GATE_OUTCOMES.includes(v),
+  outcome: (v) =>
+    OUTCOMES.includes(v) || GATE_OUTCOMES.includes(v) || AUTO_LAND_OUTCOMES.includes(v),
   gate: (v) => GATES.includes(v),
   verdict: (v) => ["green", "amber", "red"].includes(v),
   round: (v) => Number.isInteger(v) && v >= 0 && v < 100,
   sha: (v) => typeof v === "string" && SHA.test(v),
   rows: (v) => Array.isArray(v) && v.length <= 20 && v.every((r) => ROW_IDS.includes(r)),
   code: (v) => REASON_CODES.includes(v),
+  holdout: (v) => typeof v === "string" && HOLDOUT_FILE.test(v),
 };
+
+/** Events a milestone run writes: for these `milestone` stands in for `issue` (exactly one of the two). */
+const MILESTONE_EVENTS = ["start", "spawn", "result", "reason"];
 
 /** Fields each event requires; `gate` also takes an `outcome` of open or closed. */
 const REQUIRED = {
@@ -90,6 +157,8 @@ const REQUIRED = {
   gate: ["issue", "gate", "outcome"],
   audit: ["issue", "verdict", "round", "sha"],
   reason: ["issue", "code"],
+  "auto-land": ["issue", "outcome"],
+  holdout: ["code", "holdout"],
 };
 
 /**
@@ -101,10 +170,23 @@ export function validateEvent(event) {
   if (!EVENTS.includes(event?.event)) {
     return [`event must be one of ${EVENTS.join(", ")}`];
   }
+  const byMilestone = MILESTONE_EVENTS.includes(event.event);
   for (const key of REQUIRED[event.event]) {
-    if (event[key] === undefined) {
+    if (key === "issue" && byMilestone) {
+      if (event.issue === undefined && event.milestone === undefined) {
+        problems.push(`${event.event} needs issue or milestone`);
+      } else if (event.issue !== undefined && event.milestone !== undefined) {
+        problems.push(`${event.event} takes issue or milestone, not both`);
+      }
+      continue;
+    }
+    // A breaker reset belongs to no issue.
+    if (event[key] === undefined && !(event.outcome === "breaker-reset" && key === "issue")) {
       problems.push(`${event.event} needs ${key}`);
     }
+  }
+  if (!byMilestone && event.milestone !== undefined) {
+    problems.push(`${event.event} takes no milestone`);
   }
   for (const [key, value] of Object.entries(event)) {
     if (key === "event" || key === "at") {
@@ -127,6 +209,9 @@ export function validateEvent(event) {
   }
   if (event.event === "gate" && !GATE_OUTCOMES.includes(event.outcome)) {
     problems.push("gate outcome must be open or closed");
+  }
+  if (event.event === "auto-land" && !AUTO_LAND_OUTCOMES.includes(event.outcome)) {
+    problems.push(`auto-land outcome must be one of ${AUTO_LAND_OUTCOMES.join(", ")}`);
   }
   return problems;
 }

@@ -67,6 +67,18 @@ export function blockerResolvesDependents(statusName, states) {
 }
 
 /**
+ * Statuses in which a blocker no longer holds back the issues it blocks: Done and Canceled (Linear's own
+ * rule above) and Duplicate, plus Post-Merge, because its PR is already merged. By name, for callers that
+ * have a status name but not the team's status types.
+ */
+export const RESOLVED_BLOCKER_STATUSES = ["Done", "Canceled", "Duplicate", "Post-Merge"];
+
+/** @param {string} statusName */
+export function blockerIsResolved(statusName) {
+  return RESOLVED_BLOCKER_STATUSES.includes(statusName);
+}
+
+/**
  * @param {{ from: string, to: string, states: Array<{ name: string, type: string }> }} input
  * @returns {boolean}
  */
