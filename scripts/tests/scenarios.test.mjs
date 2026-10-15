@@ -5,7 +5,9 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -664,6 +666,7 @@ if (answer.files) {
     fs.writeFileSync(path.join(target, name), body);
   }
 }
+if (answer.sleepMs) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, answer.sleepMs);
 if (answer.stdout) process.stdout.write(answer.stdout);
 if (answer.stderr) process.stderr.write(answer.stderr);
 process.exit(answer.code ?? 0);
@@ -1315,4 +1318,110 @@ test("runOutcome: only a flows step that succeeded or failed on the checked sha 
     }),
     { outcome: "waiting" },
   );
+});
+
+test("flow: a producer run that does not finish within --timeout is exit 1 FAILED, like a failed one", () => {
+  const { work, env } = workEnv();
+  flowFile(work, "scn-0a1b2c3d-6");
+  const gh = scriptedGh([
+    { match: "dispatches", answers: [{ stdout: json({ workflow_run_id: 9 }) }] },
+    {
+      match: "actions/runs/9",
+      answers: [{ stdout: json({ id: 9, status: "queued", conclusion: null }) }],
+    },
+  ]);
+  const result = run(["flow", "--name", "scn-0a1b2c3d-6", "--timeout", "0"], {
+    env: { ...env, ...gh.env },
+  });
+  assert.equal(result.status, GATE_EXIT.closed);
+  assert.match(
+    result.verdict,
+    /^FAILED: the producer run 9 of scn-0a1b2c3d-6 did not finish in 0s$/,
+  );
+});
+
+/** A fake ffmpeg: `-version` answers at once; extracting sleeps `ms`, then writes one still. */
+function fakeFfmpeg(ms) {
+  const dir = mkdtempSync(join(tmpdir(), "fake-ffmpeg-"));
+  const path = join(dir, "ffmpeg");
+  writeFileSync(
+    path,
+    `#!${process.execPath}
+const fs = require("node:fs");
+const argv = process.argv.slice(2);
+if (argv[0] === "-version") process.exit(0);
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${ms});
+fs.writeFileSync(argv.at(-1).replace("%03d", "001"), "png");
+`,
+  );
+  chmodSync(path, 0o755);
+  return path;
+}
+
+test("wait keeps only the screenshots, the recording and its stills in a run's evidence", () => {
+  const { work, env } = workEnv({ KC_FFMPEG: fakeFfmpeg(0) });
+  const rules = finished(11);
+  rules[2].answers = [
+    {
+      files: {
+        "apps/mobile/.maestro/out/kc__scn__01-start.png": "png",
+        "kc__scn.mp4": "mp4",
+        "local-api.log": "api log",
+        "apps/mobile/.maestro/out/maestro.log": "x",
+      },
+    },
+  ];
+  const gh = scriptedGh(rules);
+  const result = run(["wait", "--runs", "11", "--sha", SHA40, "--timeout", "60"], {
+    env: { ...env, ...gh.env },
+  });
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  const evidence = join(work, "scenario-runs", "11");
+  const files = readdirSync(evidence, { recursive: true })
+    .map(String)
+    .filter((f) => statSync(join(evidence, f)).isFile())
+    .sort();
+  assert.deepEqual(files, [
+    "apps/mobile/.maestro/out/kc__scn__01-start.png",
+    "frames/kc__scn-001.png",
+    "kc__scn.mp4",
+  ]);
+  assert.equal(JSON.parse(result.verdict).runs[0].frames, true);
+});
+
+test("wait has one deadline: a slow download or ffmpeg is exit 3 inside --timeout, and the next slice resumes", () => {
+  const slowGh = () => {
+    const rules = [...finished(11), ...finished(12)];
+    rules[5].answers = [{ sleepMs: 8000, files: { "kc__b.png": "png" } }];
+    return scriptedGh(rules);
+  };
+  const { work, env } = workEnv();
+  const started = Date.now();
+  const first = run(["wait", "--runs", "11,12", "--sha", SHA40, "--timeout", "3"], {
+    env: { ...env, ...slowGh().env },
+  });
+  assert.ok(Date.now() - started < 7000, `wait ran ${Date.now() - started} ms past a 3 s deadline`);
+  assert.equal(first.status, GATE_EXIT.waiting, first.stdout);
+  assert.match(first.verdict, /^WAITING: evidence of 1 of 2 hosted runs not downloaded yet$/);
+  assert.ok(existsSync(join(work, "scenario-runs", "11", "kc__scn.mp4")));
+
+  // The next slice downloads only what is missing.
+  const fast = scriptedGh([...finished(11), ...finished(12)]);
+  const second = run(["wait", "--runs", "11,12", "--sha", SHA40, "--timeout", "60"], {
+    env: { ...env, ...fast.env },
+  });
+  assert.equal(second.status, GATE_EXIT.open, second.stdout);
+  const downloads = fast
+    .calls()
+    .filter((c) => c.argv[1] === "download")
+    .map((c) => c.argv[2]);
+  assert.deepEqual(downloads, ["12"]);
+
+  const slowFrames = workEnv({ KC_FFMPEG: fakeFfmpeg(8000) });
+  const t0 = Date.now();
+  const frames = run(["wait", "--runs", "11", "--sha", SHA40, "--timeout", "3"], {
+    env: { ...slowFrames.env, ...scriptedGh(finished(11)).env },
+  });
+  assert.ok(Date.now() - t0 < 7000, "ffmpeg ran past the deadline");
+  assert.equal(frames.status, GATE_EXIT.waiting, frames.stdout);
 });

@@ -216,17 +216,21 @@ const usageLine = (command, problem) => ({
 });
 const oneLine = (code, answer) => finish({ code, lines: [JSON.stringify(answer)] });
 
-function ghCall(args, input) {
+/** gh, stopped after `timeoutMs` (default two minutes) so no call can hold a slice past its cap. */
+function ghCall(args, input, timeoutMs = 120000) {
   return spawnSync("gh", args, {
     encoding: "utf8",
     input,
     maxBuffer: 64 * 1024 * 1024,
+    timeout: Math.max(1, timeoutMs),
   });
 }
 
 /** A gh api answer as JSON; exit 4 naming `what` when gh fails or answers something else. */
-function ghJson(args, what) {
-  const result = ghCall(args);
+function ghJson(args, what, deadline) {
+  // A read near the deadline still gets 5 s; the caller stops reading POLL_GRACE after it.
+  const limit = deadline ? Math.max(5000, Math.min(60000, deadline - Date.now())) : undefined;
+  const result = ghCall(args, undefined, limit);
   if (result.status !== 0) {
     return unknown(`cannot read ${what}: ${firstLine(result.error?.message ?? result.stderr)}`);
   }
@@ -456,7 +460,10 @@ async function flow({ name, timeout = 420 }) {
       });
     }
     if (Date.now() - started + pollMs() > timeout * 1000) {
-      unknown(`the producer run ${id} of ${name} did not finish in ${timeout}s`);
+      finish({
+        code: GATE_EXIT.closed,
+        lines: [`FAILED: the producer run ${id} of ${name} did not finish in ${timeout}s`],
+      });
     }
     await sleep(pollMs());
   }
@@ -477,20 +484,54 @@ function runFlow({ flowRun, name }) {
   oneLine(GATE_EXIT.open, { verdict: `SCENARIOS run ${name}: run ${id}`, run: id });
 }
 
-/** Frames of every recording under `dir`, when ffmpeg is there: the judge cannot watch a video. */
-function extractFrames(dir) {
+/** True when spawnSync stopped the child at its `timeout`. */
+const timedOut = (result) => result.error?.code === "ETIMEDOUT" || result.signal === "SIGTERM";
+
+/** What a judge may see of a run: the step screenshots, the recording and (later) its stills. */
+const EVIDENCE_FILE = /^kc__[^/]*\.(png|mp4)$/;
+
+/** Deletes every downloaded file but the evidence (the API log and Maestro's own output included). */
+function pruneEvidence(dir) {
+  for (const entry of readdirSync(dir, { recursive: true }).map(String)) {
+    const file = join(dir, entry);
+    if (
+      statSync(file, { throwIfNoEntry: false })?.isFile() &&
+      !EVIDENCE_FILE.test(basename(entry))
+    ) {
+      rmSync(file, { force: true });
+    }
+  }
+}
+
+/**
+ * Stills of every recording under `dir`, when ffmpeg is there: the judge cannot watch a video. Each
+ * ffmpeg call ends by `deadline`. Returns true or false (stills made or not), or null when the
+ * deadline cut it off.
+ */
+function extractFrames(dir, deadline) {
   const ffmpeg = process.env.KC_FFMPEG || "ffmpeg";
-  if (spawnSync(ffmpeg, ["-version"], { stdio: "ignore" }).status !== 0) {
-    return false;
+  const left = () => deadline - Date.now();
+  if (left() <= 0) {
+    return null;
+  }
+  const probe = spawnSync(ffmpeg, ["-version"], {
+    stdio: "ignore",
+    timeout: Math.min(left(), 10000),
+  });
+  if (probe.status !== 0) {
+    return timedOut(probe) ? null : false;
   }
   const frames = join(dir, "frames");
   let any = false;
-  for (const entry of readdirSync(dir, { recursive: true })) {
-    if (!String(entry).endsWith(".mp4")) {
+  for (const entry of readdirSync(dir, { recursive: true }).map(String)) {
+    if (!entry.endsWith(".mp4")) {
       continue;
     }
+    if (left() <= 0) {
+      return null;
+    }
     mkdirSync(frames, { recursive: true });
-    const stem = basename(String(entry), ".mp4");
+    const stem = basename(entry, ".mp4");
     const done = spawnSync(
       ffmpeg,
       [
@@ -498,33 +539,57 @@ function extractFrames(dir) {
         "-loglevel",
         "error",
         "-i",
-        join(dir, String(entry)),
+        join(dir, entry),
         "-vf",
         "fps=1/2",
         "-frames:v",
         "60",
         join(frames, `${stem}-%03d.png`),
       ],
-      { stdio: "ignore" },
+      { stdio: "ignore", timeout: left() },
     );
+    if (timedOut(done)) {
+      return null;
+    }
     any = any || done.status === 0;
   }
   return any;
 }
 
+/** Polling stops this many seconds before the deadline, so most slices leave the downloads room. */
 const DOWNLOAD_RESERVE = 120;
+/** The most a slow poll may run past the deadline: slice 480 s + 60 s + one 5 s read stays under 600 s. */
+const POLL_GRACE = 60;
 
-/** Waits for the hosted runs; when all are judged, downloads each run's evidence. */
+/**
+ * Waits for the hosted runs; when all are judged, downloads each run's evidence. One deadline,
+ * `--timeout` from the start, bounds everything, the downloads and ffmpeg included (ADR-0058's 10
+ * minute cap): what does not fit is exit 3, and the next slice resumes from the runs not yet done
+ * (a finished run's evidence is marked by `<id>.done` next to its folder).
+ */
 async function wait({ runs, sha, timeout = 480 }) {
   const repo = config().github.ownerRepo;
   const started = Date.now();
+  const deadline = started + timeout * 1000;
   const outcomes = new Map();
   for (;;) {
     for (const id of runs.filter((r) => !outcomes.has(r))) {
-      const run = ghJson(["api", `repos/${repo}/actions/runs/${id}`], `run ${id}`);
+      if (Date.now() > deadline + POLL_GRACE * 1000) {
+        finish({
+          code: GATE_EXIT.waiting,
+          lines: [
+            `WAITING: ${runs.length - outcomes.size} of ${runs.length} hosted runs unfinished`,
+          ],
+        });
+      }
+      const run = ghJson(["api", `repos/${repo}/actions/runs/${id}`], `run ${id}`, deadline);
       const jobs =
         run.status === "completed"
-          ? ghJson(["api", `repos/${repo}/actions/runs/${id}/jobs`], `the jobs of run ${id}`)
+          ? ghJson(
+              ["api", `repos/${repo}/actions/runs/${id}/jobs`],
+              `the jobs of run ${id}`,
+              deadline,
+            )
           : null;
       const answer = runOutcome({ id, run, jobs, sha });
       if (answer.error) {
@@ -538,9 +603,7 @@ async function wait({ runs, sha, timeout = 480 }) {
     if (unfinished === 0) {
       break;
     }
-    // The downloads come after the last poll and count against the same slice (ADR-0058's 10 minute
-    // cap), so polling stops DOWNLOAD_RESERVE seconds early.
-    if (Date.now() - started + pollMs() > Math.max(0, timeout - DOWNLOAD_RESERVE) * 1000) {
+    if (Date.now() + pollMs() > deadline - DOWNLOAD_RESERVE * 1000) {
       finish({
         code: GATE_EXIT.waiting,
         lines: [`WAITING: ${unfinished} of ${runs.length} hosted runs unfinished`],
@@ -549,22 +612,33 @@ async function wait({ runs, sha, timeout = 480 }) {
     await sleep(pollMs());
   }
   const artifact = `device-flows-${sha}`;
-  const answer = [];
+  const runsDir = join(workDir(), "scenario-runs");
+  const marker = (id) => join(runsDir, `${id}.done`);
+  const notYet = () => runs.filter((id) => !existsSync(marker(id))).length;
+  const later = () =>
+    finish({
+      code: GATE_EXIT.waiting,
+      lines: [`WAITING: evidence of ${notYet()} of ${runs.length} hosted runs not downloaded yet`],
+    });
   for (const id of runs) {
-    const evidence = join(workDir(), "scenario-runs", String(id));
+    if (existsSync(marker(id))) {
+      continue;
+    }
+    const evidence = join(runsDir, String(id));
     rmSync(evidence, { recursive: true, force: true });
     mkdirSync(evidence, { recursive: true });
-    const got = ghCall([
-      "run",
-      "download",
-      String(id),
-      "--repo",
-      repo,
-      "--name",
-      artifact,
-      "--dir",
-      evidence,
-    ]);
+    if (deadline - Date.now() <= 0) {
+      later();
+    }
+    const got = ghCall(
+      ["run", "download", String(id), "--repo", repo, "--name", artifact, "--dir", evidence],
+      undefined,
+      deadline - Date.now(),
+    );
+    if (timedOut(got)) {
+      rmSync(evidence, { recursive: true, force: true });
+      later();
+    }
     if (got.status !== 0) {
       finish({
         code: GATE_EXIT.closed,
@@ -573,11 +647,22 @@ async function wait({ runs, sha, timeout = 480 }) {
         ],
       });
     }
-    answer.push({ run: id, outcome: outcomes.get(id), evidence, frames: extractFrames(evidence) });
+    pruneEvidence(evidence);
+    const frames = extractFrames(evidence, deadline);
+    if (frames === null) {
+      rmSync(evidence, { recursive: true, force: true });
+      later();
+    }
+    writeFileSync(marker(id), JSON.stringify({ frames }));
   }
   oneLine(GATE_EXIT.open, {
     verdict: `SCENARIOS wait: ${runs.length} hosted runs finished on ${sha.slice(0, 8)}`,
-    runs: answer,
+    runs: runs.map((id) => ({
+      run: id,
+      outcome: outcomes.get(id),
+      evidence: join(runsDir, String(id)),
+      frames: JSON.parse(readFileSync(marker(id), "utf8")).frames === true,
+    })),
   });
 }
 

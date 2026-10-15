@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { parseVerdicts, scoreVerdicts } from "../lib/scenarios.mjs";
+import { validateEvent } from "../lib/run-log.mjs";
+import { ERROR_CODES, parseVerdicts, scoreVerdicts } from "../lib/scenarios.mjs";
 
 /**
  * The Milestone scenarios workflow (KIT-353) runs in bb's QuickJS sandbox, which this repo cannot
@@ -34,6 +35,22 @@ const checkAnswer = (extra = {}) => ({
 });
 
 const flag = (command, name) => new RegExp(`--${name} (\\S+)`).exec(command)?.[1];
+
+/**
+ * Every run-log line the workflow writes must be one the run log accepts: under keepGoing a refused
+ * line (exit 2) is lost without a trace, so a code outside REASON_CODES would vanish silently.
+ */
+function assertLoggable(command) {
+  const m = /^node scripts\/run-log\.mjs (\S+) (.*)$/.exec(command);
+  if (!m) return;
+  const words = m[2].split(" ");
+  const event = { event: m[1] };
+  for (let i = 0; i < words.length; i += 2) {
+    const key = words[i].slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    if (key !== "usageThread") event[key] = words[i + 1];
+  }
+  assert.deepEqual(validateEvent(event), [], `the run log refuses: ${command}`);
+}
 
 /** The default answer of a command, the way the real scripts answer it. */
 function defaultShell(command, state) {
@@ -126,6 +143,7 @@ async function run({ args = ARGS, shell, writer, judge, check } = {}) {
       const results = [];
       for (const command of lines) {
         commands.push(command);
+        assertLoggable(command);
         const custom = shell?.(command, state);
         if (custom === null) return { results };
         const result = custom ?? defaultShell(command, state);
@@ -189,8 +207,8 @@ test("meta is a literal, and every phase() title is a meta phase", () => {
 
 test("every agent() call has a literal provider and model; the Scenario judge is Opus on high", async () => {
   const provider = /const PROVIDER = "([^"]+)";/.exec(SOURCE)[1];
-  const block = /const MODELS = (\{[\s\S]*?\n\});/.exec(SOURCE)[1];
-  const models = [...block.matchAll(/: "([^"]+)"/g)].map((m) => m[1]);
+  const judgeModel = /const JUDGE_MODEL = "([^"]+)";/.exec(SOURCE)?.[1];
+  assert.equal(judgeModel, "claude-opus-5-5");
   const calls = [...SOURCE.matchAll(/\bagent\((?!\))/g)].length;
   const literalProviders = [...SOURCE.matchAll(/\bprovider: "([^"]*)"/g)].map((m) => m[1]);
   const literalModels = [...SOURCE.matchAll(/\bmodel: "([^"]*)"/g)].map((m) => m[1]);
@@ -199,8 +217,12 @@ test("every agent() call has a literal provider and model; the Scenario judge is
   assert.equal(literalModels.length, calls);
   for (const literal of literalProviders) assert.equal(literal, "claude-code");
   assert.equal(provider, "claude-code");
-  for (const literal of literalModels)
-    assert.ok(models.includes(literal), `model ${literal} is not in MODELS`);
+  // The runner's model is a literal in its one call; every other call is the Scenario judge.
+  assert.deepEqual(
+    literalModels.filter((m) => m !== judgeModel),
+    ["claude-haiku-5-5"],
+  );
+  assert.doesNotMatch(SOURCE, /const MODELS\b/);
 
   const { spawns } = await run();
   const judges = agentSpawns(spawns);
@@ -568,4 +590,146 @@ test("bad args and a check answer that fails its patterns stop before pending", 
     assert.equal(statusCommands(commands).length, 0, JSON.stringify(check));
     assert.equal(agentSpawns(spawns).length, 0);
   }
+});
+
+test("every code the workflow can log or post is a status --code and a milestone run-log reason", () => {
+  const block = /const ERROR_CODES = \[([\s\S]*?)\];/.exec(SOURCE)[1];
+  const workflowCodes = [...block.matchAll(/"([a-z-]+)"/g)].map((m) => m[1]);
+  // One list: the workflow's copy (bb workflows cannot import) equals the CLI's.
+  assert.deepEqual([...workflowCodes].sort(), Object.keys(ERROR_CODES).sort());
+  const literal = [...SOURCE.matchAll(/--code ([a-z-]+)/g)].map((m) => m[1]);
+  // finish() sends any code through pick(code, ERROR_CODES), so these are all it can write.
+  for (const code of new Set([...workflowCodes, ...literal])) {
+    assert.deepEqual(
+      validateEvent({ event: "reason", milestone: "holdout-scenarios/fixture", code }),
+      [],
+      code,
+    );
+  }
+  assert.match(SOURCE, /const fixed = pick\(code, ERROR_CODES\) \?\? "stopped";/);
+});
+
+test("every exit of every CLI call maps to a status cause that names what happened", async () => {
+  const cases = [
+    [
+      "status --sha",
+      "--state pending",
+      { code: 4, line: "UNKNOWN: cannot post the Scenarios status: HTTP 403" },
+      "status-failed",
+    ],
+    [
+      "scenarios.mjs flow",
+      "",
+      { code: 1, line: "FAILED: the producer run 7 of scn-0a1b2c3d-1 did not finish in 420s" },
+      "producer-failed",
+    ],
+    [
+      "scenarios.mjs flow",
+      "",
+      { code: 1, line: "FAILED: the producer run 7 of scn-0a1b2c3d-1 concluded failure" },
+      "producer-failed",
+    ],
+    [
+      "scenarios.mjs flow",
+      "",
+      { code: 4, line: "UNKNOWN: cannot dispatch scenario-flow.yml: HTTP 403" },
+      "dispatch-failed",
+    ],
+    [
+      "scenarios.mjs flow",
+      "",
+      {
+        code: 4,
+        line: "UNKNOWN: the dispatch of scenario-flow.yml for scn-0a1b2c3d-1 returned no run id and no run is named for it",
+      },
+      "dispatch-failed",
+    ],
+    [
+      "scenarios.mjs flow",
+      "",
+      { code: 4, line: "UNKNOWN: cannot read run 7: HTTP 502" },
+      "github-unreachable",
+    ],
+    [
+      "scenarios.mjs flow",
+      "",
+      { code: 2, line: "UNREADABLE: no flow file for scn-0a1b2c3d-1: ENOENT" },
+      "flow-not-written",
+    ],
+    [
+      "scenarios.mjs flow",
+      "",
+      { code: 2, line: "USAGE: node scripts/scenarios.mjs flow --name <name>" },
+      "bad-command",
+    ],
+    ["scenarios.mjs flow", "", { code: 3, line: "?" }, "bad-answer"],
+    [
+      "scenarios.mjs run",
+      "",
+      {
+        code: 4,
+        line: "UNKNOWN: the dispatch of device-flows.yml returned no run id (return_run_details)",
+      },
+      "dispatch-failed",
+    ],
+    [
+      "scenarios.mjs run",
+      "",
+      { code: 4, line: "UNKNOWN: cannot dispatch device-flows.yml: HTTP 403" },
+      "dispatch-failed",
+    ],
+    ["scenarios.mjs run", "", { code: 2, line: "USAGE: x" }, "bad-command"],
+    [
+      "scenarios.mjs wait",
+      "",
+      { code: 4, line: "UNKNOWN: cannot read run 7001: HTTP 502" },
+      "github-unreachable",
+    ],
+    ["scenarios.mjs wait", "", { code: 2, line: "USAGE: x" }, "bad-command"],
+    [
+      "scenarios.mjs wait",
+      "",
+      { code: 1, line: "ERROR: something-new: run 7001 x" },
+      "hosted-run-error",
+    ],
+    [
+      "--verdicts",
+      "",
+      { code: 4, line: "UNKNOWN: cannot post the Scenarios status: HTTP 403" },
+      "status-failed",
+    ],
+    ["--verdicts", "", { code: 2, line: "USAGE: x" }, "bad-command"],
+  ];
+  for (const [where, also, answer, cause] of cases) {
+    const { result, commands } = await run({
+      shell: (c) => (c.includes(where) && c.includes(also) ? answer : undefined),
+    });
+    const label = `${where} ${answer.code} ${answer.line}`;
+    assert.equal(result.status, "error", label);
+    assert.match(
+      statusCommands(commands).at(-1),
+      new RegExp(`--state error --code ${cause}( |$)`),
+      label,
+    );
+    assert.ok(ERROR_CODES[cause], `${cause} has no status description`);
+    assertNeverLeftPending(commands);
+  }
+});
+
+test("an error status that cannot be posted is logged as status-failed and named in the note", async () => {
+  const { result, commands } = await run({
+    shell: (c) =>
+      c.includes("scenarios.mjs wait")
+        ? { code: 1, line: "ERROR: hosted-run-error: run 7001 concluded cancelled" }
+        : c.includes("--state error")
+          ? { code: 4, line: "UNKNOWN: cannot post the Scenarios status: HTTP 403" }
+          : undefined,
+  });
+  assert.equal(result.state, "unknown");
+  assert.match(result.note, /may still say pending/);
+  assert.ok(
+    commands.some((c) =>
+      c.includes("reason --milestone holdout-scenarios/fixture --code status-failed"),
+    ),
+  );
 });

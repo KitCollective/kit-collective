@@ -93,9 +93,15 @@ export const REASON_CODES = [
   "integration-red",
   "land-gate-closed",
   "holdout-read",
-  // Milestone scenarios (KIT-353); the error codes are also `scenarios.mjs status --code` (ERROR_CODES).
+  // Milestone scenarios (KIT-353). Every `scenarios.mjs status --code` (ERROR_CODES in
+  // scripts/lib/scenarios.mjs) is here too, so the workflow's `reason` line for it is never refused;
+  // a test reads the workflow's list. `scenarios-refused` is a refused check, `status-failed` an
+  // error status that could not be posted.
   "scenarios-refused",
   "status-failed",
+  "stopped",
+  "bad-command",
+  "github-unreachable",
   "hosted-run-error",
   "development-moved",
   "flow-not-written",

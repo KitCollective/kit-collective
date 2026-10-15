@@ -245,6 +245,9 @@ export const ERROR_CODES = {
   "runner-no-result": "The workflow lost a command result; run it again",
   "wait-exhausted": "The hosted runs did not finish in time; run it again",
   "bad-answer": "A scenarios CLI answer failed its check; run it again",
+  "bad-command": "The scenarios CLI refused a command the workflow built; a bug to report",
+  "status-failed": "The Scenarios status could not be posted; run it again",
+  "github-unreachable": "GitHub could not be read during the run; run it again",
 };
 export const PENDING_DESCRIPTION = "The Scenario judge is running the milestone's Scenarios";
 

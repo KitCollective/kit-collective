@@ -75,6 +75,9 @@ const ERROR_CODES = [
   "runner-no-result",
   "wait-exhausted",
   "bad-answer",
+  "bad-command",
+  "status-failed",
+  "github-unreachable",
 ];
 /** A value from agent text may enter a command only through one of these. */
 const pick = (value, allowed) => (allowed.includes(value) ? value : null);
@@ -108,12 +111,10 @@ if (!NAME.test(project) || !NAME.test(milestone) || !MILESTONE_ID.test(mid) || !
 
 // Models are claude-code tuples checked against `bb provider models claude-code`.
 // `bb workflows validate` wants `provider` and `model` as string literals in every agent() call,
-// so the calls repeat them; PROVIDER and MODELS feed the run log and must stay equal to the literals.
+// so the calls repeat them. PROVIDER and JUDGE_MODEL feed the Scenario judge's run-log spawn lines
+// and must stay equal to the judge call's literals; the runner's model is never logged.
 const PROVIDER = "claude-code";
-const MODELS = {
-  opus: "claude-opus-5-5",
-  haiku: "claude-haiku-5-5",
-};
+const JUDGE_MODEL = "claude-opus-5-5";
 
 const RUNNER_SCHEMA = {
   type: "object",
@@ -249,6 +250,25 @@ function answerOf(result) {
   }
 }
 
+/**
+ * The status cause of a CLI call that did not succeed, so the `Scenarios` error says what happened.
+ * `codes` maps an exit code to a cause, or to a function of the verdict line (read through fixed
+ * patterns only). A lost runner, a refused command and an exit nothing expects have their own causes.
+ */
+function causeOf(result, codes) {
+  if (!result || result.runner) {
+    return "runner-no-result";
+  }
+  if (/^USAGE: /.test(result.line)) {
+    return "bad-command";
+  }
+  const entry = codes[result.code];
+  return pick(typeof entry === "function" ? entry(result.line) : entry, ERROR_CODES) ?? "bad-answer";
+}
+/** Exit 4 of `flow` and `run`: the dispatch itself failed, or GitHub could not be read afterwards. */
+const dispatchCause = (line) =>
+  /^UNKNOWN: (cannot dispatch|the dispatch of)/.test(line) ? "dispatch-failed" : "github-unreachable";
+
 /** Run-log lines waiting for the next runner. */
 const carried = [];
 
@@ -332,6 +352,9 @@ async function finish(stoppedAt, code, note, run) {
     `node scripts/scenarios.mjs status --sha ${sha} --state error --code ${fixed}${link}`,
   );
   const ok = posted && !posted.runner && posted.code === 0;
+  if (!ok) {
+    await sh("log:status-failed", stoppedAt, [logCmd("reason", "--code status-failed")], true);
+  }
   return stopped(stoppedAt, "error", {
     sha,
     state: ok ? "error" : "unknown",
@@ -344,7 +367,7 @@ async function finish(stoppedAt, code, note, run) {
 const pending = await shAfter([], "status:pending", "Session", `node scripts/scenarios.mjs status --sha ${sha} --state pending`);
 if (!pending || pending.runner || pending.code !== 0) {
   // A lost runner may have posted pending all the same: end it as error either way.
-  return finish("Session", pending?.runner ? "runner-no-result" : "stopped", `Scenarios could not be set to pending: ${pending?.line ?? "no output"}`);
+  return finish("Session", causeOf(pending, { 4: "status-failed" }), `Scenarios could not be set to pending: ${pending?.line ?? "no output"}`);
 }
 
 /** Spawns the Scenario judge: one literal agent() call, Opus on high (ADR-0060). */
@@ -369,7 +392,7 @@ async function judgeTwice(prompt, label, phaseTitle, schema, usable) {
 }
 
 const spawnLog = (thread) =>
-  logCmd("spawn", `--step scenario-judge --thread ${thread} --provider ${PROVIDER} --model ${MODELS.opus}${machineFlag}`);
+  logCmd("spawn", `--step scenario-judge --thread ${thread} --provider ${PROVIDER} --model ${JUDGE_MODEL}${machineFlag}`);
 
 // ---- Flows --------------------------------------------------------------------------------------
 phase("Flows");
@@ -408,11 +431,9 @@ for (let i = 1; i <= n; i += 1) {
   }
   // Not idempotent (the CLI deletes the file it sent), so never retried.
   const produced = await shOnce(carried.splice(0), `flow:${i}`, "Flows", `node scripts/scenarios.mjs flow --name ${name}`);
-  if (produced.runner) {
-    return finish("Flows", "runner-no-result", produced.line);
-  }
-  if (produced.code !== 0) {
-    return finish("Flows", produced.code === 4 ? "dispatch-failed" : produced.code === 2 ? "flow-not-written" : "producer-failed", `Scenario ${i}: ${produced.line}`);
+  if (produced.runner || produced.code !== 0) {
+    // 1: the producer failed or did not finish; 2: no usable flow file; 4: the dispatch or a read of GitHub.
+    return finish("Flows", causeOf(produced, { 1: "producer-failed", 2: "flow-not-written", 4: dispatchCause }), `Scenario ${i}: ${produced.line}`);
   }
   const flowAnswer = answerOf(produced);
   if (!flowAnswer || flowAnswer.name !== name || !RUN.test(String(flowAnswer.run))) {
@@ -438,7 +459,9 @@ if (lostDispatch) {
 }
 const failedDispatch = dispatched.find((r) => r.code !== 0);
 if (failedDispatch || dispatched.length !== dispatches.length) {
-  return finish("Hosted runs", "dispatch-failed", failedDispatch?.line ?? "fewer dispatch results than runs");
+  return failedDispatch
+    ? finish("Hosted runs", causeOf(failedDispatch, { 4: dispatchCause }), failedDispatch.line)
+    : finish("Hosted runs", "bad-answer", "fewer dispatch results than runs");
 }
 const runsOf = Array.from({ length: n }, () => []);
 for (const [k, result] of dispatched.entries()) {
@@ -468,18 +491,19 @@ for (let slice = 1; slice <= WAIT_SLICES; slice += 1) {
     break;
   }
 }
-if (waited.runner) {
-  return finish("Hosted runs", "runner-no-result", waited.line);
-}
-if (waited.code === 3) {
+if (waited.code === 3 && !waited.runner) {
   return finish("Hosted runs", "wait-exhausted", `${waited.line} (still waiting after ${slices} slices of ${WAIT_SLICE_SECONDS}s)`);
 }
-if (waited.code !== 0) {
-  // `ERROR: <code>: run <id> ...`: the code and the run are read through fixed patterns only.
+if (waited.runner || waited.code !== 0) {
+  // 1: `ERROR: <cause>: run <id> ...`, the cause and the run read through fixed patterns only;
+  // 4: GitHub could not be read.
   const named = /^ERROR: ([a-z-]+): run (\d+)\b/.exec(waited.line);
-  const code = pick(named?.[1], ["development-moved", "hosted-run-error"]) ?? "hosted-run-error";
-  const run = named && allRuns.includes(Number(named[2])) ? Number(named[2]) : undefined;
-  return finish("Hosted runs", code, waited.line, run);
+  const run = !waited.runner && named && allRuns.includes(Number(named[2])) ? Number(named[2]) : undefined;
+  const cause = causeOf(waited, {
+    1: () => pick(named?.[1], ["development-moved", "hosted-run-error"]) ?? "hosted-run-error",
+    4: "github-unreachable",
+  });
+  return finish("Hosted runs", cause, waited.line, run);
 }
 const finished = answerOf(waited)?.runs;
 const outcomeOf = new Map();
@@ -544,8 +568,9 @@ const scored = await shAfter(
   "Score",
   `node scripts/scenarios.mjs status --sha ${sha} --scenarios ${n} --verdicts ${verdicts.join(",")}`,
 );
-if (scored.runner) {
-  return finish("Score", "runner-no-result", scored.line);
+if (scored.runner || (scored.code !== 0 && scored.code !== 1)) {
+  // 4: the post failed.
+  return finish("Score", causeOf(scored, { 4: "status-failed" }), `the score did not post: ${scored.line}`);
 }
 const score = answerOf(scored);
 const state = pick(score?.state, ["success", "failure"]);
@@ -558,7 +583,7 @@ const goodScore =
   perScenario.length === n &&
   perScenario.every((s, k) => s?.index === k + 1 && typeof s.met === "boolean" && Number.isInteger(s.satisfied) && Number.isInteger(s.runs));
 if (!goodScore) {
-  return finish("Score", scored.code === 0 || scored.code === 1 ? "bad-answer" : "stopped", `the score did not post: ${scored.line}`);
+  return finish("Score", "bad-answer", `the score answer fails its patterns: ${scored.line}`);
 }
 const met = state === "success";
 await sh("log:result", "Score", [logCmd("result", `--step scenario-judge --outcome ${met ? "met" : "not-met"} --sha ${sha}`)], true);

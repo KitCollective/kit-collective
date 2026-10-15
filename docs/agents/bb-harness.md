@@ -97,7 +97,7 @@ bb workflows run --file .bb/workflows/milestone-scenarios.js --args '{"project":
 | Arg | Meaning |
 | --- | --- |
 | `project` | Required. The Linear project name, as in Linear (`Holdout Scenarios`). |
-| `milestone` | Required. The Linear milestone name (`Fixture`). Names with a quote, `$`, a backtick, a backslash or `!` are refused. |
+| `milestone` | Required. The Linear milestone name (`Fixture`). Both names may hold letters (accented ones too), digits, spaces and `. , : ( ) + _ / -`, start with a letter or digit, and are at most 80 characters; anything else (a quote, `$`, a backtick, a backslash, `!`) is refused, because the names sit in double quotes in a command. |
 | `pr` | Required. The number of the open `development → staging` PR. |
 | `machine` | Only written to the run log; it routes nothing. |
 
