@@ -11,4 +11,6 @@ What this gives up: a text finding is no longer re-judged by a fresh reviewer wi
 
 Tried while deciding: a 5-axis review instead of a matrix (more parallel sub-agents, same blank page every round); tagging findings only, with no classifier (a `[name]` finding that hides a logic change would skip review). Not tried: the matrix as a Linear custom field rather than workpad text.
 
+Amendment (KIT-367, approved by Nicklas 2026-10-15): in decision 3, a fix whose only code change is the title string of a `test`, `it` or `describe` call also classifies `light`.
+
 Status: accepted. Changes `WORKFLOW.md` "Checker run" (every pass is a complete review) for passes after the first, and `docs/agents/error-ratcheting.md` (the CI-sleep hook).
