@@ -134,7 +134,7 @@ test("Bash: a bare word with no such directory stays allowed", () => {
   allowed(bash("rg kit-scenarios docs/", { cwd: ROOT }), "rg of the word, no dir");
 });
 
-test("Bash: process substitution and redirections cannot smuggle a Holdout path past the CLI", () => {
+test("Bash: process substitution cannot smuggle a Holdout path past the CLI, and redirections carry no Holdout path", () => {
   const cli = "node scripts/scenarios.mjs titles --project a --milestone b";
   denied(bash(`${cli} >(cat /tmp/x/kit-scenarios/a.md)`), "output substitution");
   denied(bash(`${cli} <(cat /tmp/x/kit-scenarios/a.md)`), "input substitution");
