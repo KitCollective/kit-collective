@@ -512,6 +512,8 @@ function extractFrames(dir) {
   return any;
 }
 
+const DOWNLOAD_RESERVE = 120;
+
 /** Waits for the hosted runs; when all are judged, downloads each run's evidence. */
 async function wait({ runs, sha, timeout = 480 }) {
   const repo = config().github.ownerRepo;
@@ -536,7 +538,9 @@ async function wait({ runs, sha, timeout = 480 }) {
     if (unfinished === 0) {
       break;
     }
-    if (Date.now() - started + pollMs() > timeout * 1000) {
+    // The downloads come after the last poll and count against the same slice (ADR-0058's 10 minute
+    // cap), so polling stops DOWNLOAD_RESERVE seconds early.
+    if (Date.now() - started + pollMs() > Math.max(0, timeout - DOWNLOAD_RESERVE) * 1000) {
       finish({
         code: GATE_EXIT.waiting,
         lines: [`WAITING: ${unfinished} of ${runs.length} hosted runs unfinished`],

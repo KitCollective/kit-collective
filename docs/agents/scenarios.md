@@ -64,7 +64,58 @@ node scripts/scenarios.mjs put    --project "<project>" --milestone "<milestone>
 | 2 | `UNREADABLE: cannot read <file>: <cause>` | `put`'s `--file` cannot be read |
 | 4 | `UNKNOWN: cannot read\|write <repo or file>: <cause>` | gh is down, Linear cannot be read (`titles --issue`), the token has no access, the repo does not exist, `--dir` is not a directory, the milestone file exists but cannot be read, or `put` cannot write (no `contents: write`, a file that appeared since the check). Any other unexpected error is also exit 4 with one `UNKNOWN:` line, never a stack trace |
 
-The codes are ADR-0053's (`GATE_EXIT` in `scripts/lib/gates.mjs`). Exit 1 is not used: nothing here is a "no" verdict until the Scenario judge scores Satisfaction.
+The codes are ADR-0053's (`GATE_EXIT` in `scripts/lib/gates.mjs`). Exit 1 is not used by `titles`, `read` and `put`: none of them is a "no" verdict. The Milestone scenarios subcommands below use it.
+
+## Milestone scenarios
+
+The Milestone scenarios workflow (`.bb/workflows/milestone-scenarios.js`, ADR-0060) is how the Scenario judge runs one milestone's Scenarios against `development` and sets the `Scenarios` commit status on the promotion PR. Starting it: `docs/agents/bb-harness.md`. It drives these subcommands of the same CLI; a person can run each by hand.
+
+```bash
+node scripts/scenarios.mjs check  --project "<project>" --milestone "<milestone>" --pr <n>
+node scripts/scenarios.mjs score  --scenarios <n> --verdicts 1:s:101,1:s:102,1:n:103
+node scripts/scenarios.mjs status --sha <40 hex> --state pending
+node scripts/scenarios.mjs status --sha <40 hex> --state error [--code <code>] [--run <id>]
+node scripts/scenarios.mjs status --sha <40 hex> --scenarios <n> --verdicts <list> [--dry-run]
+node scripts/scenarios.mjs flow   --name scn-<nonce>-<i>
+node scripts/scenarios.mjs run    --flow-run <producer run id> --name scn-<nonce>-<i>
+node scripts/scenarios.mjs wait   --runs <id>,<id>,... --sha <40 hex> --timeout 480
+```
+
+What the workflow does, in order:
+
+1. **Session.** The harness check (as in the AFK developer), `run-log start --milestone <project-slug>/<milestone-slug>`, then `check`. A refusal posts nothing and ends the run as `refused`. Then `status --state pending` on the PR head. From here every stop posts `Scenarios` error (below); the status is never left pending by a run that returns.
+2. **Flows.** One Scenario judge per Scenario (`claude-opus-5-5`, reasoning high, a fresh thread) runs `read` alone (the guard allows only one unchained CLI call), and writes that Scenario as one Maestro flow to `.factory/scenario-flows/scn-<nonce>-<i>.yaml` in the run's checkout (gitignored). `flow` then sends it to `.github/workflows/scenario-flow.yml`, which makes the run artifact `scenario-flow-scn-<nonce>-<i>`, and deletes the local file.
+3. **Hosted runs.** `run` starts `runsPerScenario` hosted Device flows runs of every flow (`.github/workflows/device-flows.yml`, `flows: artifact`, ADR-0059), on `development`. `wait` runs in slices of 480 s, at most 30 slices (about 4 hours: macOS runners queue, and a cold native build took 41 and 58 minutes).
+4. **Judge runs.** One fresh Scenario judge per run reads the Scenario through `read` and judges it from that run's evidence only, `.factory/scenario-runs/<run id>`: the step screenshots (`kc__*.png`) and, when `ffmpeg` is on the machine, stills from the recording (`frames/`, one every 2 seconds, at most 60 per recording). Without `ffmpeg` the recording is not read, and the judge prompt says so. It never sees the diff or the code. Its schema'd verdict is `satisfied` or `not-satisfied`, with one sentence on where the Collector got stuck.
+5. **Score.** `status --verdicts` scores and posts success or failure; the workflow logs the result and returns the per-Scenario score, Satisfaction, the sha and every run judge's sentence (KIT-354 turns those into the milestone comment and the failure issues). It never moves an issue, merges or promotes.
+
+The run log gets `start`, `spawn` (step `scenario-judge`, with thread, provider and model), `result` (outcomes `written`, `cannot`, `satisfied`, `not-satisfied`, then `met` or `not-met` with the sha) and `reason` lines, all with `--milestone <project-slug>/<milestone-slug>` in place of `--issue`; `run-log.mjs report` skips them. Every `read` adds its own `holdout` line, as above.
+
+### The subcommands
+
+- **`check`** asks Linear for the milestone's issues (`linear.mjs list --project --milestone`), then reads the PR (`gh pr view`), then the Scenario titles. It refuses (exit 1, one `REFUSED:` line naming the first cause) when the milestone has no issues; when any issue is not `Done` or `Canceled` (up to three keys and states named, then `(+n more)`); when the PR is not open, or does not go `lanes.integration` → `lanes.staging` (`development` → `staging`); and when the milestone has no Holdout file. Open, it prints one JSON line: `{"verdict":"SCENARIOS check <path>: <n> Scenarios on <sha8>","path":...,"sha":<the PR head>,"titles":[...],"runsPerScenario":3,"nonce":"<8 hex>"}`. The nonce makes the artifact names of one run unique. It reads titles only, so it logs no Holdout read.
+- **The verdict list** is tokens only: `<scenario index>:<s|n>:<run id>`, comma-joined, `s` for satisfied. `--scenarios <n>` says how many Scenarios there are; every Scenario 1 to n needs exactly `runsPerScenario` entries and no run id may appear twice, or the list is usage (exit 2).
+- **`score`** prints the score as one JSON line and posts nothing: per Scenario `{index, met, satisfied, runs}`, `passed`, `satisfaction` (satisfied runs over all runs, as `7/9 (78%)`) and `run`, the link run: the first run that did not satisfy its Scenario, else the first run. A Scenario is met at `satisfiedToMeet` (2) or more satisfied runs of `runsPerScenario` (3); the milestone passes only when every Scenario is met. Satisfaction is reported, never the gate. Exit 0 passes, 1 does not.
+- **`status`** posts the `Scenarios` commit status on `--sha` (the PR head; it shows on that commit everywhere, not only on the PR). With `--verdicts` the state is worked out from the score, never passed in: success (`Every Scenario met (n/n). Satisfaction ...`) or failure (`m of n Scenarios met. Satisfaction ...`), linked to the link run. `--state pending` and `--state error` post a fixed description; `success` and `failure` by hand are refused. `--code` picks the error's description: `stopped` (the default), `hosted-run-error`, `development-moved`, `flow-not-written`, `producer-failed`, `dispatch-failed`, `judge-no-result`, `runner-no-result`, `wait-exhausted`, `bad-answer`; `--run <id>` links it to a run. `--dry-run` prints the payload and posts nothing. The link is built from the run id and `github.ownerRepo` only.
+- **`flow`** reads `.factory/scenario-flows/<name>.yaml`, deletes it, checks it has the `appId: app.kitcollective.mobile` line and is at most 60,000 characters, and dispatches `scenario-flow.yml` on `development` through `gh api .../dispatches --input -`: the flow travels in the request body on stdin, never in a command line or on stdout. It asks GitHub for the run's id (`return_run_details`); when the answer has none it finds the run by its run name, `Scenario flow <name>`, which is unique per name (never "the newest run"). It waits for that run (`--timeout`, default 420 s) and prints `{"verdict":...,"name":...,"run":<id>}`.
+- **`run`** dispatches `device-flows.yml` with `flows=artifact`, `flow_run` and `flow_artifact=scenario-flow-<name>` the same way and prints `{"verdict":...,"run":<id>}`. `device-flows.yml` has no run name, so an answer without a run id is exit 4: no run is guessed.
+- **`wait`** reads each run (`gh api .../actions/runs/<id>` and its jobs). A run is judged only when the step `Run the flows` concluded `success` (run `flow-passed`) or `failure` (run `flow-failed`) on the checked sha; then its artifact `device-flows-<sha>` is downloaded to `.factory/scenario-runs/<id>`. Polling stops 120 s before `--timeout` to leave the downloads room inside one 10 minute command. When every run is judged it prints one JSON line: `{"verdict":...,"runs":[{"run","outcome","evidence","frames"}]}`.
+
+| Exit | Line | Meaning |
+| --- | --- | --- |
+| 0 | one JSON line | `check` open; `score` passed; `status` posted (pending, error or success); `flow` and `run` started their run; `wait`: every run judged and downloaded |
+| 1 | `REFUSED: ...` | `check`: the milestone, the PR or the Holdout file is not ready (nothing is posted) |
+| 1 | one JSON line | `score` not passed; `status --verdicts` posted failure |
+| 1 | `FAILED: the producer run <id> of <name> concluded <conclusion>` | `flow`: the artifact was not made |
+| 1 | `ERROR: hosted-run-error: run <id> ...` | `wait`: a run concluded `cancelled`, `timed_out`, `startup_failure` or anything but a flows step that succeeded or failed, or it has no artifact. An error, never a verdict |
+| 1 | `ERROR: development-moved: run <id> ran <sha8>, not <sha8>` | `wait`: `development` moved between `check` and the dispatch (`--ref` takes a branch), so the run tested another commit |
+| 2 | `USAGE: ...`, `MALFORMED: ...`, `UNREADABLE: ...` | Bad flags, a bad verdict list, a malformed Holdout file (`check`), a missing or foreign flow file (`flow`) |
+| 3 | `WAITING: <n> of <m> hosted runs unfinished` | `wait`: run it again |
+| 4 | `UNKNOWN: ...` | Linear, the PR, a run or the status post cannot be reached; a dispatch failed or returned no run id |
+
+**Errors.** A hosted run that fails or stops early ends `Scenarios` as error, never pending: `wait`'s `ERROR:`, a failed producer or dispatch, a flow the judge cannot write, a judge with no usable verdict after two tries, a lost runner result and a wait still unfinished after 30 slices each post `status --state error --code <code>`. A failed Maestro flow is not an error: it is a judged run (`flow-failed`), and the judge decides from what it captured. Run Milestone scenarios again after an error; a new run posts pending again. **The one case a workflow cannot catch** is its own thread dying after pending: `Scenarios` then stays pending. Post the error by hand, `node scripts/scenarios.mjs status --sha <sha> --state error`, or run the workflow again.
+
+**What the Scenario text can reach (KIT-366, open).** The flow the judge writes is the Scenario in another form. It never enters this repo, a run-log line, a verdict line, a status, a command line, the workflow's output or any prompt but the flow writer's own, and `flow` deletes the local file once it has read it. It does stay in two places anyone who can read `kit-collective` can see: the `scenario-flow.yml` run's dispatch inputs, and the artifact `scenario-flow-<name>` (kept 7 days). The run judges' sentences are told not to retell the Scenario, but they are model text and are returned in the workflow output. KIT-366 is the open decision on that exposure; this workflow does not solve it.
 
 ## The guard and the read log
 
