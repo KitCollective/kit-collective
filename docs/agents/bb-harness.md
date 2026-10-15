@@ -85,6 +85,24 @@ With auto-land on (the `autoLand` arg, or `flow.autoLand.enabled` in `factory.co
 
 An issue gets at most `flow.maxRunsPerDay` runs (factory.config.json, 3) in 24 hours, resumes included: the session check refuses the next one and names the cap. Raising it is a committed change by a person, never something a run does for itself.
 
+## Start Milestone scenarios
+
+The second workflow on this machine, `.bb/workflows/milestone-scenarios.js` (ADR-0060), judges one finished milestone's Holdout Scenarios on the hosted iOS Simulator and sets the `Scenarios` commit status on the `development → staging` promotion PR. What it does, its subcommands and its errors: `docs/agents/scenarios.md`. Validate and start it the same way, from a bb project thread in a fresh worktree of `origin/development` (its harness check stops a stale copy as the AFK developer's does):
+
+```bash
+bb workflows validate --file .bb/workflows/milestone-scenarios.js
+bb workflows run --file .bb/workflows/milestone-scenarios.js --args '{"project":"<Linear project>","milestone":"<Linear milestone>","pr":<promotion PR>}'
+```
+
+| Arg | Meaning |
+| --- | --- |
+| `project` | Required. The Linear project name, as in Linear (`Holdout Scenarios`). |
+| `milestone` | Required. The Linear milestone name (`Fixture`). Both names may hold letters (accented ones too), digits, spaces and `. , : ( ) + _ / -`, start with a letter or digit, and are at most 80 characters; anything else (a quote, `$`, a backtick, a backslash, `!`) is refused, because the names sit in double quotes in a command. |
+| `pr` | Required. The number of the open `development → staging` PR. |
+| `machine` | Only written to the run log; it routes nothing. |
+
+`run` starts a real run: it posts a commit status that everyone sees on the `development` tip and spends macOS minutes (runsPerScenario hosted runs per Scenario, at ten times the Linux rate), so it is a person's decision. The run refuses, posting nothing, unless every issue of the milestone is `Done` or `Canceled`, the PR is an open `development → staging` PR and the milestone has a Holdout file. It needs, on top of the AFK developer's: a `GH_TOKEN` that may dispatch workflows (`actions: write`) and write commit statuses (`statuses: write`), and reads the Holdout; and `ffmpeg` on the machine for the judge to see the recording (without it the judge judges from the screenshots). It can wait about 4 hours for the hosted runs. Making `Scenarios` a required check on `staging` and the promotion path are KIT-355.
+
 ## What the workflow cannot do
 
 - **No per-agent machine.** bb gives a workflow worker no machine, worktree or visibility option; every worker (Lead, Engineer, Reviewer, runners) runs in the environment of the thread that started the run. A run started on the container runs entirely there, so a slice that needs the Mac or Postgres cannot be split. The routing table in `.cursor/skills/bb-orchestrate/SKILL.md` applies to hand-driven runs only.

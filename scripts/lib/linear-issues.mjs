@@ -92,6 +92,7 @@ const LIST_QUERY = `query($filter: IssueFilter, $first: Int!, $after: String) {
       identifier title url description
       state { name }
       project { name }
+      projectMilestone { name }
       labels(first: 20) { nodes { name } }
       inverseRelations(first: 20) { nodes { type issue { identifier state { name } } } }
     }
@@ -108,6 +109,7 @@ export async function listIssues(gql, argv) {
   const label = optionValue(argv, "--label");
   const noLabel = optionValue(argv, "--no-label");
   const project = optionValue(argv, "--project");
+  const milestone = optionValue(argv, "--milestone");
   const unblocked = argv.includes("--unblocked");
   const limit = clampLimit(optionValue(argv, "--limit"));
 
@@ -128,6 +130,9 @@ export async function listIssues(gql, argv) {
   }
   if (project) {
     and.push({ project: { name: { eqIgnoreCase: project } } });
+  }
+  if (milestone) {
+    and.push({ projectMilestone: { name: { eqIgnoreCase: milestone } } });
   }
 
   const items = [];
@@ -171,6 +176,7 @@ function compactIssue(node, states) {
     blockedBy,
     writeScope: parseWriteScopeGlobs(node.description ?? ""),
     project: node.project?.name ?? null,
+    milestone: node.projectMilestone?.name ?? null,
     url: node.url,
   };
 }

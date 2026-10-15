@@ -69,20 +69,23 @@ What the hosted run does not do: the upload to the evidence bucket, the before/a
 
 ### A flow from a run artifact
 
-The hosted run can also take one flow that is not in the repo, from a named run artifact: the Scenario judge's path (ADR-0060). Two workflows, both started by hand:
+The hosted run can also take one flow that is not in the repo, from a named run artifact: the Scenario judge's path (ADR-0060). Two workflows, each found by the run id its dispatch returns, never by "the newest run" (two dispatches a second apart would swap). The scenarios CLI does both, and the Milestone scenarios workflow uses it (`docs/agents/scenarios.md`):
 
 ```bash
-# 1. Put the flow into a run artifact, scenario-flow-<name>, holding <name>.yaml.
-jq -n --arg name scenario-smoke --rawfile flow flow.yaml '{name: $name, flow: $flow}' |
-  gh workflow run scenario-flow.yml --ref development --json
-sleep 5   # the newest run of the producer is this one
-run="$(gh run list --workflow scenario-flow.yml --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')"
-gh run watch "$run" --exit-status
+# 1. Put the flow into a run artifact, scenario-flow-<name>, holding <name>.yaml. The CLI reads
+#    .factory/scenario-flows/<name>.yaml (and deletes it), sends it on stdin, waits for the run
+#    and prints {"name","run"}.
+mkdir -p .factory/scenario-flows && cp flow.yaml .factory/scenario-flows/scenario-smoke.yaml
+node scripts/scenarios.mjs flow --name scenario-smoke
 
-# 2. Run it on the hosted iOS Simulator against the commit on --ref.
-gh workflow run device-flows.yml --ref development -f flows=artifact \
-  -f flow_run="$run" -f flow_artifact=scenario-flow-scenario-smoke
+# 2. Run it on the hosted iOS Simulator against the commit on development; prints {"run"}.
+node scripts/scenarios.mjs run --flow-run <run from step 1> --name scenario-smoke
+
+# 3. Wait for it (exit 3 while it runs) and download its evidence to .factory/scenario-runs/<run>.
+node scripts/scenarios.mjs wait --runs <run from step 2> --sha "$(git rev-parse origin/development)" --timeout 480
 ```
+
+Both dispatches go through `gh api --method POST .../actions/workflows/<file>/dispatches --input -` with `return_run_details: true`, so GitHub answers with the run's id. `scenario-flow.yml` also has a run name, `Scenario flow <name>`, to find its run by when an answer has no id; `device-flows.yml` has none, so there the CLI stops instead of guessing.
 
 `flow` names the file inside the artifact when it holds more than one. `device-flows.yml` downloads the artifact into `apps/mobile/.maestro/external/` (one level under `.maestro`, so `../subflows/sign-in.yaml` resolves), and from there it is a slice run: the same Postgres, local API, build and `run-local.sh`, signed in as the Test Collector, with the photos the flow's `# simulator-photos:` line names. Screenshots, recording and the API log are uploaded as `device-flows-<sha>`. It sets no `Device flows` status, has no permission to push and never commits the flow; several artifact runs on one commit do not cancel each other.
 

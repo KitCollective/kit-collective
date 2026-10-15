@@ -9,7 +9,18 @@ import { GATE_EXIT } from "./gates.mjs";
 export const SECTIONS = ["Starting situation", "Actions", "End state"];
 
 export const USAGE =
-  'USAGE: node scripts/scenarios.mjs titles|read|put --project "<name>" --milestone "<name>" [--dir <path>] (put also needs --file <draft>); or titles --issue <KEY> [--dir <path>]';
+  'USAGE: node scripts/scenarios.mjs titles|read|put --project "<name>" --milestone "<name>" [--dir <path>] (put also needs --file <draft>); or titles --issue <KEY> [--dir <path>]; or check|score|status|flow|run|wait (Milestone scenarios, docs/agents/scenarios.md)';
+
+/** What each Milestone scenarios subcommand takes (KIT-353). `--dry-run` is the one flag without a value. */
+export const MILESTONE_USAGE = {
+  check: 'check --project "<name>" --milestone "<name>" --pr <n> [--dir <path>]',
+  score: "score --scenarios <n> --verdicts <i>:<s|n>:<run>,...",
+  status:
+    "status --sha <40 hex> (--state pending | --state error [--code <code>] [--run <id>] | --scenarios <n> --verdicts <list>) [--dry-run]",
+  flow: "flow --name <name> [--timeout <s>]",
+  run: "run --flow-run <id> --name <name>",
+  wait: "wait --runs <id>,<id>,... --sha <40 hex> [--timeout <s>]",
+};
 
 /** A Linear issue key, the only value `titles --issue` accepts. */
 export const ISSUE_KEY = /^[A-Z][A-Z0-9]*-\d+$/;
@@ -172,6 +183,9 @@ export const refusedVerdict = (path) => ({
  */
 export function parseArgs(argv) {
   const [command, ...rest] = argv;
+  if (command in MILESTONE_USAGE) {
+    return parseMilestoneArgs(command, rest);
+  }
   if (!["titles", "read", "put"].includes(command)) {
     return { error: USAGE };
   }
@@ -201,4 +215,264 @@ export function parseArgs(argv) {
     return { error: USAGE };
   }
   return { command, path, dir: values.dir, file: values.file };
+}
+
+// ---- Milestone scenarios (KIT-353): check, score, status, flow, run, wait ------------------------
+// Every value these subcommands take is a token checked here (a run id, a sha, a fixed code, a
+// verdict list of tokens), so a workflow can build their commands without agent text (ADR-0058).
+
+/** The commit status the Milestone scenarios workflow sets on the promotion PR's head (ADR-0060). */
+export const STATUS_CONTEXT = "Scenarios";
+
+/** A flow name as `scenario-flow.yml` accepts it; the artifact is `scenario-flow-<name>`. */
+export const FLOW_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
+export const RUN_ID = /^[1-9][0-9]{0,19}$/;
+export const FULL_SHA = /^[0-9a-f]{40}$/;
+/** Largest flow `flow` dispatches: a workflow_dispatch input holds at most 65,535 characters. */
+export const MAX_FLOW_CHARS = 60000;
+/** The step of device-flows.yml whose conclusion says whether the flow ran (ADR-0059). */
+export const FLOWS_STEP = "Run the flows";
+
+/** The `status --state error --code` codes, each with the fixed description it posts. */
+export const ERROR_CODES = {
+  stopped: "Milestone scenarios stopped before a verdict; run it again",
+  "hosted-run-error": "A hosted run stopped before its flow finished; see the run",
+  "development-moved": "development moved during the run; run Milestone scenarios again",
+  "flow-not-written": "The Scenario judge could not write a flow for a Scenario",
+  "producer-failed": "A flow could not be turned into a run artifact",
+  "dispatch-failed": "A hosted run could not be started",
+  "judge-no-result": "The Scenario judge gave no usable verdict for a run",
+  "runner-no-result": "The workflow lost a command result; run it again",
+  "wait-exhausted": "The hosted runs did not finish in time; run it again",
+  "bad-answer": "A scenarios CLI answer failed its check; run it again",
+  "bad-command": "The scenarios CLI refused a command the workflow built; a bug to report",
+  "status-failed": "The Scenarios status could not be posted; run it again",
+  "github-unreachable": "GitHub could not be read during the run; run it again",
+};
+export const PENDING_DESCRIPTION = "The Scenario judge is running the milestone's Scenarios";
+
+const VALUE_FLAGS = {
+  check: ["--project", "--milestone", "--pr", "--dir"],
+  score: ["--scenarios", "--verdicts"],
+  status: ["--sha", "--state", "--code", "--run", "--scenarios", "--verdicts"],
+  flow: ["--name", "--timeout"],
+  run: ["--flow-run", "--name"],
+  wait: ["--runs", "--sha", "--timeout"],
+};
+
+const camel = (flag) => flag.slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+
+/** Argv of one Milestone scenarios subcommand: `{ command, ...values }` or `{ error }`. */
+function parseMilestoneArgs(command, rest) {
+  const usage = { error: `USAGE: node scripts/scenarios.mjs ${MILESTONE_USAGE[command]}` };
+  const values = {};
+  for (let i = 0; i < rest.length; ) {
+    const flag = rest[i];
+    if (flag === "--dry-run" && command === "status" && !values.dryRun) {
+      values.dryRun = true;
+      i += 1;
+      continue;
+    }
+    const value = rest[i + 1];
+    if (
+      !VALUE_FLAGS[command].includes(flag) ||
+      value === undefined ||
+      value.startsWith("--") ||
+      camel(flag) in values
+    ) {
+      return usage;
+    }
+    values[camel(flag)] = value;
+    i += 2;
+  }
+  const timeout = values.timeout === undefined ? undefined : Number(values.timeout);
+  if (timeout !== undefined && !(Number.isInteger(timeout) && timeout >= 0 && timeout <= 3600)) {
+    return usage;
+  }
+  const ok = (extra) => ({
+    command,
+    ...values,
+    ...(timeout === undefined ? {} : { timeout }),
+    ...extra,
+  });
+  switch (command) {
+    case "check": {
+      const path =
+        values.project && values.milestone ? scenarioPath(values.project, values.milestone) : null;
+      return path && /^[1-9][0-9]{0,9}$/.test(values.pr ?? "")
+        ? ok({ path, pr: Number(values.pr) })
+        : usage;
+    }
+    case "score":
+      return values.scenarios !== undefined && values.verdicts !== undefined ? ok() : usage;
+    case "status": {
+      if (!FULL_SHA.test(values.sha ?? "")) return usage;
+      if (values.run !== undefined && !RUN_ID.test(values.run)) return usage;
+      const byVerdicts = values.verdicts !== undefined || values.scenarios !== undefined;
+      if (byVerdicts) {
+        return values.state === undefined &&
+          values.code === undefined &&
+          values.run === undefined &&
+          values.verdicts !== undefined &&
+          values.scenarios !== undefined
+          ? ok()
+          : usage;
+      }
+      if (values.state === "pending") {
+        return values.code === undefined && values.run === undefined ? ok() : usage;
+      }
+      if (values.state === "error") {
+        return values.code === undefined || values.code in ERROR_CODES
+          ? ok({ code: values.code ?? "stopped" })
+          : usage;
+      }
+      return usage;
+    }
+    case "flow":
+      return FLOW_NAME.test(values.name ?? "") ? ok() : usage;
+    case "run":
+      return FLOW_NAME.test(values.name ?? "") && RUN_ID.test(values.flowRun ?? "") ? ok() : usage;
+    case "wait": {
+      const runs = String(values.runs ?? "").split(",");
+      const valid =
+        values.runs &&
+        runs.every((r) => RUN_ID.test(r)) &&
+        new Set(runs).size === runs.length &&
+        runs.length <= 100;
+      return valid && FULL_SHA.test(values.sha ?? "") ? ok({ runs: runs.map(Number) }) : usage;
+    }
+    default:
+      return usage;
+  }
+}
+
+/**
+ * The verdict list `<scenario index>:<s|n>:<run id>`, comma-joined, checked against the thresholds:
+ * every Scenario 1..scenarios has exactly `runsPerScenario` entries and no run appears twice.
+ * @returns {{ entries: { index: number, satisfied: boolean, run: number }[] } | { problem: string }}
+ */
+export function parseVerdicts(list, { scenarios, runsPerScenario }) {
+  const n = Number(scenarios);
+  if (!(Number.isInteger(n) && n >= 1 && n <= 50) || !/^[1-9][0-9]?$/.test(String(scenarios))) {
+    return { problem: "--scenarios must be a number from 1 to 50" };
+  }
+  const entries = [];
+  for (const token of String(list).split(",")) {
+    const match = /^([1-9][0-9]?):([sn]):([1-9][0-9]{0,19})$/.exec(token);
+    if (!match) {
+      return { problem: "every verdict is <scenario index>:<s|n>:<run id>" };
+    }
+    entries.push({ index: Number(match[1]), satisfied: match[2] === "s", run: Number(match[3]) });
+  }
+  if (new Set(entries.map((e) => e.run)).size !== entries.length) {
+    return { problem: "a run id appears twice" };
+  }
+  for (let index = 1; index <= n; index += 1) {
+    const count = entries.filter((e) => e.index === index).length;
+    if (count !== runsPerScenario) {
+      return { problem: `Scenario ${index} has ${count} verdicts, not ${runsPerScenario}` };
+    }
+  }
+  if (entries.some((e) => e.index > n)) {
+    return { problem: `a verdict names a Scenario above ${n}` };
+  }
+  return { entries };
+}
+
+/**
+ * The milestone's score: a Scenario is met at `satisfiedToMeet` satisfied runs or more, the milestone
+ * passes only when every Scenario is met, and Satisfaction is satisfied runs over all runs. `run` is
+ * the link: the first run that did not satisfy its Scenario, else the first run.
+ */
+export function scoreVerdicts(entries, { scenarios, satisfiedToMeet }) {
+  const perScenario = [];
+  for (let index = 1; index <= scenarios; index += 1) {
+    const mine = entries.filter((e) => e.index === index);
+    const satisfied = mine.filter((e) => e.satisfied).length;
+    perScenario.push({ index, met: satisfied >= satisfiedToMeet, satisfied, runs: mine.length });
+  }
+  const satisfied = entries.filter((e) => e.satisfied).length;
+  const met = perScenario.filter((s) => s.met).length;
+  const passed = met === perScenario.length;
+  const satisfaction = `${satisfied}/${entries.length} (${Math.round((satisfied / entries.length) * 100)}%)`;
+  const link = (entries.find((e) => !e.satisfied) ?? entries[0]).run;
+  const description = passed
+    ? `Every Scenario met (${met}/${perScenario.length}). Satisfaction ${satisfaction}`
+    : `${met} of ${perScenario.length} Scenarios met. Satisfaction ${satisfaction}`;
+  return {
+    verdict: `SCENARIOS score: ${passed ? "met" : "not met"}, ${met} of ${perScenario.length} Scenarios met, Satisfaction ${satisfaction}`,
+    passed,
+    state: passed ? "success" : "failure",
+    satisfaction,
+    scenarios: perScenario,
+    run: link,
+    description,
+  };
+}
+
+/** The commit status body. `target_url` is built from a run id and the repo only, never from text. */
+export function statusPayload({ state, description, run, ownerRepo }) {
+  return {
+    state,
+    context: STATUS_CONTEXT,
+    description,
+    ...(run ? { target_url: `https://github.com/${ownerRepo}/actions/runs/${run}` } : {}),
+  };
+}
+
+/** Why `check` refuses the milestone's issues, or null. At most three keys are named. */
+export function refuseMilestoneIssues(issues, { project, milestone }) {
+  if (issues.length === 0) {
+    return `REFUSED: the milestone ${milestone} of ${project} has no issues`;
+  }
+  const open = issues.filter((i) => !["Done", "Canceled"].includes(i.state));
+  if (open.length === 0) {
+    return null;
+  }
+  const named = open
+    .slice(0, 3)
+    .map((i) => `${i.identifier} (${i.state})`)
+    .join(", ");
+  const more = open.length > 3 ? ` (+${open.length - 3} more)` : "";
+  return `REFUSED: ${open.length} issue${open.length === 1 ? " of the milestone is" : "s of the milestone are"} not Done or Canceled: ${named}${more}`;
+}
+
+/** Why `check` refuses the PR, or null: it must be open and go integration → staging. */
+export function refusePromotionPr(pr, number, { integration, staging }) {
+  if (pr.state !== "OPEN") {
+    return `REFUSED: PR #${number} is not open (${pr.state})`;
+  }
+  if (pr.headRefName !== integration || pr.baseRefName !== staging) {
+    return `REFUSED: PR #${number} is ${pr.headRefName} → ${pr.baseRefName}, not ${integration} → ${staging}`;
+  }
+  return null;
+}
+
+/**
+ * What one device-flows run means for the judge. A run is judged only when its flows step
+ * concluded success or failure on the checked sha; anything else is an error, never a verdict.
+ * @returns {{ outcome: "waiting" | "flow-passed" | "flow-failed" } | { error: string, line: string }}
+ */
+export function runOutcome({ id, run, jobs, sha }) {
+  if (run.head_sha && run.head_sha !== sha) {
+    return {
+      error: "development-moved",
+      line: `run ${id} ran ${String(run.head_sha).slice(0, 8)}, not ${sha.slice(0, 8)}`,
+    };
+  }
+  if (run.status !== "completed") {
+    return { outcome: "waiting" };
+  }
+  const step = (jobs?.jobs ?? []).flatMap((j) => j.steps ?? []).find((s) => s.name === FLOWS_STEP);
+  const stepConclusion = step?.conclusion ?? "missing";
+  if (run.conclusion === "success" && stepConclusion === "success") {
+    return { outcome: "flow-passed" };
+  }
+  if (run.conclusion === "failure" && stepConclusion === "failure") {
+    return { outcome: "flow-failed" };
+  }
+  return {
+    error: "hosted-run-error",
+    line: `run ${id} concluded ${run.conclusion}, its flows step ${stepConclusion}`,
+  };
 }

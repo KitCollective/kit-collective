@@ -5,7 +5,9 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -621,4 +623,805 @@ test("the guard lets `titles --issue` through alone and runner-wrapped, and stil
     0,
   );
   assert.equal(verdict("gh api repos/KitCollective/kit-scenarios/contents/x"), 2);
+});
+
+// ---- Milestone scenarios (KIT-353): check, score, status, flow, run, wait ------------------------
+
+const SHA40 = "c".repeat(40);
+const OTHER_SHA = "d".repeat(40);
+const REPO = "KitCollective/kit-collective";
+
+/**
+ * A scripted fake `gh` on PATH. Each rule is `{ match, answers }`: the first rule whose `match` (a
+ * substring of the joined argv) fits answers with the next of its `answers` (the last one repeats).
+ * An answer is `{ stdout?, stderr?, code?, files? }`; `files` are written into the `--dir` argument.
+ * Every call is recorded with its argv and stdin.
+ */
+function scriptedGh(rules) {
+  const dir = mkdtempSync(join(tmpdir(), "scripted-gh-"));
+  writeFileSync(join(dir, "rules.json"), JSON.stringify(rules));
+  writeFileSync(
+    join(dir, "gh"),
+    `#!${process.execPath}
+const fs = require("node:fs");
+const path = require("node:path");
+const dir = ${JSON.stringify(dir)};
+const argv = process.argv.slice(2);
+let stdin = "";
+try { stdin = argv.includes("--input") ? fs.readFileSync(0, "utf8") : ""; } catch {}
+fs.appendFileSync(path.join(dir, "calls.jsonl"), JSON.stringify({ argv, stdin }) + "\\n");
+const rules = JSON.parse(fs.readFileSync(path.join(dir, "rules.json"), "utf8"));
+const joined = argv.join(" ");
+const index = rules.findIndex((r) => joined.includes(r.match));
+if (index < 0) { process.stderr.write("fake gh: no rule for " + joined + "\\n"); process.exit(97); }
+const counter = path.join(dir, "count-" + index);
+const n = fs.existsSync(counter) ? Number(fs.readFileSync(counter, "utf8")) : 0;
+fs.writeFileSync(counter, String(n + 1));
+const answers = rules[index].answers;
+const answer = answers[Math.min(n, answers.length - 1)];
+if (answer.files) {
+  const target = argv[argv.indexOf("--dir") + 1];
+  for (const [name, body] of Object.entries(answer.files)) {
+    fs.mkdirSync(path.dirname(path.join(target, name)), { recursive: true });
+    fs.writeFileSync(path.join(target, name), body);
+  }
+}
+if (answer.sleepMs) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, answer.sleepMs);
+if (answer.stdout) process.stdout.write(answer.stdout);
+if (answer.stderr) process.stderr.write(answer.stderr);
+process.exit(answer.code ?? 0);
+`,
+  );
+  chmodSync(join(dir, "gh"), 0o755);
+  return {
+    env: { PATH: `${dir}${delimiter}${process.env.PATH}` },
+    calls: () =>
+      existsSync(join(dir, "calls.jsonl"))
+        ? readFileSync(join(dir, "calls.jsonl"), "utf8")
+            .trim()
+            .split("\n")
+            .map((l) => JSON.parse(l))
+        : [],
+  };
+}
+
+/** A temp work dir for flows and evidence, and no ffmpeg, so a test never touches the checkout. */
+function workEnv(extra = {}) {
+  const work = mkdtempSync(join(tmpdir(), "scenarios-work-"));
+  return {
+    work,
+    env: {
+      KC_SCENARIO_WORK: work,
+      KC_POLL_SECONDS: "0",
+      KC_FFMPEG: "/nonexistent/ffmpeg",
+      ...extra,
+    },
+  };
+}
+
+const json = (value) => JSON.stringify(value);
+
+test("score: a Scenario is met at 2 of 3 satisfied runs, not at 1 of 3", () => {
+  const met = run(["score", "--scenarios", "1", "--verdicts", "1:s:11,1:s:12,1:n:13"]);
+  assert.equal(met.status, GATE_EXIT.open);
+  assert.equal(met.lines.length, 1);
+  const metAnswer = JSON.parse(met.verdict);
+  assert.equal(metAnswer.passed, true);
+  assert.deepEqual(metAnswer.scenarios, [{ index: 1, met: true, satisfied: 2, runs: 3 }]);
+  assert.equal(metAnswer.satisfaction, "2/3 (67%)");
+
+  const notMet = run(["score", "--scenarios", "1", "--verdicts", "1:s:11,1:n:12,1:n:13"]);
+  assert.equal(notMet.status, GATE_EXIT.closed);
+  const notMetAnswer = JSON.parse(notMet.verdict);
+  assert.equal(notMetAnswer.passed, false);
+  assert.deepEqual(notMetAnswer.scenarios, [{ index: 1, met: false, satisfied: 1, runs: 3 }]);
+});
+
+test("score: one unmet Scenario fails a milestone whose other Scenarios are met", () => {
+  const result = run([
+    "score",
+    "--scenarios",
+    "2",
+    "--verdicts",
+    "1:s:11,1:s:12,1:s:13,2:n:21,2:s:22,2:n:23",
+  ]);
+  assert.equal(result.status, GATE_EXIT.closed);
+  const answer = JSON.parse(result.verdict);
+  assert.equal(answer.passed, false);
+  assert.deepEqual(
+    answer.scenarios.map((s) => s.met),
+    [true, false],
+  );
+  assert.equal(answer.satisfaction, "4/6 (67%)");
+  // The link is the first run that did not satisfy its Scenario.
+  assert.equal(answer.run, 21);
+  assert.match(
+    answer.verdict,
+    /^SCENARIOS score: not met, 1 of 2 Scenarios met, Satisfaction 4\/6 \(67%\)$/,
+  );
+});
+
+test("score: Satisfaction is the share of all runs, as 7/9 (78%)", () => {
+  const result = run([
+    "score",
+    "--scenarios",
+    "3",
+    "--verdicts",
+    "1:s:1,1:s:2,1:s:3,2:s:4,2:s:5,2:n:6,3:s:7,3:s:8,3:n:9",
+  ]);
+  assert.equal(result.status, GATE_EXIT.open);
+  const answer = JSON.parse(result.verdict);
+  assert.equal(answer.satisfaction, "7/9 (78%)");
+  assert.equal(answer.passed, true);
+  assert.equal(answer.run, 6);
+});
+
+test("score: a verdict list that is not exactly runsPerScenario per Scenario is usage (exit 2)", () => {
+  const bad = [
+    ["--scenarios", "1", "--verdicts", "1:s:11,1:s:12"],
+    ["--scenarios", "1", "--verdicts", "1:s:11,1:s:12,1:s:13,1:s:14"],
+    ["--scenarios", "2", "--verdicts", "1:s:11,1:s:12,1:s:13"],
+    ["--scenarios", "1", "--verdicts", "2:s:11,2:s:12,2:s:13"],
+    ["--scenarios", "1", "--verdicts", "1:s:11,1:s:11,1:s:13"],
+    ["--scenarios", "1", "--verdicts", "1:satisfied:11,1:s:12,1:s:13"],
+    ["--scenarios", "1", "--verdicts", "1:s:11,1:s:12,1:s:the Collector got stuck"],
+    ["--scenarios", "0", "--verdicts", ""],
+    ["--verdicts", "1:s:11,1:s:12,1:s:13"],
+    ["--scenarios", "1"],
+  ];
+  for (const argv of bad) {
+    const result = run(["score", ...argv]);
+    assert.equal(result.status, GATE_EXIT.usage, argv.join(" "));
+    assert.equal(result.lines.length, 1);
+    assert.match(result.verdict, /^USAGE: /);
+  }
+});
+
+test("status --verdicts posts Scenarios on the sha: failure linked to the first unsatisfied run", () => {
+  const gh = scriptedGh([{ match: "statuses", answers: [{ stdout: "{}" }] }]);
+  const result = run(
+    ["status", "--sha", SHA40, "--scenarios", "1", "--verdicts", "1:s:11,1:n:12,1:n:13"],
+    { env: gh.env },
+  );
+  assert.equal(result.status, GATE_EXIT.closed);
+  const answer = JSON.parse(result.verdict);
+  assert.equal(answer.state, "failure");
+  assert.equal(answer.posted, true);
+  const [call] = gh.calls();
+  const argv = call.argv.join(" ");
+  assert.match(argv, new RegExp(`api --method POST repos/${REPO}/statuses/${SHA40}`));
+  assert.match(argv, /-f context=Scenarios/);
+  assert.match(argv, /-f state=failure/);
+  assert.match(argv, /-f description=0 of 1 Scenarios met\. Satisfaction 1\/3 \(33%\)/);
+  assert.match(argv, new RegExp(`-f target_url=https://github.com/${REPO}/actions/runs/12( |$)`));
+});
+
+test("status --verdicts posts success linked to the first run when every Scenario is met", () => {
+  const gh = scriptedGh([{ match: "statuses", answers: [{ stdout: "{}" }] }]);
+  const result = run(
+    ["status", "--sha", SHA40, "--scenarios", "1", "--verdicts", "1:s:11,1:s:12,1:n:13"],
+    { env: gh.env },
+  );
+  assert.equal(result.status, GATE_EXIT.open);
+  assert.equal(JSON.parse(result.verdict).state, "success");
+  const argv = gh.calls()[0].argv.join(" ");
+  assert.match(argv, /-f state=success/);
+  assert.match(argv, /-f description=Every Scenario met \(1\/1\)\. Satisfaction 2\/3 \(67%\)/);
+  assert.match(argv, /actions\/runs\/13/);
+});
+
+test("status --state pending|error posts a fixed description; the state is never success or failure by hand", () => {
+  const gh = scriptedGh([{ match: "statuses", answers: [{ stdout: "{}" }] }]);
+  const pending = run(["status", "--sha", SHA40, "--state", "pending"], { env: gh.env });
+  assert.equal(pending.status, GATE_EXIT.open);
+  assert.equal(JSON.parse(pending.verdict).state, "pending");
+  const error = run(
+    ["status", "--sha", SHA40, "--state", "error", "--code", "development-moved", "--run", "77"],
+    { env: gh.env },
+  );
+  assert.equal(error.status, GATE_EXIT.open);
+  const [first, second] = gh.calls().map((c) => c.argv.join(" "));
+  assert.match(first, /-f state=pending/);
+  assert.doesNotMatch(first, /target_url/);
+  assert.match(second, /-f state=error/);
+  assert.match(second, /-f description=development moved/);
+  assert.match(second, /actions\/runs\/77/);
+
+  for (const argv of [
+    ["--state", "success"],
+    ["--state", "failure"],
+    ["--state", "error", "--code", "the judge said so"],
+    ["--state", "pending", "--scenarios", "1", "--verdicts", "1:s:1,1:s:2,1:s:3"],
+    ["--state", "pending", "--run", "abc"],
+    [],
+  ]) {
+    const refused = run(["status", "--sha", SHA40, ...argv], { env: gh.env });
+    assert.equal(refused.status, GATE_EXIT.usage, argv.join(" "));
+  }
+  assert.equal(
+    run(["status", "--sha", "abc", "--state", "pending"], { env: gh.env }).status,
+    GATE_EXIT.usage,
+  );
+  assert.equal(gh.calls().length, 2, "a refused status posted something");
+});
+
+test("status: a post that fails is exit 4; --dry-run posts nothing and prints the payload", () => {
+  const down = scriptedGh([{ match: "statuses", answers: [{ code: 1, stderr: "HTTP 403" }] }]);
+  const failed = run(["status", "--sha", SHA40, "--state", "pending"], { env: down.env });
+  assert.equal(failed.status, GATE_EXIT.unknown);
+  assert.match(failed.verdict, /^UNKNOWN: cannot post the Scenarios status: .*403/);
+
+  const gh = scriptedGh([{ match: "statuses", answers: [{ stdout: "{}" }] }]);
+  const dry = run(
+    ["status", "--sha", SHA40, "--scenarios", "1", "--verdicts", "1:s:1,1:s:2,1:s:3", "--dry-run"],
+    { env: gh.env },
+  );
+  assert.equal(dry.status, GATE_EXIT.open);
+  const answer = JSON.parse(dry.verdict);
+  assert.equal(answer.posted, false);
+  assert.equal(answer.payload.context, "Scenarios");
+  assert.equal(answer.payload.state, "success");
+  assert.equal(gh.calls().length, 0);
+});
+
+// -- check: the milestone is finished, the PR is the promotion, the Holdout has Scenarios.
+
+/** A fake Linear CLI whose `list` answers `issues` (or fails when null), recording its argv. */
+function fakeLinearList(issues) {
+  const dir = mkdtempSync(join(tmpdir(), "scenarios-linear-list-"));
+  const file = join(dir, "linear.mjs");
+  writeFileSync(
+    file,
+    `import { appendFileSync } from "node:fs";
+appendFileSync(${JSON.stringify(join(dir, "argv.log"))}, JSON.stringify(process.argv.slice(2)) + "\\n");
+${
+  issues === null
+    ? 'process.stderr.write("linear: unauthorized\\n"); process.exit(1);'
+    : `process.stdout.write(${JSON.stringify(JSON.stringify(issues))});`
+}
+`,
+  );
+  return { env: { KC_LINEAR_CLI: file }, argv: () => readFileSync(join(dir, "argv.log"), "utf8") };
+}
+
+const done = (n, state = "Done") => ({ identifier: `KIT-${n}`, state });
+const promotionPr = {
+  state: "OPEN",
+  baseRefName: "staging",
+  headRefName: "development",
+  headRefOid: SHA40,
+};
+const prGh = (pr) => scriptedGh([{ match: "pr view", answers: [{ stdout: json(pr) }] }]);
+const CHECK = ["check", ...MILESTONE, "--pr", "12"];
+
+function check({
+  issues = [done(1), done(2, "Canceled")],
+  pr = promotionPr,
+  text = SCENARIO_A,
+  env = {},
+} = {}) {
+  const linear = fakeLinearList(issues);
+  const gh = prGh(pr);
+  const log = tmpLog();
+  const result = run(CHECK, {
+    dir: holdout(text),
+    env: { ...linear.env, ...gh.env, KC_RUN_LOG: log, ...env },
+  });
+  return { ...result, linear, gh, log };
+}
+
+test("check: a finished milestone, a development → staging PR and a Holdout file is one JSON line", () => {
+  const result = check({ text: `${SCENARIO_A}\n${SCENARIO_B}` });
+  assert.equal(result.status, GATE_EXIT.open);
+  assert.equal(result.lines.length, 1);
+  const answer = JSON.parse(result.verdict);
+  assert.equal(answer.path, "holdout-scenarios/holdout.md");
+  assert.equal(answer.sha, SHA40);
+  assert.deepEqual(answer.titles, ["A Collector adds a shirt", "A Collector removes a shirt"]);
+  assert.equal(answer.runsPerScenario, 3);
+  assert.match(answer.nonce, /^[0-9a-f]{8}$/);
+  assert.match(
+    answer.verdict,
+    /^SCENARIOS check holdout-scenarios\/holdout\.md: 2 Scenarios on cccccccc$/,
+  );
+  for (const hidden of ["empty Collection", "taps Add", "Starting situation"]) {
+    assert.ok(!result.stdout.includes(hidden), `check leaked "${hidden}"`);
+  }
+  // It asks Linear for exactly this milestone, and logs no Holdout read.
+  assert.match(
+    result.linear.argv(),
+    /"list","--project","Holdout Scenarios","--milestone","Holdout"/,
+  );
+  assert.ok(!existsSync(result.log) || readFileSync(result.log, "utf8") === "");
+  assert.match(result.gh.calls()[0].argv.join(" "), new RegExp(`pr view 12 --repo ${REPO}`));
+});
+
+test("check refuses (exit 1) a milestone with no issues or with issues not Done or Canceled, naming up to 3", () => {
+  const none = check({ issues: [] });
+  assert.equal(none.status, GATE_EXIT.closed);
+  assert.match(none.verdict, /^REFUSED: the milestone Holdout of Holdout Scenarios has no issues$/);
+
+  const open = check({
+    issues: [
+      done(1),
+      done(2, "In Progress"),
+      done(3, "Backlog"),
+      done(4, "Post-Merge"),
+      done(5, "To-do"),
+      done(6, "Canceled"),
+    ],
+  });
+  assert.equal(open.status, GATE_EXIT.closed);
+  assert.equal(open.lines.length, 1);
+  assert.match(
+    open.verdict,
+    /^REFUSED: 4 issues of the milestone are not Done or Canceled: KIT-2 \(In Progress\), KIT-3 \(Backlog\), KIT-4 \(Post-Merge\) \(\+1 more\)$/,
+  );
+  assert.equal(open.gh.calls().length, 0, "check read the PR after refusing the milestone");
+});
+
+test("check refuses (exit 1) a PR that is not an open development → staging promotion", () => {
+  for (const pr of [
+    { ...promotionPr, baseRefName: "development", headRefName: "kit-1-x" },
+    { ...promotionPr, baseRefName: "production", headRefName: "staging" },
+    { ...promotionPr, headRefName: "kit-353-milestone-scenarios" },
+    { ...promotionPr, state: "MERGED" },
+  ]) {
+    const result = check({ pr });
+    assert.equal(result.status, GATE_EXIT.closed, json(pr));
+    assert.match(
+      result.verdict,
+      /^REFUSED: PR #12 is (not open|.* → .*, not development → staging)/,
+    );
+  }
+});
+
+test("check refuses (exit 1) a milestone without a Holdout file; a malformed file is exit 2", () => {
+  const linear = fakeLinearList([done(1)]);
+  const gh = prGh(promotionPr);
+  const missing = run(CHECK, { dir: holdout(), env: { ...linear.env, ...gh.env } });
+  assert.equal(missing.status, GATE_EXIT.closed);
+  assert.match(
+    missing.verdict,
+    /^REFUSED: holdout-scenarios\/holdout\.md: no Holdout file, so no Scenarios to judge$/,
+  );
+  const malformed = check({ text: SCENARIO_A.replace("The Collection shows one Kit.", "") });
+  assert.equal(malformed.status, GATE_EXIT.usage);
+  assert.match(malformed.verdict, /^MALFORMED: /);
+});
+
+test("check: an unreadable Linear or PR is exit 4; usage errors are exit 2", () => {
+  const down = check({ issues: null });
+  assert.equal(down.status, GATE_EXIT.unknown);
+  assert.match(down.verdict, /^UNKNOWN: cannot list the milestone's issues: /);
+  const linear = fakeLinearList([done(1)]);
+  const gh = scriptedGh([{ match: "pr view", answers: [{ code: 1, stderr: "HTTP 404" }] }]);
+  const noPr = run(CHECK, { dir: holdout(SCENARIO_A), env: { ...linear.env, ...gh.env } });
+  assert.equal(noPr.status, GATE_EXIT.unknown);
+  assert.match(noPr.verdict, /^UNKNOWN: cannot read PR #12: /);
+  for (const argv of [
+    ["check", ...MILESTONE],
+    ["check", ...MILESTONE, "--pr", "12; id"],
+    ["check", "--project", "Holdout Scenarios", "--pr", "12"],
+    ["check", ...MILESTONE, "--pr", "12", "--file", "x"],
+  ]) {
+    assert.equal(run(argv, { dir: holdout(SCENARIO_A) }).status, GATE_EXIT.usage, argv.join(" "));
+  }
+});
+
+// -- flow, run, wait: the hosted runs, found by the id the dispatch returns.
+
+const FLOW =
+  "appId: app.kitcollective.mobile\nname: scn-0a1b2c3d-1\n---\n- launchApp\n# SECRET-SCENARIO-WORDS\n";
+
+function flowFile(work, name, text = FLOW) {
+  mkdirSync(join(work, "scenario-flows"), { recursive: true });
+  writeFileSync(join(work, "scenario-flows", `${name}.yaml`), text);
+}
+
+test("flow dispatches the producer with the flow on stdin, waits for it, deletes the file and prints its run", () => {
+  const { work, env } = workEnv();
+  flowFile(work, "scn-0a1b2c3d-1");
+  const gh = scriptedGh([
+    {
+      match: "scenario-flow.yml/dispatches",
+      answers: [{ stdout: json({ workflow_run_id: 501, run_url: "x", html_url: "y" }) }],
+    },
+    {
+      match: "actions/runs/501",
+      answers: [
+        { stdout: json({ id: 501, status: "in_progress", conclusion: null }) },
+        { stdout: json({ id: 501, status: "completed", conclusion: "success" }) },
+      ],
+    },
+  ]);
+  const result = run(["flow", "--name", "scn-0a1b2c3d-1"], { env: { ...env, ...gh.env } });
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  assert.equal(result.lines.length, 1);
+  const answer = JSON.parse(result.verdict);
+  assert.deepEqual({ name: answer.name, run: answer.run }, { name: "scn-0a1b2c3d-1", run: 501 });
+  const [dispatch] = gh.calls();
+  assert.match(
+    dispatch.argv.join(" "),
+    new RegExp(
+      `api --method POST repos/${REPO}/actions/workflows/scenario-flow.yml/dispatches --input -`,
+    ),
+  );
+  const body = JSON.parse(dispatch.stdin);
+  assert.deepEqual(body, {
+    ref: "development",
+    inputs: { name: "scn-0a1b2c3d-1", flow: FLOW },
+    return_run_details: true,
+  });
+  // The flow text is in the request body only: never in argv, never on stdout.
+  assert.ok(gh.calls().every((c) => !c.argv.join(" ").includes("SECRET-SCENARIO-WORDS")));
+  assert.ok(!result.stdout.includes("SECRET-SCENARIO-WORDS"));
+  assert.ok(
+    !existsSync(join(work, "scenario-flows", "scn-0a1b2c3d-1.yaml")),
+    "the flow file was kept",
+  );
+});
+
+test("flow without a run id in the answer finds the producer run by its unique run name, never the newest", () => {
+  const { work, env } = workEnv();
+  flowFile(work, "scn-0a1b2c3d-2");
+  const gh = scriptedGh([
+    { match: "scenario-flow.yml/dispatches", answers: [{ stdout: "" }] },
+    {
+      match: "scenario-flow.yml/runs",
+      answers: [
+        { stdout: json({ workflow_runs: [{ id: 900, display_title: "Scenario flow other" }] }) },
+        {
+          stdout: json({
+            workflow_runs: [
+              { id: 902, display_title: "Scenario flow scn-0a1b2c3d-22" },
+              { id: 901, display_title: "Scenario flow scn-0a1b2c3d-2" },
+              { id: 900, display_title: "Scenario flow other" },
+            ],
+          }),
+        },
+      ],
+    },
+    {
+      match: "actions/runs/901",
+      answers: [{ stdout: json({ id: 901, status: "completed", conclusion: "success" }) }],
+    },
+  ]);
+  const result = run(["flow", "--name", "scn-0a1b2c3d-2"], { env: { ...env, ...gh.env } });
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  assert.equal(JSON.parse(result.verdict).run, 901);
+});
+
+test("flow: a failed producer is exit 1; a missing or foreign flow file is exit 2 and dispatches nothing", () => {
+  const { work, env } = workEnv();
+  flowFile(work, "scn-0a1b2c3d-3");
+  const failing = scriptedGh([
+    { match: "dispatches", answers: [{ stdout: json({ workflow_run_id: 7 }) }] },
+    {
+      match: "actions/runs/7",
+      answers: [{ stdout: json({ id: 7, status: "completed", conclusion: "failure" }) }],
+    },
+  ]);
+  const failed = run(["flow", "--name", "scn-0a1b2c3d-3"], { env: { ...env, ...failing.env } });
+  assert.equal(failed.status, GATE_EXIT.closed);
+  assert.match(failed.verdict, /^FAILED: the producer run 7 of scn-0a1b2c3d-3 concluded failure$/);
+  assert.ok(!existsSync(join(work, "scenario-flows", "scn-0a1b2c3d-3.yaml")));
+
+  const gh = scriptedGh([
+    { match: "dispatches", answers: [{ stdout: json({ workflow_run_id: 8 }) }] },
+  ]);
+  const missing = run(["flow", "--name", "scn-0a1b2c3d-4"], { env: { ...env, ...gh.env } });
+  assert.equal(missing.status, GATE_EXIT.usage);
+  flowFile(work, "scn-0a1b2c3d-5", "name: x\n---\n- launchApp\n# SECRET-SCENARIO-WORDS\n");
+  const foreign = run(["flow", "--name", "scn-0a1b2c3d-5"], { env: { ...env, ...gh.env } });
+  assert.equal(foreign.status, GATE_EXIT.usage);
+  assert.ok(!foreign.stdout.includes("SECRET-SCENARIO-WORDS"));
+  assert.equal(gh.calls().length, 0);
+  for (const name of ["Scn-1", "../x", "scn 1", ""]) {
+    assert.equal(
+      run(["flow", "--name", name], { env: { ...env, ...gh.env } }).status,
+      GATE_EXIT.usage,
+      name,
+    );
+  }
+});
+
+test("run dispatches device-flows.yml as an artifact run of the named flow and prints its run id", () => {
+  const gh = scriptedGh([
+    {
+      match: "device-flows.yml/dispatches",
+      answers: [{ stdout: json({ workflow_run_id: 7001 }) }],
+    },
+  ]);
+  const result = run(["run", "--flow-run", "501", "--name", "scn-0a1b2c3d-1"], { env: gh.env });
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  assert.equal(JSON.parse(result.verdict).run, 7001);
+  assert.deepEqual(JSON.parse(gh.calls()[0].stdin), {
+    ref: "development",
+    inputs: { flows: "artifact", flow_run: "501", flow_artifact: "scenario-flow-scn-0a1b2c3d-1" },
+    return_run_details: true,
+  });
+  // device-flows.yml has no run name, so an answer without a run id is an error, never "the newest run".
+  const blind = scriptedGh([{ match: "dispatches", answers: [{ stdout: "" }] }]);
+  const noId = run(["run", "--flow-run", "501", "--name", "scn-0a1b2c3d-1"], { env: blind.env });
+  assert.equal(noId.status, GATE_EXIT.unknown);
+  assert.match(noId.verdict, /^UNKNOWN: the dispatch of device-flows\.yml returned no run id/);
+  assert.equal(blind.calls().length, 1);
+  assert.equal(
+    run(["run", "--flow-run", "x", "--name", "scn-0a1b2c3d-1"], { env: gh.env }).status,
+    GATE_EXIT.usage,
+  );
+});
+
+/** The gh answers for one finished device-flows run. */
+const finished = (
+  id,
+  { conclusion = "success", step = conclusion, sha = SHA40, artifact = true } = {},
+) => [
+  {
+    match: `actions/runs/${id}/jobs`,
+    answers: [
+      {
+        stdout: json({
+          jobs: [
+            {
+              name: "iOS Simulator",
+              steps: [
+                { name: "Install dependencies", conclusion: "success" },
+                { name: "Run the flows", conclusion: step },
+              ],
+            },
+          ],
+        }),
+      },
+    ],
+  },
+  {
+    match: `actions/runs/${id}`,
+    answers: [{ stdout: json({ id, status: "completed", conclusion, head_sha: sha }) }],
+  },
+  {
+    match: `run download ${id}`,
+    answers: [
+      artifact
+        ? {
+            files: {
+              "apps/mobile/.maestro/out/kc__scn__01-start.png": "png",
+              "kc__scn.mp4": "mp4",
+            },
+          }
+        : { code: 1, stderr: "no artifact matches any of the names or patterns provided" },
+    ],
+  },
+];
+
+test("wait: every run finished with a judged flow is exit 0, one JSON line, evidence downloaded per run", () => {
+  const { work, env } = workEnv();
+  const gh = scriptedGh([...finished(11), ...finished(12, { conclusion: "failure" })]);
+  const result = run(["wait", "--runs", "11,12", "--sha", SHA40, "--timeout", "60"], {
+    env: { ...env, ...gh.env },
+  });
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  assert.equal(result.lines.length, 1);
+  const answer = JSON.parse(result.verdict);
+  assert.deepEqual(
+    answer.runs.map((r) => [r.run, r.outcome]),
+    [
+      [11, "flow-passed"],
+      [12, "flow-failed"],
+    ],
+  );
+  assert.equal(answer.runs[0].evidence, join(work, "scenario-runs", "11"));
+  assert.ok(
+    existsSync(join(work, "scenario-runs", "12", "apps/mobile/.maestro/out/kc__scn__01-start.png")),
+  );
+  const download = gh.calls().find((c) => c.argv[0] === "run" && c.argv[1] === "download");
+  assert.match(
+    download.argv.join(" "),
+    new RegExp(`run download 11 --repo ${REPO} --name device-flows-${SHA40} --dir `),
+  );
+});
+
+test("wait: a run still going is exit 3 (waiting) and downloads nothing", () => {
+  const { env } = workEnv();
+  const gh = scriptedGh([
+    ...finished(11),
+    {
+      match: "actions/runs/12",
+      answers: [{ stdout: json({ id: 12, status: "queued", conclusion: null, head_sha: SHA40 }) }],
+    },
+  ]);
+  const result = run(["wait", "--runs", "11,12", "--sha", SHA40, "--timeout", "0"], {
+    env: { ...env, ...gh.env },
+  });
+  assert.equal(result.status, GATE_EXIT.waiting);
+  assert.match(result.verdict, /^WAITING: 1 of 2 hosted runs unfinished$/);
+  assert.ok(gh.calls().every((c) => c.argv[1] !== "download"));
+});
+
+test("wait: a run that stopped early, ran another commit or has no evidence is exit 1 ERROR, never a verdict", () => {
+  const cases = [
+    [
+      { conclusion: "cancelled", step: "cancelled" },
+      /^ERROR: hosted-run-error: run 11 concluded cancelled/,
+    ],
+    [
+      { conclusion: "timed_out", step: "cancelled" },
+      /^ERROR: hosted-run-error: run 11 concluded timed_out/,
+    ],
+    [
+      { conclusion: "failure", step: "skipped" },
+      /^ERROR: hosted-run-error: run 11 concluded failure, its flows step skipped/,
+    ],
+    [
+      { conclusion: "startup_failure", step: null },
+      /^ERROR: hosted-run-error: run 11 concluded startup_failure/,
+    ],
+    [{ sha: OTHER_SHA }, /^ERROR: development-moved: run 11 ran dddddddd, not cccccccc/],
+    [{ artifact: false }, /^ERROR: hosted-run-error: run 11 has no artifact device-flows-cccccccc/],
+  ];
+  for (const [shape, line] of cases) {
+    const { env } = workEnv();
+    const gh = scriptedGh(finished(11, shape));
+    const result = run(["wait", "--runs", "11", "--sha", SHA40, "--timeout", "60"], {
+      env: { ...env, ...gh.env },
+    });
+    assert.equal(result.status, GATE_EXIT.closed, json(shape));
+    assert.equal(result.lines.length, 1);
+    assert.match(result.verdict, line);
+  }
+  const { env } = workEnv();
+  for (const argv of [
+    ["--runs", "11,x", "--sha", SHA40],
+    ["--runs", "11", "--sha", "main"],
+    ["--runs", "", "--sha", SHA40],
+  ]) {
+    assert.equal(run(["wait", ...argv], { env }).status, GATE_EXIT.usage, argv.join(" "));
+  }
+});
+
+test("the guard lets the Scenario judge's `read` through when it runs alone", () => {
+  const guard = join(ROOT, ".claude", "hooks", "holdout-guard.mjs");
+  const verdict = (command) =>
+    spawnSync(process.execPath, [guard], {
+      input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: ROOT }),
+      encoding: "utf8",
+    }).status;
+  assert.equal(
+    verdict("node scripts/scenarios.mjs read --project holdout-scenarios --milestone fixture"),
+    0,
+  );
+});
+
+test("runOutcome: only a flows step that succeeded or failed on the checked sha is judged", async () => {
+  const { runOutcome } = await import("../lib/scenarios.mjs");
+  const jobs = (step) => ({ jobs: [{ steps: [{ name: "Run the flows", conclusion: step }] }] });
+  const at = (conclusion, step, sha = SHA40) =>
+    runOutcome({
+      id: 5,
+      run: { status: "completed", conclusion, head_sha: sha },
+      jobs: jobs(step),
+      sha: SHA40,
+    });
+  assert.deepEqual(at("success", "success"), { outcome: "flow-passed" });
+  assert.deepEqual(at("failure", "failure"), { outcome: "flow-failed" });
+  assert.equal(at("cancelled", "cancelled").error, "hosted-run-error");
+  assert.equal(at("timed_out", null).error, "hosted-run-error");
+  assert.equal(at("failure", "skipped").error, "hosted-run-error");
+  assert.equal(at("success", "success", OTHER_SHA).error, "development-moved");
+  assert.deepEqual(
+    runOutcome({
+      id: 5,
+      run: { status: "in_progress", conclusion: null, head_sha: SHA40 },
+      jobs: null,
+      sha: SHA40,
+    }),
+    { outcome: "waiting" },
+  );
+});
+
+test("flow: a producer run that does not finish within --timeout is exit 1 FAILED, like a failed one", () => {
+  const { work, env } = workEnv();
+  flowFile(work, "scn-0a1b2c3d-6");
+  const gh = scriptedGh([
+    { match: "dispatches", answers: [{ stdout: json({ workflow_run_id: 9 }) }] },
+    {
+      match: "actions/runs/9",
+      answers: [{ stdout: json({ id: 9, status: "queued", conclusion: null }) }],
+    },
+  ]);
+  const result = run(["flow", "--name", "scn-0a1b2c3d-6", "--timeout", "0"], {
+    env: { ...env, ...gh.env },
+  });
+  assert.equal(result.status, GATE_EXIT.closed);
+  assert.match(
+    result.verdict,
+    /^FAILED: the producer run 9 of scn-0a1b2c3d-6 did not finish in 0s$/,
+  );
+});
+
+/** A fake ffmpeg: `-version` answers at once; extracting sleeps `ms`, then writes one still. */
+function fakeFfmpeg(ms) {
+  const dir = mkdtempSync(join(tmpdir(), "fake-ffmpeg-"));
+  const path = join(dir, "ffmpeg");
+  writeFileSync(
+    path,
+    `#!${process.execPath}
+const fs = require("node:fs");
+const argv = process.argv.slice(2);
+if (argv[0] === "-version") process.exit(0);
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${ms});
+fs.writeFileSync(argv.at(-1).replace("%03d", "001"), "png");
+`,
+  );
+  chmodSync(path, 0o755);
+  return path;
+}
+
+test("wait keeps only the screenshots, the recording and its stills in a run's evidence", () => {
+  const { work, env } = workEnv({ KC_FFMPEG: fakeFfmpeg(0) });
+  const rules = finished(11);
+  rules[2].answers = [
+    {
+      files: {
+        "apps/mobile/.maestro/out/kc__scn__01-start.png": "png",
+        "kc__scn.mp4": "mp4",
+        "local-api.log": "api log",
+        "apps/mobile/.maestro/out/maestro.log": "x",
+      },
+    },
+  ];
+  const gh = scriptedGh(rules);
+  const result = run(["wait", "--runs", "11", "--sha", SHA40, "--timeout", "60"], {
+    env: { ...env, ...gh.env },
+  });
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  const evidence = join(work, "scenario-runs", "11");
+  const files = readdirSync(evidence, { recursive: true })
+    .map(String)
+    .filter((f) => statSync(join(evidence, f)).isFile())
+    .sort();
+  assert.deepEqual(files, [
+    "apps/mobile/.maestro/out/kc__scn__01-start.png",
+    "frames/kc__scn-001.png",
+    "kc__scn.mp4",
+  ]);
+  assert.equal(JSON.parse(result.verdict).runs[0].frames, true);
+});
+
+test("wait has one deadline: a slow download or ffmpeg is exit 3 inside --timeout, and the next slice resumes", () => {
+  const slowGh = () => {
+    const rules = [...finished(11), ...finished(12)];
+    rules[5].answers = [{ sleepMs: 8000, files: { "kc__b.png": "png" } }];
+    return scriptedGh(rules);
+  };
+  const { work, env } = workEnv();
+  const started = Date.now();
+  const first = run(["wait", "--runs", "11,12", "--sha", SHA40, "--timeout", "3"], {
+    env: { ...env, ...slowGh().env },
+  });
+  assert.ok(Date.now() - started < 7000, `wait ran ${Date.now() - started} ms past a 3 s deadline`);
+  assert.equal(first.status, GATE_EXIT.waiting, first.stdout);
+  assert.match(first.verdict, /^WAITING: evidence of 1 of 2 hosted runs not downloaded yet$/);
+  assert.ok(existsSync(join(work, "scenario-runs", "11", "kc__scn.mp4")));
+
+  // The next slice downloads only what is missing.
+  const fast = scriptedGh([...finished(11), ...finished(12)]);
+  const second = run(["wait", "--runs", "11,12", "--sha", SHA40, "--timeout", "60"], {
+    env: { ...env, ...fast.env },
+  });
+  assert.equal(second.status, GATE_EXIT.open, second.stdout);
+  const downloads = fast
+    .calls()
+    .filter((c) => c.argv[1] === "download")
+    .map((c) => c.argv[2]);
+  assert.deepEqual(downloads, ["12"]);
+
+  const slowFrames = workEnv({ KC_FFMPEG: fakeFfmpeg(8000) });
+  const t0 = Date.now();
+  const frames = run(["wait", "--runs", "11", "--sha", SHA40, "--timeout", "3"], {
+    env: { ...slowFrames.env, ...scriptedGh(finished(11)).env },
+  });
+  assert.ok(Date.now() - t0 < 7000, "ffmpeg ran past the deadline");
+  assert.equal(frames.status, GATE_EXIT.waiting, frames.stdout);
 });
