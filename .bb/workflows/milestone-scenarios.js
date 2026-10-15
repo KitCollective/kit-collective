@@ -25,6 +25,7 @@ export const meta = {
       satisfaction: { type: "string" },
       scenarios: { type: "array" },
       sentences: { type: "array" },
+      report: { type: "object" },
       note: { type: "string" },
     },
   },
@@ -34,6 +35,7 @@ export const meta = {
     { title: "Hosted runs", detail: "runsPerScenario hosted Device flow runs per Scenario, waited for in slices" },
     { title: "Judge runs", detail: "a fresh Scenario judge per run, from the screenshots and the recording only" },
     { title: "Score", detail: "scenarios.mjs status --verdicts sets Scenarios to success or failure" },
+    { title: "Report", detail: "scenarios.mjs report comments on the project and files one issue per failed Scenario" },
   ],
 };
 
@@ -48,6 +50,9 @@ export const meta = {
 // The `Scenarios` status: once pending is posted, every return goes through `finish()` (error) or the
 // score (success or failure), so a run that stops early never leaves the status pending. A thread
 // that dies outright is the one case a workflow cannot catch (docs/agents/scenarios.md says what to do).
+// The report (KIT-354) is one `scenarios.mjs report` with the score's tokens; the run judges' sentences
+// reach it through gitignored files (`.factory/scenario-sentences/<run>.txt`) the CLI reads, checks and
+// deletes, so no sentence or title enters a command. The CLI, not this script, talks to Linear.
 // It never moves a Linear issue, never merges and never names a promotion lane in a command: the
 // promotion stays a person's (KIT-355 makes `Scenarios` a required check on staging).
 
@@ -542,6 +547,7 @@ for (let i = 1; i <= n; i += 1) {
         `1. Read the milestone's Scenarios with exactly this command; run it alone, with nothing chained to it (no pipe, no &&, no redirect): \`${readCmd}\`. Judge against Scenario ${i} only: its Starting situation, Actions and End state.`,
         `2. Your evidence is the directory \`${evidence}\` and nothing else: the step screenshots (\`kc__*.png\`, anywhere under it)${framesOf.get(run) ? " and the stills from the run's recording in its `frames` folder (one every 2 seconds)" : "; this run has no stills from its recording (it could not be read here), so judge from the screenshots"}. The flow ${outcomeOf.get(run) === "flow-passed" ? "ran to its end" : "stopped at a failing step"} on the hosted runner.`,
         "3. Read nothing else: never the diff or the code, no git history, no flow file, no other run's evidence, no PR and no issue. Run nothing but the one command above; list and open files only in your evidence directory.",
+        `4. Also write your sentence, the same one line, to \`.factory/scenario-sentences/${run}.txt\` and nowhere else. A script reads that file, checks it and deletes it.`,
         "Return verdict satisfied (the Collector got what the End state promises) or not-satisfied, and one sentence on where the Collector got stuck (when satisfied: what showed the End state). Write it in what a Collector sees, and do not retell the Scenario's text beyond its title. Put your own thread id ($BB_THREAD_ID) in threadId.",
       ].join("\n"),
       `judge:${i}:${run}`,
@@ -587,13 +593,40 @@ if (!goodScore) {
 }
 const met = state === "success";
 await sh("log:result", "Score", [logCmd("result", `--step scenario-judge --outcome ${met ? "met" : "not-met"} --sha ${sha}`)], true);
+
+// ---- Report -------------------------------------------------------------------------------------
+phase("Report");
+// The score is final and Scenarios is already posted, so nothing here can change the result: a failed
+// report only leaves the comment and the issues to be made by hand. Not retried (the comment is not
+// idempotent); running the same command again is safe, since a Scenario with an open failure issue is
+// not filed twice.
+const KEY = /^KIT-\d+$/;
+const reportCmd = `node scripts/scenarios.mjs report --project "${project}" --milestone "${milestone}" --sha ${sha} --scenarios ${n} --verdicts ${verdicts.join(",")}`;
+const reported = await shOnce([], "report", "Report", reportCmd);
+const said = !reported.runner && reported.code === 0 ? answerOf(reported) : null;
+const goodReport =
+  said !== null &&
+  said.comment === true &&
+  Array.isArray(said.filed) &&
+  Array.isArray(said.existing) &&
+  said.filed.length + said.existing.length <= n &&
+  [...said.filed, ...said.existing].every((key) => typeof key === "string" && KEY.test(key));
+if (!goodReport) {
+  await sh("log:report-failed", "Report", [logCmd("reason", "--code report-failed")], true);
+}
+const reportNote = goodReport
+  ? ""
+  : ` The comment and the failure issues were not written (${reported.runner || reported.code !== 0 ? reported.line : "the report answer fails its patterns"}): run \`${reportCmd}\` by hand; it files only what is missing.`;
 return stopped("score", met ? "met" : "not-met", {
   sha,
   state,
   satisfaction: score.satisfaction,
   scenarios: perScenario.map((s) => ({ index: s.index, title: titles[s.index - 1], met: s.met, satisfied: s.satisfied, runs: s.runs })),
   sentences,
-  note: met
-    ? `Every Scenario met; Scenarios is success on ${sha.slice(0, 8)}. The promotion stays a person's.`
-    : `Not every Scenario met; Scenarios is failure on ${sha.slice(0, 8)}. The sentences say where the Collector got stuck.`,
+  ...(goodReport ? { report: { comment: true, filed: said.filed, existing: said.existing } } : {}),
+  note:
+    (met
+      ? `Every Scenario met; Scenarios is success on ${sha.slice(0, 8)}. The promotion stays a person's.`
+      : `Not every Scenario met; Scenarios is failure on ${sha.slice(0, 8)}. The sentences say where the Collector got stuck.`) +
+    reportNote,
 });
