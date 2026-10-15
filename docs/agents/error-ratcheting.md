@@ -18,7 +18,7 @@ This is not a memory store. Wrong lessons are reverted with git.
 | `.cursor/hooks/*.sh` | Command hooks (deny/allow) |
 | `.cursor/rules/*.mdc` | Always-applied agent rules |
 | `.pi/generated/implement-context.md` | Generated PI implement overlay from `.cursor` — edit sources, run `node scripts/generate-pi-implement-context.mjs`; never hand-edit |
-| `.claude/settings.json` + `.claude/hooks/cursor-ratchet.mjs` | Runs the same `.cursor/hooks.json` command hooks in Claude Code. One set of scripts: add a hook under `.cursor/hooks/`, never a copy under `.claude/` |
+| `.claude/settings.json` + `.claude/hooks/cursor-ratchet.mjs` | Runs the same `.cursor/hooks.json` command hooks in Claude Code. One set of scripts: add a hook under `.cursor/hooks/`, never a copy under `.claude/`. The one exception is `.claude/hooks/holdout-guard.mjs`: it is not a ratchet but the Holdout guard (`docs/agents/scenarios.md`), and it needs Read and Grep, which `beforeShellExecution` cannot see |
 | `.githooks/pre-commit` | Formats staged files with Biome before a commit (enabled by `pnpm install`) |
 | `biome.json` / `oxlint.config.ts` | Format, lint, and anti-slop gates run in CI |
 | `.pi/first-pass-classes.json` | Optional first-pass scanners (tighten only; empty `{ "classes": [] }` is the default) |

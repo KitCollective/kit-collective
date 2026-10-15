@@ -36,7 +36,7 @@ The Collection shows one Kit with the photo as its cover and the confirmed label
 
 ## The CLI
 
-`scripts/scenarios.mjs` is the only reader of the Holdout (KIT-348 adds the guard that denies direct reads, and the read log).
+`scripts/scenarios.mjs` is the only reader of the Holdout. A PreToolUse hook denies the other routes, and every `read` is logged (see "The guard and the read log").
 
 ```bash
 node scripts/scenarios.mjs titles --project "Holdout Scenarios" --milestone "Holdout"
@@ -44,6 +44,7 @@ node scripts/scenarios.mjs read   --project "Holdout Scenarios" --milestone "Hol
 ```
 
 - `titles` prints one title per line. `read` prints each Scenario in full. Both end with one verdict line, the last line on stdout.
+- `titles` is free: it writes nothing. `read` writes one run-log line first.
 - Without `--dir` it reads the file with `gh api` from `scenarios.holdoutRepo`. `--dir <path>` reads `<path>/<project-slug>/<milestone-slug>.md` from a local clone instead.
 
 | Exit | Verdict line | Meaning |
@@ -55,3 +56,27 @@ node scripts/scenarios.mjs read   --project "Holdout Scenarios" --milestone "Hol
 | 4 | `UNKNOWN: cannot read <repo or file>: <cause>` | gh is down, the token has no access, the repo does not exist, `--dir` is not a directory, or the milestone file exists but cannot be read. Any other unexpected error is also exit 4 with one `UNKNOWN:` line, never a stack trace |
 
 The codes are ADR-0053's (`GATE_EXIT` in `scripts/lib/gates.mjs`). Exit 1 is not used: nothing here is a "no" verdict until the Scenario judge scores Satisfaction.
+
+## The guard and the read log
+
+`.claude/hooks/holdout-guard.mjs` is a PreToolUse hook, registered for `Read|Grep|Bash` in `.claude/settings.json` next to the ratchet hook, so it applies to every Claude Code thread in this repo. The Holdout's name comes from `scenarios.holdoutRepo` in `factory.config.json`.
+
+Denied (exit 2, with a message that points at the CLI):
+
+- Read or Grep on a path with a Holdout clone's directory name as a segment, or with the working directory inside a clone.
+- Bash from inside a clone, any command with such a path in it (`cat`, `rg`, `ls`, ...), and any `gh` or `git` command that names the Holdout.
+- Input the hook cannot parse, or a config it cannot read (it fails closed).
+
+Allowed: one `node scripts/scenarios.mjs ...` invocation with nothing chained to it (also with `--dir` at a clone), and everything else, including a bare mention of the name such as `rg kit-scenarios docs/`. Glob and Edit are not watched.
+
+Every `read` appends one line to the run log before it fetches anything, so a read of a missing or malformed file is logged too. The shape is fixed (ADR-0052):
+
+```json
+{"at":"2026-10-15T16:20:00.000Z","event":"holdout","code":"holdout-read","holdout":"holdout-scenarios/holdout.md","thread":"thr_abcd1234"}
+```
+
+`thread` is the reading thread's `BB_THREAD_ID`; a read outside a bb thread has none. If the line cannot be written, `read` prints no Scenario text and ends `UNKNOWN: cannot log the read: ...` (exit 4). See the reads with `grep '"holdout"' "$(node scripts/run-log.mjs path)"`. The log is machine-local (ADR-0052): a read on another machine lands in that machine's file.
+
+### The stance: provenance, not unforgeability
+
+The guard makes the Holdout's contents arrive by one route and leaves a record of it. It does not make the Holdout unreadable (ADR-0060; `CONTEXT.md` says not to claim it cannot be read). A thread that builds the repo name at runtime, runs `node -e` or a script that calls `gh`, or starts a child process gets past the hook. So does a Cursor agent: Cursor has no Read or Grep hook event, so the guard covers Claude Code threads only. What the guard buys is that an honest thread cannot read the Holdout by accident, and that the log shows a read happened and by which thread. A read that is not in the log did not come through the CLI.
