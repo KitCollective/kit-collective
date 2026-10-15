@@ -142,3 +142,24 @@ test("dispatch inputs reach the Device flow workflows' shell only through env", 
     }
   }
 });
+
+// The macOS runner and the approver's Mac run these under /bin/bash 3.2, which has none of these.
+const BASH4 =
+  /\b(mapfile|readarray)\b|\b(declare|local|typeset) -A\b|\$\{[A-Za-z_]+(,,|\^\^)\}|shopt -s globstar|&>>/;
+
+test("shell that runs on macOS uses no bash 4 builtins", () => {
+  const scripts = [
+    ...runBlocks(readFileSync(join(WORKFLOWS, "device-flows.yml"), "utf8")).map((block) => [
+      "device-flows.yml",
+      block,
+    ]),
+    ...readdirSync(MAESTRO)
+      .filter((name) => name.endsWith(".sh"))
+      .map((name) => [name, readFileSync(join(MAESTRO, name), "utf8")]),
+  ];
+  for (const [name, text] of scripts) {
+    for (const line of text.split("\n").filter((l) => !/^\s*#/.test(l))) {
+      assert.doesNotMatch(line, BASH4, `${name}: ${line.trim()}`);
+    }
+  }
+});
