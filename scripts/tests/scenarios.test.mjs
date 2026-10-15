@@ -15,7 +15,9 @@ import { delimiter, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { GATE_EXIT } from "../lib/gates.mjs";
-import { slug } from "../lib/scenarios.mjs";
+import { assertCreateGuardrails, SCENARIO_FAILURE_FOOTER } from "../lib/linear-issues.mjs";
+import { parseWriteScopeGlobs } from "../lib/pr-write-scope.mjs";
+import { FAILURE_WRITE_SCOPE, failureIssueBody, slug } from "../lib/scenarios.mjs";
 
 const ROOT = join(fileURLToPath(new URL("..", import.meta.url)), "..");
 const CLI = join(ROOT, "scripts", "scenarios.mjs");
@@ -1424,4 +1426,414 @@ test("wait has one deadline: a slow download or ffmpeg is exit 3 inside --timeou
   });
   assert.ok(Date.now() - t0 < 7000, "ffmpeg ran past the deadline");
   assert.equal(frames.status, GATE_EXIT.waiting, frames.stdout);
+});
+
+// ---- report (KIT-354): the project comment, one issue per failed Scenario, no duplicates ---------
+
+/** Text only the Holdout's sections hold. It must reach no issue, comment, argv or output. */
+const SECRET = ["SECRET-STARTING-SITUATION", "SECRET-ACTIONS", "SECRET-END-STATE"];
+const secretScenario = (title) => `## ${title}
+
+### Starting situation
+
+${SECRET[0]} a Test Collector.
+
+### Actions
+
+${SECRET[1]} the Collector taps.
+
+### End state
+
+${SECRET[2]} the Collection shows it.
+`;
+const TITLE_A = "A Collector adds a shirt";
+const TITLE_B = "A Collector removes a shirt";
+const TWO = `${secretScenario(TITLE_A)}\n${secretScenario(TITLE_B)}`;
+const FAILURE_A = `Scenario not met: ${TITLE_A}`;
+
+/**
+ * A fake Linear CLI: `list` answers `issues`; `create` and `project-comment` log their argv and the
+ * body file's text as it was when they ran (the CLI deletes its temp file), and answer like linear.mjs.
+ * `failOn` makes that subcommand exit 1.
+ */
+function fakeReportLinear({ issues = [], failOn = null } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "scenarios-report-linear-"));
+  const log = join(dir, "calls.jsonl");
+  const file = join(dir, "linear.mjs");
+  writeFileSync(
+    file,
+    `import { appendFileSync, readFileSync } from "node:fs";
+const argv = process.argv.slice(2);
+const [command] = argv;
+const at = argv.indexOf("--body-file");
+const body = at === -1 ? null : readFileSync(argv[at + 1], "utf8");
+appendFileSync(${JSON.stringify(log)}, JSON.stringify({ argv, body, bodyFile: at === -1 ? null : argv[at + 1] }) + "\\n");
+if (command === ${JSON.stringify(failOn)}) { process.stderr.write("linear: request failed\\n"); process.exit(1); }
+if (command === "list") process.stdout.write(${JSON.stringify(JSON.stringify(issues))});
+if (command === "create") process.stdout.write("KIT-" + (900 + readFileSync(${JSON.stringify(log)}, "utf8").split("\\n").filter((l) => l.includes('"create"')).length) + " https://linear.app/x\\n");
+if (command === "project-comment") process.stdout.write("c-1 https://linear.app/x/c-1\\n");
+`,
+  );
+  const calls = () =>
+    existsSync(log)
+      ? readFileSync(log, "utf8")
+          .trim()
+          .split("\n")
+          .filter(Boolean)
+          .map((l) => JSON.parse(l))
+      : [];
+  return {
+    env: { KC_LINEAR_CLI: file },
+    calls,
+    of: (command) => calls().filter((c) => c.argv[0] === command),
+  };
+}
+
+/** Sentence files `<work>/scenario-sentences/<run>.txt`, like the run judges write them. */
+function sentenceDir(sentences) {
+  const work = mkdtempSync(join(tmpdir(), "scenarios-work-"));
+  mkdirSync(join(work, "scenario-sentences"));
+  for (const [run, text] of Object.entries(sentences)) {
+    writeFileSync(join(work, "scenario-sentences", `${run}.txt`), text);
+  }
+  return work;
+}
+
+// Scenario 1 is not met (1 of 3 satisfied), Scenario 2 is met.
+const FAIL_A_VERDICTS = "1:n:7001,1:n:7002,1:s:7003,2:s:7004,2:s:7005,2:s:7006";
+const REPORT = ["report", ...MILESTONE, "--sha", SHA40, "--scenarios", "2"];
+const SENTENCES = {
+  7001: "The photo picker never opened after Add.",
+  7002: "Stuck on the empty Collection screen.",
+  7003: "The Collection showed one Kit.",
+  7004: "Showed an empty Collection after the removal.",
+};
+
+function report({
+  issues,
+  failOn,
+  verdicts = FAIL_A_VERDICTS,
+  sentences = SENTENCES,
+  text = TWO,
+  args = [],
+  env = {},
+} = {}) {
+  const linear = fakeReportLinear({ issues, failOn });
+  const work = sentenceDir(sentences);
+  const result = run([...REPORT, "--verdicts", verdicts, ...args], {
+    dir: holdout(text === null ? undefined : text),
+    env: { ...linear.env, KC_SCENARIO_WORK: work, ...env },
+  });
+  return {
+    ...result,
+    linear,
+    work,
+    answer: result.status === 0 ? JSON.parse(result.verdict) : null,
+  };
+}
+
+test("report files one To-do ready-for-agent issue per failed Scenario in its milestone, and one project comment", () => {
+  const result = report();
+  assert.equal(result.status, GATE_EXIT.open, result.stdout + result.stderr);
+  assert.equal(result.lines.length, 1);
+  assert.deepEqual(
+    { ...result.answer, verdict: undefined },
+    {
+      verdict: undefined,
+      satisfaction: "4/6 (67%)",
+      comment: true,
+      filed: ["KIT-901"],
+      existing: [],
+    },
+  );
+
+  const created = result.linear.of("create");
+  assert.equal(created.length, 1, "one issue for the one failed Scenario, none for the met one");
+  assert.deepEqual(created[0].argv.slice(0, 1).concat(created[0].argv.slice(2, 3)), [
+    "create",
+    "--body-file",
+  ]);
+  assert.equal(created[0].argv[1], FAILURE_A);
+  for (const [flag, value] of [
+    ["--state", "To-do"],
+    ["--label", "ready-for-agent"],
+    ["--project", "Holdout Scenarios"],
+    ["--milestone", "Holdout"],
+  ]) {
+    assert.equal(created[0].argv[created[0].argv.indexOf(flag) + 1], value, flag);
+  }
+  const body = created[0].body;
+  assert.ok(body.includes(TITLE_A));
+  for (const run of [7001, 7002, 7003]) {
+    assert.ok(body.includes(`https://github.com/${REPO}/actions/runs/${run}`), `run link ${run}`);
+  }
+  assert.ok(
+    body.includes(SENTENCES[7001]) &&
+      body.includes(SENTENCES[7002]) &&
+      body.includes(SENTENCES[7003]),
+  );
+  assert.ok(!body.includes(SENTENCES[7004]), "a sentence of another Scenario");
+  assert.ok(!body.includes(TITLE_B));
+  assert.ok(body.split("\n").includes(SCENARIO_FAILURE_FOOTER));
+  assert.deepEqual(parseWriteScopeGlobs(body), ["apps/mobile/**", "apps/api/**", "packages/**"]);
+
+  const comments = result.linear.of("project-comment");
+  assert.equal(comments.length, 1);
+  assert.deepEqual(comments[0].argv.slice(0, 2), ["project-comment", "Holdout Scenarios"]);
+  assert.ok(comments[0].body.includes("4/6 (67%)"));
+  assert.ok(comments[0].body.includes(`"${TITLE_A}"`));
+  assert.ok(!comments[0].body.includes(TITLE_B));
+  assert.ok(comments[0].body.includes("KIT-901"));
+  assert.ok(comments[0].body.length < 400, "the comment is short");
+  // Issue first, then the comment that names it.
+  assert.deepEqual(
+    result.linear.calls().map((c) => c.argv[0]),
+    ["list", "create", "project-comment"],
+  );
+});
+
+test("the failure issue body passes create's own guardrails for ready-for-agent", () => {
+  const body = failureIssueBody({
+    title: TITLE_A,
+    ownerRepo: REPO,
+    sha: SHA40,
+    scenarioRuns: [{ run: 7001, satisfied: false, sentence: "x" }],
+  });
+  const labels = [{ id: "l", name: "ready-for-agent", parent: null }];
+  assert.doesNotThrow(() =>
+    assertCreateGuardrails({ labels: ["ready-for-agent"], state: "To-do", body }, labels),
+  );
+  assert.match(FAILURE_WRITE_SCOPE, /^apps\/mobile\/\*\*, apps\/api\/\*\*, packages\/\*\*$/);
+});
+
+test("no failure issue, comment, argv, answer or log line ever holds the Scenario text", () => {
+  const result = report({
+    sentences: { ...SENTENCES, 7001: "Never retells; a sentence of the judge." },
+  });
+  assert.equal(result.status, GATE_EXIT.open);
+  const everything = JSON.stringify(result.linear.calls()) + result.stdout + result.stderr;
+  for (const secret of SECRET) {
+    assert.ok(!everything.includes(secret), `report leaked "${secret}"`);
+  }
+  for (const hidden of ["Starting situation", "Actions", "End state"]) {
+    assert.ok(!everything.includes(`### ${hidden}`));
+  }
+});
+
+test("report logs no Holdout read, and passes the model's sentences through files, never argv", () => {
+  const log = tmpLog();
+  const result = report({ env: { KC_RUN_LOG: log } });
+  assert.equal(result.status, GATE_EXIT.open);
+  assert.ok(!existsSync(log) || readFileSync(log, "utf8") === "");
+  for (const call of result.linear.calls()) {
+    for (const sentence of Object.values(SENTENCES)) {
+      assert.ok(!call.argv.join(" ").includes(sentence), "a sentence was passed in argv");
+    }
+  }
+  for (const call of result.linear.calls().filter((c) => c.bodyFile)) {
+    assert.ok(
+      call.bodyFile.startsWith(tmpdir()) || call.bodyFile.startsWith("/private"),
+      call.bodyFile,
+    );
+    assert.ok(!existsSync(call.bodyFile), "the body file was left behind");
+  }
+});
+
+test("a re-run files no duplicate for a Scenario with an open failure issue, and names it", () => {
+  const open = [
+    { identifier: "KIT-77", title: FAILURE_A, state: "To-do", scenarioFailure: true },
+    { identifier: "KIT-78", title: "Something else", state: "Backlog", scenarioFailure: false },
+  ];
+  const result = report({ issues: open });
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  assert.deepEqual(result.answer.filed, []);
+  assert.deepEqual(result.answer.existing, ["KIT-77"]);
+  assert.equal(result.linear.of("create").length, 0, "a duplicate was filed");
+  assert.equal(result.linear.of("project-comment").length, 1);
+  assert.ok(result.linear.of("project-comment")[0].body.includes("KIT-77"));
+
+  // A title compared without case, an in-progress issue, and an issue without the footer all count as open.
+  for (const issue of [
+    {
+      identifier: "KIT-80",
+      title: FAILURE_A.toUpperCase(),
+      state: "In Progress",
+      scenarioFailure: true,
+    },
+    { identifier: "KIT-81", title: FAILURE_A, state: "In Review", scenarioFailure: false },
+  ]) {
+    const again = report({ issues: [issue] });
+    assert.deepEqual(again.answer.existing, [issue.identifier], issue.identifier);
+    assert.equal(again.linear.of("create").length, 0);
+  }
+});
+
+test("a closed failure issue does not block a new one; only the failed Scenario is matched", () => {
+  const closed = [
+    { identifier: "KIT-70", title: FAILURE_A, state: "Done", scenarioFailure: true },
+    { identifier: "KIT-71", title: FAILURE_A, state: "Canceled", scenarioFailure: true },
+    {
+      identifier: "KIT-72",
+      title: `Scenario not met: ${TITLE_B}`,
+      state: "To-do",
+      scenarioFailure: true,
+    },
+  ];
+  const result = report({ issues: closed });
+  assert.deepEqual(result.answer.filed, ["KIT-901"]);
+  assert.deepEqual(result.answer.existing, []);
+});
+
+test("every failed Scenario gets its own issue; every Scenario met files none and says so", () => {
+  const both = report({ verdicts: "1:n:7001,1:n:7002,1:s:7003,2:n:7004,2:s:7005,2:n:7006" });
+  assert.deepEqual(both.answer.filed, ["KIT-901", "KIT-902"]);
+  assert.equal(both.linear.of("create").length, 2);
+  assert.equal(both.linear.of("project-comment").length, 1);
+  assert.ok(both.linear.of("project-comment")[0].body.includes(`"${TITLE_A}", "${TITLE_B}"`));
+
+  const met = report({ verdicts: "1:s:7001,1:s:7002,1:s:7003,2:s:7004,2:s:7005,2:n:7006" });
+  assert.equal(met.status, GATE_EXIT.open);
+  assert.deepEqual(met.answer.filed, []);
+  assert.equal(met.linear.of("create").length, 0);
+  const [comment] = met.linear.of("project-comment");
+  assert.match(comment.body, /Satisfaction 5\/6 \(83%\)/);
+  assert.match(comment.body, /Every Scenario met/);
+});
+
+test("a sentence file that is missing, over 400 characters, multi-line, has a backtick or a control character is not used", () => {
+  const result = report({
+    sentences: {
+      7001: "x".repeat(401),
+      7002: "fine sentence\non two lines",
+      7003: "with a `backtick`",
+      // 7004 to 7006 belong to the met Scenario; 7001-7003 are the failed one's.
+    },
+  });
+  const body = result.linear.of("create")[0].body;
+  assert.equal(body.split("(no usable sentence from the judge)").length - 1, 2);
+  assert.ok(body.includes("fine sentence on two lines"), "whitespace is collapsed");
+  assert.ok(!body.includes("`backtick`"));
+  assert.ok(!body.includes("x".repeat(401)));
+  const control = report({ sentences: { 7001: "bell\u0007here", 7002: "ok", 7003: "ok too" } });
+  assert.ok(!control.linear.of("create")[0].body.includes("\u0007"));
+});
+
+test("sentence files are deleted once everything is written, and kept when Linear fails", () => {
+  const ok = report();
+  assert.equal(ok.status, GATE_EXIT.open);
+  assert.deepEqual(readdirSync(join(ok.work, "scenario-sentences")), []);
+  const failed = report({ failOn: "create" });
+  assert.equal(failed.status, GATE_EXIT.unknown);
+  assert.equal(readdirSync(join(failed.work, "scenario-sentences")).length, 4);
+});
+
+test("a Linear that cannot be reached is exit 4: no comment after a failed issue, and nothing filed is hidden", () => {
+  for (const failOn of ["list", "create"]) {
+    const result = report({ failOn });
+    assert.equal(result.status, GATE_EXIT.unknown, failOn);
+    assert.equal(result.lines.length, 1);
+    assert.match(result.verdict, /^UNKNOWN: /);
+    assert.equal(result.linear.of("project-comment").length, 0, failOn);
+  }
+  const noComment = report({ failOn: "project-comment" });
+  assert.equal(noComment.status, GATE_EXIT.unknown);
+  assert.match(noComment.verdict, /KIT-901/, "the issue it did file is named");
+  // Run again: the filed issue is found, so nothing is duplicated.
+  const rerun = report({
+    issues: [{ identifier: "KIT-901", title: FAILURE_A, state: "To-do", scenarioFailure: true }],
+  });
+  assert.equal(rerun.linear.of("create").length, 0);
+});
+
+test("report refuses a Holdout whose Scenario count differs from the run's, and writes nothing", () => {
+  const result = report({ text: secretScenario(TITLE_A) });
+  assert.equal(result.status, GATE_EXIT.usage);
+  assert.match(result.verdict, /^MALFORMED: .*1 Scenario.*2/);
+  assert.equal(result.linear.of("create").length + result.linear.of("project-comment").length, 0);
+  const none = report({ text: null });
+  assert.equal(none.status, GATE_EXIT.usage);
+  assert.equal(none.linear.calls().length, 0);
+  for (const secret of SECRET) assert.ok(!result.stdout.includes(secret));
+});
+
+test("report --dry-run reads Linear and the Holdout and writes nothing", () => {
+  const result = report({ args: ["--dry-run"] });
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  assert.equal(result.answer.dryRun, true);
+  assert.deepEqual(result.answer.wouldFile, [FAILURE_A]);
+  assert.equal(result.linear.of("create").length + result.linear.of("project-comment").length, 0);
+  assert.equal(
+    readdirSync(join(result.work, "scenario-sentences")).length,
+    4,
+    "dry-run keeps the sentence files",
+  );
+});
+
+test("report usage: a bad sha, a bad verdict list, a missing flag or a repeated one is exit 2 and writes nothing", () => {
+  const linear = fakeReportLinear();
+  const base = [
+    "report",
+    ...MILESTONE,
+    "--sha",
+    SHA40,
+    "--scenarios",
+    "2",
+    "--verdicts",
+    FAIL_A_VERDICTS,
+  ];
+  const swap = (flag, value) => base.map((arg, i) => (base[i - 1] === flag ? value : arg));
+  for (const argv of [
+    swap("--sha", "abc"),
+    swap("--verdicts", "1:n:7001"),
+    swap("--verdicts", "1:x:7001"),
+    base.slice(0, -2),
+    [...base, "--sha", SHA40],
+    [...base, "--other", "1"],
+  ]) {
+    const result = run(argv, { dir: holdout(TWO), env: linear.env });
+    assert.equal(result.status, GATE_EXIT.usage, argv.join(" "));
+    assert.match(result.verdict, /^USAGE: /);
+  }
+  assert.equal(linear.calls().length, 0);
+});
+
+// ---- check lets a re-run through when only the failure issues it filed are open ------------------
+
+test("check: open failure issues of Milestone scenarios (title and footer) do not block a re-run", () => {
+  const failure = (n, state = "To-do", extra = {}) => ({
+    identifier: `KIT-${n}`,
+    state,
+    title: `Scenario not met: ${TITLE_A}`,
+    scenarioFailure: true,
+    ...extra,
+  });
+  const only = check({ issues: [done(1), failure(50), failure(51, "In Progress")] });
+  assert.equal(only.status, GATE_EXIT.open, only.stdout);
+  assert.equal(JSON.parse(only.verdict).sha, SHA40);
+});
+
+test("check: any other open issue still blocks, a failure-looking title or footer alone does not pass, and only the others are named", () => {
+  const failure = {
+    identifier: "KIT-50",
+    state: "To-do",
+    title: `Scenario not met: ${TITLE_A}`,
+    scenarioFailure: true,
+  };
+  const blocked = check({ issues: [done(1), failure, done(2, "In Progress")] });
+  assert.equal(blocked.status, GATE_EXIT.closed);
+  assert.match(
+    blocked.verdict,
+    /^REFUSED: 1 issue of the milestone is not Done or Canceled: KIT-2 \(In Progress\)$/,
+  );
+
+  // Hand-written title without the footer, and the footer under another title, are ordinary open issues.
+  for (const forged of [
+    { ...failure, scenarioFailure: false },
+    { ...failure, title: "Something else" },
+    { identifier: "KIT-50", state: "To-do", title: `Scenario not met: ${TITLE_A}` },
+  ]) {
+    const result = check({ issues: [done(1), forged] });
+    assert.equal(result.status, GATE_EXIT.closed, JSON.stringify(forged));
+    assert.match(result.verdict, /KIT-50 \(To-do\)/);
+  }
 });
