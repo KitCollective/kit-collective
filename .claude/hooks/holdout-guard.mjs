@@ -6,7 +6,7 @@
 // the name at runtime (`node -e`, a script, a child process) gets past it. Docs: docs/agents/scenarios.md.
 // Deny = exit 2 with the message on stderr. Allow = exit 0, no output. A payload or config the hook
 // cannot read is a deny (fail closed), as in cursor-ratchet.mjs.
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,7 +23,7 @@ function deny(reason) {
 /** The Holdout's directory name, from `scenarios.holdoutRepo` (`Owner/name`). */
 function holdoutName() {
   const config = JSON.parse(readFileSync(join(root, "factory.config.json"), "utf8"));
-  const name = basename(String(config.scenarios.holdoutRepo));
+  const name = basename(String(config.scenarios.holdoutRepo)).toLowerCase();
   if (!name) {
     throw new Error("scenarios.holdoutRepo is empty");
   }
@@ -31,14 +31,28 @@ function holdoutName() {
 }
 
 /** True when a path has a segment that is the Holdout, or its `.git` form. */
-const inHoldout = (path, name) =>
-  path.split("/").some((segment) => segment === name || segment === `${name}.git`);
+const isName = (segment, name) => {
+  const lower = segment.toLowerCase();
+  return lower === name || lower === `${name}.git`;
+};
+const inHoldout = (path, name) => path.split("/").some((segment) => isName(segment, name));
+
+/** True when the bare word names a directory under the hook's cwd (any letter case). */
+function directoryExists(cwd, word) {
+  const dir = resolve(cwd || root);
+  try {
+    const entry = readdirSync(dir).find((e) => e.toLowerCase() === word.toLowerCase());
+    return entry !== undefined && statSync(join(dir, entry)).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 const resolveFrom = (cwd, path) => resolve(cwd || root, path);
 
 // One `node scripts/scenarios.mjs ...` invocation and nothing chained to it.
 const CLI = /^\s*node\s+(\S*scripts\/scenarios\.mjs)(?:\s|$)/;
-const CHAINING = /[;&|`\n]|\$\(/;
+const CHAINING = /[;&|`\n]|\$\(|[<>]\(/;
 
 function isScenarioCli(command, name) {
   const match = CLI.exec(command);
@@ -52,13 +66,20 @@ function decideBash(command, cwd, name) {
   if (isScenarioCli(command, name)) {
     return null;
   }
-  if (/(^|[\s;&|(`])(gh|git)\s/.test(command) && command.includes(name)) {
+  if (/(^|[\s;&|(`])(gh|git)\s/.test(command) && command.toLowerCase().includes(name)) {
     return `gh/git commands that target the Holdout (${name}) are denied.`;
   }
-  for (const token of command.split(/\s+/)) {
-    const word = token.replace(/^["']+|["']+$/g, "");
+  // Every word, whatever shell syntax joins it: split on whitespace, quotes, redirections,
+  // subshell and substitution brackets, `=` (flag=value) and the command separators.
+  const words = command.split(/[\s"'`;&|()<>=]+/).filter(Boolean);
+  for (const [index, word] of words.entries()) {
     if (word.includes("/") && inHoldout(word, name)) {
       return `A path inside the Holdout (${name}) is denied: ${word}`;
+    }
+    if (isName(word, name)) {
+      if (words[index - 1] === "cd" || directoryExists(cwd, word)) {
+        return `A directory named like the Holdout (${name}) is denied: ${word}`;
+      }
     }
   }
   return null;

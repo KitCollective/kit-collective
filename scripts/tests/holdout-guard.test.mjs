@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -104,4 +105,48 @@ test(".claude/settings.json registers the guard for Read, Grep and Bash next to 
   for (const tool of ["Read", "Grep", "Bash"]) {
     assert.ok(matcher.test(tool), `matcher covers ${tool}`);
   }
+});
+
+/** A temp folder holding a real `kit-scenarios` directory, as a clone's parent would. */
+function cloneParent() {
+  const parent = mkdtempSync(join(tmpdir(), "holdout-parent-"));
+  mkdirSync(join(parent, "kit-scenarios"));
+  mkdirSync(join(parent, "kit-scenarios.git"));
+  return parent;
+}
+
+test("Bash: a bare word that is an existing Holdout directory in cwd is denied", () => {
+  const cwd = cloneParent();
+  denied(bash("cd kit-scenarios && cat a.md", { cwd }), "cd then cat");
+  denied(bash("rg Collection kit-scenarios", { cwd }), "rg of the bare dir");
+  denied(bash("ls kit-scenarios", { cwd }), "ls of the bare dir");
+  denied(bash("ls kit-scenarios.git", { cwd }), "the .git form");
+  denied(bash('ls "Kit-Scenarios"', { cwd }), "quoted, other case");
+  denied(bash("rg x --path=kit-scenarios", { cwd }), "flag=value");
+});
+
+test("Bash: cd into the Holdout name is denied even when the directory is not there yet", () => {
+  denied(bash("cd kit-scenarios", { cwd: ROOT }), "cd by name");
+  denied(bash("cd ../kit-scenarios", { cwd: ROOT }), "cd by path");
+});
+
+test("Bash: a bare word with no such directory stays allowed", () => {
+  allowed(bash("rg kit-scenarios docs/", { cwd: ROOT }), "rg of the word, no dir");
+});
+
+test("Bash: process substitution and redirections cannot smuggle a Holdout path past the CLI", () => {
+  const cli = "node scripts/scenarios.mjs titles --project a --milestone b";
+  denied(bash(`${cli} >(cat /tmp/x/kit-scenarios/a.md)`), "output substitution");
+  denied(bash(`${cli} <(cat /tmp/x/kit-scenarios/a.md)`), "input substitution");
+  denied(bash("cat </tmp/x/kit-scenarios/a.md"), "input redirection");
+  denied(bash("cat <<< /tmp/x/kit-scenarios/a.md"), "here-string");
+  denied(bash("cp a.md >/tmp/x/kit-scenarios/a.md"), "output redirection");
+  denied(bash("(cat /tmp/x/kit-scenarios/a.md)"), "subshell");
+});
+
+test("the Holdout name is compared case-insensitively", () => {
+  denied(read("/tmp/x/Kit-Scenarios/a.md"), "read");
+  denied(grep("/tmp/x/KIT-SCENARIOS"), "grep");
+  denied(bash("cat /tmp/x/Kit-Scenarios/a.md"), "bash path");
+  denied(bash("gh repo view KitCollective/Kit-Scenarios"), "gh");
 });
