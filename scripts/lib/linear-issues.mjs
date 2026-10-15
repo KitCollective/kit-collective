@@ -13,10 +13,35 @@ const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 250;
 const PAGE_SIZE = 50;
 const TEAM_KEY = "KIT";
+/**
+ * The line Milestone scenarios ends every failure issue with (KIT-354). `list` reports it as
+ * `scenarioFailure`; `check` and `report` read the issue as one they filed only when a title that
+ * starts `Scenario not met:` also carries this line. It sits in the description, which a title edit
+ * does not touch; it is a marker, not a signature (anyone who can write an issue can copy it).
+ */
+export const SCENARIO_FAILURE_FOOTER = "Filed by Milestone scenarios (failure issue)";
+const FOOTER_LINE = new RegExp(`^${SCENARIO_FAILURE_FOOTER.replace(/[()]/g, "\\$&")}\\s*$`, "m");
+
 const REFUSED_LABELS = new Map([
   ["signal-up", "use `signal-up` (it files into Triage, related to its origin, with its own cap)"],
   ["proposal", "proposals are filed from /qualified-proposals into Triage, at most one per run"],
 ]);
+
+/** The non-empty text of `--body-file <path>`; throws a usage error when it is absent, missing or empty. */
+function bodyFromFlag(argv, readBody, usage) {
+  const bodyPath = optionValue(argv, "--body-file");
+  if (!bodyPath) {
+    throw new LinearUsageError(`--body-file <path> is required: ${usage}`);
+  }
+  const body = readBody(bodyPath);
+  if (body === null) {
+    throw new LinearUsageError(`body file ${bodyPath} does not exist`);
+  }
+  if (body.trim() === "") {
+    throw new LinearUsageError(`body file ${bodyPath} is empty`);
+  }
+  return body;
+}
 
 /** Values of every occurrence of a repeatable flag. */
 export function optionValues(args, flag) {
@@ -175,6 +200,7 @@ function compactIssue(node, states) {
     labels: node.labels.nodes.map((label) => label.name),
     blockedBy,
     writeScope: parseWriteScopeGlobs(node.description ?? ""),
+    scenarioFailure: FOOTER_LINE.test(node.description ?? ""),
     project: node.project?.name ?? null,
     milestone: node.projectMilestone?.name ?? null,
     url: node.url,
@@ -188,22 +214,12 @@ function compactIssue(node, states) {
  */
 export function parseCreateArgs(argv, readBody) {
   const usage =
-    'create "<title>" --body-file <path> [--state <name>] [--label <name>]... [--project <name>] [--parent KIT-n] [--blocked-by KIT-n]...';
+    'create "<title>" --body-file <path> [--state <name>] [--label <name>]... [--project <name> [--milestone <name>]] [--parent KIT-n] [--blocked-by KIT-n]...';
   const title = argv[0] && !argv[0].startsWith("--") ? argv[0] : null;
   if (!title) {
     throw new LinearUsageError(usage);
   }
-  const bodyPath = optionValue(argv, "--body-file");
-  if (!bodyPath) {
-    throw new LinearUsageError(`--body-file <path> is required: ${usage}`);
-  }
-  const body = readBody(bodyPath);
-  if (body === null) {
-    throw new LinearUsageError(`body file ${bodyPath} does not exist`);
-  }
-  if (body.trim() === "") {
-    throw new LinearUsageError(`body file ${bodyPath} is empty`);
-  }
+  const body = bodyFromFlag(argv, readBody, usage);
   const parentRaw = optionValue(argv, "--parent");
   const parent = parentRaw ? issueIdentifier(parentRaw) : null;
   if (parentRaw && !parent) {
@@ -220,12 +236,20 @@ export function parseCreateArgs(argv, readBody) {
     }
     return id;
   });
+  const project = optionValue(argv, "--project");
+  const milestone = optionValue(argv, "--milestone");
+  if (milestone && !project) {
+    throw new LinearUsageError(
+      `--milestone needs --project (a milestone belongs to a project): ${usage}`,
+    );
+  }
   return {
     title,
     body,
     state: optionValue(argv, "--state") ?? "Backlog",
     labels: optionValues(argv, "--label"),
-    project: optionValue(argv, "--project"),
+    project,
+    milestone,
     parent,
     blockedBy,
   };
@@ -270,6 +294,19 @@ export function assertCreateGuardrails({ labels, state, body }, labelNodes) {
   return resolved;
 }
 
+/** The project of that name (case-insensitive) with its milestones. */
+async function loadProject(gql, name) {
+  const { projects } = await gql(
+    "query($name: String!) { projects(filter: { name: { eqIgnoreCase: $name } }) { nodes { id name projectMilestones(first: 100) { nodes { id name } } } } }",
+    { name },
+  );
+  const project = projects.nodes[0];
+  if (!project?.id) {
+    throw new LinearUsageError(`no project "${name}"`);
+  }
+  return project;
+}
+
 /**
  * Create the issue on the KIT team. Returns the identifier and url.
  * `relate(blockedId, blockerId)` creates the blocking relation, as `block` does.
@@ -280,14 +317,19 @@ export async function createIssue(gql, parsed, { loadIssueId, block }) {
   const labels = assertCreateGuardrails({ ...parsed, state: state.name }, team.labels.nodes);
 
   let projectId;
+  let milestoneId;
   if (parsed.project) {
-    const { projects } = await gql(
-      "query($name: String!) { projects(filter: { name: { eqIgnoreCase: $name } }) { nodes { id name } } }",
-      { name: parsed.project },
-    );
-    projectId = projects.nodes[0]?.id;
-    if (!projectId) {
-      throw new LinearUsageError(`no project "${parsed.project}"`);
+    const project = await loadProject(gql, parsed.project);
+    projectId = project.id;
+    if (parsed.milestone) {
+      const milestones = project.projectMilestones?.nodes ?? [];
+      const found = byName(milestones, parsed.milestone);
+      if (!found) {
+        throw new LinearUsageError(
+          `no milestone "${parsed.milestone}" in project ${parsed.project}; valid: ${milestones.map((m) => m.name).join(", ")}`,
+        );
+      }
+      milestoneId = found.id;
     }
   }
   const parentId = parsed.parent ? await loadIssueId(parsed.parent) : undefined;
@@ -306,6 +348,7 @@ export async function createIssue(gql, parsed, { loadIssueId, block }) {
         description: parsed.body,
         labelIds: labels.map((label) => label.id),
         ...(projectId ? { projectId } : {}),
+        ...(milestoneId ? { projectMilestoneId: milestoneId } : {}),
         ...(parentId ? { parentId } : {}),
       },
     },
@@ -315,4 +358,29 @@ export async function createIssue(gql, parsed, { loadIssueId, block }) {
     await block(created.identifier, blocker);
   }
   return created;
+}
+
+/**
+ * Arguments of `project-comment "<project>" --body-file <path>`, with the body already read.
+ * @param {string[]} argv arguments after `project-comment`
+ * @param {(path: string) => string | null} readBody
+ */
+export function parseProjectCommentArgs(argv, readBody) {
+  const usage = 'project-comment "<project>" --body-file <path>';
+  const project = argv[0] && !argv[0].startsWith("--") ? argv[0] : null;
+  if (!project) {
+    throw new LinearUsageError(usage);
+  }
+  const body = bodyFromFlag(argv, readBody, usage);
+  return { project, body };
+}
+
+/** One comment on a project (Linear's `CommentCreateInput.projectId`). Returns its id and url. */
+export async function createProjectComment(gql, { project, body }) {
+  const { id } = await loadProject(gql, project);
+  const { commentCreate } = await gql(
+    "mutation($input: CommentCreateInput!) { commentCreate(input: $input) { comment { id url } } }",
+    { input: { projectId: id, body } },
+  );
+  return commentCreate.comment;
 }

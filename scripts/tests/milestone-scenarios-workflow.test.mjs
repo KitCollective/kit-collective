@@ -103,6 +103,28 @@ function defaultShell(command, state) {
       line: JSON.stringify({ ...score, verdict: `SCENARIOS status ${score.state}`, posted: true }),
     };
   }
+  if (command.includes("scenarios.mjs report")) {
+    const parsed = parseVerdicts(flag(command, "verdicts"), {
+      scenarios: flag(command, "scenarios"),
+      runsPerScenario: state.runsPerScenario,
+    });
+    assert.ok(parsed.entries, `bad verdict list: ${command}`);
+    const score = scoreVerdicts(parsed.entries, {
+      scenarios: Number(flag(command, "scenarios")),
+      satisfiedToMeet: 2,
+    });
+    const failed = score.scenarios.filter((x) => !x.met);
+    return {
+      code: 0,
+      line: JSON.stringify({
+        verdict: "SCENARIOS report",
+        satisfaction: score.satisfaction,
+        comment: true,
+        filed: failed.map((_, i) => `KIT-${900 + i}`),
+        existing: [],
+      }),
+    };
+  }
   if (command.includes("scenarios.mjs status")) {
     return {
       code: 0,
@@ -184,6 +206,7 @@ async function run({ args = ARGS, shell, writer, judge, check } = {}) {
 const agentSpawns = (spawns) =>
   spawns.filter((s) => !s.options.schema?.required?.includes("results"));
 const statusCommands = (commands) => commands.filter((c) => c.includes("scenarios.mjs status"));
+const reportCommands = (commands) => commands.filter((c) => c.includes("scenarios.mjs report "));
 const scenarioCommands = (commands, sub) =>
   commands.filter((c) => c.includes(`scenarios.mjs ${sub} `));
 
@@ -259,6 +282,7 @@ test("green path: check, pending, one flow per Scenario, runsPerScenario hosted 
     "scenarios.mjs wait",
     `scenarios.mjs status --sha ${SHA} --scenarios 2 --verdicts`,
     "--outcome met",
+    `scenarios.mjs report --project "Holdout Scenarios" --milestone "Fixture" --sha ${SHA} --scenarios 2 --verdicts`,
   ];
   const positions = order.map(at);
   assert.ok(
@@ -275,7 +299,7 @@ test("green path: check, pending, one flow per Scenario, runsPerScenario hosted 
   );
   assert.deepEqual(
     [...new Set(phases)],
-    ["Session", "Flows", "Hosted runs", "Judge runs", "Score"],
+    ["Session", "Flows", "Hosted runs", "Judge runs", "Score", "Report"],
   );
   assertNeverLeftPending(commands);
 });
@@ -732,4 +756,105 @@ test("an error status that cannot be posted is logged as status-failed and named
       c.includes("reason --milestone holdout-scenarios/fixture --code status-failed"),
     ),
   );
+});
+
+// ---- Report (KIT-354): one scenarios.mjs report after the score, tokens only -----------------------
+
+const notSatisfiedFirstScenario = (_label, n) => ({
+  verdict: n <= 2 ? "not-satisfied" : "satisfied",
+  sentence: `stuck at the photo picker ${MARKER}`,
+  threadId: `thr_judge${n}`,
+});
+
+test("after the score, report runs once with the score's tokens only, and no judge sentence reaches a command", async () => {
+  const { result, commands, spawns } = await run({ judge: notSatisfiedFirstScenario });
+  const reports = reportCommands(commands);
+  assert.equal(reports.length, 1);
+  const statusLine = statusCommands(commands).at(-1);
+  assert.equal(
+    reports[0],
+    `node scripts/scenarios.mjs report --project "Holdout Scenarios" --milestone "Fixture" --sha ${SHA} --scenarios 2 --verdicts ${flag(statusLine, "verdicts")}`,
+  );
+  assert.match(
+    reports[0],
+    /^node scripts\/scenarios\.mjs report --project "[^"`$\\!]+" --milestone "[^"`$\\!]+" --sha [0-9a-f]{40} --scenarios \d+ --verdicts [0-9:sn,]+$/,
+  );
+  // After the status that scored, after the result line; never retried; no command after it but its own logs.
+  const at = (needle) => commands.findIndex((c) => c.includes(needle));
+  assert.ok(at("scenarios.mjs report ") > at("--outcome not-met"));
+  assert.ok(at("--outcome not-met") > at("--verdicts"));
+  for (const command of commands)
+    assert.ok(!command.includes(MARKER), `marker in command: ${command}`);
+  for (const { prompt } of spawns) assert.ok(!prompt.includes(MARKER));
+  assert.equal(result.status, "not-met");
+  assert.deepEqual(result.report, { comment: true, filed: ["KIT-900"], existing: [] });
+  assertNeverLeftPending(commands);
+});
+
+test("a met milestone reports too: the comment is written, no issue is filed", async () => {
+  const { result, commands } = await run();
+  assert.equal(reportCommands(commands).length, 1);
+  assert.deepEqual(result.report, { comment: true, filed: [], existing: [] });
+  assert.equal(result.status, "met");
+});
+
+test("every run judge is told to write its sentence to its own file, and to none other", async () => {
+  const { spawns } = await run();
+  const judges = agentSpawns(spawns).filter((s) => s.options.label.startsWith("judge:"));
+  assert.equal(judges.length, 6);
+  for (const [n, { prompt }] of judges.entries()) {
+    const own = 7001 + n;
+    assert.ok(prompt.includes(`\`.factory/scenario-sentences/${own}.txt\``), `run ${own}`);
+    const named = [...prompt.matchAll(/\.factory\/scenario-sentences\/(\d+)\.txt/g)].map((m) =>
+      Number(m[1]),
+    );
+    assert.deepEqual([...new Set(named)], [own]);
+    // Rule 3 forbids everything outside the evidence, so it must allow this one write by name.
+    const rule3 = prompt.split("\n").find((l) => l.startsWith("3. "));
+    assert.ok(
+      rule3.includes(`except writing your sentence to \`.factory/scenario-sentences/${own}.txt\``),
+      rule3,
+    );
+  }
+});
+
+test("a report that fails does not change the score: Scenarios stays as posted, the note says what to run, the run log says report-failed", async () => {
+  for (const shell of [
+    (c) => (c.includes("scenarios.mjs report ") ? null : undefined),
+    (c) =>
+      c.includes("scenarios.mjs report ")
+        ? { code: 4, line: "UNKNOWN: cannot list the milestone's issues: boom" }
+        : undefined,
+    (c) => (c.includes("scenarios.mjs report ") ? { code: 0, line: "not json" } : undefined),
+    (c) =>
+      c.includes("scenarios.mjs report ")
+        ? {
+            code: 0,
+            line: JSON.stringify({ comment: true, filed: ["KIT-1; rm -rf /"], existing: [] }),
+          }
+        : undefined,
+    (c) =>
+      c.includes("scenarios.mjs report ")
+        ? { code: 0, line: JSON.stringify({ comment: "yes", filed: [], existing: [] }) }
+        : undefined,
+  ]) {
+    const { result, commands } = await run({ shell, judge: notSatisfiedFirstScenario });
+    assert.equal(reportCommands(commands).length, 1, "report must not be retried");
+    assert.equal(result.status, "not-met");
+    assert.equal(result.state, "failure");
+    assert.equal(result.report, undefined);
+    assert.match(result.note, /comment and the failure issues were not written/);
+    assert.match(
+      result.note,
+      /node scripts\/scenarios\.mjs report --project "Holdout Scenarios" --milestone "Fixture" --sha c{40} --scenarios 2 --verdicts 1:n:7001/,
+    );
+    assert.ok(
+      commands.some((c) =>
+        c.includes("reason --milestone holdout-scenarios/fixture --code report-failed"),
+      ),
+    );
+    // The status the score posted is the last one; nothing re-posts it as an error.
+    assert.ok(statusCommands(commands).at(-1).includes("--verdicts"));
+    assertNeverLeftPending(commands);
+  }
 });

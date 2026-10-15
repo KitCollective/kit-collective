@@ -25,19 +25,30 @@
 //       writeScope, project, url }; read-only. Dispatch query:
 //       list --state To-do --label ready-for-agent --unblocked
 //   node scripts/linear.mjs create "<title>" --body-file <path> [--state <name>] [--label <name>]...
-//       [--project <name>] [--parent KIT-n] [--blocked-by KIT-n]...
+//       [--project <name> [--milestone <name>]] [--parent KIT-n] [--blocked-by KIT-n]...
 //       new issue on team KIT (default state Backlog), prints `KIT-n <url>`. Refuses the labels
-//       signal-up and proposal, and ready-for-agent without a write-scope line and acceptance criteria
+//       signal-up and proposal, and ready-for-agent without a write-scope line and acceptance criteria.
+//       --milestone puts it in that milestone of --project (an unknown name is an error)
+//   node scripts/linear.mjs project-comment "<project>" --body-file <path>
+//       one comment on the project, prints `<commentId> <url>`
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { blockArgs, issueIdentifier, optionValue, swapLabelIds } from "./lib/linear-args.mjs";
+import {
+  blockArgs,
+  issueIdentifier,
+  optionValue,
+  readBodyFile,
+  swapLabelIds,
+} from "./lib/linear-args.mjs";
 import {
   createIssue,
+  createProjectComment,
   LinearUsageError,
   listIssues,
   parseCreateArgs,
+  parseProjectCommentArgs,
 } from "./lib/linear-issues.mjs";
 
 const API = "https://api.linear.app/graphql";
@@ -403,9 +414,7 @@ switch (command) {
     break;
   case "create":
     try {
-      const parsed = parseCreateArgs(args, (path) =>
-        existsSync(path) ? readFileSync(path, "utf8") : null,
-      );
+      const parsed = parseCreateArgs(args, readBodyFile);
       const created = await createIssue(gql, parsed, {
         loadIssueId: async (identifier) => (await loadIssue(identifier)).id,
         block: blockIssue,
@@ -416,8 +425,18 @@ switch (command) {
       throw error;
     }
     break;
+  case "project-comment":
+    try {
+      const parsed = parseProjectCommentArgs(args, readBodyFile);
+      const made = await createProjectComment(gql, parsed);
+      process.stdout.write(`${made.id} ${made.url}\n`);
+    } catch (error) {
+      if (error instanceof LinearUsageError) fail(error.message);
+      throw error;
+    }
+    break;
   default:
     fail(
-      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up, relate, block, project, list, create",
+      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up, relate, block, project, list, create, project-comment",
     );
 }

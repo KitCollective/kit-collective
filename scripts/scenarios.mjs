@@ -20,11 +20,14 @@
  * has no Holdout file. 2: usage, an unreadable or malformed file, or `put` onto an existing file. 4: the
  * Holdout cannot be read or written (gh down, no access, repo missing). Format: docs/agents/scenarios.md.
  *
- * Milestone scenarios (KIT-353; the bb workflow .bb/workflows/milestone-scenarios.js runs these):
+ * Milestone scenarios (KIT-353, KIT-354; the bb workflow .bb/workflows/milestone-scenarios.js runs these):
  *   check --project "<name>" --milestone "<name>" --pr <n> [--dir <path>]
  *       refuse (exit 1) unless every issue of the milestone is Done or Canceled, the PR is an open
  *       development → staging PR and the milestone has Scenarios; else ONE JSON line (path, sha, titles,
  *       runsPerScenario, nonce). Reads titles only: no Holdout read is logged.
+ *   report --project "<name>" --milestone "<name>" --sha <sha> --scenarios <n> --verdicts <list> [--dir <path>] [--dry-run]
+ *       after the score: one issue per failed Scenario in the milestone (none for a Scenario that
+ *       already has an open failure issue), then one comment on the project; ONE JSON line
  *   score --scenarios <n> --verdicts <i>:<s|n>:<run>,...   the score as one JSON line; exit 0 met, 1 not
  *   status --sha <sha> (--state pending | --state error [--code c] [--run id] | --scenarios n --verdicts list) [--dry-run]
  *       post the `Scenarios` commit status; the state of a verdict list is worked out, never passed in
@@ -38,12 +41,14 @@ import { randomBytes } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config, linearCli, linearIssue, sh } from "./lib/gate-io.mjs";
@@ -51,10 +56,15 @@ import { GATE_EXIT } from "./lib/gates.mjs";
 import { append, logPath } from "./lib/run-log.mjs";
 import {
   checkDraft,
+  cleanSentence,
   ERROR_CODES,
   FULL_SHA,
+  failureIssueBody,
+  failureTitle,
   MAX_FLOW_CHARS,
   MILESTONE_USAGE,
+  milestoneComment,
+  openFailureIssue,
   PENDING_DESCRIPTION,
   parseArgs,
   parseScenarios,
@@ -65,6 +75,7 @@ import {
   refusePromotionPr,
   renderIssueTitles,
   renderResult,
+  retellsScenario,
   runOutcome,
   scenarioPath,
   scoreVerdicts,
@@ -345,15 +356,26 @@ async function check({ path, pr, project, milestone, dir }) {
   });
 }
 
-/** The score of a verdict list, or the usage verdict that refuses the list. */
-function scoreOf(command, { scenarios, verdicts }) {
-  const { runsPerScenario, satisfiedToMeet } = config().scenarios;
-  const parsed = parseVerdicts(verdicts, { scenarios, runsPerScenario });
+/** The entries of a verdict list, or the usage verdict that refuses the list. */
+function verdictEntries(command, { scenarios, verdicts }) {
+  const parsed = parseVerdicts(verdicts, {
+    scenarios,
+    runsPerScenario: config().scenarios.runsPerScenario,
+  });
   if (parsed.problem) {
     finish(usageLine(command, parsed.problem));
   }
-  return scoreVerdicts(parsed.entries, { scenarios: Number(scenarios), satisfiedToMeet });
+  return parsed.entries;
 }
+
+const scoreEntries = (entries, scenarios) =>
+  scoreVerdicts(entries, {
+    scenarios: Number(scenarios),
+    satisfiedToMeet: config().scenarios.satisfiedToMeet,
+  });
+
+/** The score of a verdict list, or the usage verdict that refuses the list. */
+const scoreOf = (command, args) => scoreEntries(verdictEntries(command, args), args.scenarios);
 
 function score(args) {
   const { description: _d, state: _s, ...answer } = scoreOf("score", args);
@@ -396,6 +418,195 @@ function status(args) {
     posted: !args.dryRun,
     ...(args.dryRun ? { payload } : {}),
     ...score,
+  });
+}
+
+/**
+ * The judge's sentence for a run (`scenario-sentences/<run>.txt` in the work dir), or null when it
+ * is unusable or retells a Scenario (shares RETELL_WORDS consecutive words with its text).
+ */
+function sentenceFile(run, sections) {
+  const file = join(workDir(), "scenario-sentences", `${run}.txt`);
+  try {
+    const sentence = cleanSentence(readFileSync(file, "utf8"));
+    return {
+      file,
+      sentence: sentence && !retellsScenario(sentence, sections) ? sentence : null,
+    };
+  } catch {
+    return { file, sentence: null };
+  }
+}
+
+/** A failed `linear.mjs` call; thrown so `finally` blocks run, then reported as exit 4. */
+class LinearFailure extends Error {}
+
+/** `linear.mjs <args>`, its stdout; throws LinearFailure naming the cause. `done` names what was written already. */
+async function linear(args, what, done = "") {
+  try {
+    return await sh("node", [linearCli(), ...args]);
+  } catch (error) {
+    throw new LinearFailure(`cannot ${what}: ${firstLine(error.stderr || error.message)}${done}`);
+  }
+}
+
+/** A text for `linear.mjs --body-file`: a temp file outside the repo, removed after `use`. */
+async function withBodyFile(text, use) {
+  const dir = mkdtempSync(join(tmpdir(), "kc-report-"));
+  const file = join(dir, "body.md");
+  writeFileSync(file, text, { mode: 0o600 });
+  try {
+    return await use(file);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * After the score: one To-do `ready-for-agent` issue per failed Scenario in the same milestone, then
+ * one comment on the project. The titles are the only thing taken from the Holdout (the full text is
+ * never read here, so no `holdout` read is logged and none could leak); the sentences are the run
+ * judges', read from files and used in issue bodies only. A Scenario with an open failure issue is
+ * not filed again. An existing issue is never moved. Nothing is written when anything is unclear;
+ * a failure part-way names what was filed, and running `report` again files only what is missing.
+ */
+async function report({ path, project, milestone, sha, scenarios, verdicts, dir, dryRun }) {
+  const cfg = config();
+  const entries = verdictEntries("report", { scenarios, verdicts });
+  const scored = scoreEntries(entries, scenarios);
+  const text = dir ? readFromDir(dir, path) : readFromGitHub(cfg.scenarios.holdoutRepo, path);
+  if (text === null) {
+    finish({
+      code: GATE_EXIT.usage,
+      lines: [`MALFORMED: ${path}: no Holdout file, so no Scenario titles`],
+    });
+  }
+  const parsed = parseScenarios(text);
+  if (parsed.problems) {
+    finish(renderResult({ command: "report", path, text }));
+  }
+  const titles = parsed.scenarios.map((s) => s.title);
+  if (titles.length !== scored.scenarios.length) {
+    finish({
+      code: GATE_EXIT.usage,
+      lines: [
+        `MALFORMED: ${path}: the Holdout has ${titles.length} Scenario${titles.length === 1 ? "" : "s"}, the run judged ${scored.scenarios.length}`,
+      ],
+    });
+  }
+
+  const failed = scored.scenarios.filter((s) => !s.met).map((s) => s.index);
+  const sections = parsed.scenarios.flatMap((s) => s.sections);
+  const sentences = new Map(entries.map((e) => [e.run, sentenceFile(e.run, sections)]));
+
+  let issues = [];
+  if (failed.length > 0) {
+    const listed = await linear(
+      ["list", "--project", project, "--milestone", milestone, "--limit", "250"],
+      "list the milestone's issues",
+    );
+    try {
+      issues = JSON.parse(listed);
+    } catch {
+      issues = null;
+    }
+    if (!Array.isArray(issues)) {
+      unknown("cannot list the milestone's issues: the answer is not a list");
+    }
+  }
+
+  const filed = [];
+  const existing = [];
+  const wouldFile = [];
+  for (const index of failed) {
+    const title = titles[index - 1];
+    const open = openFailureIssue(issues, title);
+    if (open) {
+      existing.push(open.identifier);
+      continue;
+    }
+    if (dryRun) {
+      wouldFile.push(failureTitle(title));
+      continue;
+    }
+    const body = failureIssueBody({
+      title,
+      ownerRepo: cfg.github.ownerRepo,
+      sha,
+      scenarioRuns: entries
+        .filter((e) => e.index === index)
+        .map((e) => ({
+          run: e.run,
+          satisfied: e.satisfied,
+          sentence: sentences.get(e.run).sentence,
+        })),
+    });
+    const made = await withBodyFile(body, (file) =>
+      linear(
+        [
+          "create",
+          failureTitle(title),
+          "--body-file",
+          file,
+          "--state",
+          "To-do",
+          "--label",
+          "ready-for-agent",
+          "--project",
+          project,
+          "--milestone",
+          milestone,
+        ],
+        `file the failure issue of Scenario ${index}`,
+        filed.length > 0
+          ? ` (filed already: ${filed.join(", ")}; run report again to file the rest)`
+          : "",
+      ),
+    );
+    const key = /^([A-Z][A-Z0-9]*-\d+)\b/.exec(made.trim())?.[1];
+    if (!key) {
+      unknown(
+        `the failure issue of Scenario ${index} was filed but linear.mjs answered no issue key`,
+      );
+    }
+    filed.push(key);
+  }
+
+  const verdict = `SCENARIOS report ${sha.slice(0, 8)}: Satisfaction ${scored.satisfaction}, ${filed.length} issue${filed.length === 1 ? "" : "s"} filed, ${existing.length} already open`;
+  if (dryRun) {
+    oneLine(GATE_EXIT.open, {
+      verdict,
+      satisfaction: scored.satisfaction,
+      dryRun: true,
+      comment: false,
+      wouldFile,
+      existing,
+    });
+  }
+  const comment = milestoneComment({
+    milestone,
+    sha,
+    satisfaction: scored.satisfaction,
+    failed: failed.map((index) => titles[index - 1]),
+    filed,
+    existing,
+  });
+  await withBodyFile(comment, (file) =>
+    linear(
+      ["project-comment", project, "--body-file", file],
+      "comment on the project",
+      filed.length > 0 ? ` (filed already: ${filed.join(", ")})` : "",
+    ),
+  );
+  for (const { file } of sentences.values()) {
+    rmSync(file, { force: true });
+  }
+  oneLine(GATE_EXIT.open, {
+    verdict,
+    satisfaction: scored.satisfaction,
+    comment: true,
+    filed,
+    existing,
   });
 }
 
@@ -666,7 +877,7 @@ async function wait({ runs, sha, timeout = 480 }) {
   });
 }
 
-const MILESTONE_COMMANDS = { check, score, status, flow, run: runFlow, wait };
+const MILESTONE_COMMANDS = { check, score, status, report, flow, run: runFlow, wait };
 
 const args = parseArgs(process.argv.slice(2));
 if (args.error) {
@@ -702,5 +913,7 @@ try {
   const text = dir ? readFromDir(dir, path) : readFromGitHub(config().scenarios.holdoutRepo, path);
   finish(args.issue ? renderIssueTitles({ path, text }) : renderResult({ command, path, text }));
 } catch (error) {
-  unknown(`scenarios: ${error.message.split("\n")[0]}`);
+  unknown(
+    error instanceof LinearFailure ? error.message : `scenarios: ${error.message.split("\n")[0]}`,
+  );
 }
