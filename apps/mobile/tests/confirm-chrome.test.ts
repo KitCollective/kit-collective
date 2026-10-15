@@ -381,6 +381,19 @@ describe("Confirm chrome", () => {
     expect(existsSync(join(__dirname, "../src/components/confirm-vision-banner.tsx"))).toBe(false);
   });
 
+  it.each(["confirm", "confirm-data", "confirm-details"])(
+    "gives the %s route a fade under reduced motion, with no travel",
+    (screen) => {
+      const layout = readFileSync(captureLayoutPath, "utf8");
+
+      expect(layout).toMatch(
+        new RegExp(
+          `name="${screen}"\\s+options=\\{\\{ headerShown: false, animation: stackScreenMotion\\(reduceMotion\\) \\}\\}`,
+        ),
+      );
+    },
+  );
+
   it("opens club, season, and player as one full-screen picker at a time, not a Sheet", () => {
     const dataScreen = readFileSync(dataScreenPath, "utf8");
     const pickerModal = readFileSync(pickerModalPath, "utf8");

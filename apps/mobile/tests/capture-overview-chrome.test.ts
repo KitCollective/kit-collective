@@ -15,6 +15,12 @@ describe("bulk overview wiring", () => {
     expect(layout).toContain('name="overview"');
   });
 
+  it("gives the overview route a fade under reduced motion, with no travel", () => {
+    expect(layout).toMatch(
+      /name="overview"\s+options=\{\{ headerShown: false, animation: stackScreenMotion\(reduceMotion\) \}\}/,
+    );
+  });
+
   it("runs grouping on the overview and lists rows from the pure derivation", () => {
     expect(overview).toContain("useConfirmGrouping");
     expect(overview).toContain("overviewRows(state)");
