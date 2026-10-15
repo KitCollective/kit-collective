@@ -1,6 +1,6 @@
 # Factory plugin
 
-Kickoff spec, 2026-10-15. Grilled in `/grill-with-docs` the same day; decisions in `docs/adr/0061-the-factory-dispatches-and-owns-gate-verdicts.md`; terms (Factory, Loop, Board, AFK developer, Milestone scenarios) in `CONTEXT.md`. Background: `.scratch/Research/dark-factory.md`.
+Kickoff spec, 2026-10-15. Grilled in `/grill-with-docs` the same day; decisions in `docs/adr/0062-the-factory-dispatches-and-owns-gate-verdicts.md`; terms (Factory, Loop, Board, AFK developer, Milestone scenarios) in `CONTEXT.md`. Background: `.scratch/Research/dark-factory.md`.
 
 ## Problem Statement
 
@@ -48,9 +48,9 @@ One bb plugin, the **Factory**, kept in this repo and tested in its CI. Its **Bo
 
 - **Home and identity.** The Meta Agents source moves into this repo as its own package with plugin id `factory`, CLI `bb factory`, and its own tests. It is installed by path from the main checkout; Meta Agents is removed after the Orchestrator is re-seeded. Product names (team key, workflow names, labels, states, lanes) come from `factory.config.json`, never from plugin code.
 - **Loop registry.** `factory.config.json` gains a `loops` block. Each Loop has a name, a trigger, the workflow it runs, the machines it may use and a live-run cap. Two trigger kinds: *issue* (dispatch state, required label, unblocked, skip labels, priority order, write-scope rules as WORKFLOW.md defines them) and *milestone done* (every issue in a milestone `Done` or `Canceled`), the second shipped disabled. The Board reads the registry from the project checkout each tick and refuses a registry that does not parse. Operating settings (mode, machine capacity, focus milestone) stay plugin settings edited on the page.
-- **Board.** The existing board planner becomes registry-driven instead of one hardcoded workflow; capacity, write-scope overlap, focus milestone and `flow.maxRunsPerDay` keep their current rules. It starts a Loop through a launcher thread (ADR-0061 known limit) and writes every decision to the record of runs.
+- **Board.** The existing board planner becomes registry-driven instead of one hardcoded workflow; capacity, write-scope overlap, focus milestone and `flow.maxRunsPerDay` keep their current rules. It starts a Loop through a launcher thread (ADR-0062 known limit) and writes every decision to the record of runs.
 - **Cutover.** Board in dry-run beside `kit-dispatch.js` for a day with a comparison of their choices; then Board live and the script automation paused in the same slice; the script deleted a week later. `AGENTS.md` and `WORKFLOW.md` change in the live slice to name the Board as dispatcher.
-- **Gate tool.** The Factory registers an agent tool that takes a gate name from a fixed set and validated arguments, runs the repo's gate script on the calling thread's machine in its worktree through the plugin's host worker, and records exit code, verdict line, commit SHA and thread id. AFK developer's hand-over reads this record. A spike first proves the host worker can run a script in a thread's worktree; if not, the decision is reopened (ADR-0061).
+- **Gate tool.** The Factory registers an agent tool that takes a gate name from a fixed set and validated arguments, runs the repo's gate script on the calling thread's machine in its worktree through the plugin's host worker, and records exit code, verdict line, commit SHA and thread id. AFK developer's hand-over reads this record. A spike first proves the host worker can run a script in a thread's worktree; if not, the decision is reopened (ADR-0062).
 - **Record of runs and page.** The Factory's existing ledgers become one record of runs per Loop (start, steps, gate verdicts, stop reason, links). The page lists it with filters per Loop and state.
 - **Standing agents.** Only the Orchestrator is kept, with its brief and memory; stalled-run reports go to its thread as today.
 - **Budget.** No per-Loop token or money budget in this project; `flow.maxRunsPerDay` stays the cap.
@@ -90,4 +90,4 @@ One bb plugin, the **Factory**, kept in this repo and tested in its CI. Its **Bo
 - Until milestone 2 is live, `kit-dispatch.js` keeps dispatching; it already started KIT-347 from Holdout Scenarios.
 - Holdout Scenarios' KIT-350 renames `kit-issue` to AFK developer; the registry names whichever workflow exists when milestone 2 lands.
 - The Meta Agents folder has no commits and no remote; until milestone 1 lands it is one disk failure from gone.
-- ADR numbering: the unmerged `claude/auto-land` branch carries its own `0059-…`; it needs the next free number after 0061 when it lands.
+- ADR numbering: auto-land landed as ADR-0061, so this project's decision is ADR-0062.
