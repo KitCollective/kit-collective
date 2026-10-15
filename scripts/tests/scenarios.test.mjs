@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { basename, delimiter, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { GATE_EXIT } from "../lib/gates.mjs";
@@ -1389,6 +1389,114 @@ test("wait keeps only the screenshots, the recording and its stills in a run's e
     "kc__scn.mp4",
   ]);
   assert.equal(JSON.parse(result.verdict).runs[0].frames, true);
+});
+
+/** Maestro's own output of one failed run, laid out as the hosted artifact holds it (KIT-371). */
+const MAESTRO_OUT = "kit-collective/kit-collective/apps/mobile/.maestro/out/2026-10-15_203230";
+const maestroTree = (flow) => ({
+  [`${MAESTRO_OUT}/${flow}/screenshots/step-071-assertCondition-x.png`]: "failing step",
+  [`${MAESTRO_OUT}/${flow}/screenshots/step-060-assertCondition-y.png`]: "earlier step",
+  [`${MAESTRO_OUT}/${flow}/screen-hierarchy/step-071-assertCondition-x.json`]: "{}",
+  [`${MAESTRO_OUT}/${flow}/commands.json`]: "[]",
+  [`${MAESTRO_OUT}/${flow}/manifest.json`]: "{}",
+  [`${MAESTRO_OUT}/${flow}/logs/maestro.log`]: "log",
+  [`${MAESTRO_OUT}/xctest_runner_2026-10-15_203242.log`]: "log",
+  "_temp/local-api.log": "api log",
+});
+
+/** Every file left under a run's evidence folder, sorted. */
+const evidenceFiles = (evidence) =>
+  readdirSync(evidence, { recursive: true })
+    .map(String)
+    .filter((f) => statSync(join(evidence, f)).isFile())
+    .sort();
+
+test("wait keeps Maestro's step screenshots under a name with no flow text, and deletes the rest of its output", () => {
+  const { work, env } = workEnv();
+  const rules = finished(11, { conclusion: "failure" });
+  rules[2].answers = [
+    {
+      files: {
+        [`${MAESTRO_OUT}/scn-0a1b2c3d-1/takeScreenshot/kc__scn-0a1b2c3d-1__01-start.png`]: "png",
+        ...maestroTree("scn-0a1b2c3d-1"),
+      },
+    },
+  ];
+  const gh = scriptedGh(rules);
+  const result = run(["wait", "--runs", "11", "--sha", SHA40, "--timeout", "60"], {
+    env: { ...env, ...gh.env },
+  });
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  assert.equal(JSON.parse(result.verdict).runs[0].outcome, "flow-failed");
+  const evidence = join(work, "scenario-runs", "11");
+  const flowDir = `${MAESTRO_OUT}/scn-0a1b2c3d-1`;
+  assert.deepEqual(evidenceFiles(evidence), [
+    `${flowDir}/screenshots/kc__scn-0a1b2c3d-1__failure-01.png`,
+    `${flowDir}/screenshots/kc__scn-0a1b2c3d-1__failure-02.png`,
+    `${flowDir}/takeScreenshot/kc__scn-0a1b2c3d-1__01-start.png`,
+  ]);
+  // Numbered by Maestro's step order: the last is the screen at the failing step.
+  const shot = (n) =>
+    readFileSync(
+      join(evidence, flowDir, "screenshots", `kc__scn-0a1b2c3d-1__failure-${n}.png`),
+      "utf8",
+    );
+  assert.equal(shot("01"), "earlier step");
+  assert.equal(shot("02"), "failing step");
+  const paths = readdirSync(evidence, { recursive: true }).map(String);
+  assert.ok(
+    paths.every((p) => !p.includes("assertCondition")),
+    paths.join("\n"),
+  );
+});
+
+test("wait names a Maestro screenshot `maestro` when its flow folder is not a flow name", () => {
+  const { work, env } = workEnv();
+  const rules = finished(11, { conclusion: "failure" });
+  rules[2].answers = [{ files: maestroTree("Some Flow Title") }];
+  const gh = scriptedGh(rules);
+  const result = run(["wait", "--runs", "11", "--sha", SHA40, "--timeout", "60"], {
+    env: { ...env, ...gh.env },
+  });
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  const files = evidenceFiles(join(work, "scenario-runs", "11"));
+  assert.deepEqual(
+    files.map((f) => basename(f)),
+    ["kc__maestro__failure-01.png", "kc__maestro__failure-02.png"],
+  );
+});
+
+test("wait: a failed run with no screenshot at all is a hosted-run-error, never judged, and stays one on a resume", () => {
+  const { work, env } = workEnv();
+  const rules = [...finished(11), ...finished(12, { conclusion: "failure" })];
+  rules[5].answers = [
+    {
+      files: {
+        [`${MAESTRO_OUT}/xctest_runner_2026-10-15_203146.log`]: "driver did not start",
+        "_temp/local-api.log": "api log",
+      },
+    },
+  ];
+  for (let slice = 1; slice <= 2; slice += 1) {
+    const gh = scriptedGh(rules);
+    const result = run(["wait", "--runs", "11,12", "--sha", SHA40, "--timeout", "60"], {
+      env: { ...env, ...gh.env },
+    });
+    assert.equal(result.status, GATE_EXIT.closed, result.stdout);
+    assert.equal(result.lines.length, 1);
+    assert.match(result.verdict, /^ERROR: hosted-run-error: run 12 failed with no screenshot/);
+    assert.ok(!existsSync(join(work, "scenario-runs", "12")), `slice ${slice} kept the evidence`);
+    assert.ok(!existsSync(join(work, "scenario-runs", "12.done")), `slice ${slice} marked 12 done`);
+    assert.ok(existsSync(join(work, "scenario-runs", "11.done")));
+  }
+  // A passed run without a screenshot is still judged: it ran to its end.
+  const passed = workEnv();
+  const quiet = finished(13);
+  quiet[2].answers = [{ files: { "_temp/local-api.log": "api log" } }];
+  const ok = run(["wait", "--runs", "13", "--sha", SHA40, "--timeout", "60"], {
+    env: { ...passed.env, ...scriptedGh(quiet).env },
+  });
+  assert.equal(ok.status, GATE_EXIT.open, ok.stdout);
 });
 
 test("wait has one deadline: a slow download or ffmpeg is exit 3 inside --timeout, and the next slice resumes", () => {
