@@ -865,7 +865,7 @@ test("a fresh run never asks for the workpad plan, and skipLead still skips the 
   assert.ok(!skip.commands.some(planCheck));
 });
 
-// ---- autoLand (ADR-0060) --------------------------------------------------------------------------------
+// ---- autoLand (ADR-0061) --------------------------------------------------------------------------------
 
 const autoLandShell =
   ({

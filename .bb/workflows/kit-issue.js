@@ -1,7 +1,7 @@
 export const meta = {
   name: "kit-issue",
   description:
-    "One KIT issue from To-do to Approval, or with autoLand on to Done: session-check, Lead, Engineer, pre-review gate, Reviewer, review gate, audit receipt dry-run, then Approval (default) or scripts/auto-land.mjs, the only thing that may post the receipt, set Merging and enqueue (ADR-0058, ADR-0060).",
+    "One KIT issue from To-do to Approval, or with autoLand on to Done: session-check, Lead, Engineer, pre-review gate, Reviewer, review gate, audit receipt dry-run, then Approval (default) or scripts/auto-land.mjs, the only thing that may post the receipt, set Merging and enqueue (ADR-0058, ADR-0061).",
   inputSchema: {
     type: "object",
     required: ["issue"],
@@ -51,7 +51,7 @@ export const meta = {
 // This workflow is the orchestrator of ADR-0052: its runner workers are the only writers of the
 // run log. By default it stops at Approval and landing stays human-started (/issue-session -> Merging -> /land).
 // With the `autoLand` arg (or flow.autoLand.enabled) it hands a green issue to scripts/auto-land.mjs, which
-// re-checks everything itself (ADR-0060). THIS SCRIPT STILL NEVER posts a receipt, sets Merging or Done, or
+// re-checks everything itself (ADR-0061). THIS SCRIPT STILL NEVER posts a receipt, sets Merging or Done, or
 // merges: MAY_SET has no such state and no command below names `gh pr merge`; only auto-land.mjs does those.
 
 const ISSUE = /^[A-Z][A-Z0-9]*-\d+$/;
@@ -714,7 +714,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
   });
 }
 
-// ---- Auto-land (ADR-0060) -------------------------------------------------------------------------
+// ---- Auto-land (ADR-0061) -------------------------------------------------------------------------
 // Everything that matters is enforced inside scripts/auto-land.mjs, which re-checks the issue, the PR, the
 // receipt and the gate itself. The workflow only starts it and reports; a runner that lies about an exit code
 // cannot cause a merge, and none of these commands is idempotent, so a runner that returns nothing is never retried.

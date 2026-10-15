@@ -1,5 +1,5 @@
 /**
- * Pure decisions behind `scripts/auto-land.mjs` (ADR-0060). Every function takes what it needs as
+ * Pure decisions behind `scripts/auto-land.mjs` (ADR-0061). Every function takes what it needs as
  * data and returns either `null` (the condition holds) or a refusal `{ code, line }`; the CLI
  * gathers the data from GitHub, git, Linear and the run log, runs these in the documented order
  * and stops at the first refusal. Nothing here reads a result relayed by a model.

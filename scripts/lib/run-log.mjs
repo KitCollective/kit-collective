@@ -31,7 +31,7 @@ export const OUTCOMES = [
 ];
 export const GATES = ["review", "pre-review", "land", "session", "head", "scope", "checks"];
 export const GATE_OUTCOMES = ["open", "closed"];
-/** What `scripts/auto-land.mjs` logs (ADR-0060): `start` is an enqueue and is what the daily cap counts. */
+/** What `scripts/auto-land.mjs` logs (ADR-0061): `start` is an enqueue and is what the daily cap counts. */
 export const AUTO_LAND_OUTCOMES = ["start", "landed", "refused", "alarm", "breaker-reset"];
 
 /** Fixed reason codes. A row that failed an audit is `row-<lock row id>`. */

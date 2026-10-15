@@ -48,7 +48,7 @@ The issue is claimed and being coded, including after a review or merge failure.
 _Avoid_: Implementing
 
 **Approval**:
-Waiting for a human, at any stage (renamed from Ready for merge, and now cross-stage). Three shapes: `needs-info` (the agent asks a question), `ready-for-human` (the agent needs a yes/no decision or permission, including a lead `plan-approval`), or neither (review is green and the approver may merge). What is asked and the stage it came from go under workpad `### Waiting`. The human answers in a Linear comment and moves the issue to `To-do` (any answer goes back to To-do, never to a specific stage), or to `Merging` to approve the merge. `Approval` is never merge permission by itself; only the move to `Merging` is. With auto-land enabled the normal path does not stop here: `Approval` is the exception exit, used when a rule was exceeded or a person is genuinely needed (ADR-0060).
+Waiting for a human, at any stage (renamed from Ready for merge, and now cross-stage). Three shapes: `needs-info` (the agent asks a question), `ready-for-human` (the agent needs a yes/no decision or permission, including a lead `plan-approval`), or neither (review is green and the approver may merge). What is asked and the stage it came from go under workpad `### Waiting`. The human answers in a Linear comment and moves the issue to `To-do` (any answer goes back to To-do, never to a specific stage), or to `Merging` to approve the merge. `Approval` is never merge permission by itself; only the move to `Merging` is. With auto-land enabled the normal path does not stop here: `Approval` is the exception exit, used when a rule was exceeded or a person is genuinely needed (ADR-0061).
 _Avoid_: Ready for merge; reading an issue in `Approval` as merge permission; answering by moving the card to a specific stage
 
 **Blocked**:
@@ -60,11 +60,11 @@ What an `Approval` issue is waiting for: what is asked, the stage it came from, 
 _Avoid_: asking the question only in a comment; leaving the label on after the answer
 
 **Merging**:
-The approver moved the issue here from `Approval`, or `scripts/auto-land.mjs` set it after re-checking every condition itself (ADR-0060): this is merge permission (the PRs are opened with the approver's own GitHub account, so GitHub's approving review cannot be used). The PR is enqueued and stays `Merging` until GitHub says `MERGED`.
+The approver moved the issue here from `Approval`, or `scripts/auto-land.mjs` set it after re-checking every condition itself (ADR-0061): this is merge permission (the PRs are opened with the approver's own GitHub account, so GitHub's approving review cannot be used). The PR is enqueued and stays `Merging` until GitHub says `MERGED`.
 _Avoid_: using a GitHub review approval as merge permission; setting `Merging` from the workflow, a thread or an automation instead of a person or auto-land
 
 **Auto-land**:
-`scripts/auto-land.mjs` (ADR-0060): the only thing besides a person that sets `Merging`. `start` re-reads the PR, the issue, the risk class, the independent reviewer, the audit receipt, the review gate, the runaway ceiling and the circuit breaker itself and refuses with one verdict line if any fails; `finish` waits for the merge and the integration check, sets `Done`, or raises the alarm (`Approval` + `ready-for-human`). Off by default (`flow.autoLand.enabled`, the `autoLand` workflow input, the `hold` label, the file `auto-land.off` in the gitignored `.factory` folder of the main checkout). `Approval` stays the exception exit.
+`scripts/auto-land.mjs` (ADR-0061): the only thing besides a person that sets `Merging`. `start` re-reads the PR, the issue, the risk class, the independent reviewer, the audit receipt, the review gate, the runaway ceiling and the circuit breaker itself and refuses with one verdict line if any fails; `finish` waits for the merge and the integration check, sets `Done`, or raises the alarm (`Approval` + `ready-for-human`). Off by default (`flow.autoLand.enabled`, the `autoLand` workflow input, the `hold` label, the file `auto-land.off` in the gitignored `.factory` folder of the main checkout). `Approval` stays the exception exit.
 _Avoid_: reading a green relayed gate result as enough; auto-land for a high-risk, `surface:mobile` or oversize change; calling it Auto-merge (the archived worker rule below)
 
 **Post-Merge**:

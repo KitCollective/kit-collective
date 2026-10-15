@@ -2,7 +2,7 @@
 
 > **Archived runtime (2026-09-01).** The PI worker described below was removed from this repo and its host was decommissioned; see `pi-harness-archived.md`. Nothing dispatches issues automatically today. The live path is Desktop `/issue-session`. This file is kept as the contract a future worker must meet and as a cookbook for the role prompts.
 
-> **Auto-merge below is the archived worker's rule.** The live equivalent is `scripts/auto-land.mjs` (ADR-0060): off by default, enforced inside the script instead of by a relayed result, `Approval` kept as the exception exit. See `docs/agents/bb-harness.md`.
+> **Auto-merge below is the archived worker's rule.** The live equivalent is `scripts/auto-land.mjs` (ADR-0061): off by default, enforced inside the script instead of by a relayed result, `Approval` kept as the exception exit. See `docs/agents/bb-harness.md`.
 
 The dispatch runtime is the **PI worker** on kit-harness: Docker Compose + `gh` + Linear CLI. `.pi/mcp.json` is empty — Linear MCP is not installed on that box. Do **not** treat Cursor Cloud Agents as factory dispatch.
 
