@@ -52,6 +52,6 @@ node scripts/scenarios.mjs read   --project "Holdout Scenarios" --milestone "Hol
 | 0 | `SCENARIOS <command> <path>: no Scenarios (no Holdout file)` | The milestone has no Holdout file. Not an error |
 | 2 | `USAGE: ...` | Unknown subcommand, a missing flag or a name with no letter or digit |
 | 2 | `MALFORMED: <path>: <first problem> (+n more)` | The file breaks the format. Nothing from it is printed |
-| 4 | `UNKNOWN: cannot read <repo>: <cause>` | gh is down, the token has no access, the repo does not exist, or `--dir` is not a directory |
+| 4 | `UNKNOWN: cannot read <repo or file>: <cause>` | gh is down, the token has no access, the repo does not exist, `--dir` is not a directory, or the milestone file exists but cannot be read. Any other unexpected error is also exit 4 with one `UNKNOWN:` line, never a stack trace |
 
 The codes are ADR-0053's (`GATE_EXIT` in `scripts/lib/gates.mjs`). Exit 1 is not used: nothing here is a "no" verdict until the Scenario judge scores Satisfaction.

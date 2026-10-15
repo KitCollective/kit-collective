@@ -31,7 +31,14 @@ function readFromDir(dir, path) {
     unknown(`cannot read ${dir}: not a directory`);
   }
   const file = join(dir, path);
-  return existsSync(file) ? readFileSync(file, "utf8") : null;
+  if (!existsSync(file)) {
+    return null;
+  }
+  try {
+    return readFileSync(file, "utf8");
+  } catch (error) {
+    return unknown(`cannot read ${file}: ${error.code ?? error.message}`);
+  }
 }
 
 function readFromGitHub(repo, path) {
@@ -62,6 +69,11 @@ if (args.error) {
   finish({ code: GATE_EXIT.usage, lines: [args.error] });
 }
 
-const { command, path, dir } = args;
-const text = dir ? readFromDir(dir, path) : readFromGitHub(config().scenarios.holdoutRepo, path);
-finish(renderResult({ command, path, text }));
+// Every path ends in one verdict line: an error nothing above expected is exit 4, never a stack trace.
+try {
+  const { command, path, dir } = args;
+  const text = dir ? readFromDir(dir, path) : readFromGitHub(config().scenarios.holdoutRepo, path);
+  finish(renderResult({ command, path, text }));
+} catch (error) {
+  unknown(`scenarios: ${error.message.split("\n")[0]}`);
+}

@@ -248,8 +248,8 @@ git -C "$DIR" commit -qm "README and fixture milestone file"
 git -C "$DIR" push -u origin HEAD:main
 
 stage "Check the read"
-say "Reads the fixture the way the scenarios CLI does."
-gh api repos/KitCollective/kit-scenarios/contents/holdout-scenarios/fixture.md -H "Accept: application/vnd.github.raw" | head -3
-note "Run the same command on the Mac and on the bb-harness machine. A 404 or 403 means that machine's GH_TOKEN lacks repo access: name it in the PR."
+say "Reads the fixture with the scenarios CLI."
+node scripts/scenarios.mjs titles --project "Holdout Scenarios" --milestone Fixture
+note "Run the same command from a kit-collective checkout on the Mac and on the bb-harness machine. Exit 4 means that machine's GH_TOKEN lacks repo access: name it in the PR."
 
 finish

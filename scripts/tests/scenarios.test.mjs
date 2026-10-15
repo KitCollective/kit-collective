@@ -188,6 +188,17 @@ test("a --dir that does not exist is exit 4, not 'no Scenarios'", () => {
   assert.match(result.verdict, /^UNKNOWN: /);
 });
 
+test("a milestone file that exists but cannot be read is exit 4 with one verdict line, not a crash", () => {
+  const dir = holdout();
+  mkdirSync(join(dir, "holdout-scenarios", "holdout.md"), { recursive: true });
+  for (const command of ["titles", "read"]) {
+    const result = run([command, ...MILESTONE], { dir });
+    assert.equal(result.status, GATE_EXIT.unknown);
+    assert.match(result.verdict, /^UNKNOWN: cannot read .*holdout\.md: /);
+    assert.equal(result.stderr, "");
+  }
+});
+
 /** A fake `gh` on PATH. `contents` answers the file read, `repo` the repo probe. */
 function fakeGh({ contents, repo }) {
   const dir = mkdtempSync(join(tmpdir(), "fake-gh-"));
