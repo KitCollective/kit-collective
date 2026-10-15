@@ -9,7 +9,7 @@ import { GATE_EXIT } from "./gates.mjs";
 export const SECTIONS = ["Starting situation", "Actions", "End state"];
 
 export const USAGE =
-  'USAGE: node scripts/scenarios.mjs titles|read --project "<name>" --milestone "<name>" [--dir <path>]';
+  'USAGE: node scripts/scenarios.mjs titles|read|put --project "<name>" --milestone "<name>" [--dir <path>] (put also needs --file <draft>)';
 
 /** A Linear name as a path part: lowercased, runs of non-alphanumerics to one dash, no edge dashes. */
 export const slug = (name) =>
@@ -110,10 +110,36 @@ export function renderResult({ command, path, text }) {
   };
 }
 
-/** Parse argv (after the script name). Returns `{ command, project, milestone, dir }` or `{ error }`. */
+/** The one verdict line of a `put` that wrote `n` Scenarios to `path`. */
+export const putVerdict = (path, n) => ({
+  code: GATE_EXIT.open,
+  lines: [`SCENARIOS put ${path}: ${plural(n)}`],
+});
+
+/** What `put` does with a draft: the Scenario count to write, or the verdict that refuses it. */
+export function checkDraft({ path, text }) {
+  const parsed = parseScenarios(text);
+  if (parsed.problems) {
+    const [first, ...rest] = parsed.problems;
+    const more = rest.length > 0 ? ` (+${rest.length} more)` : "";
+    return { verdict: { code: GATE_EXIT.usage, lines: [`MALFORMED: ${path}: ${first}${more}`] } };
+  }
+  return { count: parsed.scenarios.length };
+}
+
+/** The verdict of a `put` onto a milestone that already has a Holdout file. */
+export const refusedVerdict = (path) => ({
+  code: GATE_EXIT.usage,
+  lines: [`REFUSED: ${path} already exists in the Holdout; put only creates a milestone's file`],
+});
+
+/**
+ * Parse argv (after the script name). Returns `{ command, path, dir, file }` or `{ error }`.
+ * `--file` is required for `put` and refused for `titles` and `read`.
+ */
 export function parseArgs(argv) {
   const [command, ...rest] = argv;
-  if (command !== "titles" && command !== "read") {
+  if (!["titles", "read", "put"].includes(command)) {
     return { error: USAGE };
   }
   const values = {};
@@ -121,7 +147,7 @@ export function parseArgs(argv) {
     const flag = rest[i];
     const value = rest[i + 1];
     if (
-      !["--project", "--milestone", "--dir"].includes(flag) ||
+      !["--project", "--milestone", "--dir", "--file"].includes(flag) ||
       value === undefined ||
       value.startsWith("--")
     ) {
@@ -131,5 +157,8 @@ export function parseArgs(argv) {
   }
   const path =
     values.project && values.milestone ? scenarioPath(values.project, values.milestone) : null;
-  return path ? { command, path, dir: values.dir } : { error: USAGE };
+  if (!path || (command === "put") !== Boolean(values.file)) {
+    return { error: USAGE };
+  }
+  return { command, path, dir: values.dir, file: values.file };
 }

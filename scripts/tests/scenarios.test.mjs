@@ -209,8 +209,8 @@ test("a milestone file that exists but cannot be read is exit 4 with one verdict
   }
 });
 
-/** A fake `gh` on PATH. `contents` answers the file read, `repo` the repo probe. */
-function fakeGh({ contents, repo }) {
+/** A fake `gh` on PATH. `contents` answers the file read, `repo` the repo probe, `put` the write. */
+function fakeGh({ contents, repo, put }) {
   const dir = mkdtempSync(join(tmpdir(), "fake-gh-"));
   const path = join(dir, "gh");
   const answer = (spec, name) => {
@@ -223,6 +223,7 @@ function fakeGh({ contents, repo }) {
     `#!/bin/sh
 echo "$@" >> "${join(dir, "calls.log")}"
 case "$*" in
+  *PUT*) ${put ? answer(put, "put") : "exit 99"} ;;
   *contents*) ${answer(contents, "contents")} ;;
   *) ${answer(repo, "repo")} ;;
 esac
@@ -360,4 +361,119 @@ test("read with a usage error writes no line", () => {
   });
   assert.equal(result.status, GATE_EXIT.usage);
   assert.equal(existsSync(log), false);
+});
+
+/** A `--file` draft outside the repo and the Holdout, as the skill writes it. */
+function draft(text) {
+  const file = join(mkdtempSync(join(tmpdir(), "scenarios-draft-")), "draft.md");
+  writeFileSync(file, text);
+  return file;
+}
+
+const PUT_PATH = "holdout-scenarios/holdout.md";
+const putArgs = (file) => ["put", ...MILESTONE, "--file", file];
+
+test("put creates the milestone file, and read gives the same Scenarios back", () => {
+  const dir = holdout();
+  const put = run(putArgs(draft(`${SCENARIO_A}\n${SCENARIO_B}`)), { dir });
+  assert.equal(put.status, GATE_EXIT.open);
+  assert.deepEqual(put.lines, [`SCENARIOS put ${PUT_PATH}: 2 Scenarios`]);
+  const read = run(["read", ...MILESTONE], { dir });
+  assert.equal(read.status, GATE_EXIT.open);
+  assert.ok(read.stdout.includes("The Collector removes the Kit."));
+  assert.ok(read.stdout.includes("## A Collector adds a shirt"));
+  assert.match(read.verdict, /: 2 Scenarios$/);
+});
+
+test("put refuses a malformed file with exit 2 and writes nothing", () => {
+  const dir = holdout();
+  const result = run(putArgs(draft("## No sections\n")), { dir });
+  assert.equal(result.status, GATE_EXIT.usage);
+  assert.match(result.verdict, /^MALFORMED: holdout-scenarios\/holdout\.md: /);
+  assert.equal(existsSync(join(dir, PUT_PATH)), false);
+});
+
+test("put refuses to overwrite an existing milestone file: exit 2 REFUSED, file unchanged", () => {
+  const dir = holdout(SCENARIO_A);
+  const result = run(putArgs(draft(SCENARIO_B)), { dir });
+  assert.equal(result.status, GATE_EXIT.usage);
+  assert.match(result.verdict, /^REFUSED: holdout-scenarios\/holdout\.md already exists/);
+  assert.equal(readFileSync(join(dir, PUT_PATH), "utf8"), SCENARIO_A);
+});
+
+test("put needs a readable --file; --file is refused for titles and read", () => {
+  const dir = holdout();
+  const bad = [
+    ["put", ...MILESTONE],
+    ["put", ...MILESTONE, "--file", join(tmpdir(), "scenarios-no-such-draft.md")],
+    ["titles", ...MILESTONE, "--file", draft(SCENARIO_A)],
+    ["read", ...MILESTONE, "--file", draft(SCENARIO_A)],
+  ];
+  for (const args of bad) {
+    const result = run(args, { dir });
+    assert.equal(result.status, GATE_EXIT.usage, JSON.stringify(args));
+    assert.match(result.verdict, /^(USAGE|UNREADABLE): /, JSON.stringify(args));
+  }
+  assert.equal(existsSync(join(dir, PUT_PATH)), false);
+});
+
+test("put prints no Scenario text and writes no run-log line", () => {
+  const log = tmpLog();
+  const result = run(putArgs(draft(SCENARIO_A)), { dir: holdout(), env: { KC_RUN_LOG: log } });
+  assert.equal(result.status, GATE_EXIT.open);
+  assert.equal(result.lines.length, 1);
+  assert.ok(!result.stdout.includes("empty Collection"));
+  assert.equal(existsSync(log), false);
+});
+
+test("gh: put on a missing file does one PUT of the base64 file to the Holdout repo", () => {
+  const gh = fakeGh({
+    contents: { ok: false, error: "gh: Not Found (HTTP 404)" },
+    repo: { ok: true, body: "{}" },
+    put: { ok: true, body: "{}" },
+  });
+  const text = `${SCENARIO_A}\n${SCENARIO_B}`;
+  const result = run(putArgs(draft(text)), { env: gh.env });
+  assert.equal(result.status, GATE_EXIT.open);
+  assert.deepEqual(result.lines, [`SCENARIOS put ${PUT_PATH}: 2 Scenarios`]);
+  const puts = gh
+    .calls()
+    .split("\n")
+    .filter((line) => line.includes("PUT"));
+  assert.equal(puts.length, 1);
+  assert.ok(puts[0].includes(`repos/KitCollective/kit-scenarios/contents/${PUT_PATH}`));
+  const content = /content=(\S+)/.exec(puts[0])[1];
+  assert.equal(Buffer.from(content, "base64").toString("utf8"), text);
+});
+
+test("gh: put on an existing file is REFUSED with no PUT", () => {
+  const gh = fakeGh({
+    contents: { ok: true, body: SCENARIO_A },
+    repo: { ok: true, body: "{}" },
+    put: { ok: true, body: "{}" },
+  });
+  const result = run(putArgs(draft(SCENARIO_B)), { env: gh.env });
+  assert.equal(result.status, GATE_EXIT.usage);
+  assert.match(result.verdict, /^REFUSED: /);
+  assert.ok(!gh.calls().includes("PUT"));
+});
+
+test("gh: put that cannot reach or write the repo is exit 4 with the cause", () => {
+  const down = fakeGh({
+    contents: { ok: false, error: "gh: Bad credentials (HTTP 401)" },
+    repo: { ok: false, error: "gh: Bad credentials (HTTP 401)" },
+  });
+  const probe = run(putArgs(draft(SCENARIO_A)), { env: down.env });
+  assert.equal(probe.status, GATE_EXIT.unknown);
+  assert.match(probe.verdict, /^UNKNOWN: cannot read KitCollective\/kit-scenarios: .*401/);
+
+  const noWrite = fakeGh({
+    contents: { ok: false, error: "gh: Not Found (HTTP 404)" },
+    repo: { ok: true, body: "{}" },
+    put: { ok: false, error: "gh: Resource not accessible (HTTP 403)" },
+  });
+  const write = run(putArgs(draft(SCENARIO_A)), { env: noWrite.env });
+  assert.equal(write.status, GATE_EXIT.unknown);
+  assert.match(write.verdict, /^UNKNOWN: cannot write KitCollective\/kit-scenarios: .*403/);
+  assert.equal(write.lines.length, 1);
 });
