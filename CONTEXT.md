@@ -100,7 +100,7 @@ Worker moving Approval → Merging when the PR is MERGEABLE, required checks are
 _Avoid_: force-push; treating Auto-merge as land; requiring Pi delegate for flip
 
 **Promotion**:
-A Linear **milestone** complete → `staging`; release helper → `production`. Separate from land. Not the whole project at once.
+A Linear **milestone** complete → `staging`; release helper → `production`. Separate from land. Not the whole project at once. The `development → staging` PR merges only with a green `Scenarios` from Milestone scenarios, and only by a person.
 _Avoid_: deploy, release PR as a synonym for land, treating the Linear project as one staging dump
 
 **Triage** *(Linear state)*:
@@ -194,7 +194,7 @@ The set of Scenarios, kept outside this repo, that implementing and reviewing ag
 _Avoid_: hidden tests; Scenarios in this repo; claiming the Holdout cannot be read
 
 **Satisfaction**:
-The fraction of Scenario runs the Scenario judge scores as giving the Collector what the Scenario promises, for one milestone on one `development` SHA. Replaces "green" as the promotion signal.
+The fraction of Scenario runs the Scenario judge scores as giving the Collector what the Scenario promises, for one milestone on one `development` SHA. Reported on the promotion PR, never the gate: the milestone promotes only when every Scenario is met (ADR-0060).
 _Avoid_: pass rate, green, coverage; confusing it with a Vision eval (which scores Vision labels at Save)
 
 **Scenario judge**:
