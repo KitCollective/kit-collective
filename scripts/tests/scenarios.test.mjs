@@ -477,3 +477,148 @@ test("gh: put that cannot reach or write the repo is exit 4 with the cause", () 
   assert.match(write.verdict, /^UNKNOWN: cannot write KitCollective\/kit-scenarios: .*403/);
   assert.equal(write.lines.length, 1);
 });
+
+// ---- titles --issue (KIT-351): the milestone of a Linear issue, as one JSON line ----------------
+
+/** A fake Linear CLI that answers `issue <KEY>` with `issue` as JSON, or fails when it is null. */
+function fakeLinear(issue) {
+  const dir = mkdtempSync(join(tmpdir(), "scenarios-linear-"));
+  const file = join(dir, "linear.mjs");
+  writeFileSync(
+    file,
+    issue === null
+      ? 'process.stderr.write("linear: unauthorized\\n"); process.exit(1);\n'
+      : `process.stdout.write(${JSON.stringify(JSON.stringify(issue))});\n`,
+  );
+  return { KC_LINEAR_CLI: file };
+}
+
+const HOLDOUT_ISSUE = { identifier: "KIT-9", project: "Holdout Scenarios", milestone: "Holdout" };
+const issueArgs = ["titles", "--issue", "KIT-9"];
+
+test("titles --issue prints one JSON line with the milestone's titles and no section text", () => {
+  const dir = holdout(`${SCENARIO_A}\n${SCENARIO_B}`);
+  const result = run(issueArgs, { dir, env: fakeLinear(HOLDOUT_ISSUE) });
+  assert.equal(result.status, GATE_EXIT.open);
+  assert.equal(result.lines.length, 1, "more than one line on stdout");
+  assert.deepEqual(JSON.parse(result.verdict), {
+    verdict: "SCENARIOS titles holdout-scenarios/holdout.md: 2 Scenarios",
+    path: "holdout-scenarios/holdout.md",
+    titles: ["A Collector adds a shirt", "A Collector removes a shirt"],
+  });
+  for (const hidden of ["empty Collection", "taps Add", "Starting situation", "End state"]) {
+    assert.ok(!result.stdout.includes(hidden), `titles --issue leaked "${hidden}"`);
+  }
+});
+
+test("titles --issue carries seven real-length titles on one line", () => {
+  const titles = [
+    "A Collector edits one fact on their own jersey",
+    "A Collector adds a home shirt from a photo",
+    "A Collector removes a shirt from the Collection",
+    "A Collector corrects a wrong season on a Kit",
+    "A Collector sees the Kit's labels after saving",
+    "A Collector adds a second photo to an existing Kit",
+    "A Collector opens the Collection with no Kits yet",
+  ];
+  const file = titles
+    .map(
+      (t) => `## ${t}\n\n### Starting situation\n\nx\n\n### Actions\n\ny\n\n### End state\n\nz\n`,
+    )
+    .join("\n");
+  const result = run(issueArgs, { dir: holdout(file), env: fakeLinear(HOLDOUT_ISSUE) });
+  assert.equal(result.lines.length, 1);
+  assert.deepEqual(JSON.parse(result.verdict).titles, titles);
+});
+
+test("titles --issue: no Holdout file is exit 0 with titles []", () => {
+  const result = run(issueArgs, { dir: holdout(), env: fakeLinear(HOLDOUT_ISSUE) });
+  assert.equal(result.status, GATE_EXIT.open);
+  assert.equal(result.lines.length, 1);
+  assert.deepEqual(JSON.parse(result.verdict), {
+    verdict: "SCENARIOS titles holdout-scenarios/holdout.md: no Scenarios (no Holdout file)",
+    path: "holdout-scenarios/holdout.md",
+    titles: [],
+  });
+});
+
+test("titles --issue: an issue without a milestone (or project) is exit 0, path null, titles []", () => {
+  for (const issue of [
+    { project: "Holdout Scenarios", milestone: null },
+    { project: null, milestone: null },
+  ]) {
+    const result = run(issueArgs, { dir: holdout(), env: fakeLinear(issue) });
+    assert.equal(result.status, GATE_EXIT.open);
+    const answer = JSON.parse(result.verdict);
+    assert.equal(answer.path, null);
+    assert.deepEqual(answer.titles, []);
+    assert.match(answer.verdict, /no Scenarios \(the issue has no project or milestone\)$/);
+  }
+});
+
+test("titles --issue: a malformed file or an unreadable Linear is the usual one-line verdict, never Scenario text", () => {
+  const malformed = run(issueArgs, {
+    dir: holdout(SCENARIO_A.replace("The Collection shows one Kit.", "")),
+    env: fakeLinear(HOLDOUT_ISSUE),
+  });
+  assert.equal(malformed.status, GATE_EXIT.usage);
+  assert.equal(malformed.lines.length, 1);
+  assert.match(malformed.verdict, /^MALFORMED: holdout-scenarios\/holdout\.md: /);
+  assert.ok(!malformed.stdout.includes("Test Collector"));
+
+  const down = run(issueArgs, { dir: holdout(), env: fakeLinear(null) });
+  assert.equal(down.status, GATE_EXIT.unknown);
+  assert.equal(down.lines.length, 1);
+  assert.match(down.verdict, /^UNKNOWN: cannot read KIT-9 from Linear: /);
+
+  const noDir = run(issueArgs, { dir: "/nonexistent-holdout-dir", env: fakeLinear(HOLDOUT_ISSUE) });
+  assert.equal(noDir.status, GATE_EXIT.unknown);
+  assert.match(noDir.verdict, /^UNKNOWN: /);
+});
+
+test("--issue is usage (exit 2) with read, put, --project, --milestone, a bad key or twice", () => {
+  const env = fakeLinear(HOLDOUT_ISSUE);
+  const bad = [
+    ["read", "--issue", "KIT-9"],
+    ["put", "--issue", "KIT-9", "--file", "x"],
+    ["titles", "--issue", "KIT-9", "--project", "Holdout Scenarios"],
+    ["titles", "--issue", "KIT-9", ...MILESTONE],
+    ["titles", "--issue", "kit-9"],
+    ["titles", "--issue", "KIT-9; id"],
+    ["titles", "--issue", "KIT-9", "--issue", "KIT-10"],
+    ["titles", "--issue"],
+  ];
+  for (const argv of bad) {
+    const result = run(argv, { dir: holdout(), env });
+    assert.equal(result.status, GATE_EXIT.usage, argv.join(" "));
+    assert.match(result.verdict, /^USAGE: /);
+  }
+});
+
+test("titles --issue writes no run-log line, and the --project form is unchanged", () => {
+  const log = tmpLog();
+  const dir = holdout(SCENARIO_A);
+  run(issueArgs, { dir, env: { ...fakeLinear(HOLDOUT_ISSUE), KC_RUN_LOG: log } });
+  assert.ok(!existsSync(log) || readFileSync(log, "utf8") === "");
+  const plain = run(["titles", ...MILESTONE], { dir });
+  assert.deepEqual(plain.lines, [
+    "A Collector adds a shirt",
+    "SCENARIOS titles holdout-scenarios/holdout.md: 1 Scenario",
+  ]);
+});
+
+test("the guard lets a lone `titles --issue` through and still denies it when chained", () => {
+  const guard = join(ROOT, ".claude", "hooks", "holdout-guard.mjs");
+  const verdict = (command) =>
+    spawnSync(process.execPath, [guard], {
+      input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: ROOT }),
+      encoding: "utf8",
+    }).status;
+  assert.equal(verdict("node scripts/scenarios.mjs titles --issue KIT-288"), 0);
+  // The runner wraps every command like this; the wrapper names no Holdout path.
+  assert.equal(
+    verdict('( node scripts/scenarios.mjs titles --issue KIT-288 ); echo "KIT-EXIT:$?"'),
+    0,
+  );
+  assert.equal(verdict("gh api repos/KitCollective/kit-scenarios/contents/x"), 2);
+});

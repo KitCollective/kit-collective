@@ -9,7 +9,10 @@ import { GATE_EXIT } from "./gates.mjs";
 export const SECTIONS = ["Starting situation", "Actions", "End state"];
 
 export const USAGE =
-  'USAGE: node scripts/scenarios.mjs titles|read|put --project "<name>" --milestone "<name>" [--dir <path>] (put also needs --file <draft>)';
+  'USAGE: node scripts/scenarios.mjs titles|read|put --project "<name>" --milestone "<name>" [--dir <path>] (put also needs --file <draft>); or titles --issue <KEY> [--dir <path>]';
+
+/** A Linear issue key, the only value `titles --issue` accepts. */
+export const ISSUE_KEY = /^[A-Z][A-Z0-9]*-\d+$/;
 
 /** A Linear name as a path part: lowercased, runs of non-alphanumerics to one dash, no edge dashes. */
 export const slug = (name) =>
@@ -110,6 +113,34 @@ export function renderResult({ command, path, text }) {
   };
 }
 
+/**
+ * What `titles --issue` prints for the issue's milestone: ONE line of JSON, so a command runner that
+ * relays only the last line carries the whole answer. `path` is null when the issue has no project
+ * or milestone. Never any Scenario text but the titles. A malformed file is the same MALFORMED line
+ * as without `--issue` (not JSON); the caller reads the exit code first.
+ * @param {{ path: string | null, text: string | null }} input
+ */
+export function renderIssueTitles({ path, text }) {
+  const answer = (verdict, titles) => ({
+    code: GATE_EXIT.open,
+    lines: [JSON.stringify({ verdict, path, titles })],
+  });
+  if (path === null) {
+    return answer("SCENARIOS titles: no Scenarios (the issue has no project or milestone)", []);
+  }
+  if (text === null) {
+    return answer(`SCENARIOS titles ${path}: no Scenarios (no Holdout file)`, []);
+  }
+  const parsed = parseScenarios(text);
+  if (parsed.problems) {
+    return renderResult({ command: "titles", path, text });
+  }
+  return answer(
+    `SCENARIOS titles ${path}: ${plural(parsed.scenarios.length)}`,
+    parsed.scenarios.map((s) => s.title),
+  );
+}
+
 /** The one verdict line of a `put` that wrote `n` Scenarios to `path`. */
 export const putVerdict = (path, n) => ({
   code: GATE_EXIT.open,
@@ -134,8 +165,10 @@ export const refusedVerdict = (path) => ({
 });
 
 /**
- * Parse argv (after the script name). Returns `{ command, path, dir, file }` or `{ error }`.
- * `--file` is required for `put` and refused for `titles` and `read`.
+ * Parse argv (after the script name). Returns `{ command, path, issue, dir, file }` or `{ error }`.
+ * `--file` is required for `put` and refused for `titles` and `read`. `--issue <KEY>` is for `titles`
+ * alone and replaces `--project` and `--milestone` (the CLI resolves them from Linear); `path` is then
+ * null until it has.
  */
 export function parseArgs(argv) {
   const [command, ...rest] = argv;
@@ -147,13 +180,20 @@ export function parseArgs(argv) {
     const flag = rest[i];
     const value = rest[i + 1];
     if (
-      !["--project", "--milestone", "--dir", "--file"].includes(flag) ||
+      !["--project", "--milestone", "--dir", "--file", "--issue"].includes(flag) ||
       value === undefined ||
-      value.startsWith("--")
+      value.startsWith("--") ||
+      flag.slice(2) in values
     ) {
       return { error: USAGE };
     }
     values[flag.slice(2)] = value;
+  }
+  if (values.issue !== undefined) {
+    const alone = command === "titles" && !values.project && !values.milestone && !values.file;
+    return alone && ISSUE_KEY.test(values.issue)
+      ? { command, path: null, issue: values.issue, dir: values.dir }
+      : { error: USAGE };
   }
   const path =
     values.project && values.milestone ? scenarioPath(values.project, values.milestone) : null;
