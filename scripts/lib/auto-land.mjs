@@ -5,6 +5,7 @@
  * and stops at the first refusal. Nothing here reads a result relayed by a model.
  */
 
+import { blockerIsResolved } from "./land-policy.mjs";
 import { matchesGlob, parseWriteScopeGlobs } from "./pr-write-scope.mjs";
 import { HIGH_RISK_GLOBS, startDecision } from "./start-decision.mjs";
 
@@ -121,11 +122,12 @@ export function killSwitch({ labels, killFile, enabled, forceEnabled }) {
 
 /**
  * (b) The PR itself. `head` is the checkout's HEAD; the PR's head comes from GitHub.
- * `behind` says origin/<integration> is not an ancestor of the checkout.
- * @param {{ view: Record<string, any>, head: string, lane: string, dirty: boolean, behind: boolean }} o
+ * Being behind the lane is no refusal: the merge queue integrates the head with the newest base and tests
+ * the combined state (the caller trial-merges for conflicts).
+ * @param {{ view: Record<string, any>, head: string, lane: string, dirty: boolean }} o
  * @returns {{ code: string, line: string, waiting?: boolean } | null}
  */
-export function prReadiness({ view, head, lane, dirty, behind }) {
+export function prReadiness({ view, head, lane, dirty }) {
   if (view.state !== "OPEN") {
     return refuse("pr-not-ready", `the PR is ${view.state}, not open`);
   }
@@ -156,12 +158,6 @@ export function prReadiness({ view, head, lane, dirty, behind }) {
   if (view.mergeable !== "MERGEABLE") {
     return refuse("pr-not-ready", `the PR is ${view.mergeable}`);
   }
-  if (behind) {
-    return refuse(
-      "sync-changed-head",
-      `the branch does not hold origin/${lane}; syncing would change the head and stale the audit`,
-    );
-  }
   return null;
 }
 
@@ -181,7 +177,7 @@ export function issueReadiness(linear) {
   if (stop) {
     return refuse("hold-label", `the issue carries the label ${stop}`);
   }
-  const open = (linear.blockedBy ?? []).filter((b) => !["Done", "Canceled"].includes(b.state));
+  const open = (linear.blockedBy ?? []).filter((b) => !blockerIsResolved(b.state));
   if (open.length > 0) {
     return refuse(
       "blocked-by",

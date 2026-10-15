@@ -11,7 +11,7 @@
  *       more than 400 lines, a path outside the issue's write-scope: a person), (e) an independent
  *       reviewer is in the run log and the kc/audit receipt for the head is posted (the existing
  *       audit-receipt.mjs does it, with its own checks), (f) the review gate, run here, (g) the
- *       runaway ceiling. Only then: merge lock, sync (the head must not change), the run log's `start`
+ *       runaway ceiling. Only then: merge lock, a trial merge with the lane and the check that nobody pushed, the run log's `start`
  *       event, Merging plus one role comment, `gh pr merge --merge --auto`.
  *       --dry-run runs every check and changes nothing: no receipt, no lock, no Linear write, no
  *       enqueue, no run-log line. (It posts nothing, so a kc/audit that is a required check can make
@@ -252,6 +252,35 @@ const prFields =
 const viewPr = async () =>
   JSON.parse(await gh(["pr", "view", pr, "--repo", repo, "--json", prFields]));
 
+/**
+ * `git merge-tree --write-tree` of the lane into HEAD: no working-tree or index change, nothing pushed.
+ * Null when the merge is clean (or HEAD already holds the lane), a `conflict` refusal otherwise.
+ */
+async function trialMerge() {
+  const held =
+    (await sh("git", ["merge-base", "--is-ancestor", `origin/${lane}`, "HEAD"])).code === 0;
+  if (held) {
+    return null;
+  }
+  const trial = await sh("git", [
+    "merge-tree",
+    "--write-tree",
+    "--quiet",
+    `origin/${lane}`,
+    "HEAD",
+  ]);
+  if (trial.code === 0) {
+    return null;
+  }
+  if (trial.code === 1) {
+    return {
+      code: "conflict",
+      line: `REFUSED (auto-land): conflict: the branch conflicts with origin/${lane}; a person resolves it`,
+    };
+  }
+  out(4, `UNKNOWN (auto-land): the trial merge with origin/${lane} failed: ${trial.line}`);
+}
+
 async function start() {
   const killFile = existsSync(join(mainCheckout(cwd), KILL_FILE));
   const issueData = await linearIssue(issue);
@@ -270,10 +299,12 @@ async function start() {
   const head = await git(["rev-parse", "HEAD"]);
   await sh("git", ["fetch", "--quiet", "origin", lane]);
   const dirty = (await git(["status", "--porcelain"])) !== "";
-  const behind =
-    (await sh("git", ["merge-base", "--is-ancestor", `origin/${lane}`, "HEAD"])).code !== 0;
-  const notReady = prReadiness({ view, head, lane, dirty, behind });
+  const notReady = prReadiness({ view, head, lane, dirty });
   if (notReady) await refused(notReady, head);
+  // Being behind the lane is not a problem by itself (the merge queue tests the combined state), but a
+  // conflict is: a trial merge that touches nothing says which it is.
+  const conflict = await trialMerge();
+  if (conflict) await refused(conflict, head);
 
   const issueBad = issueReadiness({
     state: issueData.state,
@@ -413,7 +444,7 @@ async function start() {
     );
   }
 
-  // (h) the lock, then the sync (the head must not move: the audit is for this head), then the writes.
+  // (h) the lock, then a fresh trial merge and the check that nobody pushed (the audit is for this head), then the writes.
   // Wait for the lock inside the budget (one PR at a time), so a second start queues up instead of failing.
   const lockWait = process.env.AUTO_LAND_LOCK_WAIT_SECONDS
     ? Number(process.env.AUTO_LAND_LOCK_WAIT_SECONDS)
@@ -435,23 +466,15 @@ async function start() {
   };
   const again = dailyCap(events(), cap);
   if (again) await letGo(again);
-  const sync = await script("sync-pr.mjs", "sync", pr);
-  const after = await git(["rev-parse", "HEAD"]);
+  // The lane may have moved while the checks ran: fetch it again and trial-merge under the lock.
+  await sh("git", ["fetch", "--quiet", "origin", lane]);
+  const clash = await trialMerge();
+  if (clash) await letGo(clash);
   const prHead = (await viewPr()).headRefOid;
-  if (sync.code !== 0) {
+  if (prHead.toLowerCase() !== head.toLowerCase()) {
     await letGo({
-      code: /^CONFLICT/.test(sync.line) ? "conflict" : "pr-not-ready",
-      line: `REFUSED (auto-land): ${/^CONFLICT/.test(sync.line) ? "conflict" : "pr-not-ready"}: ${sync.line}`,
-    });
-  }
-  if (
-    after !== head ||
-    prHead.toLowerCase() !== head.toLowerCase() ||
-    !/^CURRENT/.test(sync.line)
-  ) {
-    await letGo({
-      code: "sync-changed-head",
-      line: `REFUSED (auto-land): sync-changed-head: ${sync.line}; head ${head.slice(0, 7)} -> ${prHead.slice(0, 7)}, so the audit is for another head`,
+      code: "head-mismatch",
+      line: `REFUSED (auto-land): head-mismatch: the PR head moved ${head.slice(0, 7)} -> ${prHead.slice(0, 7)} while the checks ran, so the audit is for another head`,
     });
   }
   try {

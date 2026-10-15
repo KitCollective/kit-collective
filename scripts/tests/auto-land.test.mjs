@@ -65,13 +65,16 @@ if (args[0] === "pr" && args[1] === "view") {
 } else if (args[0] === "api" && /check-runs/.test(joined)) {
   if (s.advanceOnChecks) {
     const clone = s.advanceOnChecks;
-    fs.writeFileSync(clone + "/newfile.txt", "x\\n");
+    const file = s.advanceFile || "newfile.txt";
+    fs.mkdirSync(require("node:path").dirname(clone + "/" + file), { recursive: true });
+    fs.writeFileSync(clone + "/" + file, "lane version\\n");
     const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
     execFileSync("git", ["add", "-A"], { cwd: clone, env });
     execFileSync("git", ["commit", "-m", "lane moves"], { cwd: clone, env });
     execFileSync("git", ["push", "origin", "development"], { cwd: clone, env });
     s.advanceOnChecks = null; save(s);
   }
+  if (s.moveHeadOnChecks) { s.pr.headRefOid = s.moveHeadOnChecks; s.moveHeadOnChecks = null; save(s); }
   console.log(JSON.stringify(s.checks));
 } else if (args[0] === "api" && /\\/statuses\\//.test(joined)) {
   if (args.includes("-f")) {
@@ -684,37 +687,95 @@ test("a second start waits for the lock and then goes through once the first PR 
   assert.match(w.lockOnOrigin(), /refs\/factory\/merge-lock/);
 });
 
-test("refuses when the branch is behind the lane, before anything is posted", () => {
-  const w = world();
+/** A clone of the origin on development, to move the lane from. */
+function laneClone(w) {
   const other = tmp("lane");
   git(other, "clone", w.origin, ".");
   git(other, "checkout", "development");
-  writeFileSync(join(other, "later.txt"), "x\n");
+  return other;
+}
+const moveLane = (other, file) => {
+  mkdirSync(join(other, file, ".."), { recursive: true });
+  writeFileSync(join(other, file), "lane version\n");
   git(other, "add", "-A");
   git(other, "commit", "-m", "lane moves");
   git(other, "push", "origin", "development");
-  refusedWith(w.start(), "sync-changed-head");
+};
+
+test("a branch behind the lane with a clean trial merge goes through, untouched (the queue tests the combined state)", () => {
+  const w = world();
+  moveLane(laneClone(w), "later.txt");
+  const result = w.start();
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /^ENQUEUED/);
+  assert.equal(
+    git(w.work, "rev-parse", "HEAD"),
+    w.head,
+    "the checkout and the PR head did not move",
+  );
+  assert.equal(git(w.work, "status", "--porcelain"), "", "the trial merge touched nothing");
+  assert.match(w.read("gh-calls.log"), /pr merge 12 --merge --auto/);
+});
+
+test("a conflicting trial merge is refused as conflict before anything is posted", () => {
+  const w = world();
+  moveLane(laneClone(w), "apps/web/src/a.ts");
+  refusedWith(w.start(), "conflict");
+  assert.equal(w.ghState().statuses.length, 0);
   noEffects(w);
 });
 
-test("refuses, with the lock given back, when the sync changes the head (the audit would be for another head)", () => {
+test("a lane that moves cleanly while the checks run still goes through", () => {
   const w = world();
-  const other = tmp("lane2");
-  git(other, "clone", w.origin, ".");
-  git(other, "checkout", "development");
-  // The lane moves while the gate runs: the fake gh does it when the check runs are read.
   w.setGh((s) => {
-    s.advanceOnChecks = other;
+    s.advanceOnChecks = laneClone(w);
   });
   const result = w.start();
-  refusedWith(result, "sync-changed-head");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(w.read("gh-calls.log"), /pr merge 12 --merge --auto/);
+});
+
+test("a lane that moves into a conflict while the checks run is refused as conflict, the lock given back, a person asked", () => {
+  const w = world();
+  w.setGh((s) => {
+    s.advanceOnChecks = laneClone(w);
+    s.advanceFile = "apps/web/src/a.ts";
+  });
+  const result = w.start(["--handoff"]);
+  refusedWith(result, "conflict");
   assert.equal(w.lockOnOrigin(), "", "the lock was released");
-  assert.equal(w.read("linear-writes.log"), "", "Merging was never set");
+  const writes = w.read("linear-writes.log");
+  assert.doesNotMatch(writes, /state KIT-9 Merging/, "Merging was never set");
+  assert.match(writes, /state KIT-9 Approval/);
+  assert.match(writes, /label KIT-9 swap ready-for-agent ready-for-human/);
   assert.doesNotMatch(w.read("gh-calls.log"), /pr merge/);
   assert.equal(
     w.events().filter((e) => e.event === "auto-land" && e.outcome === "start").length,
     0,
   );
+});
+
+test("a push to the PR while the checks ran is refused: the audit is for the head the reviewer judged", () => {
+  const w = world();
+  // The PR head moves when the check runs are read (after the audit, before the lock).
+  w.setGh((s) => {
+    s.moveHeadOnChecks = "b".repeat(40);
+  });
+  const result = w.start();
+  refusedWith(result, "head-mismatch");
+  assert.equal(w.lockOnOrigin(), "");
+  assert.doesNotMatch(w.read("gh-calls.log"), /pr merge/);
+});
+
+test("a Post-Merge, Duplicate or Canceled blocker is resolved; an In Review blocker is not", () => {
+  for (const state of ["Post-Merge", "Duplicate", "Canceled", "Done"]) {
+    const w = world();
+    w.setLinear((i) => (i.blockedBy = [{ identifier: "KIT-1", state }]));
+    assert.equal(w.start(["--dry-run"]).status, 0, state);
+  }
+  const w = world();
+  w.setLinear((i) => (i.blockedBy = [{ identifier: "KIT-1", state: "In Review" }]));
+  refusedWith(w.start(), "blocked-by");
 });
 
 test("a refusal with --handoff asks a person in Linear; a dry run never does", () => {
