@@ -291,6 +291,7 @@ jobs:
           scripts/tests/fix-diff.test.mjs
           scripts/tests/pr-checks.test.mjs
           scripts/tests/linear-args.test.mjs
+          scripts/tests/linear-issues.test.mjs
           scripts/tests/start-decision.test.mjs
           scripts/tests/run-log.test.mjs
           scripts/tests/gates.test.mjs
