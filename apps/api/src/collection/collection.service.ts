@@ -120,6 +120,13 @@ function canonicalCollectorPair(leftId: string, rightId: string): [string, strin
   return leftId < rightId ? [leftId, rightId] : [rightId, leftId];
 }
 
+type UnansweredBidSummary = {
+  count: number;
+  latestAt: string;
+  bidderInitials: string[];
+  conversationId: string | null;
+};
+
 type MessageJerseySnapshotRow = {
   userJerseyId: string | null;
   jerseyClubId: string | null;
@@ -320,7 +327,7 @@ export class CollectionService {
       squadPlayersByScope,
       playerFieldsByJersey,
       patchesByJersey,
-      unansweredBidCounts,
+      unansweredBidSummaries,
     ] = await Promise.all([
       this.resolveEntityLabels("club", clubIds, locale),
       this.resolveEntityLabels("national_team", nationalTeamIds, locale),
@@ -330,10 +337,11 @@ export class CollectionService {
       this.loadSquadPlayersForScopes(squadScopes, locale),
       this.loadPlayerFieldsForJerseys(rows, locale),
       this.loadPatchesForJerseys(jerseyIds, locale),
-      this.loadUnansweredBidCounts(userId, jerseyIds),
+      this.loadUnansweredBidSummaries(userId, jerseyIds),
     ]);
 
     const jerseys: CollectionJersey[] = rows.map((row) => {
+      const bidSummary = unansweredBidSummaries.get(row.id);
       const clubLabel = row.clubId ? (clubLabels.get(row.clubId) ?? null) : null;
       const nationalTeamLabel = row.nationalTeamId
         ? (nationalTeamLabels.get(row.nationalTeamId) ?? null)
@@ -392,7 +400,14 @@ export class CollectionService {
         photos,
         biddingEnabled: row.biddingEnabled,
         private: row.private,
-        unansweredBidCount: unansweredBidCounts.get(row.id) ?? 0,
+        unansweredBidCount: bidSummary?.count ?? 0,
+        ...(bidSummary
+          ? {
+              unansweredBidLatestAt: bidSummary.latestAt,
+              unansweredBidderInitials: bidSummary.bidderInitials,
+              unansweredBidConversationId: bidSummary.conversationId,
+            }
+          : {}),
       };
     });
 
@@ -2948,17 +2963,18 @@ export class CollectionService {
   }
 
   /**
-   * Pending bids from other collectors per owned jersey, by the Indbakke rule: the conversation is
-   * visible to the owner (not hidden) and the bidder is not a blocked peer.
+   * Pending Buds from other collectors per owned jersey, by the Indbakke rule: the Conversation is
+   * visible to the owner (not hidden) and the bidder is not a blocked peer. One query feeds the
+   * count, the latest two bidders' initials, the latest Bud time and the single Conversation id.
    */
-  private async loadUnansweredBidCounts(
+  private async loadUnansweredBidSummaries(
     ownerId: string,
     jerseyIds: string[],
-  ): Promise<Map<string, number>> {
-    const countsByJersey = new Map<string, number>();
+  ): Promise<Map<string, UnansweredBidSummary>> {
+    const summaryByJersey = new Map<string, UnansweredBidSummary>();
 
     if (jerseyIds.length === 0) {
-      return countsByJersey;
+      return summaryByJersey;
     }
 
     const blockedPeerIds = [...(await this.moderationService.getBlockedPeerIds(ownerId))];
@@ -2967,7 +2983,10 @@ export class CollectionService {
     const rows = await this.db
       .select({
         userJerseyId: conversationMessage.userJerseyId,
-        unansweredBidCount: count(),
+        senderId: conversationMessage.senderId,
+        senderHandle: user.handle,
+        conversationId: conversationMessage.conversationId,
+        createdAt: conversationMessage.createdAt,
       })
       .from(conversationMessage)
       .innerJoin(conversation, eq(conversationMessage.conversationId, conversation.id))
@@ -2978,6 +2997,7 @@ export class CollectionService {
           eq(conversationParticipant.userId, ownerId),
         ),
       )
+      .innerJoin(user, eq(user.id, conversationMessage.senderId))
       .where(
         and(
           inArray(conversationMessage.userJerseyId, jerseyIds),
@@ -2990,15 +3010,47 @@ export class CollectionService {
             : undefined,
         ),
       )
-      .groupBy(conversationMessage.userJerseyId);
+      .orderBy(desc(conversationMessage.createdAt));
 
+    // Newest first: the first Bud per jersey sets latestAt, distinct senders fill the initials.
+    const conversationIdsByJersey = new Map<string, Set<string>>();
+    const sendersByJersey = new Map<string, Set<string>>();
     for (const row of rows) {
-      if (row.userJerseyId) {
-        countsByJersey.set(row.userJerseyId, row.unansweredBidCount);
+      if (!row.userJerseyId) {
+        continue;
+      }
+      let summary = summaryByJersey.get(row.userJerseyId);
+      if (!summary) {
+        summary = {
+          count: 0,
+          latestAt: row.createdAt.toISOString(),
+          bidderInitials: [],
+          conversationId: null,
+        };
+        summaryByJersey.set(row.userJerseyId, summary);
+        conversationIdsByJersey.set(row.userJerseyId, new Set());
+        sendersByJersey.set(row.userJerseyId, new Set());
+      }
+      summary.count += 1;
+      conversationIdsByJersey.get(row.userJerseyId)?.add(row.conversationId);
+      const senders = sendersByJersey.get(row.userJerseyId);
+      if (senders && !senders.has(row.senderId)) {
+        senders.add(row.senderId);
+        if (summary.bidderInitials.length < 2) {
+          summary.bidderInitials.push(handleInitial(row.senderHandle));
+        }
       }
     }
 
-    return countsByJersey;
+    for (const [jerseyId, summary] of summaryByJersey) {
+      const conversationIds = conversationIdsByJersey.get(jerseyId);
+      const senders = sendersByJersey.get(jerseyId);
+      if (senders?.size === 1 && conversationIds?.size === 1) {
+        summary.conversationId = [...conversationIds][0] ?? null;
+      }
+    }
+
+    return summaryByJersey;
   }
 
   private async loadPatchesForJerseys(

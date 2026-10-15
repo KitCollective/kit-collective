@@ -943,6 +943,96 @@ describe("Collection /v1", () => {
     expect(afterBlock.get(quietJersey.id)).toBe(0);
   });
 
+  it("summarises who bid last on the owner's jersey list (KIT-287)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "summary-owner@example.com");
+    const bidderA = await registerSession(app, "summary-bidder-a@example.com");
+    const bidderB = await registerSession(app, "summary-bidder-b@example.com");
+    const bidderC = await registerSession(app, "summary-bidder-c@example.com");
+    const hiddenBidder = await registerSession(app, "summary-bidder-hidden@example.com");
+    const twoBidders = await saveJerseyForUser(app, owner, fixture);
+    const oneBidder = await saveJerseyForUser(app, owner, fixture);
+    const guarded = await saveJerseyForUser(app, owner, fixture);
+    const quiet = await saveJerseyForUser(app, owner, fixture);
+    for (const jersey of [twoBidders, oneBidder, guarded]) {
+      await patchJerseyBidding(app, owner, jersey.id, true);
+    }
+
+    const initialOf = (session: Session) => session.user.handle.trim().charAt(0).toUpperCase();
+
+    const sendBid = async (bidder: Session, jerseyId: string, amountDkk: number) => {
+      const response = await app.inject({
+        method: "POST",
+        url: `/v1/collection/jerseys/${jerseyId}/bids`,
+        headers: { authorization: `Bearer ${bidder.accessToken}` },
+        payload: { amountDkk },
+      });
+      expect(response.statusCode).toBe(201);
+      return collectionSendBidResponseSchema.parse(JSON.parse(response.body));
+    };
+
+    const listOwnerJerseys = async () => {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/collection/jerseys",
+        headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+      });
+      expect(response.statusCode).toBe(200);
+      const jerseys = collectionJerseysSchema.parse(JSON.parse(response.body)).jerseys;
+      return new Map(jerseys.map((jersey) => [jersey.id, jersey]));
+    };
+
+    await sendBid(bidderA, twoBidders.id, 300);
+    const afterA = (await listOwnerJerseys()).get(twoBidders.id);
+    expect(afterA?.unansweredBidderInitials).toEqual([initialOf(bidderA)]);
+
+    await sendBid(bidderB, twoBidders.id, 350);
+    const bidOne = await sendBid(bidderA, oneBidder.id, 250);
+
+    const hiddenBid = await sendBid(hiddenBidder, guarded.id, 100);
+    const hideResponse = await app.inject({
+      method: "DELETE",
+      url: `/v1/collection/conversations/${hiddenBid.conversationId}`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(hideResponse.statusCode).toBe(204);
+    await sendBid(bidderC, guarded.id, 120);
+    const blockResponse = await app.inject({
+      method: "POST",
+      url: `/v1/moderation/peers/${bidderC.user.id}/block`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(blockResponse.statusCode).toBe(201);
+
+    const jerseys = await listOwnerJerseys();
+
+    const two = jerseys.get(twoBidders.id);
+    expect(two?.unansweredBidCount).toBe(2);
+    expect(two?.unansweredBidderInitials).toEqual([initialOf(bidderB), initialOf(bidderA)]);
+    expect(two?.unansweredBidConversationId).toBeNull();
+    expect(new Date(two?.unansweredBidLatestAt ?? "").getTime()).toBeGreaterThanOrEqual(
+      new Date(afterA?.unansweredBidLatestAt ?? "").getTime(),
+    );
+
+    const one = jerseys.get(oneBidder.id);
+    expect(one?.unansweredBidCount).toBe(1);
+    expect(one?.unansweredBidderInitials).toEqual([initialOf(bidderA)]);
+    expect(one?.unansweredBidConversationId).toBe(bidOne.conversationId);
+    expect(typeof one?.unansweredBidLatestAt).toBe("string");
+
+    const guardedJersey = jerseys.get(guarded.id);
+    expect(guardedJersey?.unansweredBidCount).toBe(0);
+    expect(guardedJersey?.unansweredBidderInitials).toBeUndefined();
+    expect(guardedJersey?.unansweredBidLatestAt).toBeUndefined();
+    expect(guardedJersey?.unansweredBidConversationId).toBeUndefined();
+
+    const quietJersey = jerseys.get(quiet.id);
+    expect(quietJersey?.unansweredBidCount).toBe(0);
+    expect(quietJersey?.unansweredBidderInitials).toBeUndefined();
+    expect(quietJersey?.unansweredBidLatestAt).toBeUndefined();
+    expect(quietJersey?.unansweredBidConversationId).toBeUndefined();
+  });
+
   it("rejects bidding on own UserJersey and when bidding is disabled", async () => {
     const fixture = await insertClubSeasonFixture();
     const owner = await registerSession(app, "owner-self@example.com");
