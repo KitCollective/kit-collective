@@ -63,6 +63,7 @@ export const REASON_CODES = [
   "evidence-gap",
   "no-result-line",
   "runner-no-result",
+  "report-failed",
   "lead-skipped",
   "engineer-skipped",
   "ci-red",

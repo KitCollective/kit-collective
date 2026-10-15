@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   createIssue,
+  createProjectComment,
   LinearUsageError,
   listIssues,
   parseCreateArgs,
+  parseProjectCommentArgs,
+  SCENARIO_FAILURE_FOOTER,
 } from "../lib/linear-issues.mjs";
 
 const STATES = [
@@ -68,6 +71,7 @@ function matches(node, clause) {
 function fakeLinear(issues = [], { labelPageSize = 100 } = {}) {
   const calls = [];
   const created = [];
+  const comments = [];
   async function gql(query, variables = {}) {
     calls.push({ query, variables });
     if (query.includes("teams(filter")) {
@@ -102,7 +106,28 @@ function fakeLinear(issues = [], { labelPageSize = 100 } = {}) {
       };
     }
     if (query.includes("projects(filter")) {
-      return { projects: { nodes: variables.name === "Gallery" ? [{ id: "p-1" }] : [] } };
+      return {
+        projects: {
+          nodes:
+            variables.name === "Gallery"
+              ? [
+                  {
+                    id: "p-1",
+                    projectMilestones: {
+                      nodes: [
+                        { id: "m-1", name: "Alpha" },
+                        { id: "m-2", name: "Beta" },
+                      ],
+                    },
+                  },
+                ]
+              : [],
+        },
+      };
+    }
+    if (query.includes("commentCreate")) {
+      comments.push(variables.input);
+      return { commentCreate: { comment: { id: "c-1", url: "https://linear.app/x/c-1" } } };
     }
     if (query.includes("issueCreate")) {
       created.push(variables.input);
@@ -112,7 +137,7 @@ function fakeLinear(issues = [], { labelPageSize = 100 } = {}) {
     }
     throw new Error(`unexpected query: ${query}`);
   }
-  return { gql, calls, created };
+  return { gql, calls, created, comments };
 }
 
 const names = (items) => items.map((item) => item.identifier);
@@ -192,6 +217,7 @@ test("list parses write-scope, including markdown-escaped globs, or gives null",
     "labels",
     "blockedBy",
     "writeScope",
+    "scenarioFailure",
     "project",
     "milestone",
     "url",
@@ -366,4 +392,98 @@ test("list --milestone filters on the project milestone and the record names it"
   );
   const all = await listIssues(gql, []);
   assert.equal(all.find((i) => i.identifier === "KIT-3").milestone, null);
+});
+
+// ---- KIT-354: create --milestone, project-comment, the failure-issue marker -------------------------
+
+test("create --milestone resolves the project's milestone case-insensitively and sends its id", async () => {
+  const { input } = await create([
+    "T",
+    "--body-file",
+    "b.md",
+    "--project",
+    "Gallery",
+    "--milestone",
+    "beta",
+  ]);
+  assert.equal(input.projectId, "p-1");
+  assert.equal(input.projectMilestoneId, "m-2");
+  const plain = await create(["T", "--body-file", "b.md", "--project", "Gallery"]);
+  assert.ok(!("projectMilestoneId" in plain.input));
+});
+
+test("create --milestone needs --project, and an unknown milestone names the valid ones before anything is created", async () => {
+  assert.throws(
+    () => parse(["T", "--body-file", "b.md", "--milestone", "Alpha"]),
+    (error) =>
+      error instanceof LinearUsageError && /--milestone needs --project/.test(error.message),
+  );
+  const fake = fakeLinear();
+  await assert.rejects(
+    createIssue(
+      fake.gql,
+      parse(["T", "--body-file", "b.md", "--project", "Gallery", "--milestone", "Gamma"]),
+      {
+        loadIssueId: async (id) => id,
+        block: async () => {},
+      },
+    ),
+    /no milestone "Gamma" in project Gallery; valid: Alpha, Beta/,
+  );
+  assert.equal(fake.created.length, 0);
+});
+
+test("project-comment parses a project and a body file, and refuses an empty or missing one", () => {
+  const read = (path) => (path === "missing.md" ? null : path === "empty.md" ? "  \n" : "hello");
+  assert.deepEqual(parseProjectCommentArgs(["Gallery", "--body-file", "b.md"], read), {
+    project: "Gallery",
+    body: "hello",
+  });
+  for (const argv of [
+    [],
+    ["--body-file", "b.md"],
+    ["Gallery"],
+    ["Gallery", "--body-file", "missing.md"],
+    ["Gallery", "--body-file", "empty.md"],
+  ]) {
+    assert.throws(
+      () => parseProjectCommentArgs(argv, read),
+      LinearUsageError,
+      JSON.stringify(argv),
+    );
+  }
+});
+
+test("project-comment writes a comment on the project (commentCreate projectId), nothing else", async () => {
+  const fake = fakeLinear();
+  const made = await createProjectComment(fake.gql, {
+    project: "Gallery",
+    body: "Satisfaction 4/6",
+  });
+  assert.deepEqual(fake.comments, [{ projectId: "p-1", body: "Satisfaction 4/6" }]);
+  assert.deepEqual(made, { id: "c-1", url: "https://linear.app/x/c-1" });
+  await assert.rejects(
+    createProjectComment(fake.gql, { project: "Nope", body: "x" }),
+    /no project "Nope"/,
+  );
+  assert.equal(fake.comments.length, 1);
+});
+
+test("list marks an issue whose description carries the Milestone scenarios footer line, and only then", async () => {
+  const { gql } = fakeLinear([
+    issue("KIT-1", "To-do", { description: `## x\n\n${SCENARIO_FAILURE_FOOTER}\n` }),
+    issue("KIT-2", "To-do", {
+      description: `Scenario not met: x. ${SCENARIO_FAILURE_FOOTER} but inline`,
+    }),
+    issue("KIT-3", "To-do", { description: null }),
+  ]);
+  const items = await listIssues(gql, []);
+  assert.deepEqual(
+    items.map((i) => [i.identifier, i.scenarioFailure]),
+    [
+      ["KIT-1", true],
+      ["KIT-2", false],
+      ["KIT-3", false],
+    ],
+  );
 });
