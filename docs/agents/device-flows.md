@@ -51,6 +51,7 @@ Flows tap by `testID`, so a copy change does not break a flow. The exceptions, e
 - the app's own upload source sheet option `Fotos` (a system action sheet), by label;
 - the system photo picker: the first cell and its confirm button, by screen point, on a simulator whose library holds exactly one photo;
 - iOS's "save password" prompt: `Ikke nu` / `Not Now`, by text, when it shows;
+- Send bud: a tap on the photo, by screen point, to dismiss the number pad that covers the form (KIT-270).
 
 When a slice adds a control a flow must tap, add the `testID` in the same PR. Adding a `testID` is not a UI change; do not restyle a screen to make a flow pass.
 

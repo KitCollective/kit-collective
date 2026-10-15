@@ -48,14 +48,17 @@ name: search-bid
     visible:
       id: bid-amount
     timeout: 15000
+# The amount field starts underneath the floating tab bar; scroll it clear first,
+# or the tap lands on the Søg tab and pops the stack.
+- scroll
 - runFlow: ../subflows/settle.yaml
 - takeScreenshot: kc__search-bid__04-send-bid
 - tapOn:
     id: bid-amount
 - inputText: "250"
-# The number pad has no return key; the keyboard accessory's Færdig dismisses it.
+# The number pad has no return key and covers the form; a tap on the photo dismisses it.
 - tapOn:
-    id: bid-keyboard-done
+    point: 50%,25%
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: kc__search-bid__05-amount-entered
