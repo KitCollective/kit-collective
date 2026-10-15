@@ -101,7 +101,19 @@ bb workflows run --file .bb/workflows/milestone-scenarios.js --args '{"project":
 | `pr` | Required. The number of the open `development → staging` PR. |
 | `machine` | Only written to the run log; it routes nothing. |
 
-`run` starts a real run: it posts a commit status that everyone sees on the `development` tip and spends macOS minutes (runsPerScenario hosted runs per Scenario, at ten times the Linux rate), so it is a person's decision. The run refuses, posting nothing, unless every issue of the milestone is `Done` or `Canceled`, the PR is an open `development → staging` PR and the milestone has a Holdout file. It needs, on top of the AFK developer's: a `GH_TOKEN` that may dispatch workflows (`actions: write`) and write commit statuses (`statuses: write`), and reads the Holdout; and `ffmpeg` on the machine for the judge to see the recording (without it the judge judges from the screenshots). It can wait about 4 hours for the hosted runs. Making `Scenarios` a required check on `staging` and the promotion path are KIT-355.
+`run` starts a real run: it posts a commit status that everyone sees on the `development` tip and spends macOS minutes (runsPerScenario hosted runs per Scenario, at ten times the Linux rate), so it is a person's decision. The run refuses, posting nothing, unless every issue of the milestone is `Done` or `Canceled`, the PR is an open `development → staging` PR and the milestone has a Holdout file. It needs, on top of the AFK developer's: a `GH_TOKEN` that may dispatch workflows (`actions: write`) and write commit statuses (`statuses: write`), and reads the Holdout; and `ffmpeg` on the machine for the judge to see the recording (without it the judge judges from the screenshots). It can wait about 4 hours for the hosted runs.
+
+### Promotion path
+
+`Scenarios` is a required check on `staging`: ruleset `lane-staging` requires `test` and `Scenarios` and has no bypass actors, so no one (Nicklas included) can merge a promotion PR past a red or missing `Scenarios`. Undoing that is an edit of the ruleset by a person, never by an agent. The path for one milestone, in full in `docs/agents/automations.md` section 4:
+
+1. Every issue of the milestone is `Done` or `Canceled`.
+2. The `development → staging` promotion PR is open (a person opens or updates it today; the hourly opener is not wired).
+3. A person starts Milestone scenarios (above) with the project, the milestone and the PR.
+4. The Scenario judge posts `Scenarios` on the PR head. Red: the failed Scenarios go back through the issue flow (KIT-354), then a new run on the new head. Any push to `development` moves the head and needs a new run.
+5. When `Scenarios` and `test` are green, a person merges. Never an agent, never auto-merge.
+
+A milestone with no Holdout file gets no `Scenarios` (the run refuses), so it cannot promote. Satisfaction is reported, not the gate.
 
 ## What the workflow cannot do
 

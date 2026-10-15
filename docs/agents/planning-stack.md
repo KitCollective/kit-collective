@@ -37,7 +37,7 @@ Keep `/to-tickets` (Matt’s name). It slices vertical issues onto a **milestone
 | Checker | Wakes on `In Review`. Judge-only `/code-review` + GitHub CI/CD. Mobile/EAS diffs include Expo vendor skills on Standards. Pass + checks green → `Approval`. Fail → `In Progress` + `### Review feedback` (same branch). |
 | Approver | Reads the GitHub PR. Linear `Merging` **is** merge approval. Land moves to `Post-Merge` on merge and to `Done` only after `gate.mjs land` is open. |
 | `/land` | Merge to integration only. |
-| Staging | When **that milestone’s** issues are all Done or Canceled. |
+| Staging | When **that milestone’s** issues are all Done or Canceled and Milestone scenarios has posted a green `Scenarios` on the promotion PR; a person merges it (`docs/agents/automations.md` section 4). |
 
 ## Router
 

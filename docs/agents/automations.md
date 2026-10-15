@@ -253,13 +253,26 @@ Merge fail → In Progress, write the error under workpad ### Review feedback, a
 
 ---
 
-## 4. Staging promotion (wire later)
+## 4. Staging promotion (PR opener wire later; the rest is by a person)
 
 | Field | Value |
 | --- | --- |
 | Trigger | Every hour |
 | Tools | Linear CLI + `gh`. Not Linear MCP on kit-harness. Staging/production promotion is not an issue land run. |
-| Action | If a **milestone’s** issues are all `Done` or `Canceled`, open or update a PR `lanes.integration` → `lanes.staging`. Do not wait for the whole Linear project. Do not merge without green checks. |
+| Action | If a **milestone’s** issues are all `Done` or `Canceled`, open or update the promotion PR `lanes.integration` → `lanes.staging` (`development` → `staging`). Do not wait for the whole Linear project. Never merge it: the rest of the path below is a person's. |
+
+The promotion path for one milestone (ADR-0060 decision 2):
+
+1. **Milestone done.** Every issue of the milestone is `Done` or `Canceled`.
+2. **Promotion PR.** The `development` → `staging` PR is open (opened or updated). The hourly opener above is not wired yet, so today a person opens or updates it (`--base staging --head development`, the only pair `block-pr-lane.sh` allows into `staging`).
+3. **Milestone scenarios.** A person starts the Milestone scenarios workflow with the project, the milestone and the PR number (`docs/agents/bb-harness.md` "Start Milestone scenarios"). The Scenario judge runs the milestone's Holdout against `development` and posts the `Scenarios` commit status on the PR head (`docs/agents/scenarios.md` "Milestone scenarios").
+4. **`Scenarios` green.** Ruleset `lane-staging` on `staging` requires `test` and `Scenarios`, so the PR cannot merge until both are green on its head. The ruleset has no bypass actors: no one, Nicklas included, can merge past a red or missing `Scenarios`. The gate is every Scenario met; Satisfaction is reported on the status, not the gate.
+5. **Merge by a person.** When `Scenarios` and `test` are green, a person merges the promotion PR. Never an agent, and no auto-merge into `staging`.
+
+- **Red `Scenarios`.** The PR stays blocked. The failed Scenarios go back through the issue flow (KIT-354, in flight, files them as issues on the same milestone); once that work lands on `development`, run Milestone scenarios again on the new PR head.
+- **New head, new run.** A push to `development` moves the PR head, and the `Scenarios` of the old head does not count for the new one. The new head needs a new Milestone scenarios run.
+- **No Holdout file, no promotion.** Milestone scenarios refuses a milestone with no Holdout file and posts nothing, so its promotion PR has no `Scenarios` and cannot merge. Give the milestone Scenarios (`/to-spec`, `scripts/scenarios.mjs put`) or undo the rule.
+- **Undo.** Dropping `Scenarios` from the required checks is an edit of ruleset `lane-staging` (21607989) by a person with admin rights, never by an agent.
 
 ## 5. Production release (wire later)
 
