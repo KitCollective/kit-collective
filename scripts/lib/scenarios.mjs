@@ -97,7 +97,11 @@ export function parseScenarios(text) {
         problems.push(`${label}: empty "### ${section}"`);
       }
     }
-    return { title: block.title, text: [`## ${block.title}`, ...block.lines].join("\n").trimEnd() };
+    return {
+      title: block.title,
+      text: [`## ${block.title}`, ...block.lines].join("\n").trimEnd(),
+      sections: SECTIONS.map((section) => (bodies.get(section) ?? []).join("\n")),
+    };
   });
 
   return problems.length > 0 ? { problems } : { scenarios };
@@ -552,8 +556,13 @@ export function cleanSentence(text) {
 
 /** Consecutive words (case, punctuation and whitespace ignored) that make a sentence a retelling. */
 export const RETELL_WORDS = 6;
+// A list marker (`1.`, `2)`, `-`, `*`) opens a line of an Actions list; it is not part of a quote.
+const LIST_MARKER = /^\s*(?:\d+[.)]|[-*])\s+/;
 const wordsOf = (text) =>
   String(text)
+    .split("\n")
+    .map((line) => line.replace(LIST_MARKER, ""))
+    .join(" ")
     .toLowerCase()
     .match(/[\p{L}\p{N}]+/gu) ?? [];
 const spans = (words) => {
@@ -565,17 +574,17 @@ const spans = (words) => {
 };
 
 /**
- * True when the sentence shares RETELL_WORDS or more consecutive words with the text of any
- * Scenario of the milestone (its Starting situation, Actions or End state). Catches a quote, also
- * with other case, spacing or punctuation. Does not catch a paraphrase, a quote broken up by other
- * words, or a Scenario section shorter than RETELL_WORDS words.
- * @param {string} sentence @param {string[]} scenarioTexts
+ * True when the sentence shares RETELL_WORDS or more consecutive words with a section body (Starting
+ * situation, Actions or End state) of any Scenario of the milestone. Each section is its own word
+ * list, so no window spans two sections, and the title and the headings are not compared: the judge
+ * may name the title, which the issue carries anyway. List markers are ignored, so a quote across
+ * numbered Actions items is caught. Does not catch a paraphrase, a quote broken up by other words,
+ * or a section shorter than RETELL_WORDS words.
+ * @param {string} sentence @param {string[]} sections the section bodies, each its own text
  */
-export function retellsScenario(sentence, scenarioTexts) {
+export function retellsScenario(sentence, sections) {
   const mine = new Set(spans(wordsOf(sentence)));
-  return (
-    mine.size > 0 && scenarioTexts.some((text) => spans(wordsOf(text)).some((s) => mine.has(s)))
-  );
+  return mine.size > 0 && sections.some((text) => spans(wordsOf(text)).some((s) => mine.has(s)));
 }
 
 const runLink = (ownerRepo, run) => `https://github.com/${ownerRepo}/actions/runs/${run}`;

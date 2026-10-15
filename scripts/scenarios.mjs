@@ -425,13 +425,13 @@ function status(args) {
  * The judge's sentence for a run (`scenario-sentences/<run>.txt` in the work dir), or null when it
  * is unusable or retells a Scenario (shares RETELL_WORDS consecutive words with its text).
  */
-function sentenceFile(run, scenarioTexts) {
+function sentenceFile(run, sections) {
   const file = join(workDir(), "scenario-sentences", `${run}.txt`);
   try {
     const sentence = cleanSentence(readFileSync(file, "utf8"));
     return {
       file,
-      sentence: sentence && !retellsScenario(sentence, scenarioTexts) ? sentence : null,
+      sentence: sentence && !retellsScenario(sentence, sections) ? sentence : null,
     };
   } catch {
     return { file, sentence: null };
@@ -496,8 +496,8 @@ async function report({ path, project, milestone, sha, scenarios, verdicts, dir,
   }
 
   const failed = scored.scenarios.filter((s) => !s.met).map((s) => s.index);
-  const scenarioTexts = parsed.scenarios.map((s) => s.text);
-  const sentences = new Map(entries.map((e) => [e.run, sentenceFile(e.run, scenarioTexts)]));
+  const sections = parsed.scenarios.flatMap((s) => s.sections);
+  const sentences = new Map(entries.map((e) => [e.run, sentenceFile(e.run, sections)]));
 
   let issues = [];
   if (failed.length > 0) {

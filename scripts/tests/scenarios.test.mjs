@@ -1501,7 +1501,6 @@ function sentenceDir(sentences) {
 
 // Scenario 1 is not met (1 of 3 satisfied), Scenario 2 is met.
 const FAIL_A_VERDICTS = "1:n:7001,1:n:7002,1:s:7003,2:s:7004,2:s:7005,2:s:7006";
-const REPORT = ["report", ...MILESTONE, "--sha", SHA40, "--scenarios", "2"];
 const SENTENCES = {
   7001: "The photo picker never opened after Add.",
   7002: "Stuck on the empty Collection screen.",
@@ -1510,6 +1509,7 @@ const SENTENCES = {
 };
 
 function report({
+  scenarios = 2,
   issues,
   failOn,
   verdicts = FAIL_A_VERDICTS,
@@ -1520,10 +1520,23 @@ function report({
 } = {}) {
   const linear = fakeReportLinear({ issues, failOn });
   const work = sentenceDir(sentences);
-  const result = run([...REPORT, "--verdicts", verdicts, ...args], {
-    dir: holdout(text === null ? undefined : text),
-    env: { ...linear.env, KC_SCENARIO_WORK: work, ...env },
-  });
+  const result = run(
+    [
+      "report",
+      ...MILESTONE,
+      "--sha",
+      SHA40,
+      "--scenarios",
+      String(scenarios),
+      "--verdicts",
+      verdicts,
+      ...args,
+    ],
+    {
+      dir: holdout(text === null ? undefined : text),
+      env: { ...linear.env, KC_SCENARIO_WORK: work, ...env },
+    },
+  );
   return {
     ...result,
     linear,
@@ -1868,4 +1881,43 @@ test("no kc-report folder is left in the temp dir when Linear fails, or when eve
       String(failOn),
     );
   }
+});
+
+test("the retelling filter compares the three section bodies only: a long title survives, a quote across numbered items does not", () => {
+  const longTitle = "A new Collector adds their very first shirt";
+  const text = `## ${longTitle}
+
+### Starting situation
+
+A Test Collector whose Collection is completely empty today.
+
+### Actions
+
+1. The Collector opens the Add screen
+2. then picks a photo from the library
+3. and saves it with the default name
+
+### End state
+
+The Collection now shows one brand new Kit.
+`;
+  const sentences = {
+    7001: `Stuck early in "${longTitle}" before any photo.`,
+    7002: "The Collector opens the Add screen then picks a photo and nothing happened.",
+    // 6 words across items 2 and 3, numbers left out.
+    7003: "It never got as far as picks a photo from the library and saves it.",
+  };
+  const result = report({
+    text,
+    scenarios: 1,
+    verdicts: "1:n:7001,1:n:7002,1:n:7003",
+    sentences,
+    args: [],
+  });
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  const body = result.linear.of("create")[0].body;
+  assert.ok(body.includes(sentences[7001]), "a sentence naming the title was dropped");
+  assert.ok(!body.includes("opens the Add screen"));
+  assert.ok(!body.includes("picks a photo from the library"));
+  assert.equal(body.split("(no usable sentence from the judge)").length - 1, 2);
 });
