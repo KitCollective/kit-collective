@@ -1,6 +1,10 @@
 /**
  * Argument helpers for scripts/linear.mjs.
  */
+import { existsSync, readFileSync } from "node:fs";
+
+/** The text of a body file, or null when it does not exist. */
+export const readBodyFile = (path) => (existsSync(path) ? readFileSync(path, "utf8") : null);
 
 /**
  * The value after a flag, or null when the flag is absent or has no value.

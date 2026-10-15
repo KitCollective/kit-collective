@@ -439,8 +439,9 @@ export function refuseMilestoneIssues(issues, { project, milestone }) {
   if (issues.length === 0) {
     return `REFUSED: the milestone ${milestone} of ${project} has no issues`;
   }
-  // A failure issue Milestone scenarios filed does not block the next run (KIT-354): that run is
-  // how it gets closed. Any other open issue does.
+  // A failure issue Milestone scenarios filed does not block the next run (KIT-354), so the run can
+  // meet the Scenario again. Nothing here closes it: the work that fixes the Scenario does.
+  // Any other open issue blocks.
   const open = issues.filter((i) => isOpen(i) && !isFilingFailure(i));
   if (open.length === 0) {
     return null;
@@ -543,15 +544,38 @@ export function cleanSentence(text) {
     .trim();
   const unusable = [...one].some((ch) => {
     const code = ch.codePointAt(0);
-    return (
-      code < 0x20 ||
-      (code >= 0x7f && code <= 0x9f) ||
-      code === 0x2028 ||
-      code === 0x2029 ||
-      ch === "`"
-    );
+    // \s+ above already turned U+2028 and U+2029 into spaces.
+    return code < 0x20 || (code >= 0x7f && code <= 0x9f) || ch === "`";
   });
   return one.length >= 1 && one.length <= MAX_SENTENCE_CHARS && !unusable ? one : null;
+}
+
+/** Consecutive words (case, punctuation and whitespace ignored) that make a sentence a retelling. */
+export const RETELL_WORDS = 6;
+const wordsOf = (text) =>
+  String(text)
+    .toLowerCase()
+    .match(/[\p{L}\p{N}]+/gu) ?? [];
+const spans = (words) => {
+  const out = [];
+  for (let i = 0; i + RETELL_WORDS <= words.length; i += 1) {
+    out.push(words.slice(i, i + RETELL_WORDS).join(" "));
+  }
+  return out;
+};
+
+/**
+ * True when the sentence shares RETELL_WORDS or more consecutive words with the text of any
+ * Scenario of the milestone (its Starting situation, Actions or End state). Catches a quote, also
+ * with other case, spacing or punctuation. Does not catch a paraphrase, a quote broken up by other
+ * words, or a Scenario section shorter than RETELL_WORDS words.
+ * @param {string} sentence @param {string[]} scenarioTexts
+ */
+export function retellsScenario(sentence, scenarioTexts) {
+  const mine = new Set(spans(wordsOf(sentence)));
+  return (
+    mine.size > 0 && scenarioTexts.some((text) => spans(wordsOf(text)).some((s) => mine.has(s)))
+  );
 }
 
 const runLink = (ownerRepo, run) => `https://github.com/${ownerRepo}/actions/runs/${run}`;

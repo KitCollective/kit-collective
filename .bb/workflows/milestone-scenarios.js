@@ -46,7 +46,8 @@ export const meta = {
 // No agent text enters a command. The Scenario judge is the only role that reads the Holdout, and it
 // does so through `scenarios.mjs read` (logged). Its flow text goes into a gitignored file the
 // scenarios CLI reads and deletes; it never passes through this script. Its run verdicts reach the
-// score as `s`/`n` tokens through `pick`; its sentences go into the output only.
+// score as `s`/`n` tokens through `pick`; its sentences go into the output and, through files the
+// scenarios CLI reads, into the failure issues `report` files.
 // The `Scenarios` status: once pending is posted, every return goes through `finish()` (error) or the
 // score (success or failure), so a run that stops early never leaves the status pending. A thread
 // that dies outright is the one case a workflow cannot catch (docs/agents/scenarios.md says what to do).
@@ -546,7 +547,7 @@ for (let i = 1; i <= n; i += 1) {
         `You are the Scenario judge for the milestone ${mid} (Milestone scenarios, ADR-0060). Judge one hosted run of Scenario ${i} of ${n}, titled "${titles[i - 1]}". You judge what a Collector got, not how the app is built.`,
         `1. Read the milestone's Scenarios with exactly this command; run it alone, with nothing chained to it (no pipe, no &&, no redirect): \`${readCmd}\`. Judge against Scenario ${i} only: its Starting situation, Actions and End state.`,
         `2. Your evidence is the directory \`${evidence}\` and nothing else: the step screenshots (\`kc__*.png\`, anywhere under it)${framesOf.get(run) ? " and the stills from the run's recording in its `frames` folder (one every 2 seconds)" : "; this run has no stills from its recording (it could not be read here), so judge from the screenshots"}. The flow ${outcomeOf.get(run) === "flow-passed" ? "ran to its end" : "stopped at a failing step"} on the hosted runner.`,
-        "3. Read nothing else: never the diff or the code, no git history, no flow file, no other run's evidence, no PR and no issue. Run nothing but the one command above; list and open files only in your evidence directory.",
+        `3. Read nothing else: never the diff or the code, no git history, no flow file, no other run's evidence, no PR and no issue. Run nothing but the one command above; list and open files only in your evidence directory, except writing your sentence to \`.factory/scenario-sentences/${run}.txt\` (rule 4).`,
         `4. Also write your sentence, the same one line, to \`.factory/scenario-sentences/${run}.txt\` and nowhere else. A script reads that file, checks it and deletes it.`,
         "Return verdict satisfied (the Collector got what the End state promises) or not-satisfied, and one sentence on where the Collector got stuck (when satisfied: what showed the End state). Write it in what a Collector sees, and do not retell the Scenario's text beyond its title. Put your own thread id ($BB_THREAD_ID) in threadId.",
       ].join("\n"),

@@ -1436,15 +1436,15 @@ const secretScenario = (title) => `## ${title}
 
 ### Starting situation
 
-${SECRET[0]} a Test Collector.
+${SECRET[0]} a Test Collector whose Collection is completely empty today.
 
 ### Actions
 
-${SECRET[1]} the Collector taps.
+${SECRET[1]} the Collector taps Add and then saves exactly one photo.
 
 ### End state
 
-${SECRET[2]} the Collection shows it.
+${SECRET[2]} the Collection now shows one brand new Kit.
 `;
 const TITLE_A = "A Collector adds a shirt";
 const TITLE_B = "A Collector removes a shirt";
@@ -1835,5 +1835,37 @@ test("check: any other open issue still blocks, a failure-looking title or foote
     const result = check({ issues: [done(1), forged] });
     assert.equal(result.status, GATE_EXIT.closed, JSON.stringify(forged));
     assert.match(result.verdict, /KIT-50 \(To-do\)/);
+  }
+});
+
+test("a sentence that quotes the Scenario (6 or more consecutive words of any section) is replaced, the marker reaches nothing", () => {
+  const retold = {
+    // The End state with its marker, whitespace and case changed.
+    7001: `${SECRET[2]}   THE collection now shows ONE brand new Kit`,
+    // Six words of the Actions without the marker.
+    7002: "It failed because the Collector taps Add and then saves, then nothing.",
+    // Five consecutive words only: still the judge's own sentence.
+    7003: "Collector taps Add and then stalled.",
+  };
+  const result = report({ sentences: { ...SENTENCES, ...retold } });
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  const body = result.linear.of("create")[0].body;
+  assert.equal(body.split("(no usable sentence from the judge)").length - 1, 2);
+  assert.ok(body.includes(retold[7003]));
+  const everything = JSON.stringify(result.linear.calls()) + result.stdout + result.stderr;
+  for (const secret of SECRET) assert.ok(!everything.includes(secret), `leaked ${secret}`);
+  assert.ok(!everything.includes("taps Add and then saves"));
+  assert.ok(!everything.includes("brand new Kit"));
+});
+
+test("no kc-report folder is left in the temp dir when Linear fails, or when everything works", () => {
+  for (const failOn of ["create", "project-comment", null]) {
+    const tmp = mkdtempSync(join(tmpdir(), "scenarios-tmp-"));
+    report({ failOn, env: { TMPDIR: tmp } });
+    assert.deepEqual(
+      readdirSync(tmp).filter((name) => name.startsWith("kc-report-")),
+      [],
+      String(failOn),
+    );
   }
 });

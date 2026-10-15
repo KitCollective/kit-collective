@@ -27,6 +27,22 @@ const REFUSED_LABELS = new Map([
   ["proposal", "proposals are filed from /qualified-proposals into Triage, at most one per run"],
 ]);
 
+/** The non-empty text of `--body-file <path>`; throws a usage error when it is absent, missing or empty. */
+function bodyFromFlag(argv, readBody, usage) {
+  const bodyPath = optionValue(argv, "--body-file");
+  if (!bodyPath) {
+    throw new LinearUsageError(`--body-file <path> is required: ${usage}`);
+  }
+  const body = readBody(bodyPath);
+  if (body === null) {
+    throw new LinearUsageError(`body file ${bodyPath} does not exist`);
+  }
+  if (body.trim() === "") {
+    throw new LinearUsageError(`body file ${bodyPath} is empty`);
+  }
+  return body;
+}
+
 /** Values of every occurrence of a repeatable flag. */
 export function optionValues(args, flag) {
   const values = [];
@@ -203,17 +219,7 @@ export function parseCreateArgs(argv, readBody) {
   if (!title) {
     throw new LinearUsageError(usage);
   }
-  const bodyPath = optionValue(argv, "--body-file");
-  if (!bodyPath) {
-    throw new LinearUsageError(`--body-file <path> is required: ${usage}`);
-  }
-  const body = readBody(bodyPath);
-  if (body === null) {
-    throw new LinearUsageError(`body file ${bodyPath} does not exist`);
-  }
-  if (body.trim() === "") {
-    throw new LinearUsageError(`body file ${bodyPath} is empty`);
-  }
+  const body = bodyFromFlag(argv, readBody, usage);
   const parentRaw = optionValue(argv, "--parent");
   const parent = parentRaw ? issueIdentifier(parentRaw) : null;
   if (parentRaw && !parent) {
@@ -365,17 +371,7 @@ export function parseProjectCommentArgs(argv, readBody) {
   if (!project) {
     throw new LinearUsageError(usage);
   }
-  const bodyPath = optionValue(argv, "--body-file");
-  if (!bodyPath) {
-    throw new LinearUsageError(`--body-file <path> is required: ${usage}`);
-  }
-  const body = readBody(bodyPath);
-  if (body === null) {
-    throw new LinearUsageError(`body file ${bodyPath} does not exist`);
-  }
-  if (body.trim() === "") {
-    throw new LinearUsageError(`body file ${bodyPath} is empty`);
-  }
+  const body = bodyFromFlag(argv, readBody, usage);
   return { project, body };
 }
 

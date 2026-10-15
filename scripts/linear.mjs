@@ -35,7 +35,13 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { blockArgs, issueIdentifier, optionValue, swapLabelIds } from "./lib/linear-args.mjs";
+import {
+  blockArgs,
+  issueIdentifier,
+  optionValue,
+  readBodyFile,
+  swapLabelIds,
+} from "./lib/linear-args.mjs";
 import {
   createIssue,
   createProjectComment,
@@ -408,9 +414,7 @@ switch (command) {
     break;
   case "create":
     try {
-      const parsed = parseCreateArgs(args, (path) =>
-        existsSync(path) ? readFileSync(path, "utf8") : null,
-      );
+      const parsed = parseCreateArgs(args, readBodyFile);
       const created = await createIssue(gql, parsed, {
         loadIssueId: async (identifier) => (await loadIssue(identifier)).id,
         block: blockIssue,
@@ -423,9 +427,7 @@ switch (command) {
     break;
   case "project-comment":
     try {
-      const parsed = parseProjectCommentArgs(args, (path) =>
-        existsSync(path) ? readFileSync(path, "utf8") : null,
-      );
+      const parsed = parseProjectCommentArgs(args, readBodyFile);
       const made = await createProjectComment(gql, parsed);
       process.stdout.write(`${made.id} ${made.url}\n`);
     } catch (error) {

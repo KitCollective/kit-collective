@@ -809,6 +809,12 @@ test("every run judge is told to write its sentence to its own file, and to none
       Number(m[1]),
     );
     assert.deepEqual([...new Set(named)], [own]);
+    // Rule 3 forbids everything outside the evidence, so it must allow this one write by name.
+    const rule3 = prompt.split("\n").find((l) => l.startsWith("3. "));
+    assert.ok(
+      rule3.includes(`except writing your sentence to \`.factory/scenario-sentences/${own}.txt\``),
+      rule3,
+    );
   }
 });
 

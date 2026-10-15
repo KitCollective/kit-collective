@@ -75,6 +75,7 @@ import {
   refusePromotionPr,
   renderIssueTitles,
   renderResult,
+  retellsScenario,
   runOutcome,
   scenarioPath,
   scoreVerdicts,
@@ -355,15 +356,26 @@ async function check({ path, pr, project, milestone, dir }) {
   });
 }
 
-/** The score of a verdict list, or the usage verdict that refuses the list. */
-function scoreOf(command, { scenarios, verdicts }) {
-  const { runsPerScenario, satisfiedToMeet } = config().scenarios;
-  const parsed = parseVerdicts(verdicts, { scenarios, runsPerScenario });
+/** The entries of a verdict list, or the usage verdict that refuses the list. */
+function verdictEntries(command, { scenarios, verdicts }) {
+  const parsed = parseVerdicts(verdicts, {
+    scenarios,
+    runsPerScenario: config().scenarios.runsPerScenario,
+  });
   if (parsed.problem) {
     finish(usageLine(command, parsed.problem));
   }
-  return scoreVerdicts(parsed.entries, { scenarios: Number(scenarios), satisfiedToMeet });
+  return parsed.entries;
 }
+
+const scoreEntries = (entries, scenarios) =>
+  scoreVerdicts(entries, {
+    scenarios: Number(scenarios),
+    satisfiedToMeet: config().scenarios.satisfiedToMeet,
+  });
+
+/** The score of a verdict list, or the usage verdict that refuses the list. */
+const scoreOf = (command, args) => scoreEntries(verdictEntries(command, args), args.scenarios);
 
 function score(args) {
   const { description: _d, state: _s, ...answer } = scoreOf("score", args);
@@ -409,22 +421,32 @@ function status(args) {
   });
 }
 
-/** The judge's sentence for a run (`scenario-sentences/<run>.txt` in the work dir), or null when unusable. */
-function sentenceFile(run) {
+/**
+ * The judge's sentence for a run (`scenario-sentences/<run>.txt` in the work dir), or null when it
+ * is unusable or retells a Scenario (shares RETELL_WORDS consecutive words with its text).
+ */
+function sentenceFile(run, scenarioTexts) {
   const file = join(workDir(), "scenario-sentences", `${run}.txt`);
   try {
-    return { file, sentence: cleanSentence(readFileSync(file, "utf8")) };
+    const sentence = cleanSentence(readFileSync(file, "utf8"));
+    return {
+      file,
+      sentence: sentence && !retellsScenario(sentence, scenarioTexts) ? sentence : null,
+    };
   } catch {
     return { file, sentence: null };
   }
 }
 
-/** `linear.mjs <args>`, its stdout; exit 4 naming the cause when it fails. `done` names what was written already. */
+/** A failed `linear.mjs` call; thrown so `finally` blocks run, then reported as exit 4. */
+class LinearFailure extends Error {}
+
+/** `linear.mjs <args>`, its stdout; throws LinearFailure naming the cause. `done` names what was written already. */
 async function linear(args, what, done = "") {
   try {
     return await sh("node", [linearCli(), ...args]);
   } catch (error) {
-    return unknown(`cannot ${what}: ${firstLine(error.stderr || error.message)}${done}`);
+    throw new LinearFailure(`cannot ${what}: ${firstLine(error.stderr || error.message)}${done}`);
   }
 }
 
@@ -450,7 +472,8 @@ async function withBodyFile(text, use) {
  */
 async function report({ path, project, milestone, sha, scenarios, verdicts, dir, dryRun }) {
   const cfg = config();
-  const scored = scoreOf("report", { scenarios, verdicts });
+  const entries = verdictEntries("report", { scenarios, verdicts });
+  const scored = scoreEntries(entries, scenarios);
   const text = dir ? readFromDir(dir, path) : readFromGitHub(cfg.scenarios.holdoutRepo, path);
   if (text === null) {
     finish({
@@ -473,11 +496,8 @@ async function report({ path, project, milestone, sha, scenarios, verdicts, dir,
   }
 
   const failed = scored.scenarios.filter((s) => !s.met).map((s) => s.index);
-  const entries = parseVerdicts(verdicts, {
-    scenarios,
-    runsPerScenario: cfg.scenarios.runsPerScenario,
-  }).entries;
-  const sentences = new Map(entries.map((e) => [e.run, sentenceFile(e.run)]));
+  const scenarioTexts = parsed.scenarios.map((s) => s.text);
+  const sentences = new Map(entries.map((e) => [e.run, sentenceFile(e.run, scenarioTexts)]));
 
   let issues = [];
   if (failed.length > 0) {
@@ -561,7 +581,6 @@ async function report({ path, project, milestone, sha, scenarios, verdicts, dir,
       comment: false,
       wouldFile,
       existing,
-      filed,
     });
   }
   const comment = milestoneComment({
@@ -894,5 +913,7 @@ try {
   const text = dir ? readFromDir(dir, path) : readFromGitHub(config().scenarios.holdoutRepo, path);
   finish(args.issue ? renderIssueTitles({ path, text }) : renderResult({ command, path, text }));
 } catch (error) {
-  unknown(`scenarios: ${error.message.split("\n")[0]}`);
+  unknown(
+    error instanceof LinearFailure ? error.message : `scenarios: ${error.message.split("\n")[0]}`,
+  );
 }
