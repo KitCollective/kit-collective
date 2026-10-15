@@ -134,7 +134,7 @@ catches it in the API tests and the container smoke test.
 
 ### Push behind development ratchet (KIT-23)
 
-`.cursor/hooks/block-push-behind-development.sh` denies `git push` when the current branch is behind `origin/development`. Prevents repeating the KIT-23 checker fail (unmergeable PR because the feature branch was never rebased after `development` moved). Pushes to `development`, `staging`, and `production` are exempt. Tighten only.
+`.cursor/hooks/block-push-behind-development.sh` denies `git push` when the current branch is behind `origin/development`. Prevents repeating the KIT-23 checker fail (unmergeable PR because the feature branch was never rebased after `development` moved). Pushes to `development`, `staging`, and `production` are exempt. The hook evaluates the checkout and branch actually being pushed, not its own working directory: the hook input `cwd`, then `git -C <dir>` and `cd <dir> &&` prefixes, then a named refspec's source ref (no refspec = the directory's HEAD). When the directory cannot be determined with certainty it falls back to the base directory's HEAD, never to a more permissive result. The deny message names the directory and branch it checked. Fixed 2026-10-15: from a git worktree the hook used to check the main checkout, which blocked an up-to-date PR #313 branch and would have allowed a behind worktree branch. `.cursor/hooks/tests/block-push-behind-development.test.mjs` drives it against scratch repos. Tighten only.
 
 ### Seed DB proof evidence ratchet (KIT-34)
 

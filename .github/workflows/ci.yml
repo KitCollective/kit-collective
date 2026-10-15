@@ -336,6 +336,9 @@ jobs:
       - name: Test shared-db reset test hook
         run: node --test .cursor/hooks/tests/block-reset-database-test-on-shared-db.test.mjs
 
+      - name: Test push-behind-development hook
+        run: node --test .cursor/hooks/tests/block-push-behind-development.test.mjs
+
       - name: Check admin stamdata navigation
         run: node scripts/check-admin-stamdata-navigation.mjs
 
