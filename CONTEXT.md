@@ -181,6 +181,30 @@ _Avoid_: committing screenshots to git; comparing against `staging` or an arbitr
 What the review reports for a step whose screenshot differs from "before": the change was not asked for by the issue, or it breaks a named rule in `docs/design-system.md`. Advisory: it goes into `### Review feedback`, it does not fail the `Device flows` status, and the reviewer never edits UI.
 _Avoid_: failing a PR on a model's opinion; a suggestion without the "opinion" label; a design-lock break with no rule cited
 
+**Scenario**:
+One end-to-end story of what a Collector does and gets, in plain language, belonging to one milestone. Drafted by `/to-spec`, approved by a human, and run by the Scenario judge against `development` before that milestone promotes to staging.
+_Avoid_: test, user story, e2e; calling a slice's Device flow a Scenario (a Device flow is one issue's evidence, written by its implementer)
+
+**Holdout**:
+The set of Scenarios, kept outside this repo, that implementing and reviewing agents must not read. Its separation is provenance, not unforgeability: on a shared machine an agent could reach it, so the guard is a hook plus a record of who read it.
+_Avoid_: hidden tests; Scenarios in this repo; claiming the Holdout cannot be read
+
+**Satisfaction**:
+The fraction of Scenario runs the Scenario judge scores as giving the Collector what the Scenario promises, for one milestone on one `development` SHA. Replaces "green" as the promotion signal.
+_Avoid_: pass rate, green, coverage; confusing it with a Vision eval (which scores Vision labels at Save)
+
+**Scenario judge**:
+The factory role that turns the Holdout's Scenarios into runs, executes them, and scores Satisfaction. Never implements, never reviews a PR, and the only role that reads the Holdout.
+_Avoid_: validator (ADR-0053 uses it for ref checks), Reviewer (judges one PR's diff), tester
+
+**AFK developer**:
+The bb workflow that takes one issue from `To-do` to `Approval` (Lead, Engineer, gates, Reviewer). It sees the titles of its milestone's Scenarios, never their text.
+_Avoid_: kit-issue (its former name, ADR-0058); calling it the planner or a dispatch worker
+
+**Milestone scenarios**:
+The bb workflow in which the Scenario judge runs one milestone's Holdout against `development` and sets the `Scenarios` status on the promotion PR (ADR-0060).
+_Avoid_: milestone promotion (Promotion is the PR itself); running it per issue
+
 **Football Data Seed**:
 The Linear project for vendor ingest: Transfermarkt hierarchy, then Football Kit Archive hierarchy, then Join workflow, then Cross MCP. Successor to KitCollective Seed. Still the one seed board beside the KitCollective product project.
 _Avoid_: a third Linear project; filing fetch tickets on the product board; keeping KitCollective Seed alive beside this one
