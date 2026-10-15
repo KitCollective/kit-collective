@@ -339,7 +339,7 @@ Prevents repeating the KIT-47 checker that reviewed a local `kit-47` cut from `d
 
 ### PR lane ratchet (KIT-102)
 
-`.cursor/hooks/block-pr-lane.sh` denies `gh pr create` without `--base development`, and denies `--base production` / `--base staging` except the promotion pairs (`--head development` → staging, `--head staging` → production). Prevents repeating the KIT-101/KIT-100 land onto `production` when that was the repo default. GitHub default branch is `development`; rulesets `lane-development` / `lane-staging` / `lane-production` require a PR (production also requires one approving review). Tighten only.
+`.cursor/hooks/block-pr-lane.sh` denies `gh pr create` without `--base development`, and denies `--base production` / `--base staging` except the promotion pairs (`--head development` → staging, `--head staging` → production). Prevents repeating the KIT-101/KIT-100 land onto `production` when that was the repo default. GitHub default branch is `development`; rulesets `lane-development` / `lane-staging` / `lane-production` require a PR (production also requires one approving review; `lane-staging` also requires the `test` and `Scenarios` checks, with no bypass actors, ADR-0060). Tighten only.
 
 ### Pi helper model pin (Kimi default)
 
