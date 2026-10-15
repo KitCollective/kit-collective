@@ -168,6 +168,17 @@
     actionable.unblock.length === 0 &&
     actionable.agentSet.length === 0 &&
     actionable.triage.length === 0;
+  // One Max at a time: while a Max thread is still working, a second one would triage and start
+  // the same issues (2026-10-15: the 22:00 and 22:05 ticks both triaged the Triage pool). Skip the
+  // tick without saving state, so the next tick after that thread goes idle still sees the work.
+  const threads = JSON.parse(
+    execFileSync(bb, ["thread", "list", "--project", project, "--json"], { encoding: "utf8" }),
+  );
+  const maxBusy = (Array.isArray(threads) ? threads : (threads.threads ?? [])).some(
+    (thread) => thread.status === "active" && /^Max \d{4}-\d{2}-\d{2} /.test(thread.title ?? ""),
+  );
+  if (maxBusy) return;
+
   const fingerprint = crypto.createHash("sha256").update(JSON.stringify(actionable)).digest("hex");
   const previous = fs.existsSync(statePath) ? fs.readFileSync(statePath, "utf8").trim() : "";
   if (fingerprint === previous) return;
