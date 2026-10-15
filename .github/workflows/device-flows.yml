@@ -239,6 +239,10 @@ jobs:
         id: flows
         # An artifact run names its one flow; the others pick theirs from E2E_FLOWS and the branch.
         run: apps/mobile/.maestro/run-local.sh ${E2E_FLOW_FILE:+"$E2E_FLOW_FILE"}
+        env:
+          # Milliseconds Maestro waits for its iOS driver. Its default is 120000 (cli-2.11.0);
+          # run 38801470319 hit IOSDriverTimeoutException on a cold runner, before any flow step.
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000"
 
       - name: Upload screenshots and recordings
         if: always()
