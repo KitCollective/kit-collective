@@ -25,8 +25,16 @@ name: kit-287
     env:
       EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
 - startRecording: kc__kit-287
+# Samling must have loaded and settled before the first tap, as in KIT-286.
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
 - tapOn:
     id: jersey-tile-e2e00000-0000-4000-8000-000000000101
+    retryTapIfNoChange: true
 - extendedWaitUntil:
     visible:
       id: jersey-detail-own
