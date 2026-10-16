@@ -56,9 +56,26 @@ describe("send bid screen chrome (KIT-270)", () => {
   it("opens the number pad from the start and lets a tap outside the field keep working", () => {
     const source = readScreen();
 
-    expect(source).toMatch(/autoFocus/);
+    expect(source).toMatch(/amountInputRef\.current\?\.focus\(\)/);
     expect(source).toMatch(/keyboardShouldPersistTaps="handled"/);
     expect(source).toMatch(/keyboardDismissMode="on-drag"/);
+  });
+
+  it("focuses the field from JS, not native autoFocus, so the Færdig accessory is attached first", () => {
+    // RN Fabric: native autoFocus makes the field first responder in its own didMoveToWindow,
+    // before the sibling InputAccessoryView attaches, and the accessory never reloads the
+    // input views, so the iOS number pad opens without Færdig (hosted Device flow, 9ee252ab).
+    const source = readScreen();
+
+    expect(source).not.toMatch(/\bautoFocus\b/);
+    expect(source).toMatch(/requestAnimationFrame\(\(\) => amountInputRef\.current\?\.focus\(\)\)/);
+  });
+
+  it("links the field and the accessory by the same id", () => {
+    const source = readScreen();
+
+    expect(source).toMatch(/inputAccessoryViewID=\{[^}]*KEYBOARD_ACCESSORY_ID/);
+    expect(source).toMatch(/nativeID=\{KEYBOARD_ACCESSORY_ID\}/);
   });
 
   it("gives the number pad a Færdig control that dismisses it", () => {

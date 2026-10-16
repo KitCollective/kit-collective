@@ -84,6 +84,19 @@ export default function SendBidScreen() {
     };
   }, []);
 
+  // The number pad opens on arrival (Send bid lock), but not through the focus-on-mount prop: on iOS
+  // Fabric that makes the field first responder before the sibling InputAccessoryView attaches,
+  // and the pad then opens without Færdig. Focusing after the loaded screen has committed lets
+  // the accessory attach first.
+  const formReady = !loading && peerJersey !== null;
+  useEffect(() => {
+    if (!formReady) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => amountInputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [formReady]);
+
   const parsedAmount = Number.parseInt(amount, 10);
   const canSubmit = Number.isInteger(parsedAmount) && parsedAmount >= 1 && !submitting;
 
@@ -181,7 +194,6 @@ export default function SendBidScreen() {
               ref={amountInputRef}
               accessibilityLabel="Dit bud i kroner"
               testID="bid-amount"
-              autoFocus
               keyboardType="number-pad"
               returnKeyType="done"
               inputAccessoryViewID={Platform.OS === "ios" ? KEYBOARD_ACCESSORY_ID : undefined}
