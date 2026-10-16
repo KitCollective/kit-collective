@@ -556,18 +556,39 @@ async function finish() {
   let notQueued = 0;
   let renewed = Date.now();
   let markedMerged = false;
-  for (;;) {
-    const view = JSON.parse(
+  // `gh pr view --json` has no isInMergeQueue field (gh 2.97 and 2.102 answer "Unknown JSON field"),
+  // so whether the PR sits in the merge queue comes from the GraphQL API.
+  const [owner, name] = repo.split("/");
+  const inMergeQueue = async () =>
+    JSON.parse(
       await gh([
-        "pr",
-        "view",
-        pr,
-        "--repo",
-        repo,
-        "--json",
-        "state,mergeCommit,headRefOid,headRefName,autoMergeRequest,isInMergeQueue",
+        "api",
+        "graphql",
+        "-f",
+        "query=query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { isInMergeQueue } } }",
+        "-f",
+        `owner=${owner}`,
+        "-f",
+        `name=${name}`,
+        "-F",
+        `number=${pr}`,
       ]),
-    );
+    ).data.repository.pullRequest.isInMergeQueue === true;
+  for (;;) {
+    const view = {
+      ...JSON.parse(
+        await gh([
+          "pr",
+          "view",
+          pr,
+          "--repo",
+          repo,
+          "--json",
+          "state,mergeCommit,headRefOid,headRefName,autoMergeRequest",
+        ]),
+      ),
+      isInMergeQueue: await inMergeQueue(),
+    };
     const sha = view.headRefOid;
     const where = queueState(view);
     if (where === "closed") {

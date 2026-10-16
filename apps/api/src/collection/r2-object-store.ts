@@ -5,10 +5,15 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { collectorImageContentType } from "./image-content-type.js";
 import type { ObjectStoreAdapter } from "./object-store.js";
 
+type R2Client = { send(command: unknown): Promise<unknown> };
+
+type R2GetObjectResponse = { Body?: { transformToByteArray(): Promise<Uint8Array> } };
+
 /** R2 / S3-compatible object store using AWS SigV4 (not HTTP Basic). */
-export function createR2ObjectStore(): ObjectStoreAdapter {
+export function createR2ObjectStore(injectedClient?: R2Client): ObjectStoreAdapter {
   const endpoint = process.env.R2_ENDPOINT;
   const bucket = process.env.R2_BUCKET;
   const accessKey = process.env.R2_ACCESS_KEY_ID;
@@ -20,24 +25,30 @@ export function createR2ObjectStore(): ObjectStoreAdapter {
     );
   }
 
-  const client = new S3Client({
-    region: "auto",
-    endpoint,
-    credentials: {
-      accessKeyId: accessKey,
-      secretAccessKey: secretKey,
-    },
-    forcePathStyle: true,
-  });
+  const client: R2Client =
+    injectedClient ??
+    new S3Client({
+      region: "auto",
+      endpoint,
+      credentials: {
+        accessKeyId: accessKey,
+        secretAccessKey: secretKey,
+      },
+      forcePathStyle: true,
+    });
 
   return {
     async putObject(key: string, bytes: Uint8Array): Promise<void> {
+      const contentType = collectorImageContentType(bytes);
+      if (!contentType) {
+        throw new Error(`Refusing to store non-image bytes at ${key}`);
+      }
       await client.send(
         new PutObjectCommand({
           Bucket: bucket,
           Key: key,
           Body: bytes,
-          ContentType: "image/jpeg",
+          ContentType: contentType,
         }),
       );
     },
@@ -56,12 +67,13 @@ export function createR2ObjectStore(): ObjectStoreAdapter {
     },
     async getObject(key: string): Promise<Uint8Array | null> {
       try {
-        const response = await client.send(
+        // SAFETY: client.send(GetObjectCommand) resolves to the S3 GetObject output, whose Body exposes transformToByteArray.
+        const response = (await client.send(
           new GetObjectCommand({
             Bucket: bucket,
             Key: key,
           }),
-        );
+        )) as R2GetObjectResponse;
         const body = response.Body;
         if (!body) {
           return null;
