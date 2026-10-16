@@ -9,12 +9,7 @@ type FetchJerseys = () => Promise<{ jerseys: CollectionJersey[] }>;
 
 // Duck-typed so this module never imports the API client (and its Expo config).
 function isNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    (error as { status: unknown }).status === 404
-  );
+  return typeof error === "object" && error !== null && "status" in error && error.status === 404;
 }
 
 export async function loadOwnJersey(

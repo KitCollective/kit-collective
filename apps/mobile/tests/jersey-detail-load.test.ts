@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { loadOwnJersey } from "../src/jersey-detail/own-jersey-load";
 
 function jerseyStub(id: string): CollectionJersey {
+  // SAFETY: loadOwnJersey only reads `id`; the other fields are never touched.
   return { id } as CollectionJersey;
 }
 
