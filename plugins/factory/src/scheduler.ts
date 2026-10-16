@@ -109,26 +109,26 @@ export function createScheduler(deps: SchedulerDeps) {
     const attempts = store.consecutiveStalls(dispatch.issue);
     const capped = attempts >= config.maxAttempts;
     return [
-      `[meta-agents] ${dispatch.issue} stopped without a hand-over (attempt ${attempts} of ${config.maxAttempts}).`,
+      `[optio] ${dispatch.issue} stopped without a hand-over (attempt ${attempts} of ${config.maxAttempts}).`,
       `Machine: ${dispatch.machineId}. Launcher thread: ${dispatch.threadId ?? "none"}.`,
       `What is known: ${dispatch.outcome ?? "nothing"}.`,
       "Find the gate that failed and why, then put the issue where it belongs in the process.",
       capped
-        ? `The attempt cap is reached, so \`bb meta-agents resume ${dispatch.issue}\` is refused: park the issue for a person, then run \`bb meta-agents release ${dispatch.issue}\`.`
-        : `When another run can fix it: \`bb meta-agents resume ${dispatch.issue}\`. When a person is needed: park the issue, then \`bb meta-agents release ${dispatch.issue}\`.`,
+        ? `The attempt cap is reached, so \`bb optio resume ${dispatch.issue}\` is refused: park the issue for a person, then run \`bb optio release ${dispatch.issue}\`.`
+        : `When another run can fix it: \`bb optio resume ${dispatch.issue}\`. When a person is needed: park the issue, then \`bb optio release ${dispatch.issue}\`.`,
     ].join("\n");
   }
 
   function refillMessage(config: SchedulerConfig, plan: Plan): string {
     const shown = plan.promotable.slice(0, 30);
     return [
-      `[meta-agents] The ready queue has room for ${plan.room} more issue${plan.room === 1 ? "" : "s"} (${plan.running.length} running, ${plan.ready} ready). Focus: ${plan.focus ?? "none"}.`,
+      `[optio] The ready queue has room for ${plan.room} more issue${plan.room === 1 ? "" : "s"} (${plan.running.length} running, ${plan.ready} ready). Focus: ${plan.focus ?? "none"}.`,
       `Choose what to promote from ${config.backlogState}. These ${shown.length} of ${plan.promotable.length} are unblocked, best first by focus, priority and age:`,
       ...shown.map(
         (issue) => `- ${issue.identifier}  P${issue.priority}  ${issue.milestone ?? "no milestone"}  ${issue.title}`,
       ),
       "Read the ones you consider before you choose. Promote an issue only when it is well-formed (what to build, acceptance criteria, a write-scope line, one milestone) and it is the right next step: it finishes a milestone that is under way, it unblocks other issues, or it is in the focus milestone.",
-      `Promote with \`bb meta-agents promote <issue> --reason "<why now>"\`, at most ${plan.room}. Promote fewer, or none, when nothing is ready: say what each rejected candidate is missing.`,
+      `Promote with \`bb optio promote <issue> --reason "<why now>"\`, at most ${plan.room}. Promote fewer, or none, when nothing is ready: say what each rejected candidate is missing.`,
     ].join("\n");
   }
 

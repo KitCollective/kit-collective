@@ -55,20 +55,20 @@ export function renderBrief(agent: Agent, memories: Memory[]): string {
     "",
     "# Keeping your memory",
     "",
-    `- When you and the user decide something, or you learn something durable about this area, save it as one self-contained sentence: bb meta-agents memory add ${agent.id} "<fact>"`,
+    `- When you and the user decide something, or you learn something durable about this area, save it as one self-contained sentence: bb optio memory add ${agent.id} "<fact>"`,
     "- Save what a future session needs and cannot read from the code: decisions and their reason, preferences, pitfalls. Not status, not what you just did.",
-    "- When a memory turned out wrong or was replaced: bb meta-agents memory remove <memory-id>",
+    "- When a memory turned out wrong or was replaced: bb optio memory remove <memory-id>",
     "",
     "# Working over time",
     "",
-    `- To look into something later, or in a thread of its own, schedule a follow-up: bb meta-agents follow-up add ${agent.id} --in 2h --task "<what to investigate>" (or --at "2026-10-13T08:00"; omit both to start now). It opens a new thread of you at that time and delivers its report to the thread you scheduled it from.`,
+    `- To look into something later, or in a thread of its own, schedule a follow-up: bb optio follow-up add ${agent.id} --in 2h --task "<what to investigate>" (or --at "2026-10-13T08:00"; omit both to start now). It opens a new thread of you at that time and delivers its report to the thread you scheduled it from.`,
   ].join("\n");
 }
 
 /** What a thread gets when the user @-mentions an agent in the composer. */
 export function mentionContext(agent: Agent, memories: Memory[]): string {
   return [
-    `The user addressed the "${agent.name}" meta agent (id: ${agent.id}) in this message. Act as that agent for this message, following its instructions and memory below.`,
+    `The user addressed the "${agent.name}" standing agent (id: ${agent.id}) in this message. Act as that agent for this message, following its instructions and memory below.`,
     "",
     renderBrief(agent, memories),
   ].join("\n");
@@ -86,9 +86,9 @@ export function followUpTask(task: string): string {
 /** The instruction block every thread of an agent gets; the brief itself is fetched by command. */
 export function sessionInstructions(agent: Agent): string {
   return [
-    `You are the "${agent.name}" meta agent (id: ${agent.id}).`,
-    `Before anything else run \`bb meta-agents brief ${agent.id}\`: it prints your instructions and your memory. Follow them.`,
-    `When you and the user decide something, or you learn something durable about your area, save it with \`bb meta-agents memory add ${agent.id} "<fact>"\`.`,
+    `You are the "${agent.name}" standing agent (id: ${agent.id}).`,
+    `Before anything else run \`bb optio brief ${agent.id}\`: it prints your instructions and your memory. Follow them.`,
+    `When you and the user decide something, or you learn something durable about your area, save it with \`bb optio memory add ${agent.id} "<fact>"\`.`,
   ].join("\n");
 }
 
@@ -166,7 +166,7 @@ export function createSessions(deps: SessionDeps) {
         pluginMetadata:
           input.launcher === true
             ? { launcherFor: agent.id, runId: run.id, source: input.source }
-            : { metaAgent: agent.id, runId: run.id, source: input.source },
+            : { standingAgent: agent.id, runId: run.id, source: input.source },
       });
       deps.runs.started(run.id, thread.id);
       deps.log(`${agent.id}: started ${thread.id} (${input.source})`);

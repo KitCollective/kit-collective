@@ -10,9 +10,9 @@ import plugin from "../server.js";
 async function load(settings: Record<string, unknown> = {}) {
   let threads = 0;
   const host = createFakePluginHost({
-    pluginId: "meta-agents",
+    pluginId: "optio",
     settings: { linearWebhookSecret: "whsec", ...settings },
-    agentSkillIds: ["meta-agents"],
+    agentSkillIds: ["optio"],
     sdk: {
       threads: { spawn: async () => ({ id: `thr_${(threads += 1)}` }), get: async () => ({ status: "active", archivedAt: null }) },
       projects: { list: async () => [{ id: "proj_1", name: "kit-collective" }] },
@@ -111,14 +111,14 @@ describe("session instructions", () => {
   it("briefs a thread of a known agent and no other thread", async () => {
     const { harness } = await load();
     const forAgent = await harness.behavior.resolveAgentConfiguration(
-      makePluginAgentConfigurationContext({ pluginMetadata: { metaAgent: "devops" } }),
+      makePluginAgentConfigurationContext({ pluginMetadata: { standingAgent: "devops" } }),
     );
-    expect(JSON.stringify(forAgent)).toContain("bb meta-agents brief devops");
-    for (const pluginMetadata of [{}, { metaAgent: "nope" }, { metaAgent: 7 }] as Record<string, string | number>[]) {
+    expect(JSON.stringify(forAgent)).toContain("bb optio brief devops");
+    for (const pluginMetadata of [{}, { standingAgent: "nope" }, { standingAgent: 7 }] as Record<string, string | number>[]) {
       const other = await harness.behavior.resolveAgentConfiguration(
         makePluginAgentConfigurationContext({ pluginMetadata }),
       );
-      expect(JSON.stringify(other)).not.toContain("meta-agents brief");
+      expect(JSON.stringify(other)).not.toContain("optio brief");
     }
   });
 });
@@ -206,7 +206,7 @@ describe("POST /linear", () => {
   });
 });
 
-describe("bb meta-agents", () => {
+describe("bb optio", () => {
   it("triggers by hand and closes the session when the thread goes idle", async () => {
     const { harness } = await load();
     const started = await harness.behavior.runCli(["trigger", "devops", "--task", "Check the deploy.", "--json"]);

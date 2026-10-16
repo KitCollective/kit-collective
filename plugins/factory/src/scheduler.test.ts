@@ -220,7 +220,7 @@ describe("refilling the queue from the backlog", () => {
     expect((await scheduler.tick(on, true)).refillRequested).toBe(true);
     expect(state.notes[0]).toContain("room for 3 more issues");
     expect(state.notes[0]).toContain("- KIT-2  P3  no milestone  KIT-2");
-    expect(state.notes[0]).toContain('bb meta-agents promote <issue> --reason "<why now>"');
+    expect(state.notes[0]).toContain('bb optio promote <issue> --reason "<why now>"');
     state.clock += 10 * 60_000;
     expect((await scheduler.tick(on, true)).refillRequested).toBe(false);
     state.clock += 21 * 60_000;
@@ -335,7 +335,7 @@ describe("scheduler", () => {
     expect(first.stalled.map((dispatch) => dispatch.issue)).toEqual(["KIT-1"]);
     expect(state.notes[0]).toContain("KIT-1 stopped without a hand-over (attempt 1 of 2)");
     expect(state.notes[0]).toContain('in phase "Review gate"; the issue is in In Review');
-    expect(state.notes[0]).toContain("bb meta-agents resume KIT-1");
+    expect(state.notes[0]).toContain("bb optio resume KIT-1");
     expect(state.spawned).toHaveLength(1); // a stalled issue is not restarted by the plan
 
     const resumed = await scheduler.resume(config(), "KIT-1");

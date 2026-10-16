@@ -7,7 +7,7 @@
     "bbPluginSdk": ">=0.6.37"
   },
   "bb": {
-    "name": "Meta Agents",
+    "name": "Optio",
     "description": "Standing agents (orchestrator, devops, \u2026) that Linear webhooks and other systems start.",
     "branding": {
       "icon": "Bot"

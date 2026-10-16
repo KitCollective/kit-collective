@@ -73,12 +73,12 @@ describe("brief and instructions", () => {
     expect(brief).toContain("# Memory (2)");
     expect(brief.indexOf("Never rerun")).toBeLessThan(brief.indexOf("Staging deploys"));
     expect(brief).toContain(`(${newer.id})`);
-    expect(brief).toContain('bb meta-agents memory add devops "<fact>"');
+    expect(brief).toContain('bb optio memory add devops "<fact>"');
   });
 
   it("points every thread of the agent at its brief", () => {
     const { agent } = setup();
-    expect(sessionInstructions(agent)).toContain("run `bb meta-agents brief devops`");
+    expect(sessionInstructions(agent)).toContain("run `bb optio brief devops`");
   });
 });
 
@@ -92,7 +92,7 @@ describe("sessions", () => {
       prompt: "Why is CI red on development?",
       title: "DevOps: Why is CI red on development?",
       environment: { type: "project-default" },
-      pluginMetadata: { metaAgent: "devops", source: "chat" },
+      pluginMetadata: { standingAgent: "devops", source: "chat" },
     });
     expect(runs.list(10, "devops")).toHaveLength(1);
   });
@@ -155,7 +155,7 @@ describe("automations", () => {
     expect(state.spawned[0]).toMatchObject({
       prompt: "Check last night's CI.",
       title: "DevOps: Morning CI check",
-      pluginMetadata: { metaAgent: "devops", source: "automation" },
+      pluginMetadata: { standingAgent: "devops", source: "automation" },
     });
   });
 
@@ -180,7 +180,7 @@ describe("automations", () => {
       `bb workflows run --name kit-issue --args '{"issue":"KIT-12","resume":true,"maxRounds":3}' --json`,
     );
     expect(state.spawned[0]?.pluginMetadata).toMatchObject({ launcherFor: "devops" });
-    expect(state.spawned[0]?.pluginMetadata.metaAgent).toBeUndefined();
+    expect(state.spawned[0]?.pluginMetadata.standingAgent).toBeUndefined();
   });
 
   it("quotes workflow args so their text cannot leave the argument", () => {
@@ -195,7 +195,7 @@ describe("composer mention", () => {
     const { agents, agent, state } = setup();
     agents.remember(agent.id, "Deploys go through Coolify.", null, state.clock);
     const context = mentionContext(agent, agents.memories(agent.id));
-    expect(context).toContain('addressed the "DevOps" meta agent (id: devops)');
+    expect(context).toContain('addressed the "DevOps" standing agent (id: devops)');
     expect(context).toContain("Own the pipelines.");
     expect(context).toContain("Deploys go through Coolify.");
   });
@@ -214,7 +214,7 @@ describe("follow-ups", () => {
     expect(await sessions.runDueFollowUps()).toHaveLength(0);
     expect(state.spawned[0]?.prompt).toContain("Check that the deploy went green.");
     expect(state.spawned[0]?.prompt).toContain("your last message is delivered to the thread that asked");
-    expect(state.spawned[0]?.pluginMetadata).toMatchObject({ metaAgent: "devops", source: "follow-up" });
+    expect(state.spawned[0]?.pluginMetadata).toMatchObject({ standingAgent: "devops", source: "follow-up" });
     expect(agents.startedFollowUpByThread("thr_1")).toMatchObject({ id: followUp.id, reportThreadId: "thr_origin" });
   });
 

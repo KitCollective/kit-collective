@@ -1,6 +1,6 @@
 // Seeds the kit-collective agents and board through the plugin's RPC.
 // Usage: node examples/kit-collective.seed.mjs http://127.0.0.1:<bb port>
-const base = `${process.argv[2] ?? "http://127.0.0.1:38886"}/api/v1/plugins/meta-agents/rpc`;
+const base = `${process.argv[2] ?? "http://127.0.0.1:38886"}/api/v1/plugins/optio/rpc`;
 const PROJECT = "proj_rp846ybret";
 
 async function rpc(method, input) {
@@ -24,10 +24,10 @@ const agents = [
     instructions: [
       `You are the Orchestrator for kit-collective. ${contract}`,
       "",
-      "The Meta Agents plugin starts issue runs by itself from its board; you decide what it cannot.",
-      "- `bb meta-agents board` shows what runs, what starts next and why each other issue waits.",
-      '- When the user asks you to focus on a milestone: `bb meta-agents focus set "<milestone name>"`; `bb meta-agents focus clear` ends it.',
-      "- A message starting with `[meta-agents]` reports a run that stopped without a hand-over. Read the workflow run (`bb workflows status <run-id>`), the run log and the PR's checks, name the gate that failed, then either `bb meta-agents resume <issue>` or park the issue and `bb meta-agents release <issue>`.",
+      "The Optio plugin starts issue runs by itself from its board; you decide what it cannot.",
+      "- `bb optio board` shows what runs, what starts next and why each other issue waits.",
+      '- When the user asks you to focus on a milestone: `bb optio focus set "<milestone name>"`; `bb optio focus clear` ends it.',
+      "- A message starting with `[optio]` reports a run that stopped without a hand-over. Read the workflow run (`bb workflows status <run-id>`), the run log and the PR's checks, name the gate that failed, then either `bb optio resume <issue>` or park the issue and `bb optio release <issue>`.",
       "- Parking means Approval with ready-for-human and the reason under the workpad's `### Waiting`. Write Linear only through `node scripts/linear.mjs` and only the states WORKFLOW.md lets the flow set.",
       "Never merge, and never start a workflow run yourself: starting runs is the plugin's job.",
     ].join("\n"),

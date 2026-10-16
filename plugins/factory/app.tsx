@@ -1,4 +1,4 @@
-// bb-plugin-meta-agents — the Agents page.
+// bb-plugin-optio — the Agents page.
 //
 // Compiled by `bb plugin build` into dist/app.js + dist/app.css. React and
 // @get-bb/plugin-sdk/app are provided by the BB app at load time (never bundled),

@@ -1,4 +1,4 @@
-# bb-plugin-meta-agents
+# Optio
 
 Standing agents for [bb](https://getbb.app): an orchestrator, a devops agent, a
 frontend agent, or whatever areas a project has. Each agent has its own
@@ -11,17 +11,17 @@ Everything is set up on the **Agents** page in the bb sidebar.
 
 - **Instructions**: its area, its rules, what it may touch.
 - **Chat**: "Start chat" opens a new bb thread as the agent. The thread first
-  runs `bb meta-agents brief <agent>`, which prints the instructions and the
+  runs `bb optio brief <agent>`, which prints the instructions and the
   memory.
 - **Memory**: one-sentence facts and decisions. The agent saves them with
-  `bb meta-agents memory add` while you talk; you can add, correct and remove
+  `bb optio memory add` while you talk; you can add, correct and remove
   them on the page.
 - **Automations**: a schedule plus either a task for the agent or a named bb
   workflow (`.bb/workflows/<name>.js`) to start with arguments.
 - **Linear triggers**: start the agent when an issue of a chosen team (and
   project) is created, moves to a status or gets a label. Polled once a minute.
 - **Follow-ups**: the agent schedules a new thread of itself for later with
-  `bb meta-agents follow-up add`; the report comes back to the thread that asked.
+  `bb optio follow-up add`; the report comes back to the thread that asked.
 - **In the composer**: type `@` and pick an agent, or use the Agent picker
   beside the send button, to address an agent from any thread.
 - **HTTP trigger** (optional): another system starts the agent with a task.
@@ -44,7 +44,7 @@ npm install
 bb plugin install .
 ```
 
-Then, under Settings → Installed plugins → Meta Agents, set the Linear API key
+Then, under Settings → Installed plugins → Optio, set the Linear API key
 (or the path of a dotenv file with `LINEAR_API_KEY`) if you use the board.
 
 `examples/kit-collective.seed.mjs` creates three agents and a board through the
@@ -53,9 +53,9 @@ plugin's RPC; read it as an example of the shapes.
 ## Triggering an agent from another system
 
 ```bash
-curl -X POST "$BB_URL/api/v1/plugins/meta-agents/http/trigger" \
+curl -X POST "$BB_URL/api/v1/plugins/optio/http/trigger" \
   -H "content-type: application/json" \
-  -H "x-bb-plugin-token: $(bb plugin token meta-agents)" \
+  -H "x-bb-plugin-token: $(bb plugin token optio)" \
   -d '{"agent":"devops","task":"CI failed on development.","payload":{"run":1234}}'
 ```
 

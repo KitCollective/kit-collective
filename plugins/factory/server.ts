@@ -1,9 +1,9 @@
-// bb-plugin-meta-agents — standing agents with instructions, memory and
+// bb-plugin-optio — standing agents with instructions, memory and
 // automations, and the orchestrator's board.
 //
 // An agent is a row in the plugin's database: a name, a project and standing
 // instructions. Every way of starting it (a chat from the Agents page, an
-// automation, an HTTP trigger, `bb meta-agents trigger`) spawns one bb thread
+// automation, an HTTP trigger, `bb optio trigger`) spawns one bb thread
 // that is told to read the agent's brief: its instructions plus the memory it
 // has saved in earlier sessions. An automation can also start a named bb
 // workflow instead of asking the agent.
@@ -157,11 +157,11 @@ export default async function plugin(bb: BbPluginApi) {
   // by this plugin at spawn, but anyone can write it: it only ever selects
   // which brief to read, never a permission.
   bb.agents.configure((context) => {
-    const id = context.pluginMetadata.metaAgent;
+    const id = context.pluginMetadata.standingAgent;
     const agent = typeof id === "string" ? agents.get(id) : null;
     return {
       tools: [],
-      skills: ["meta-agents"],
+      skills: ["optio"],
       ...(agent === null ? {} : { instructions: sessionInstructions(agent) }),
     };
   });
@@ -200,7 +200,7 @@ export default async function plugin(bb: BbPluginApi) {
       const value = line?.[1]?.replace(/^(["'])(.*)\1$/, "$2") ?? "";
       if (value !== "") return value;
     }
-    throw new Error("no Linear API key: set it under Settings, Installed plugins, Meta Agents");
+    throw new Error("no Linear API key: set it under Settings, Installed plugins, Optio");
   }
 
   /** The stored board config, or null when the board was never set up. */
@@ -232,7 +232,7 @@ export default async function plugin(bb: BbPluginApi) {
     if (agent === null) throw new Error(`the board's orchestrator agent "${config.orchestratorAgent}" does not exist`);
     const run = await sessions.start(agent, {
       source: "manual",
-      task: "Run `bb meta-agents board` and reply with a three-line summary. Reports about stopped runs will arrive in this thread.",
+      task: "Run `bb optio board` and reply with a three-line summary. Reports about stopped runs will arrive in this thread.",
       label: "board",
     });
     if (run === null || run.threadId === null) throw new Error(run?.reason ?? "could not start the orchestrator thread");
@@ -405,7 +405,7 @@ export default async function plugin(bb: BbPluginApi) {
         input: [
           {
             type: "text",
-            text: `[meta-agents] Report from the follow-up ${name} scheduled ("${followUp.task.slice(0, 200)}"), thread ${thread.id}:\n\n${lastAssistantText ?? "(the follow-up ended without a message)"}`,
+            text: `[optio] Report from the follow-up ${name} scheduled ("${followUp.task.slice(0, 200)}"), thread ${thread.id}:\n\n${lastAssistantText ?? "(the follow-up ended without a message)"}`,
             mentions: [],
           },
         ],
@@ -638,7 +638,7 @@ export default async function plugin(bb: BbPluginApi) {
     },
   });
 
-  // ---- bb meta-agents ----------------------------------------------------------------------
+  // ---- bb optio ----------------------------------------------------------------------
 
   const json = { type: "boolean", description: "Emit machine-readable JSON" } as const;
   /** Turns a rejected promise into a CLI failure with the error's own text. */
@@ -650,7 +650,7 @@ export default async function plugin(bb: BbPluginApi) {
     if (agent === null) {
       throw new PluginCliError(`no agent "${id}"`, {
         code: "agent_not_found",
-        hint: "Run `bb meta-agents list` to see agent ids.",
+        hint: "Run `bb optio list` to see agent ids.",
       });
     }
     return agent;
@@ -659,8 +659,8 @@ export default async function plugin(bb: BbPluginApi) {
 
   bb.cli.register(
     defineCli({
-      name: "meta-agents",
-      summary: "Meta agents: their brief and memory, their runs, and the orchestrator's board",
+      name: "optio",
+      summary: "Standing agents: their brief and memory, their runs, and the orchestrator's board",
       commands: {
         list: cliCommand({
           summary: "List the agents",

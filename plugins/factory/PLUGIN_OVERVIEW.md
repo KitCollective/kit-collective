@@ -13,7 +13,7 @@ frontend agent, each with its own instructions, memory and recurring tasks.
 - A board for the orchestrator: it reads a Linear team's issues every minute,
   starts the ones that are unblocked within each machine's capacity, takes a
   focus milestone first, and reports a run that stopped at a gate.
-- A `bb meta-agents` command for the same data from a terminal, and a
+- A `bb optio` command for the same data from a terminal, and a
   token-guarded route so another system can start an agent.
 
 ## How it works

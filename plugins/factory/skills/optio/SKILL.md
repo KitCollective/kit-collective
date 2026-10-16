@@ -1,58 +1,58 @@
 ---
-name: meta-agents
-description: Work as, or manage, a meta agent of the Meta Agents plugin: load an agent's brief and memory, save a decision to its memory, read the orchestrator's board, set a milestone focus, and handle a `[meta-agents]` report of a stopped run. Use when your instructions name you a meta agent, when the user asks what is running or waiting, asks to focus on a milestone, or asks to add or change an agent or automation.
+name: optio
+description: Work as, or manage, a standing agent of the Optio plugin: load an agent's brief and memory, save a decision to its memory, read the orchestrator's board, set a milestone focus, and handle an `[optio]` report of a stopped run. Use when your instructions name you a standing agent, when the user asks what is running or waiting, asks to focus on a milestone, or asks to add or change an agent or automation.
 ---
 
-# Meta agents
+# Optio
 
 An agent is a name, a project and standing instructions, plus the memory it
 has saved. The user creates and edits agents, their memory and their
 automations on the **Agents** page in the bb sidebar; the commands below are the
 same data from a shell.
 
-## If you are a meta agent
+## If you are a standing agent
 
 Your thread instructions name you and your agent id.
 
-1. Run `bb meta-agents brief <agent>` before anything else. It prints your
+1. Run `bb optio brief <agent>` before anything else. It prints your
    instructions and your memory, newest first. Follow them.
 2. When you and the user decide something, or you learn something durable about
    your area, save it at once as one self-contained sentence:
-   `bb meta-agents memory add <agent> "<fact>"`.
+   `bb optio memory add <agent> "<fact>"`.
    Save what a later session needs and cannot read from the code: a decision
    and its reason, a preference, a pitfall. Do not save status or what you just
    did.
-3. When a memory is wrong or was replaced: `bb meta-agents memory remove <memory-id>`.
+3. When a memory is wrong or was replaced: `bb optio memory remove <memory-id>`.
 
 4. To look into something later, or in a thread of its own, schedule a
    follow-up instead of waiting:
-   `bb meta-agents follow-up add <agent> --in 2h --task "<what to investigate>"`
+   `bb optio follow-up add <agent> --in 2h --task "<what to investigate>"`
    (`--at "2026-10-13T08:00"` for a clock time; neither to start now). It opens
    a new thread of you at that time. That thread's last message is delivered
-   to the thread you scheduled it from, as a `[meta-agents] Report …` message.
+   to the thread you scheduled it from, as an `[optio] Report …` message.
 
 ## In the composer
 
 The user addresses an agent from any composer by typing `@` and picking it
 under Agents, or with the Agent picker beside the send button. The message then
 carries that agent's brief as context: when you see "The user addressed the …
-meta agent", act as that agent for the message.
+standing agent", act as that agent for the message.
 
 ## Commands
 
 | Command | Effect |
 | --- | --- |
-| `bb meta-agents list [--json]` | The agents, with their memory and automation counts. |
-| `bb meta-agents brief <agent>` | The agent's instructions and memory. |
-| `bb meta-agents memory add <agent> <text>` | Save one memory (1 to 2000 characters). |
-| `bb meta-agents memory list <agent> [--json]` | The agent's memory with ids. |
-| `bb meta-agents memory remove <memory-id>` | Delete one memory. |
-| `bb meta-agents trigger <agent> --task "<task>"` | Start a new thread of the agent with a task. |
-| `bb meta-agents follow-up add <agent> --task "<task>" [--in <duration> \| --at <time>]` | Schedule a new thread of the agent that reports back to the calling thread. At most 30 days ahead. |
-| `bb meta-agents follow-up list [--agent <id>]` | Follow-ups that are waiting or running. |
-| `bb meta-agents follow-up cancel <id>` | Cancel a follow-up that has not started. |
-| `bb meta-agents runs [--agent <id>] [--limit <n>]` | Recent sessions: chats, automations, triggers. |
-| `bb meta-agents urls` | The routes other systems call. |
+| `bb optio list [--json]` | The agents, with their memory and automation counts. |
+| `bb optio brief <agent>` | The agent's instructions and memory. |
+| `bb optio memory add <agent> <text>` | Save one memory (1 to 2000 characters). |
+| `bb optio memory list <agent> [--json]` | The agent's memory with ids. |
+| `bb optio memory remove <memory-id>` | Delete one memory. |
+| `bb optio trigger <agent> --task "<task>"` | Start a new thread of the agent with a task. |
+| `bb optio follow-up add <agent> --task "<task>" [--in <duration> \| --at <time>]` | Schedule a new thread of the agent that reports back to the calling thread. At most 30 days ahead. |
+| `bb optio follow-up list [--agent <id>]` | Follow-ups that are waiting or running. |
+| `bb optio follow-up cancel <id>` | Cancel a follow-up that has not started. |
+| `bb optio runs [--agent <id>] [--limit <n>]` | Recent sessions: chats, automations, triggers. |
+| `bb optio urls` | The routes other systems call. |
 
 Agents, instructions and automations are created and changed on the Agents
 page, not from a shell.
@@ -93,42 +93,42 @@ reads the team's issues from Linear and:
   priority, then age. An issue it started before is started with `resume`;
 - when "refill from Backlog" is on and the ready queue has room, asks the
   orchestrator agent, at most once per half hour, to choose backlog issues to
-  promote. The orchestrator promotes with `bb meta-agents promote`; the workflow
+  promote. The orchestrator promotes with `bb optio promote`; the workflow
   the board then starts is what moves the issue on to In Progress;
 - moves a blocked issue back to the dispatch state once every blocker is
   completed or canceled;
 - closes its runs that ended. A run whose issue is still in the dispatch state
   or a working state **stalled**: it stopped at a gate. The board never restarts
   a stalled issue by itself and never merges; it reports the stall to the
-  orchestrator agent's thread in a `[meta-agents]` message.
+  orchestrator agent's thread in an `[optio]` message.
 
 Mode, focus, machines, capacity and routing rules are edited on the Agents
 page under Board.
 
 | Command | Effect |
 | --- | --- |
-| `bb meta-agents board [--json]` | Open issues per state and milestone, what runs, what starts next, and why each other ready issue waits. Reads Linear; writes nothing. |
-| `bb meta-agents focus set "<milestone>"` | That milestone's issues go first; others fill the capacity left. |
-| `bb meta-agents focus clear` | Back to priority order. |
-| `bb meta-agents promote <issue> --reason "<why now>"` | Move a backlog issue to the dispatch state with the ready label and the reason as a comment. Refused when the issue is not in the backlog, is blocked, carries a skip label, or the queue (running plus ready) already equals the machines' capacity. Live mode only. |
-| `bb meta-agents resume <issue> [--machine <id>]` | Start a stalled issue's workflow again with `resume`. Refused at the attempt cap or when the machine is full. |
-| `bb meta-agents release <issue>` | Clear a stall after the issue was parked or fixed by hand. |
-| `bb meta-agents dispatches [--limit <n>]` | The workflow runs the board started. |
+| `bb optio board [--json]` | Open issues per state and milestone, what runs, what starts next, and why each other ready issue waits. Reads Linear; writes nothing. |
+| `bb optio focus set "<milestone>"` | That milestone's issues go first; others fill the capacity left. |
+| `bb optio focus clear` | Back to priority order. |
+| `bb optio promote <issue> --reason "<why now>"` | Move a backlog issue to the dispatch state with the ready label and the reason as a comment. Refused when the issue is not in the backlog, is blocked, carries a skip label, or the queue (running plus ready) already equals the machines' capacity. Live mode only. |
+| `bb optio resume <issue> [--machine <id>]` | Start a stalled issue's workflow again with `resume`. Refused at the attempt cap or when the machine is full. |
+| `bb optio release <issue>` | Clear a stall after the issue was parked or fixed by hand. |
+| `bb optio dispatches [--limit <n>]` | The workflow runs the board started. |
 
-### When a `[meta-agents]` message arrives
+### When an `[optio]` message arrives
 
 1. Read what it says is known, then the workflow run (`bb workflows status
    <run-id>`), the project's run log and the pull request's checks. Name the
    gate that failed.
-2. If another run can fix it: `bb meta-agents resume <issue>`.
+2. If another run can fix it: `bb optio resume <issue>`.
 3. If a person is needed, or the message says the cap is reached: park the
    issue the way the project's workflow document says, then
-   `bb meta-agents release <issue>`.
+   `bb optio release <issue>`.
 
 ## Triggers from outside
 
-`POST /api/v1/plugins/meta-agents/http/trigger` with header `x-bb-plugin-token`
-(`bb plugin token meta-agents`) and body
+`POST /api/v1/plugins/optio/http/trigger` with header `x-bb-plugin-token`
+(`bb plugin token optio`) and body
 `{ "agent": "<id>", "task": "…", "payload": {…}, "deliveryId": "<optional dedupe id>" }`
 starts an agent whose "Other systems may start this agent over HTTP" box is
 ticked. The payload reaches the agent as data, not as instructions.
