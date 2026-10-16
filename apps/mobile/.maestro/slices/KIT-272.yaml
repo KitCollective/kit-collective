@@ -80,16 +80,16 @@ name: kit-272
       id: door-email-error
     timeout: 5000
 - assertNotVisible:
-    id: code-stub
+    id: code-screen
 - takeScreenshot: kc__kit-272__03-invalid-email
-# AC 6: a valid e-mail hands over to the code step (a stub until KIT-275).
+# AC 6: a valid e-mail hands over to the code step.
 - eraseText: 40
 - inputText: ${MAESTRO_COLLECTOR_EMAIL}
 - tapOn:
     id: door-submit
 - extendedWaitUntil:
     visible:
-      id: code-stub
+      id: code-screen
     timeout: 10000
 - waitForAnimationToEnd:
     timeout: 5000

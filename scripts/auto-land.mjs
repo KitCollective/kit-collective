@@ -254,7 +254,11 @@ const viewPr = async () =>
 
 /**
  * `git merge-tree --write-tree` of the lane into HEAD: no working-tree or index change, nothing pushed.
- * Null when the merge is clean (or HEAD already holds the lane), a `conflict` refusal otherwise.
+ * Null when the merge is clean (or HEAD already holds the lane), a `conflict` refusal when it clashes,
+ * and `{ unknown: true }` when git itself failed, so the caller can give back a lock it holds first.
+ * No `--quiet`: it needs git 2.40, the bb-harness container has 2.39, and git 2.39 answered every
+ * trial merge with its usage text (exit 129), which stopped every auto-land of a branch behind the lane.
+ * The tree id the command prints is not used; its exit code says clean (0) or conflict (1).
  */
 async function trialMerge() {
   const held =
@@ -262,13 +266,7 @@ async function trialMerge() {
   if (held) {
     return null;
   }
-  const trial = await sh("git", [
-    "merge-tree",
-    "--write-tree",
-    "--quiet",
-    `origin/${lane}`,
-    "HEAD",
-  ]);
+  const trial = await sh("git", ["merge-tree", "--write-tree", `origin/${lane}`, "HEAD"]);
   if (trial.code === 0) {
     return null;
   }
@@ -278,7 +276,10 @@ async function trialMerge() {
       line: `REFUSED (auto-land): conflict: the branch conflicts with origin/${lane}; a person resolves it`,
     };
   }
-  out(4, `UNKNOWN (auto-land): the trial merge with origin/${lane} failed: ${trial.line}`);
+  return {
+    unknown: true,
+    line: `UNKNOWN (auto-land): the trial merge with origin/${lane} failed: ${trial.line}`,
+  };
 }
 
 async function start() {
@@ -304,6 +305,7 @@ async function start() {
   // Being behind the lane is not a problem by itself (the merge queue tests the combined state), but a
   // conflict is: a trial merge that touches nothing says which it is.
   const conflict = await trialMerge();
+  if (conflict?.unknown) out(4, conflict.line);
   if (conflict) await refused(conflict, head);
 
   const issueBad = issueReadiness({
@@ -469,6 +471,11 @@ async function start() {
   // The lane may have moved while the checks ran: fetch it again and trial-merge under the lock.
   await sh("git", ["fetch", "--quiet", "origin", lane]);
   const clash = await trialMerge();
+  if (clash?.unknown) {
+    // Give the lock back before an UNKNOWN exit, or every later start waits on a lock nobody holds.
+    await script("merge-lock.mjs", "release", pr);
+    out(4, clash.line);
+  }
   if (clash) await letGo(clash);
   const prHead = (await viewPr()).headRefOid;
   if (prHead.toLowerCase() !== head.toLowerCase()) {
@@ -549,18 +556,39 @@ async function finish() {
   let notQueued = 0;
   let renewed = Date.now();
   let markedMerged = false;
-  for (;;) {
-    const view = JSON.parse(
+  // `gh pr view --json` has no isInMergeQueue field (gh 2.97 and 2.102 answer "Unknown JSON field"),
+  // so whether the PR sits in the merge queue comes from the GraphQL API.
+  const [owner, name] = repo.split("/");
+  const inMergeQueue = async () =>
+    JSON.parse(
       await gh([
-        "pr",
-        "view",
-        pr,
-        "--repo",
-        repo,
-        "--json",
-        "state,mergeCommit,headRefOid,headRefName,autoMergeRequest,isInMergeQueue",
+        "api",
+        "graphql",
+        "-f",
+        "query=query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { isInMergeQueue } } }",
+        "-f",
+        `owner=${owner}`,
+        "-f",
+        `name=${name}`,
+        "-F",
+        `number=${pr}`,
       ]),
-    );
+    ).data.repository.pullRequest.isInMergeQueue === true;
+  for (;;) {
+    const view = {
+      ...JSON.parse(
+        await gh([
+          "pr",
+          "view",
+          pr,
+          "--repo",
+          repo,
+          "--json",
+          "state,mergeCommit,headRefOid,headRefName,autoMergeRequest",
+        ]),
+      ),
+      isInMergeQueue: await inMergeQueue(),
+    };
     const sha = view.headRefOid;
     const where = queueState(view);
     if (where === "closed") {

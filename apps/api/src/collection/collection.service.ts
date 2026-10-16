@@ -108,6 +108,7 @@ import {
   uniqueNonNullIds,
 } from "./catalog-side.js";
 import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
+import { collectorImageContentType } from "./image-content-type.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store.js";
 import { PhotoDerivativeQueueService } from "./photo-derivative-queue.service.js";
 import { derivativeKeysForPhoto, storeGpsStrippedOriginal } from "./photo-derivatives.js";
@@ -225,6 +226,9 @@ function decodeBase64Photo(contentBase64: string, maxBytes?: number): Uint8Array
   }
   if (maxBytes !== undefined && bytes.length > maxBytes) {
     throw new BadRequestException("Photo exceeds the maximum upload size");
+  }
+  if (!collectorImageContentType(bytes)) {
+    throw new BadRequestException("Photo is not a JPEG, PNG, WebP or HEIC image");
   }
   return Uint8Array.from(bytes);
 }

@@ -53,6 +53,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { OBJECT_STORE } from "../dist/collection/collection.service.js";
 import type { ObjectStoreAdapter } from "../dist/collection/object-store.js";
+import { createR2ObjectStore } from "../dist/collection/r2-object-store.js";
 import { FailingVisionAdapter, SlowVisionAdapter } from "../dist/vision/test-vision.adapters.js";
 import { VISION_ADAPTER } from "../dist/vision/vision.adapter.js";
 import { clearAuthThrottleHits } from "./helpers/auth-throttle.js";
@@ -2142,6 +2143,40 @@ describe("Collection /v1", () => {
     }
   });
 
+  it("rejects a save whose photo bytes are not an image, storing nothing", async () => {
+    const session = await registerSession(app, "save-non-image@example.com");
+    const fixture = await insertClubSeasonFixture();
+    const objectStore = app.get<ObjectStoreAdapter>(OBJECT_STORE);
+    const putKeys: string[] = [];
+    const originalPut = objectStore.putObject.bind(objectStore);
+    objectStore.putObject = async (key, bytes) => {
+      putKeys.push(key);
+      await originalPut(key, bytes);
+    };
+    const notAnImage = Buffer.from("%PDF-1.4 not an image").toString("base64");
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/collection/jerseys/save",
+        headers: { authorization: `Bearer ${session.accessToken}` },
+        payload: {
+          clubId: fixture.clubId,
+          seasonId: fixture.seasonId,
+          type: "home",
+          size: "m",
+          condition: "used",
+          photos: [{ role: "front", source: "gallery", contentBase64: notAnImage }],
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(putKeys).toEqual([]);
+    } finally {
+      objectStore.putObject = originalPut;
+    }
+  });
+
   it("rejects oversized save uploads", async () => {
     const session = await registerSession(app, "grid-clamp@example.com");
     const fixture = await insertClubSeasonFixture();
@@ -2250,5 +2285,82 @@ describe("Collection /v1", () => {
     await verifyPool.end();
     expect(row?.playerId).toBe(insertedPlayer!.id);
     expect(patchRows.map((entry) => entry.patchId)).toEqual([insertedPatch!.id]);
+  });
+});
+
+describe("R2 object store content type", () => {
+  const R2_ENV_KEYS = [
+    "R2_ENDPOINT",
+    "R2_BUCKET",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+  ] as const;
+  const savedEnv: Partial<Record<(typeof R2_ENV_KEYS)[number], string>> = {};
+
+  beforeAll(() => {
+    for (const key of R2_ENV_KEYS) {
+      savedEnv[key] = process.env[key];
+    }
+    process.env.R2_ENDPOINT = "https://r2.example.test";
+    process.env.R2_BUCKET = "kit-test";
+    process.env.R2_ACCESS_KEY_ID = "test-access-key";
+    process.env.R2_SECRET_ACCESS_KEY = "test-secret-key";
+  });
+
+  afterAll(() => {
+    for (const key of R2_ENV_KEYS) {
+      const previous = savedEnv[key];
+      if (previous === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous;
+      }
+    }
+  });
+
+  function storeWithRecordingClient() {
+    const sent: Array<{ input: { ContentType?: string; Key?: string } }> = [];
+    const client = {
+      async send(command: unknown) {
+        // SAFETY: the store only sends PutObjectCommand here, whose `input` carries Key and ContentType.
+        sent.push(command as (typeof sent)[number]);
+        return {};
+      },
+    };
+    return { store: createR2ObjectStore(client), sent };
+  }
+
+  function riffWebp(): Uint8Array {
+    const bytes = new Uint8Array(16);
+    bytes.set([0x52, 0x49, 0x46, 0x46], 0);
+    bytes.set([0xac, 0x03, 0x00, 0x00], 4);
+    bytes.set([0x57, 0x45, 0x42, 0x50], 8);
+    bytes.set([0x56, 0x50, 0x38, 0x58], 12);
+    return bytes;
+  }
+
+  it("stores JPEG bytes as image/jpeg", async () => {
+    const { store, sent } = storeWithRecordingClient();
+    await store.putObject("jpeg-key", Uint8Array.from(Buffer.from(JPEG_BASE64, "base64")));
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.input.ContentType).toBe("image/jpeg");
+  });
+
+  it("stores WebP bytes as image/webp, not image/jpeg", async () => {
+    const { store, sent } = storeWithRecordingClient();
+    await store.putObject("webp-key", riffWebp());
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.input.ContentType).toBe("image/webp");
+  });
+
+  it("rejects non-image bytes without sending to R2", async () => {
+    const { store, sent } = storeWithRecordingClient();
+    const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
+    await expect(store.putObject("pdf-key", pdf)).rejects.toThrow("pdf-key");
+    const riffWave = new Uint8Array(16);
+    riffWave.set([0x52, 0x49, 0x46, 0x46], 0);
+    riffWave.set([0x57, 0x41, 0x56, 0x45], 8);
+    await expect(store.putObject("wave-key", riffWave)).rejects.toThrow("wave-key");
+    expect(sent).toHaveLength(0);
   });
 });

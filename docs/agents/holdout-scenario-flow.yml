@@ -1,21 +1,21 @@
 name: Scenario flow
 
-# Turns a flow file into a named run artifact (KIT-352, ADR-0060), so the hosted
-# Device flows run can take it without the flow ever being committed:
+# The SOURCE of the Holdout repo's producer workflow (KIT-366, ADR-0060). It does
+# not run here: `scripts/holdout-flows-wizard.sh` (stage 1) pushes this file as
+# `.github/workflows/scenario-flow.yml` onto the Holdout repo's `main`, the repo
+# named by `scenarios.holdoutRepo` in factory.config.json. Change it here, then run
+# that stage again.
 #
-#   jq -n --arg name scenario-smoke --rawfile flow flow.yaml '{name: $name, flow: $flow}' |
-#     gh workflow run scenario-flow.yml --ref development --json
+# It turns a flow into a named run artifact of the Holdout repo, so the flow's
+# text never enters kit-collective: not a dispatch input, a log or an artifact
+# anyone who reads kit-collective can open. `node scripts/scenarios.mjs flow
+# --name <name>` dispatches it with SCENARIOS_GH_TOKEN; the hosted Device flows
+# run (`device-flows.yml`, flows: artifact) downloads `scenario-flow-<name>` from
+# here with the Actions secret SCENARIO_FLOWS_TOKEN. docs/agents/scenarios.md.
 #
-# The artifact is `scenario-flow-<name>` and holds one file, `<name>.yaml`. Hand its
-# run id to `device-flows.yml` (flows: artifact). The flow text is never printed to
-# the log, but anyone who can read this repository can download the artifact and
-# read the dispatch inputs.
-#
-# Triggers:
-#   - manual: the flow text and its name
-#   - a PR that changes this file: one no-op job. GitHub only dispatches a workflow
-#     it has seen run, and before the first merge it has not seen this one; the PR
-#     run makes the branch's file dispatchable with `--ref <branch>`.
+# The artifact holds one file, `<name>.yaml`, and is kept 1 day: the hosted runs
+# start within minutes of it (a Milestone scenarios run waits at most about 4
+# hours). The flow text is never printed to the log.
 
 run-name: ${{ inputs.name && format('Scenario flow {0}', inputs.name) || 'Scenario flow' }}
 
@@ -30,9 +30,6 @@ on:
         description: The Maestro flow, the whole YAML file
         required: true
         type: string
-  pull_request:
-    paths:
-      - .github/workflows/scenario-flow.yml
 
 permissions:
   contents: read
@@ -40,7 +37,6 @@ permissions:
 jobs:
   flow:
     name: Flow artifact
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -65,13 +61,5 @@ jobs:
         with:
           name: scenario-flow-${{ inputs.name }}
           path: ${{ runner.temp }}/scenario-flow/${{ inputs.name }}.yaml
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: error
-
-  registered:
-    name: Dispatchable
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - run: echo "Scenario flow runs by workflow_dispatch only; this run lets GitHub dispatch the branch's file."

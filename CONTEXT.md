@@ -100,7 +100,7 @@ Worker moving Approval → Merging when the PR is MERGEABLE, required checks are
 _Avoid_: force-push; treating Auto-merge as land; requiring Pi delegate for flip
 
 **Promotion**:
-A Linear **milestone** complete → `staging`; release helper → `production`. Separate from land. Not the whole project at once.
+A Linear **milestone** complete → `staging`; release helper → `production`. Separate from land. Not the whole project at once. The `development → staging` PR merges only with a green `Scenarios` from Milestone scenarios, and only by a person.
 _Avoid_: deploy, release PR as a synonym for land, treating the Linear project as one staging dump
 
 **Triage** *(Linear state)*:
@@ -194,7 +194,7 @@ The set of Scenarios, kept outside this repo, that implementing and reviewing ag
 _Avoid_: hidden tests; Scenarios in this repo; claiming the Holdout cannot be read
 
 **Satisfaction**:
-The fraction of Scenario runs the Scenario judge scores as giving the Collector what the Scenario promises, for one milestone on one `development` SHA. Replaces "green" as the promotion signal.
+The fraction of Scenario runs the Scenario judge scores as giving the Collector what the Scenario promises, for one milestone on one `development` SHA. Reported on the promotion PR, never the gate: the milestone promotes only when every Scenario is met (ADR-0060).
 _Avoid_: pass rate, green, coverage; confusing it with a Vision eval (which scores Vision labels at Save)
 
 **Scenario judge**:
@@ -208,6 +208,18 @@ _Avoid_: kit-issue (its former name, ADR-0058); calling it the planner or a disp
 **Milestone scenarios**:
 The bb workflow in which the Scenario judge runs one milestone's Holdout against `development` and sets the `Scenarios` status on the promotion PR (ADR-0060).
 _Avoid_: milestone promotion (Promotion is the PR itself); running it per issue
+
+**Factory**:
+The bb plugin that runs KitCollective's Loops from Linear: the Board, the Loop registry, the record of runs and its page in bb. Its code names no product; KitCollective's names live in `factory.config.json`.
+_Avoid_: meta-agents (its former name); the PI worker (archived); harness (the machine the runs use)
+
+**Loop**:
+One registered kind of unattended work: a trigger (a Linear condition or a schedule), the bb workflow it runs, the roles in it, and the hand-over it ends in. AFK developer and Milestone scenarios are Loops.
+_Avoid_: workflow as a synonym (a workflow is the file a Loop runs); session (a person is present); automation (bb's scheduling primitive)
+
+**Board**:
+The Factory's dispatcher: every tick it reads Linear, finds what triggers a Loop, and starts runs within each machine's capacity and without write-scope overlap. The only dispatcher.
+_Avoid_: planner (the archived claim agent); kit-dispatch or a dispatcher thread; a second dispatcher beside it
 
 **Football Data Seed**:
 The Linear project for vendor ingest: Transfermarkt hierarchy, then Football Kit Archive hierarchy, then Join workflow, then Cross MCP. Successor to KitCollective Seed. Still the one seed board beside the KitCollective product project.

@@ -10,7 +10,7 @@ import { SCENARIO_FAILURE_FOOTER } from "./linear-issues.mjs";
 export const SECTIONS = ["Starting situation", "Actions", "End state"];
 
 export const USAGE =
-  'USAGE: node scripts/scenarios.mjs titles|read|put --project "<name>" --milestone "<name>" [--dir <path>] (put also needs --file <draft>); or titles --issue <KEY> [--dir <path>]; or check|score|status|report|flow|run|wait (Milestone scenarios, docs/agents/scenarios.md)';
+  'USAGE: node scripts/scenarios.mjs titles|read|put --project "<name>" --milestone "<name>" [--dir <path>] (put also needs --file <draft>); or titles --issue <KEY> [--dir <path>]; or check|score|status|report|flow|run|wait|evidence|access (Milestone scenarios, docs/agents/scenarios.md)';
 
 /** What each Milestone scenarios subcommand takes (KIT-353). `--dry-run` is the one flag without a value. */
 export const MILESTONE_USAGE = {
@@ -23,7 +23,17 @@ export const MILESTONE_USAGE = {
   flow: "flow --name <name> [--timeout <s>]",
   run: "run --flow-run <id> --name <name>",
   wait: "wait --runs <id>,<id>,... --sha <40 hex> [--timeout <s>]",
+  evidence: "evidence --dir <Maestro output dir>",
+  access: "access",
 };
+
+/**
+ * The Holdout repo's default branch, where its producer workflow `scenario-flow.yml` lives (KIT-366;
+ * its source is docs/agents/holdout-scenario-flow.yml, pushed by scripts/holdout-flows-wizard.sh).
+ */
+export const HOLDOUT_REF = "main";
+/** The Holdout-only token the CLI uses for every call to the Holdout repo (KIT-366, `bb.env`). */
+export const HOLDOUT_TOKEN_NAME = "SCENARIOS_GH_TOKEN";
 
 /** A Linear issue key, the only value `titles --issue` accepts. */
 export const ISSUE_KEY = /^[A-Z][A-Z0-9]*-\d+$/;
@@ -266,6 +276,8 @@ const VALUE_FLAGS = {
   flow: ["--name", "--timeout"],
   run: ["--flow-run", "--name"],
   wait: ["--runs", "--sha", "--timeout"],
+  evidence: ["--dir"],
+  access: [],
 };
 
 const camel = (flag) => flag.slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
@@ -359,6 +371,10 @@ function parseMilestoneArgs(command, rest) {
         runs.length <= 100;
       return valid && FULL_SHA.test(values.sha ?? "") ? ok({ runs: runs.map(Number) }) : usage;
     }
+    case "evidence":
+      return values.dir ? ok() : usage;
+    case "access":
+      return ok();
     default:
       return usage;
   }
