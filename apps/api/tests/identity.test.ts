@@ -678,6 +678,36 @@ describe("Identity /v1", () => {
     expect(avatarBytes.headers["content-type"]).toBe("image/jpeg");
   });
 
+  it("rejects a non-image avatar with 400 and stores nothing", async () => {
+    const session = await registerSession(app, "avatar-not-image@example.com");
+
+    const upload = await app.inject({
+      method: "POST",
+      url: "/v1/identity/avatar",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: { contentBase64: Buffer.from("%PDF-1.4 not an image").toString("base64") },
+    });
+
+    expect(upload.statusCode).toBe(400);
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    expect(me.statusCode).toBe(200);
+    expect(identityMeSchema.parse(JSON.parse(me.body)).avatarUrl).toBeNull();
+
+    const avatarBytes = await app.inject({
+      method: "GET",
+      url: "/v1/identity/avatar",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    expect(avatarBytes.statusCode).toBe(404);
+  });
+
   it("rejects unauthenticated collection requests with 401", async () => {
     const response = await app.inject({
       method: "GET",
