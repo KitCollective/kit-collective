@@ -44,6 +44,23 @@ async function registerSession(app: NestFastifyApplication, email: string) {
   return identitySessionSchema.parse(JSON.parse(response.body));
 }
 
+async function waitForJob(app: NestFastifyApplication, token: string, jobId: string) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/collection/vision/jobs/${jobId}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const job = visionJobResponseSchema.parse(response.json());
+    if (job.status !== "pending") {
+      return job;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  throw new Error("Vision job did not finish");
+}
+
 describe("vision grouping API", () => {
   let app: NestFastifyApplication;
   let token: string;
@@ -105,15 +122,7 @@ describe("vision grouping API", () => {
     expect(suggest.statusCode).toBe(202);
     const { jobId } = visionSuggestResponseSchema.parse(suggest.json());
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    const jobResponse = await app.inject({
-      method: "GET",
-      url: `/v1/collection/vision/jobs/${jobId}`,
-      headers: { authorization: `Bearer ${token}` },
-    });
-
-    const job = visionJobResponseSchema.parse(jobResponse.json());
+    const job = await waitForJob(app, token, jobId);
     expect(job.kind).toBe("grouping");
     expect(job.grouping?.groups).toHaveLength(2);
     expect(job.grouping?.groups[0]?.photoIds).toEqual([PHOTO_A, PHOTO_B]);
@@ -138,14 +147,7 @@ describe("vision grouping API", () => {
       },
     });
     const { jobId } = visionSuggestResponseSchema.parse(suggest.json());
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    const jobResponse = await app.inject({
-      method: "GET",
-      url: `/v1/collection/vision/jobs/${jobId}`,
-      headers: { authorization: `Bearer ${token}` },
-    });
-    const job = visionJobResponseSchema.parse(jobResponse.json());
+    const job = await waitForJob(app, token, jobId);
     expect(job.status).toBe("ready");
     expect(job.grouping?.groups.map((group) => group.confidence)).toEqual([90, 60, 30]);
   });
