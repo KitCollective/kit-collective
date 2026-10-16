@@ -1,5 +1,8 @@
 // Seeds the kit-collective agents and board through the plugin's RPC.
 // Usage: node examples/kit-collective.seed.mjs http://127.0.0.1:<bb port>
+// Importing it runs nothing: the plugin's tests read `boardSetup` and `boardRouting`.
+import { pathToFileURL } from "node:url";
+
 const base = `${process.argv[2] ?? "http://127.0.0.1:38886"}/api/v1/plugins/optio/rpc`;
 const PROJECT = "proj_rp846ybret";
 
@@ -58,22 +61,40 @@ const agents = [
   },
 ];
 
-const existing = new Set((await rpc("agents_list", null)).agents.map((agent) => agent.name));
-for (const agent of agents) {
-  if (existing.has(agent.name)) continue;
-  const created = await rpc("agent_create", { ...agent, projectId: PROJECT, enabled: true });
-  console.log(`created ${created.id}`);
-}
+/** KitCollective's board: the Linear names the plugin reads all come from here. */
+export const boardSetup = {
+  projectId: PROJECT,
+  teamKey: "KIT",
+  workflow: "afk-developer",
+  dispatchState: "To-do",
+  readyLabel: "ready-for-agent",
+  backlogState: "Backlog",
+  activeStates: ["In Progress", "In Review"],
+  blockedState: "Blocked",
+};
 
-if (!(await rpc("board_get", null)).configured) {
-  await rpc("board_setup", { projectId: PROJECT, teamKey: "KIT", workflow: "kit-issue" });
-  console.log("board set up (dry-run)");
-}
-await rpc("board_update", {
+export const boardRouting = {
   machines: [
     { id: "harness", hostId: "host_new78xp362", branch: "origin/development", cap: 2, capabilities: [] },
     { id: "mac", hostId: "host_kttknna49n", branch: "origin/development", cap: 1, capabilities: ["postgres", "simulator"] },
   ],
   requirements: [{ capability: "postgres", labels: ["api"], scope: ["apps/api/", "packages/db/"] }],
-});
-console.log("board machines and rules saved");
+};
+
+const say = (line) => process.stdout.write(`${line}\n`);
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  const existing = new Set((await rpc("agents_list", null)).agents.map((agent) => agent.name));
+  for (const agent of agents) {
+    if (existing.has(agent.name)) continue;
+    const created = await rpc("agent_create", { ...agent, projectId: PROJECT, enabled: true });
+    say(`created ${created.id}`);
+  }
+
+  if (!(await rpc("board_get", null)).configured) {
+    await rpc("board_setup", boardSetup);
+    say("board set up (dry-run)");
+  }
+  await rpc("board_update", boardRouting);
+  say("board machines and rules saved");
+}

@@ -83,7 +83,7 @@ const machine = z
   .object({
     id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/),
     hostId: z.string().min(1),
-    /** Branch a run's worktree starts from, e.g. `origin/development`. */
+    /** Branch a run's worktree starts from, e.g. `origin/main`. */
     branch: z.string().min(1),
     cap: z.number().int().min(0).max(16),
     capabilities: z.array(z.string().min(1)),
@@ -224,6 +224,12 @@ export const rpcContract = defineRpcContract({
         projectId: z.string().min(1),
         teamKey: z.string().regex(/^[A-Z][A-Z0-9]*$/),
         workflow: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(64),
+        dispatchState: z.string().trim().min(1),
+        readyLabel: z.string().trim().min(1),
+        backlogState: z.string().trim().min(1),
+        activeStates: z.array(z.string().trim().min(1)).min(1),
+        /** Null when the team has no blocked state. */
+        blockedState: z.string().trim().min(1).nullable(),
       })
       .strict(),
     output: ok,

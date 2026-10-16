@@ -171,21 +171,21 @@ describe("automations", () => {
   it("starts a workflow through a launcher thread that is not briefed as the agent", async () => {
     const { agents, sessions, state } = setup();
     agents.saveAutomation(
-      automation({ prompt: "", workflow: "kit-issue", workflowArgs: { issue: "KIT-12", resume: "true", maxRounds: "3" } }),
+      automation({ prompt: "", workflow: "issue-run", workflowArgs: { issue: "ENG-12", resume: "true", maxRounds: "3" } }),
       state.clock,
     );
     state.clock += 31 * 60_000;
     await sessions.runDueAutomations();
     expect(state.spawned[0]?.prompt).toContain(
-      `bb workflows run --name kit-issue --args '{"issue":"KIT-12","resume":true,"maxRounds":3}' --json`,
+      `bb workflows run --name issue-run --args '{"issue":"ENG-12","resume":true,"maxRounds":3}' --json`,
     );
     expect(state.spawned[0]?.pluginMetadata).toMatchObject({ launcherFor: "devops" });
     expect(state.spawned[0]?.pluginMetadata.standingAgent).toBeUndefined();
   });
 
   it("quotes workflow args so their text cannot leave the argument", () => {
-    expect(workflowLauncherPrompt("kit-issue", coerceArgs({ issue: "KIT-1'; rm -rf ~ #" }))).toContain(
-      `--args '{"issue":"KIT-1'\\''; rm -rf ~ #"}' --json`,
+    expect(workflowLauncherPrompt("issue-run", coerceArgs({ issue: "ENG-1'; rm -rf ~ #" }))).toContain(
+      `--args '{"issue":"ENG-1'\\''; rm -rf ~ #"}' --json`,
     );
   });
 });
@@ -237,12 +237,12 @@ describe("follow-ups", () => {
 describe("Linear triggers", () => {
   const issue = (overrides: Partial<LinearIssue> = {}): LinearIssue => ({
     id: "i1",
-    identifier: "KIT-12",
+    identifier: "ENG-12",
     title: "Tab bar",
-    url: "https://linear.app/x/KIT-12",
-    teamKey: "KIT",
-    project: "Samling",
-    state: "To-do",
+    url: "https://linear.app/x/ENG-12",
+    teamKey: "ENG",
+    project: "Launch",
+    state: "Ready",
     labels: ["mobile"],
     createdAt: "2026-10-01T00:00:00.000Z",
     updatedAt: "2026-10-12T08:00:00.000Z",
@@ -254,24 +254,24 @@ describe("Linear triggers", () => {
     expect(deriveEvents(null, issue({ createdAt: "2026-10-12T07:30:00.000Z" }), lastPoll)).toEqual([{ event: "created", value: null }]);
     // An old issue seen for the first time has no known past: nothing fires.
     expect(deriveEvents(null, issue(), lastPoll)).toEqual([]);
-    expect(deriveEvents({ state: "Backlog", labels: [] }, issue(), lastPoll)).toEqual([
-      { event: "state", value: "To-do" },
+    expect(deriveEvents({ state: "Icebox", labels: [] }, issue(), lastPoll)).toEqual([
+      { event: "state", value: "Ready" },
       { event: "label", value: "mobile" },
     ]);
-    expect(deriveEvents({ state: "To-do", labels: ["mobile"] }, issue(), lastPoll)).toEqual([]);
+    expect(deriveEvents({ state: "Ready", labels: ["mobile"] }, issue(), lastPoll)).toEqual([]);
   });
 
   it("matches on team, project, event and value", () => {
-    const trigger = { id: "t", agentId: "devops", teamKey: "KIT", project: null as string | null, event: "state" as const, value: "To-do" as string | null, task: "x", enabled: true, createdAt: 0 };
-    const moved = { event: "state" as const, value: "To-do" };
+    const trigger = { id: "t", agentId: "devops", teamKey: "ENG", project: null as string | null, event: "state" as const, value: "Ready" as string | null, task: "x", enabled: true, createdAt: 0 };
+    const moved = { event: "state" as const, value: "Ready" };
     expect(triggerMatches(trigger, issue(), moved)).toBe(true);
     expect(triggerMatches({ ...trigger, value: null }, issue(), moved)).toBe(true);
     expect(triggerMatches({ ...trigger, value: "Done" }, issue(), moved)).toBe(false);
     expect(triggerMatches({ ...trigger, teamKey: "OPE" }, issue(), moved)).toBe(false);
-    expect(triggerMatches({ ...trigger, project: "samling" }, issue(), moved)).toBe(true);
+    expect(triggerMatches({ ...trigger, project: "launch" }, issue(), moved)).toBe(true);
     expect(triggerMatches({ ...trigger, project: "E-mail" }, issue(), moved)).toBe(false);
     expect(triggerMatches({ ...trigger, enabled: false }, issue(), moved)).toBe(false);
-    expect(triggerMatches(trigger, issue(), { event: "label", value: "To-do" })).toBe(false);
+    expect(triggerMatches(trigger, issue(), { event: "label", value: "Ready" })).toBe(false);
   });
 
   function poller(batches: LinearIssue[][]) {
@@ -294,11 +294,11 @@ describe("Linear triggers", () => {
   }
 
   it("takes the first poll as the baseline, then starts the agent on a matching change, once", async () => {
-    const { agents, instance, state, asked, cursor } = poller([[issue({ state: "Backlog" })], [issue()], [issue()]]);
+    const { agents, instance, state, asked, cursor } = poller([[issue({ state: "Icebox" })], [issue()], [issue()]]);
     expect(await instance.poll()).toBe(0); // no trigger: Linear is not even asked
     expect(asked).toEqual([]);
     agents.addLinearTrigger(
-      { agentId: "devops", teamKey: "KIT", project: "Samling", event: "state", value: "To-do", task: "Review the issue.", enabled: true },
+      { agentId: "devops", teamKey: "ENG", project: "Launch", event: "state", value: "Ready", task: "Review the issue.", enabled: true },
       state.clock,
     );
     expect(await instance.poll()).toBe(0);
@@ -308,8 +308,8 @@ describe("Linear triggers", () => {
     expect(await instance.poll()).toBe(0); // the same update again changes nothing
     expect(state.spawned).toHaveLength(1);
     expect(state.spawned[0]?.prompt).toContain("Review the issue.");
-    expect(state.spawned[0]?.prompt).toContain('"identifier": "KIT-12"');
-    expect(state.spawned[0]?.title).toBe("DevOps: KIT-12 To-do");
+    expect(state.spawned[0]?.prompt).toContain('"identifier": "ENG-12"');
+    expect(state.spawned[0]?.title).toBe("DevOps: ENG-12 Ready");
   });
 });
 

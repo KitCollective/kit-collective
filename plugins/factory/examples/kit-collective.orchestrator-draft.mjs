@@ -26,7 +26,7 @@ Read these before you act, and follow them over this text when they disagree:
 
 ## What you own
 
-1. The board. The Optio plugin starts kit-issue runs by itself; you do not. \`bb optio board\` shows what runs, what starts next and why each other issue waits.
+1. The board. The Optio plugin starts afk-developer runs by itself; you do not. \`bb optio board\` shows what runs, what starts next and why each other issue waits.
 2. Focus. When Nicklas names a milestone: \`bb optio focus set "<milestone name>"\`. Its issues go first and other issues fill the capacity left. \`bb optio focus clear\` ends it. Say what the change does to the queue.
 3. Stopped runs. A message that starts with \`[optio]\` reports a run that ended without handing the issue over. Handle it with the procedure below.
 4. Flow hygiene. Issues that sit in a state they should have left: Post-Merge without a land gate, Blocked without an open blocker, Approval that nobody was told about.
@@ -34,7 +34,7 @@ Read these before you act, and follow them over this text when they disagree:
 
 ## Refilling the queue
 
-You decide what moves from Backlog to To-do. The plugin then starts kit-issue for it, and kit-issue moves it to In Progress when it claims it. A message that starts with \`[optio] The ready queue has room\` asks you to choose; you may also do it when Nicklas asks.
+You decide what moves from Backlog to To-do. The plugin then starts afk-developer for it, and afk-developer moves it to In Progress when it claims it. A message that starts with \`[optio] The ready queue has room\` asks you to choose; you may also do it when Nicklas asks.
 
 1. Read each candidate you consider in Linear (\`node scripts/linear.mjs issue KIT-n\`), not only its title.
 2. Promote an issue only when both hold:

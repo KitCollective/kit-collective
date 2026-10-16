@@ -12,7 +12,7 @@ const machineSchema = z
     capabilities: z.array(z.string().min(1)).default([]),
     /** The enrolled bb machine runs start on. */
     hostId: z.string().min(1),
-    /** The branch a run's worktree starts from, e.g. `origin/development`. */
+    /** The branch a run's worktree starts from, e.g. `origin/main`. */
     branch: z.string().min(1),
   })
   .strict();
@@ -45,19 +45,22 @@ const schedulerSchema = z
     teamKey: z.string().regex(/^[A-Z][A-Z0-9]*$/),
     /** The named workflow one issue runs through; it gets `{ issue, resume?, machine }`. */
     workflow: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(64),
-    dispatchState: z.string().min(1).default("To-do"),
-    readyLabel: z.string().min(1).default("ready-for-agent"),
+    /** The state a ready issue waits in; the board starts issues from here. */
+    dispatchState: z.string().min(1),
+    /** The label that marks an issue in the dispatch state as ready to start. */
+    readyLabel: z.string().min(1),
     /** Where unstarted work waits before the orchestrator promotes it. */
-    backlogState: z.string().min(1).default("Backlog"),
+    backlogState: z.string().min(1),
     /** Ask the orchestrator to promote from the backlog when the ready queue has room. */
     autoPromote: z.boolean().default(false),
     /** The least time between two such requests. */
     refillMinutes: z.number().int().min(5).max(1440).default(30),
     skipLabels: z.array(z.string().min(1)).default([]),
     /** States in which an issue is being worked on and holds its write scope. */
-    activeStates: z.array(z.string().min(1)).default(["In Progress", "In Review"]),
+    activeStates: z.array(z.string().min(1)).min(1),
     /** Issues here go back to `dispatchState` once every blocker is completed or canceled. */
-    blockedState: z.string().min(1).nullable().default("Blocked"),
+    /** Null when the team has no such state. */
+    blockedState: z.string().min(1).nullable(),
     priorityOrder: z.array(z.number().int().min(0).max(4)).default([1, 2, 3, 4, 0]),
     /** Consecutive runs that may end without a hand-over before only a person can restart the issue. */
     maxAttempts: z.number().int().min(1).max(5).default(2),

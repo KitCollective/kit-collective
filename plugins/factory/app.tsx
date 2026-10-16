@@ -421,7 +421,7 @@ const blankAutomation: AutomationForm = {
   enabled: true,
 };
 
-/** `issue=KIT-12` lines to an args record; a line without `=` is ignored. */
+/** `issue=ENG-12` lines to an args record; a line without `=` is ignored. */
 function parseArgs(text: string): Record<string, string> {
   const args: Record<string, string> = {};
   for (const line of text.split("\n")) {
@@ -471,13 +471,13 @@ function AutomationEditor({ form, onChange }: { form: AutomationForm; onChange: 
       ) : (
         <>
           <Labeled label="Workflow" hint="The name of a file under .bb/workflows in the agent's project, without .js.">
-            <Input className="font-mono" value={form.workflow} placeholder="kit-issue" onChange={(event) => set("workflow", event.target.value)} />
+            <Input className="font-mono" value={form.workflow} placeholder="issue-run" onChange={(event) => set("workflow", event.target.value)} />
           </Labeled>
           <Labeled label="Arguments" hint="One name=value per line.">
             <textarea
               className={cn(field, "min-h-20 font-mono text-xs")}
               value={form.args}
-              placeholder={"issue=KIT-12"}
+              placeholder={"issue=ENG-12"}
               onChange={(event) => set("args", event.target.value)}
             />
           </Labeled>
@@ -922,7 +922,28 @@ function Rows({ rows, empty }: { rows: ReactNode[]; empty: string }) {
 
 function BoardSetup({ act }: { act: (write: (rpc: Rpc) => Promise<unknown>) => Promise<void> }) {
   const { value } = useLoaded((rpc) => rpc.call("agents_list"), "setup");
-  const [form, setForm] = useState({ projectId: "", teamKey: "", workflow: "" });
+  const [form, setForm] = useState({
+    projectId: "",
+    teamKey: "",
+    workflow: "",
+    dispatchState: "",
+    readyLabel: "",
+    backlogState: "",
+    activeStates: "",
+    blockedState: "",
+  });
+  const activeStates = form.activeStates
+    .split(",")
+    .map((state) => state.trim())
+    .filter((state) => state !== "");
+  const complete =
+    form.projectId !== "" &&
+    form.teamKey !== "" &&
+    form.workflow !== "" &&
+    form.dispatchState.trim() !== "" &&
+    form.readyLabel.trim() !== "" &&
+    form.backlogState.trim() !== "" &&
+    activeStates.length > 0;
   return (
     <Section title="Set up the board">
       <p className="text-sm text-muted-foreground">
@@ -939,16 +960,44 @@ function BoardSetup({ act }: { act: (write: (rpc: Rpc) => Promise<unknown>) => P
           ))}
         </select>
       </Labeled>
-      <Labeled label="Linear team key" hint="The prefix of the team's issues, e.g. KIT.">
+      <Labeled label="Linear team key" hint="The prefix of the team's issues, e.g. ENG.">
         <Input value={form.teamKey} onChange={(event) => setForm({ ...form, teamKey: event.target.value.toUpperCase() })} />
       </Labeled>
       <Labeled label="Workflow per issue" hint="A file under .bb/workflows, without .js.">
         <Input className="font-mono" value={form.workflow} onChange={(event) => setForm({ ...form, workflow: event.target.value })} />
       </Labeled>
+      <Labeled label="Dispatch state" hint="The Linear state a ready issue waits in.">
+        <Input value={form.dispatchState} onChange={(event) => setForm({ ...form, dispatchState: event.target.value })} />
+      </Labeled>
+      <Labeled label="Ready label" hint="The label that marks an issue in the dispatch state as ready to start.">
+        <Input value={form.readyLabel} onChange={(event) => setForm({ ...form, readyLabel: event.target.value })} />
+      </Labeled>
+      <Labeled label="Backlog state" hint="Where unstarted work waits before the orchestrator promotes it.">
+        <Input value={form.backlogState} onChange={(event) => setForm({ ...form, backlogState: event.target.value })} />
+      </Labeled>
+      <Labeled label="Active states" hint="The states in which an issue is being worked on, separated by commas.">
+        <Input value={form.activeStates} onChange={(event) => setForm({ ...form, activeStates: event.target.value })} />
+      </Labeled>
+      <Labeled label="Blocked state" hint="Issues here go back to the dispatch state once their blockers are done. Empty when the team has none.">
+        <Input value={form.blockedState} onChange={(event) => setForm({ ...form, blockedState: event.target.value })} />
+      </Labeled>
       <Button
         className="mt-4"
-        disabled={form.projectId === "" || form.teamKey === "" || form.workflow === ""}
-        onClick={() => void act((rpc) => rpc.call("board_setup", form))}
+        disabled={!complete}
+        onClick={() =>
+          void act((rpc) =>
+            rpc.call("board_setup", {
+              projectId: form.projectId,
+              teamKey: form.teamKey,
+              workflow: form.workflow,
+              dispatchState: form.dispatchState.trim(),
+              readyLabel: form.readyLabel.trim(),
+              backlogState: form.backlogState.trim(),
+              activeStates,
+              blockedState: form.blockedState.trim() === "" ? null : form.blockedState.trim(),
+            }),
+          )
+        }
       >
         Set up
       </Button>
@@ -1156,7 +1205,7 @@ function Board() {
               onCheckedChange={(checked) => void act((rpc) => rpc.call("board_update", { autoPromote: checked === true }))}
             />
             <span>
-              Let the orchestrator refill the queue from Backlog
+              Let the orchestrator refill the queue from the backlog
               <span className="block text-xs text-muted-foreground">
                 When the queue has room, it is asked to choose well-formed backlog issues and promote them. Room now:{" "}
                 {board.room} · backlog issues it could choose from: {board.promotable}.

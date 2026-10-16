@@ -91,10 +91,10 @@ reads the team's issues from Linear and:
   overlap the write scope of work in progress, and fits a machine with a free
   slot and the capabilities the issue needs. Order: focus milestone, then
   priority, then age. An issue it started before is started with `resume`;
-- when "refill from Backlog" is on and the ready queue has room, asks the
+- when "refill the queue from the backlog" is on and the ready queue has room, asks the
   orchestrator agent, at most once per half hour, to choose backlog issues to
   promote. The orchestrator promotes with `bb optio promote`; the workflow
-  the board then starts is what moves the issue on to In Progress;
+  the board then starts is what moves the issue on to an active state;
 - moves a blocked issue back to the dispatch state once every blocker is
   completed or canceled;
 - closes its runs that ended. A run whose issue is still in the dispatch state
@@ -102,6 +102,8 @@ reads the team's issues from Linear and:
   a stalled issue by itself and never merges; it reports the stall to the
   orchestrator agent's thread in an `[optio]` message.
 
+The dispatch, backlog, active and blocked states and the ready label are the
+board's configuration, set when it is set up; the plugin names none itself.
 Mode, focus, machines, capacity and routing rules are edited on the Agents
 page under Board.
 

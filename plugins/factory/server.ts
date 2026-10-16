@@ -877,7 +877,7 @@ export default async function plugin(bb: BbPluginApi) {
         }),
         resume: cliCommand({
           summary: "Start a stalled issue's workflow again with resume, within the attempt cap",
-          positionals: [{ name: "issue", description: "Issue key, e.g. KIT-12", required: true }],
+          positionals: [{ name: "issue", description: "Issue key, e.g. ENG-12", required: true }],
           options: {
             machine: { type: "string", description: "Machine id; defaults to the machine of the stalled run" },
           },
@@ -898,7 +898,7 @@ export default async function plugin(bb: BbPluginApi) {
           summary: "Move a backlog issue to the dispatch state with the ready label, so the board starts it",
           description:
             "Refused when the issue is not in the backlog, is blocked, carries a skip label, or the ready queue is already as long as the machines' capacity.",
-          positionals: [{ name: "issue", description: "Issue key, e.g. KIT-12", required: true }],
+          positionals: [{ name: "issue", description: "Issue key, e.g. ENG-12", required: true }],
           options: {
             reason: { type: "string", required: true, description: "Why this issue is the right next step; written as a comment on the issue" },
           },
@@ -919,7 +919,7 @@ export default async function plugin(bb: BbPluginApi) {
         }),
         release: cliCommand({
           summary: "Clear an issue's stall, so it is planned again once it is back in the dispatch state",
-          positionals: [{ name: "issue", description: "Issue key, e.g. KIT-12", required: true }],
+          positionals: [{ name: "issue", description: "Issue key, e.g. ENG-12", required: true }],
           run(input) {
             if (!dispatches.release(input.positionals.issue)) {
               throw new PluginCliError(`${input.positionals.issue} is not stalled`, { code: "not_stalled" });

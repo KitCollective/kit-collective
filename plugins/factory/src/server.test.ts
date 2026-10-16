@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { readdirSync } from "node:fs";
 import {
   createFakePluginHost,
   makePluginAgentConfigurationContext,
@@ -15,7 +16,7 @@ async function load(settings: Record<string, unknown> = {}) {
     agentSkillIds: ["optio"],
     sdk: {
       threads: { spawn: async () => ({ id: `thr_${(threads += 1)}` }), get: async () => ({ status: "active", archivedAt: null }) },
-      projects: { list: async () => [{ id: "proj_1", name: "kit-collective" }] },
+      projects: { list: async () => [{ id: "proj_1", name: "acme" }] },
       hosts: { list: async () => [{ id: "host_1", name: "Mac" }] },
     },
   });
@@ -43,7 +44,7 @@ describe("the Agents page RPC", () => {
     await rpc("agent_update", { ...pick(agent), id: agent.id, instructions: "Own CI." });
     const listed = await rpc("agents_list", null);
     expect(listed.agents[0]).toMatchObject({ id: "devops", instructions: "Own CI.", memories: 0, automations: 0 });
-    expect(listed.projects).toEqual([{ id: "proj_1", name: "kit-collective" }]);
+    expect(listed.projects).toEqual([{ id: "proj_1", name: "acme" }]);
   });
 
   it("starts a chat as the agent and lists it as a session", async () => {
@@ -127,20 +128,31 @@ describe("the board", () => {
   it("is set up from the page in dry-run and edited without JSON", async () => {
     const { rpc } = await load();
     expect(await rpc("board_get", null)).toMatchObject({ configured: false, mode: "off" });
-    await rpc("board_setup", { projectId: "proj_1", teamKey: "KIT", workflow: "kit-issue" });
+    await expect(rpc("board_setup", { projectId: "proj_1", teamKey: "ENG", workflow: "issue-run" })).rejects.toThrow();
+    expect(await rpc("board_get", null)).toMatchObject({ configured: false });
+    await rpc("board_setup", {
+      projectId: "proj_1",
+      teamKey: "ENG",
+      workflow: "issue-run",
+      dispatchState: "Ready",
+      readyLabel: "agent-ready",
+      backlogState: "Icebox",
+      activeStates: ["Doing", "Reviewing"],
+      blockedState: null,
+    });
     await rpc("board_update", {
-      focus: "Samling 1.0",
+      focus: "Launch 1.0",
       maxAttempts: 3,
-      machines: [{ id: "mac", hostId: "host_1", branch: "origin/development", cap: 1, capabilities: ["postgres"] }],
+      machines: [{ id: "mac", hostId: "host_1", branch: "origin/main", cap: 1, capabilities: ["postgres"] }],
       requirements: [{ capability: "postgres", labels: ["api"], scope: [] }],
     });
     const board = await rpc("board_get", null);
     expect(board).toMatchObject({
       configured: true,
       mode: "dry-run",
-      focus: "Samling 1.0",
+      focus: "Launch 1.0",
       maxAttempts: 3,
-      teamKey: "KIT",
+      teamKey: "ENG",
       machines: [{ id: "mac", cap: 1 }],
       requirements: [{ capability: "postgres" }],
     });
@@ -149,6 +161,22 @@ describe("the board", () => {
     await rpc("board_update", { focus: null });
     expect((await rpc("board_get", null)).focus).toBeNull();
     expect((await rpc("hosts_list", null)).hosts).toEqual([{ id: "host_1", name: "Mac" }]);
+  });
+});
+
+describe("the example seeds", () => {
+  const examples = new URL("../examples/", import.meta.url);
+  const seeds = readdirSync(examples).filter((file) => file.endsWith(".seed.mjs"));
+
+  it("set up a board the RPC contract accepts", async () => {
+    expect(seeds.length).toBeGreaterThan(0);
+    for (const seed of seeds) {
+      const { rpc } = await load();
+      const { boardSetup, boardRouting } = await import(new URL(seed, examples).href);
+      await rpc("board_setup", { ...boardSetup, projectId: "proj_1" });
+      await rpc("board_update", boardRouting);
+      expect(await rpc("board_get", null)).toMatchObject({ configured: true, mode: "dry-run" });
+    }
   });
 });
 
@@ -254,7 +282,7 @@ describe("bb optio", () => {
   it("keeps Linear triggers per agent", async () => {
     const { rpc } = await load();
     const trigger = await rpc("linear_trigger_add", {
-      agentId: "devops", teamKey: "KIT", project: null, event: "created", value: "ignored", task: "Triage it.",
+      agentId: "devops", teamKey: "ENG", project: null, event: "created", value: "ignored", task: "Triage it.",
     });
     expect(trigger).toMatchObject({ event: "created", value: null, enabled: true });
     await rpc("linear_trigger_toggle", { id: trigger.id, enabled: false });

@@ -34,21 +34,28 @@ unblocked, in focus-milestone and priority order, within each machine's
 capacity and without write-scope overlap. A run that stops at a gate is
 reported to the orchestrator agent's thread, which resumes it or parks it.
 
-Mode, focus milestone, machines, capacity and routing rules are form fields on
-the page. A new board starts in `dry-run`: it shows the plan and starts nothing.
+The Linear states and the ready label the board reads (dispatch, backlog,
+active and blocked states) are set when the board is set up; they have no
+default. Mode, focus milestone, machines, capacity and routing rules are form
+fields on the page. A new board starts in `dry-run`: it shows the plan and starts nothing.
 
 ## Install
 
+The plugin is the workspace package `@kit/bb-plugin-optio` in `plugins/factory`.
+From the repository root:
+
 ```bash
-npm install
-bb plugin install .
+pnpm install
+bb plugin install plugins/factory
 ```
 
 Then, under Settings → Installed plugins → Optio, set the Linear API key
 (or the path of a dotenv file with `LINEAR_API_KEY`) if you use the board.
 
-`examples/kit-collective.seed.mjs` creates three agents and a board through the
-plugin's RPC; read it as an example of the shapes.
+The seed under `examples/` creates three agents and a board through the
+plugin's RPC; read it as an example of the shapes. It is the only place that
+names one product's team key, workflow, labels and states: the plugin reads
+them from the board's configuration.
 
 ## Triggering an agent from another system
 
@@ -56,7 +63,7 @@ plugin's RPC; read it as an example of the shapes.
 curl -X POST "$BB_URL/api/v1/plugins/optio/http/trigger" \
   -H "content-type: application/json" \
   -H "x-bb-plugin-token: $(bb plugin token optio)" \
-  -d '{"agent":"devops","task":"CI failed on development.","payload":{"run":1234}}'
+  -d '{"agent":"devops","task":"CI failed on main.","payload":{"run":1234}}'
 ```
 
 The agent must allow the HTTP trigger. bb's `getbb.app` URL and `bb connect`
@@ -80,6 +87,7 @@ own tunnel to that one path.
 | `src/dispatch-store.ts` | The ledger of workflow runs the board started. |
 | `src/linear-triggers.ts` | The poller that turns Linear changes into agent sessions. |
 | `src/linear.ts` | Linear webhook signature check. |
+| `src/product-neutral.test.ts` | Fails when plugin code outside `examples/` names one product's values. |
 
 `src/dispatch.test.ts` tests `src/sessions.ts` and `src/agent-store.ts`; the
 file kept its name from the module those replaced.
@@ -87,7 +95,8 @@ file kept its name from the module those replaced.
 ## Develop
 
 ```bash
-npm test          # vitest: pure logic plus the fake plugin host
-npm run typecheck
-bb plugin dev     # rebuild and reload on save against a running bb
+pnpm --filter @kit/bb-plugin-optio test       # vitest: pure logic plus the fake plugin host
+pnpm --filter @kit/bb-plugin-optio typecheck
+pnpm test:optio                               # both, as CI runs them
+bb plugin dev plugins/factory                 # rebuild and reload on save against a running bb
 ```
