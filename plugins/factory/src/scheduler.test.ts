@@ -1,11 +1,11 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { planBoard, scopesOverlap } from "./board.js";
-import type { SpawnRequest } from "./sessions.js";
-import { DISPATCH_MIGRATIONS, createDispatchStore } from "./dispatch-store.js";
-import { fetchBoard, parseWriteScope, type Board, type BoardIssue } from "./linear-api.js";
+import { createDispatchStore, DISPATCH_MIGRATIONS } from "./dispatch-store.js";
+import { type Board, type BoardIssue, fetchBoard, parseWriteScope } from "./linear-api.js";
 import { createScheduler } from "./scheduler.js";
 import { parseScheduler, type SchedulerConfig } from "./scheduler-config.js";
+import type { SpawnRequest } from "./sessions.js";
 
 function config(overrides: Record<string, unknown> = {}): SchedulerConfig {
   const parsed = parseScheduler(
@@ -21,7 +21,13 @@ function config(overrides: Record<string, unknown> = {}): SchedulerConfig {
       blockedState: "Waiting",
       skipLabels: ["on-hold"],
       machines: [
-        { id: "mac", cap: 1, capabilities: ["postgres"], hostId: "host_mac", branch: "origin/main" },
+        {
+          id: "mac",
+          cap: 1,
+          capabilities: ["postgres"],
+          hostId: "host_mac",
+          branch: "origin/main",
+        },
         { id: "harness", cap: 2, hostId: "host_harness", branch: "origin/main" },
       ],
       requirements: [{ capability: "postgres", labels: ["api"], scope: ["apps/api/"] }],
@@ -56,14 +62,22 @@ const plan = (issues: BoardIssue[], focus: string | null = null, overrides = {})
 
 describe("scheduler config", () => {
   it("takes the states and the ready label from the config, with no default", () => {
-    for (const field of ["dispatchState", "readyLabel", "backlogState", "activeStates", "blockedState"]) {
+    for (const field of [
+      "dispatchState",
+      "readyLabel",
+      "backlogState",
+      "activeStates",
+      "blockedState",
+    ]) {
       const stored = { ...config(), [field]: undefined };
       expect(parseScheduler(JSON.stringify(stored))).toMatchObject({
         ok: false,
         error: expect.stringContaining(`scheduler.${field}:`),
       });
     }
-    expect(parseScheduler(JSON.stringify({ ...config(), blockedState: null }))).toMatchObject({ ok: true });
+    expect(parseScheduler(JSON.stringify({ ...config(), blockedState: null }))).toMatchObject({
+      ok: true,
+    });
   });
 });
 
@@ -109,8 +123,14 @@ describe("planBoard", () => {
       ],
       "collection v2",
     );
-    expect(result.start.map((start) => start.issue.identifier)).toEqual(["ENG-2", "ENG-1", "ENG-4"]);
-    expect(result.waiting).toEqual([{ identifier: "ENG-3", reason: "no free slot on harness or mac" }]);
+    expect(result.start.map((start) => start.issue.identifier)).toEqual([
+      "ENG-2",
+      "ENG-1",
+      "ENG-4",
+    ]);
+    expect(result.waiting).toEqual([
+      { identifier: "ENG-3", reason: "no free slot on harness or mac" },
+    ]);
   });
 
   it("keeps the capable machine for the issues that need it", () => {
@@ -152,7 +172,9 @@ describe("planBoard", () => {
       ]),
     });
     expect(result.running).toEqual([{ identifier: "ENG-1", machineId: "harness" }]);
-    expect(result.start.map((start) => [start.issue.identifier, start.machineId, start.resume])).toEqual([
+    expect(
+      result.start.map((start) => [start.issue.identifier, start.machineId, start.resume]),
+    ).toEqual([
       ["ENG-3", "harness", true],
       ["ENG-4", "mac", false],
     ]);
@@ -160,7 +182,10 @@ describe("planBoard", () => {
   });
 
   it("lists blocked issues whose blockers are resolved", () => {
-    const result = plan([issue("ENG-1", { state: "Waiting" }), issue("ENG-2", { state: "Waiting", blockedBy: ["ENG-9"] })]);
+    const result = plan([
+      issue("ENG-1", { state: "Waiting" }),
+      issue("ENG-2", { state: "Waiting", blockedBy: ["ENG-9"] }),
+    ]);
     expect(result.unblock.map((entry) => entry.identifier)).toEqual(["ENG-1"]);
   });
 });
@@ -169,15 +194,25 @@ function setup(board: Board) {
   const db = new Database(":memory:");
   for (const statement of DISPATCH_MIGRATIONS) db.exec(statement);
   const store = createDispatchStore(db);
-  const state = {
+  const state: {
+    clock: number;
+    spawned: SpawnRequest[];
+    notes: string[];
+    moved: string[];
+    promoted: { identifier: string; stateId: string; comment: string }[];
+    lastRefill: number | null;
+    workflowActive: boolean;
+    threadStatus: string | null;
+    board: Board;
+  } = {
     clock: 1_000_000,
-    spawned: [] as SpawnRequest[],
-    notes: [] as string[],
-    moved: [] as string[],
-    promoted: [] as { identifier: string; stateId: string; comment: string }[],
-    lastRefill: null as number | null,
+    spawned: [],
+    notes: [],
+    moved: [],
+    promoted: [],
+    lastRefill: null,
     workflowActive: true,
-    threadStatus: "idle" as string | null,
+    threadStatus: "idle",
     board,
   };
   const scheduler = createScheduler({
@@ -198,7 +233,9 @@ function setup(board: Board) {
     promoteIssue: async (promoted, stateId, comment) =>
       void state.promoted.push({ identifier: promoted.identifier, stateId, comment }),
     getLastRefill: async () => state.lastRefill,
-    setLastRefill: async (at) => void (state.lastRefill = at),
+    setLastRefill: async (at) => {
+      state.lastRefill = at;
+    },
     now: () => state.clock,
     log: () => {},
   });
@@ -206,7 +243,7 @@ function setup(board: Board) {
 }
 
 describe("refilling the queue from the backlog", () => {
-  const states = { "Ready": "state-todo" };
+  const states = { Ready: "state-todo" };
   const backlog = (identifier: string, overrides: Partial<BoardIssue> = {}) =>
     issue(identifier, { state: "Icebox", labels: [], ...overrides });
 
@@ -248,7 +285,10 @@ describe("refilling the queue from the backlog", () => {
 
   it("does not ask when the queue is full or the backlog has nothing unblocked", async () => {
     const on = config({ autoPromote: true });
-    const full = setup({ states, issues: [issue("ENG-1"), issue("ENG-2"), issue("ENG-3"), issue("ENG-4"), backlog("ENG-9")] });
+    const full = setup({
+      states,
+      issues: [issue("ENG-1"), issue("ENG-2"), issue("ENG-3"), issue("ENG-4"), backlog("ENG-9")],
+    });
     await full.scheduler.tick(on, true);
     expect(full.state.notes).toHaveLength(0);
     const empty = setup({ states, issues: [backlog("ENG-9", { blockedBy: ["ENG-1"] })] });
@@ -263,7 +303,8 @@ describe("refilling the queue from the backlog", () => {
       {
         identifier: "ENG-2",
         stateId: "state-todo",
-        comment: "Orchestrator: promoted from Icebox to Ready with agent-ready.\n\nWhy now: finishes Launch 1.0",
+        comment:
+          "Orchestrator: promoted from Icebox to Ready with agent-ready.\n\nWhy now: finishes Launch 1.0",
       },
     ]);
   });
@@ -277,7 +318,9 @@ describe("refilling the queue from the backlog", () => {
         backlog("ENG-3", { labels: ["on-hold"] }),
       ],
     });
-    await expect(scheduler.promote(config(), "ENG-1", "x")).rejects.toThrow("only Icebox issues are promoted");
+    await expect(scheduler.promote(config(), "ENG-1", "x")).rejects.toThrow(
+      "only Icebox issues are promoted",
+    );
     await expect(scheduler.promote(config(), "ENG-2", "x")).rejects.toThrow("blocked by ENG-1");
     await expect(scheduler.promote(config(), "ENG-3", "x")).rejects.toThrow("labelled on-hold");
     await expect(scheduler.promote(config(), "ENG-99", "x")).rejects.toThrow("not an open issue");
@@ -285,16 +328,22 @@ describe("refilling the queue from the backlog", () => {
   });
 
   it("refuses to grow the queue past the machines' capacity", async () => {
-    const { scheduler } = setup({ states, issues: [issue("ENG-1"), issue("ENG-2"), issue("ENG-3"), backlog("ENG-4")] });
+    const { scheduler } = setup({
+      states,
+      issues: [issue("ENG-1"), issue("ENG-2"), issue("ENG-3"), backlog("ENG-4")],
+    });
     await expect(scheduler.promote(config(), "ENG-4", "x")).rejects.toThrow("the queue is full");
   });
 });
 
 describe("scheduler", () => {
-  const states = { "Ready": "state-todo" };
+  const states = { Ready: "state-todo" };
 
   it("starts nothing and writes nothing without apply", async () => {
-    const { scheduler, store, state } = setup({ states, issues: [issue("ENG-1"), issue("ENG-2", { state: "Waiting" })] });
+    const { scheduler, store, state } = setup({
+      states,
+      issues: [issue("ENG-1"), issue("ENG-2", { state: "Waiting" })],
+    });
     const result = await scheduler.tick(config(), false);
     expect(result.plan.start).toHaveLength(1);
     expect(state.spawned).toHaveLength(0);
@@ -358,13 +407,17 @@ describe("scheduler", () => {
 
     const resumed = await scheduler.resume(config(), "ENG-1");
     expect(resumed).toMatchObject({ machineId: "harness", resume: true, threadId: "thr_2" });
-    expect(state.spawned[1]?.prompt).toContain(`'{"issue":"ENG-1","resume":true,"machine":"harness"}'`);
+    expect(state.spawned[1]?.prompt).toContain(
+      `'{"issue":"ENG-1","resume":true,"machine":"harness"}'`,
+    );
 
     state.clock += 10 * 60_000;
     await scheduler.tick(config(), true);
     expect(state.notes[1]).toContain("attempt 2 of 2");
     expect(state.notes[1]).toContain("is refused");
-    await expect(scheduler.resume(config(), "ENG-1")).rejects.toThrow("reached the cap of 2 attempts");
+    await expect(scheduler.resume(config(), "ENG-1")).rejects.toThrow(
+      "reached the cap of 2 attempts",
+    );
 
     expect(store.release("ENG-1")).toBe(true);
     expect(store.history().get("ENG-1")).toMatchObject({ stalled: false, startedBefore: true });
@@ -387,7 +440,9 @@ describe("scheduler", () => {
     const stalled = store.start({ issue: "ENG-1", machineId: "mac", resume: false, now });
     store.end(stalled.id, "stalled", "x", now);
     store.start({ issue: "ENG-2", machineId: "mac", resume: false, now });
-    await expect(scheduler.resume(config(), "ENG-1")).rejects.toThrow("no free slot on mac (1 of 1 in use)");
+    await expect(scheduler.resume(config(), "ENG-1")).rejects.toThrow(
+      "no free slot on mac (1 of 1 in use)",
+    );
   });
 });
 
@@ -413,8 +468,8 @@ describe("fetchBoard", () => {
       },
       ...extra,
     });
-    const calls: unknown[] = [];
-    const fakeFetch = (async (_url: unknown, init?: { body?: unknown; headers?: unknown }) => {
+    const calls: (RequestInit | undefined)[] = [];
+    const fakeFetch: typeof fetch = async (_url, init) => {
       calls.push(init);
       const second = calls.length === 2;
       return new Response(
@@ -428,17 +483,23 @@ describe("fetchBoard", () => {
           },
         }),
       );
-    }) as typeof fetch;
+    };
     const board = await fetchBoard("lin_key", "ENG", fakeFetch);
-    expect(board.states).toEqual({ "Ready": "s1" });
+    expect(board.states).toEqual({ Ready: "s1" });
     expect(board.issues.map((entry) => entry.identifier)).toEqual(["ENG-1", "ENG-2"]);
-    expect(board.issues[0]).toMatchObject({ blockedBy: ["ENG-7"], writeScope: ["apps/api/**"], milestone: "M1" });
-    expect((calls[0] as { headers: Record<string, string> }).headers.authorization).toBe("lin_key");
+    expect(board.issues[0]).toMatchObject({
+      blockedBy: ["ENG-7"],
+      writeScope: ["apps/api/**"],
+      milestone: "M1",
+    });
+    expect(new Headers(calls[0]?.headers).get("authorization")).toBe("lin_key");
   });
 
   it("fails loudly on a GraphQL error", async () => {
-    const fakeFetch = (async () =>
-      new Response(JSON.stringify({ errors: [{ message: "Query too complex" }] }))) as typeof fetch;
-    await expect(fetchBoard("k", "ENG", fakeFetch)).rejects.toThrow("Linear answered 200: Query too complex");
+    const fakeFetch: typeof fetch = async () =>
+      new Response(JSON.stringify({ errors: [{ message: "Query too complex" }] }));
+    await expect(fetchBoard("k", "ENG", fakeFetch)).rejects.toThrow(
+      "Linear answered 200: Query too complex",
+    );
   });
 });

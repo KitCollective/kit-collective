@@ -102,13 +102,17 @@ export function createRunStore(db: Database) {
     },
     active(agentId: string, concurrencyKey: string): Run[] {
       return (
-        db
-          .prepare(`SELECT * FROM runs WHERE agent_id = ? AND concurrency_key = ? AND ${ACTIVE}`)
-          .all(agentId, concurrencyKey) as Row[]
-      ).map(toRun);
+        // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+        (
+          db
+            .prepare(`SELECT * FROM runs WHERE agent_id = ? AND concurrency_key = ? AND ${ACTIVE}`)
+            .all(agentId, concurrencyKey) as Row[]
+        ).map(toRun)
+      );
     },
     /** When this agent last started a run for the key, skipped events excluded. */
     lastStartedAt(agentId: string, concurrencyKey: string): number | null {
+      // SAFETY: an aggregate query returns exactly one row; MAX(created_at) is a number, or null with no rows.
       const row = db
         .prepare(
           `SELECT MAX(created_at) AS at FROM runs
@@ -118,7 +122,10 @@ export function createRunStore(db: Database) {
       return row.at;
     },
     started(id: string, threadId: string): void {
-      db.prepare(`UPDATE runs SET status = 'running', thread_id = ? WHERE id = ?`).run(threadId, id);
+      db.prepare(`UPDATE runs SET status = 'running', thread_id = ? WHERE id = ?`).run(
+        threadId,
+        id,
+      );
     },
     finish(id: string, status: "done" | "failed", reason: string | null, now: number): void {
       db.prepare(
@@ -151,6 +158,7 @@ export function createRunStore(db: Database) {
                 `SELECT * FROM runs WHERE agent_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`,
               )
               .all(agentId, limit);
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
       return (rows as Row[]).map(toRun);
     },
   };

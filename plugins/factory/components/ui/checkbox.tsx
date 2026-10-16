@@ -1,9 +1,8 @@
-import * as React from "react";
 import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
-
+import * as React from "react";
+import { Icon } from "../../components/ui/icon.js";
 import { cn } from "../../lib/utils";
 import { CONTROL_HOVER_TRANSITION } from "./motion.js";
-import { Icon } from "../../components/ui/icon.js";
 
 const Checkbox = React.forwardRef<
   React.ComponentRef<typeof CheckboxPrimitive.Root>,
@@ -17,9 +16,7 @@ const Checkbox = React.forwardRef<
     )}
     {...props}
   >
-    <CheckboxPrimitive.Indicator
-      className={cn("flex items-center justify-center text-current")}
-    >
+    <CheckboxPrimitive.Indicator className={cn("flex items-center justify-center text-current")}>
       <Icon name="Check" className="size-3.5" />
     </CheckboxPrimitive.Indicator>
   </CheckboxPrimitive.Root>

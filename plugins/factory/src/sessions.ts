@@ -25,7 +25,9 @@ const MAX_PAYLOAD_CHARS = 20_000;
 
 /** A task with data from another system attached as data, never as instructions. */
 export function taskWithPayload(task: string | undefined, payload: unknown): string {
-  const text = task?.trim() || "Another system triggered you. Handle the event below as your instructions say.";
+  const text =
+    task?.trim() ||
+    "Another system triggered you. Handle the event below as your instructions say.";
   if (payload === undefined) return text;
   let json = JSON.stringify(payload, null, 2) ?? "null";
   if (json.length > MAX_PAYLOAD_CHARS) json = `${json.slice(0, MAX_PAYLOAD_CHARS)}\n… (truncated)`;
@@ -103,7 +105,9 @@ export function assertCron(expression: string): void {
 /** Whether a fire time passed since the automation last ran (or was created). */
 export function isDue(automation: Automation, now: number): boolean {
   const since = automation.lastRunAt ?? automation.createdAt;
-  const previous = CronExpressionParser.parse(automation.cron, { currentDate: new Date(now) }).prev().getTime();
+  const previous = CronExpressionParser.parse(automation.cron, { currentDate: new Date(now) })
+    .prev()
+    .getTime();
   return previous > since;
 }
 
@@ -204,7 +208,11 @@ export function createSessions(deps: SessionDeps) {
         const run =
           agent === null
             ? null
-            : await start(agent, { source: "follow-up", task: followUpTask(followUp.task), label: followUp.task });
+            : await start(agent, {
+                source: "follow-up",
+                task: followUpTask(followUp.task),
+                label: followUp.task,
+              });
         if (run === null || run.threadId === null) {
           deps.agents.setFollowUp(followUp.id, "started", "cancelled");
           continue;

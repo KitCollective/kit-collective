@@ -44,7 +44,10 @@ const schedulerSchema = z
     projectId: z.string().min(1),
     teamKey: z.string().regex(/^[A-Z][A-Z0-9]*$/),
     /** The named workflow one issue runs through; it gets `{ issue, resume?, machine }`. */
-    workflow: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(64),
+    workflow: z
+      .string()
+      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+      .max(64),
     /** The state a ready issue waits in; the board starts issues from here. */
     dispatchState: z.string().min(1),
     /** The label that marks an issue in the dispatch state as ready to start. */
@@ -96,7 +99,10 @@ export function parseScheduler(raw: unknown): ParsedScheduler {
     try {
       value = JSON.parse(value);
     } catch (error) {
-      return { ok: false, error: `scheduler is not valid JSON: ${(error as Error).message}` };
+      return {
+        ok: false,
+        error: `scheduler is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      };
     }
   }
   const result = schedulerSchema.safeParse(value);

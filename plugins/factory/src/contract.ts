@@ -129,7 +129,9 @@ const board = z.object({
     }),
   ),
   waiting: z.array(z.object({ identifier: z.string(), reason: z.string() })),
-  stalled: z.array(z.object({ issue: z.string(), machineId: z.string(), outcome: z.string().nullable() })),
+  stalled: z.array(
+    z.object({ issue: z.string(), machineId: z.string(), outcome: z.string().nullable() }),
+  ),
 });
 
 const ok = z.object({ ok: z.literal(true) });
@@ -161,7 +163,12 @@ export const rpcContract = defineRpcContract({
       /** Why Linear could not be read, when it could not. */
       error: z.string().nullable(),
       teams: z.array(
-        z.object({ key: z.string(), name: z.string(), states: z.array(z.string()), projects: z.array(z.string()) }),
+        z.object({
+          key: z.string(),
+          name: z.string(),
+          states: z.array(z.string()),
+          projects: z.array(z.string()),
+        }),
       ),
     }),
   },
@@ -178,7 +185,10 @@ export const rpcContract = defineRpcContract({
       .strict(),
     output: linearTrigger,
   },
-  linear_trigger_toggle: { input: z.object({ id: z.string(), enabled: z.boolean() }).strict(), output: ok },
+  linear_trigger_toggle: {
+    input: z.object({ id: z.string(), enabled: z.boolean() }).strict(),
+    output: ok,
+  },
   linear_trigger_delete: { input: z.object({ id: z.string() }).strict(), output: ok },
   agent_create: { input: agentInput, output: agent },
   agent_update: { input: agentInput.extend({ id: z.string() }).strict(), output: agent },
@@ -205,7 +215,10 @@ export const rpcContract = defineRpcContract({
           .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
           .max(64)
           .nullable(),
-        workflowArgs: z.record(z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,40}$/), z.string().max(500)),
+        workflowArgs: z.record(
+          z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,40}$/),
+          z.string().max(500),
+        ),
         enabled: z.boolean(),
       })
       .strict(),
@@ -223,7 +236,10 @@ export const rpcContract = defineRpcContract({
       .object({
         projectId: z.string().min(1),
         teamKey: z.string().regex(/^[A-Z][A-Z0-9]*$/),
-        workflow: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(64),
+        workflow: z
+          .string()
+          .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+          .max(64),
         dispatchState: z.string().trim().min(1),
         readyLabel: z.string().trim().min(1),
         backlogState: z.string().trim().min(1),

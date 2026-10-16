@@ -2,7 +2,7 @@
 import { createHmac } from "node:crypto";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { AGENT_MIGRATIONS, createAgentStore, slugify } from "./agent-store.js";
+import { AGENT_MIGRATIONS, createAgentStore, type LinearTrigger, slugify } from "./agent-store.js";
 import { verifyLinearWebhook } from "./linear.js";
 import type { LinearIssue } from "./linear-api.js";
 import { createLinearPoller, deriveEvents, triggerMatches } from "./linear-triggers.js";
@@ -13,19 +13,22 @@ import {
   isDue,
   mentionContext,
   renderBrief,
+  type SpawnRequest,
   sessionInstructions,
   taskWithPayload,
   workflowLauncherPrompt,
-  type SpawnRequest,
 } from "./sessions.js";
-import { MIGRATIONS, createRunStore } from "./store.js";
+import { createRunStore, MIGRATIONS } from "./store.js";
 
 function setup(spawnFails = false) {
   const db = new Database(":memory:");
   for (const statement of [...MIGRATIONS, ...AGENT_MIGRATIONS]) db.exec(statement);
   const agents = createAgentStore(db);
   const runs = createRunStore(db);
-  const state = { clock: Date.parse("2026-10-12T07:30:00"), spawned: [] as SpawnRequest[] };
+  const state: { clock: number; spawned: SpawnRequest[] } = {
+    clock: Date.parse("2026-10-12T07:30:00"),
+    spawned: [],
+  };
   const sessions = createSessions({
     runs,
     agents,
@@ -38,7 +41,14 @@ function setup(spawnFails = false) {
     log: () => {},
   });
   const agent = agents.create(
-    { name: "DevOps", description: "CI and deploys", projectId: "proj_1", instructions: "Own the pipelines.", enabled: true, httpTrigger: true },
+    {
+      name: "DevOps",
+      description: "CI and deploys",
+      projectId: "proj_1",
+      instructions: "Own the pipelines.",
+      enabled: true,
+      httpTrigger: true,
+    },
     state.clock,
   );
   return { agents, runs, sessions, state, agent };
@@ -56,7 +66,18 @@ describe("agent store", () => {
   it("removes an agent together with its memory and automations", () => {
     const { agents, agent, state } = setup();
     agents.remember(agent.id, "Deploys go through Coolify.", null, state.clock);
-    agents.saveAutomation({ agentId: agent.id, name: "CI", cron: "0 8 * * *", prompt: "Check CI.", workflow: null, workflowArgs: {}, enabled: true }, state.clock);
+    agents.saveAutomation(
+      {
+        agentId: agent.id,
+        name: "CI",
+        cron: "0 8 * * *",
+        prompt: "Check CI.",
+        workflow: null,
+        workflowArgs: {},
+        enabled: true,
+      },
+      state.clock,
+    );
     expect(agents.remove(agent.id)).toBe(true);
     expect(agents.memories(agent.id)).toEqual([]);
     expect(agents.automations()).toEqual([]);
@@ -67,7 +88,12 @@ describe("brief and instructions", () => {
   it("prints the instructions, the memory newest first, and how to save more", () => {
     const { agents, agent, state } = setup();
     agents.remember(agent.id, "Staging deploys need the approver.", null, state.clock);
-    const newer = agents.remember(agent.id, "Never rerun a deploy by hand.", "thr_9", state.clock + 1000);
+    const newer = agents.remember(
+      agent.id,
+      "Never rerun a deploy by hand.",
+      "thr_9",
+      state.clock + 1000,
+    );
     const brief = renderBrief(agent, agents.memories(agent.id));
     expect(brief).toContain("# DevOps: instructions\n\nOwn the pipelines.");
     expect(brief).toContain("# Memory (2)");
@@ -85,7 +111,10 @@ describe("brief and instructions", () => {
 describe("sessions", () => {
   it("starts one thread that belongs to the agent", async () => {
     const { sessions, agent, state, runs } = setup();
-    const run = await sessions.start(agent, { source: "chat", task: "Why is CI red on development?" });
+    const run = await sessions.start(agent, {
+      source: "chat",
+      task: "Why is CI red on development?",
+    });
     expect(run).toMatchObject({ status: "running", threadId: "thr_1", source: "chat" });
     expect(state.spawned[0]).toMatchObject({
       projectId: "proj_1",
@@ -142,7 +171,9 @@ describe("automations", () => {
     const saved = agents.saveAutomation(automation(), state.clock); // created 07:30
     expect(isDue(saved, state.clock + 10 * 60_000)).toBe(false); // 07:40
     expect(isDue(saved, state.clock + 31 * 60_000)).toBe(true); // 08:01
-    expect(isDue({ ...saved, lastRunAt: state.clock + 31 * 60_000 }, state.clock + 60 * 60_000)).toBe(false);
+    expect(
+      isDue({ ...saved, lastRunAt: state.clock + 31 * 60_000 }, state.clock + 60 * 60_000),
+    ).toBe(false);
   });
 
   it("runs a due automation once per fire time, as the agent", async () => {
@@ -171,7 +202,11 @@ describe("automations", () => {
   it("starts a workflow through a launcher thread that is not briefed as the agent", async () => {
     const { agents, sessions, state } = setup();
     agents.saveAutomation(
-      automation({ prompt: "", workflow: "issue-run", workflowArgs: { issue: "ENG-12", resume: "true", maxRounds: "3" } }),
+      automation({
+        prompt: "",
+        workflow: "issue-run",
+        workflowArgs: { issue: "ENG-12", resume: "true", maxRounds: "3" },
+      }),
       state.clock,
     );
     state.clock += 31 * 60_000;
@@ -184,9 +219,9 @@ describe("automations", () => {
   });
 
   it("quotes workflow args so their text cannot leave the argument", () => {
-    expect(workflowLauncherPrompt("issue-run", coerceArgs({ issue: "ENG-1'; rm -rf ~ #" }))).toContain(
-      `--args '{"issue":"ENG-1'\\''; rm -rf ~ #"}' --json`,
-    );
+    expect(
+      workflowLauncherPrompt("issue-run", coerceArgs({ issue: "ENG-1'; rm -rf ~ #" })),
+    ).toContain(`--args '{"issue":"ENG-1'\\''; rm -rf ~ #"}' --json`);
   });
 });
 
@@ -205,7 +240,12 @@ describe("follow-ups", () => {
   it("start in a new thread of the agent once their time has come, exactly once", async () => {
     const { agents, sessions, state } = setup();
     const followUp = agents.addFollowUp(
-      { agentId: "devops", task: "Check that the deploy went green.", dueAt: state.clock + 60 * 60_000, reportThreadId: "thr_origin" },
+      {
+        agentId: "devops",
+        task: "Check that the deploy went green.",
+        dueAt: state.clock + 60 * 60_000,
+        reportThreadId: "thr_origin",
+      },
       state.clock,
     );
     expect(await sessions.runDueFollowUps()).toHaveLength(0);
@@ -213,14 +253,25 @@ describe("follow-ups", () => {
     expect(await sessions.runDueFollowUps()).toHaveLength(1);
     expect(await sessions.runDueFollowUps()).toHaveLength(0);
     expect(state.spawned[0]?.prompt).toContain("Check that the deploy went green.");
-    expect(state.spawned[0]?.prompt).toContain("your last message is delivered to the thread that asked");
-    expect(state.spawned[0]?.pluginMetadata).toMatchObject({ standingAgent: "devops", source: "follow-up" });
-    expect(agents.startedFollowUpByThread("thr_1")).toMatchObject({ id: followUp.id, reportThreadId: "thr_origin" });
+    expect(state.spawned[0]?.prompt).toContain(
+      "your last message is delivered to the thread that asked",
+    );
+    expect(state.spawned[0]?.pluginMetadata).toMatchObject({
+      standingAgent: "devops",
+      source: "follow-up",
+    });
+    expect(agents.startedFollowUpByThread("thr_1")).toMatchObject({
+      id: followUp.id,
+      reportThreadId: "thr_origin",
+    });
   });
 
   it("can be cancelled only while waiting", () => {
     const { agents, state } = setup();
-    const followUp = agents.addFollowUp({ agentId: "devops", task: "x", dueAt: state.clock, reportThreadId: null }, state.clock);
+    const followUp = agents.addFollowUp(
+      { agentId: "devops", task: "x", dueAt: state.clock, reportThreadId: null },
+      state.clock,
+    );
     expect(agents.setFollowUp(followUp.id, "pending", "cancelled")).toBe(true);
     expect(agents.setFollowUp(followUp.id, "pending", "cancelled")).toBe(false);
     expect(agents.dueFollowUps(state.clock)).toEqual([]);
@@ -228,7 +279,10 @@ describe("follow-ups", () => {
 
   it("is cancelled when its thread cannot be started", async () => {
     const { agents, sessions, state } = setup(true);
-    agents.addFollowUp({ agentId: "devops", task: "x", dueAt: state.clock, reportThreadId: null }, state.clock);
+    agents.addFollowUp(
+      { agentId: "devops", task: "x", dueAt: state.clock, reportThreadId: null },
+      state.clock,
+    );
     expect(await sessions.runDueFollowUps()).toHaveLength(0);
     expect(agents.openFollowUps()).toEqual([]);
   });
@@ -251,7 +305,9 @@ describe("Linear triggers", () => {
   const lastPoll = "2026-10-12T07:00:00.000Z";
 
   it("derives created, status and label events from what was seen before", () => {
-    expect(deriveEvents(null, issue({ createdAt: "2026-10-12T07:30:00.000Z" }), lastPoll)).toEqual([{ event: "created", value: null }]);
+    expect(deriveEvents(null, issue({ createdAt: "2026-10-12T07:30:00.000Z" }), lastPoll)).toEqual([
+      { event: "created", value: null },
+    ]);
     // An old issue seen for the first time has no known past: nothing fires.
     expect(deriveEvents(null, issue(), lastPoll)).toEqual([]);
     expect(deriveEvents({ state: "Icebox", labels: [] }, issue(), lastPoll)).toEqual([
@@ -262,7 +318,17 @@ describe("Linear triggers", () => {
   });
 
   it("matches on team, project, event and value", () => {
-    const trigger = { id: "t", agentId: "devops", teamKey: "ENG", project: null as string | null, event: "state" as const, value: "Ready" as string | null, task: "x", enabled: true, createdAt: 0 };
+    const trigger: LinearTrigger = {
+      id: "t",
+      agentId: "devops",
+      teamKey: "ENG",
+      project: null,
+      event: "state",
+      value: "Ready",
+      task: "x",
+      enabled: true,
+      createdAt: 0,
+    };
     const moved = { event: "state" as const, value: "Ready" };
     expect(triggerMatches(trigger, issue(), moved)).toBe(true);
     expect(triggerMatches({ ...trigger, value: null }, issue(), moved)).toBe(true);
@@ -286,7 +352,9 @@ describe("Linear triggers", () => {
         return batches.shift() ?? [];
       },
       getCursor: async () => cursor,
-      setCursor: async (next) => void (cursor = next),
+      setCursor: async (next) => {
+        cursor = next;
+      },
       now: () => base.state.clock,
       log: () => {},
     });
@@ -294,11 +362,23 @@ describe("Linear triggers", () => {
   }
 
   it("takes the first poll as the baseline, then starts the agent on a matching change, once", async () => {
-    const { agents, instance, state, asked, cursor } = poller([[issue({ state: "Icebox" })], [issue()], [issue()]]);
+    const { agents, instance, state, asked, cursor } = poller([
+      [issue({ state: "Icebox" })],
+      [issue()],
+      [issue()],
+    ]);
     expect(await instance.poll()).toBe(0); // no trigger: Linear is not even asked
     expect(asked).toEqual([]);
     agents.addLinearTrigger(
-      { agentId: "devops", teamKey: "ENG", project: "Launch", event: "state", value: "Ready", task: "Review the issue.", enabled: true },
+      {
+        agentId: "devops",
+        teamKey: "ENG",
+        project: "Launch",
+        event: "state",
+        value: "Ready",
+        task: "Review the issue.",
+        enabled: true,
+      },
       state.clock,
     );
     expect(await instance.poll()).toBe(0);
@@ -319,12 +399,17 @@ describe("verifyLinearWebhook", () => {
   const signature = createHmac("sha256", secret).update(rawBody).digest("hex");
 
   it("accepts a fresh, correctly signed body", () => {
-    expect(verifyLinearWebhook({ rawBody, signature, secret, now: 1_500 })).toMatchObject({ ok: true });
+    expect(verifyLinearWebhook({ rawBody, signature, secret, now: 1_500 })).toMatchObject({
+      ok: true,
+    });
   });
 
   it("rejects a wrong, missing or malformed signature", () => {
     for (const bad of [null, "", "zz", signature.replace(/^./, (c) => (c === "0" ? "1" : "0"))]) {
-      expect(verifyLinearWebhook({ rawBody, signature: bad, secret, now: 1_500 })).toMatchObject({ ok: false, status: 401 });
+      expect(verifyLinearWebhook({ rawBody, signature: bad, secret, now: 1_500 })).toMatchObject({
+        ok: false,
+        status: 401,
+      });
     }
   });
 

@@ -6,7 +6,15 @@ import {
   makeThreadResponse,
 } from "@get-bb/plugin-sdk/testing";
 import { describe, expect, it, vi } from "vitest";
+import type { z } from "zod";
 import plugin from "../server.js";
+import type { rpcContract } from "./contract.js";
+
+type Contract = typeof rpcContract;
+type Rpc = <M extends keyof Contract & string>(
+  method: M,
+  input: unknown,
+) => Promise<z.output<Contract[M]["output"]>>;
 
 async function load(settings: Record<string, unknown> = {}) {
   let threads = 0;
@@ -15,13 +23,21 @@ async function load(settings: Record<string, unknown> = {}) {
     settings: { linearWebhookSecret: "whsec", ...settings },
     agentSkillIds: ["optio"],
     sdk: {
-      threads: { spawn: async () => ({ id: `thr_${(threads += 1)}` }), get: async () => ({ status: "active", archivedAt: null }) },
+      threads: {
+        spawn: async () => {
+          threads += 1;
+          return { id: `thr_${threads}` };
+        },
+        get: async () => ({ status: "active", archivedAt: null }),
+      },
       projects: { list: async () => [{ id: "proj_1", name: "acme" }] },
       hosts: { list: async () => [{ id: "host_1", name: "Mac" }] },
     },
   });
   await plugin(host.bb);
-  const rpc = host.harness.behavior.callRpc as (method: string, input: unknown) => Promise<any>;
+  // SAFETY: the fake host's callRpc parses every result with the method's output schema in rpcContract;
+  // the input stays unknown so a test can send what the contract refuses.
+  const rpc = host.harness.behavior.callRpc as Rpc;
   const agent = await rpc("agent_create", {
     name: "DevOps",
     description: "CI and deploys",
@@ -43,22 +59,43 @@ describe("the Agents page RPC", () => {
     expect(agent.id).toBe("devops");
     await rpc("agent_update", { ...pick(agent), id: agent.id, instructions: "Own CI." });
     const listed = await rpc("agents_list", null);
-    expect(listed.agents[0]).toMatchObject({ id: "devops", instructions: "Own CI.", memories: 0, automations: 0 });
+    expect(listed.agents[0]).toMatchObject({
+      id: "devops",
+      instructions: "Own CI.",
+      memories: 0,
+      automations: 0,
+    });
     expect(listed.projects).toEqual([{ id: "proj_1", name: "acme" }]);
   });
 
   it("starts a chat as the agent and lists it as a session", async () => {
     const loaded = await load();
     const { rpc } = loaded;
-    expect(await rpc("agent_chat", { id: "devops", message: "Why is CI red?" })).toEqual({ threadId: "thr_1" });
+    expect(await rpc("agent_chat", { id: "devops", message: "Why is CI red?" })).toEqual({
+      threadId: "thr_1",
+    });
     const detail = await rpc("agent_get", { id: "devops" });
-    expect(detail.sessions[0]).toMatchObject({ source: "chat", status: "running", threadId: "thr_1" });
+    expect(detail.sessions[0]).toMatchObject({
+      source: "chat",
+      status: "running",
+      threadId: "thr_1",
+    });
   });
 
   it("keeps memory that the page and the agent both write", async () => {
     const { rpc, harness } = await load();
     await rpc("memory_add", { agentId: "devops", text: "Deploys go through Coolify." });
-    const saved = await harness.behavior.runCli(["memory", "add", "devops", "Never", "rerun", "a", "deploy", "by", "hand."]);
+    const saved = await harness.behavior.runCli([
+      "memory",
+      "add",
+      "devops",
+      "Never",
+      "rerun",
+      "a",
+      "deploy",
+      "by",
+      "hand.",
+    ]);
     expect(saved.exitCode).toBe(0);
     const brief = await harness.behavior.runCli(["brief", "devops"]);
     expect(brief.stdout).toContain("Own the pipelines.");
@@ -71,9 +108,18 @@ describe("the Agents page RPC", () => {
 
   it("refuses an automation with a bad schedule or nothing to do", async () => {
     const { rpc } = await load();
-    const base = { agentId: "devops", name: "CI", prompt: "Check CI.", workflow: null, workflowArgs: {}, enabled: true };
+    const base = {
+      agentId: "devops",
+      name: "CI",
+      prompt: "Check CI.",
+      workflow: null,
+      workflowArgs: {},
+      enabled: true,
+    };
     await expect(rpc("automation_save", { ...base, cron: "every day" })).rejects.toThrow();
-    await expect(rpc("automation_save", { ...base, cron: "0 8 * * *", prompt: " " })).rejects.toThrow();
+    await expect(
+      rpc("automation_save", { ...base, cron: "0 8 * * *", prompt: " " }),
+    ).rejects.toThrow();
     const saved = await rpc("automation_save", { ...base, cron: "0 8 * * *" });
     expect(await rpc("automation_run", { id: saved.id })).toEqual({ threadId: "thr_1" });
   });
@@ -83,7 +129,13 @@ describe("the Agents page RPC", () => {
     try {
       const loaded = await load();
       await loaded.rpc("automation_save", {
-        agentId: "devops", name: "CI", cron: "0 8 * * *", prompt: "Check CI.", workflow: null, workflowArgs: {}, enabled: true,
+        agentId: "devops",
+        name: "CI",
+        cron: "0 8 * * *",
+        prompt: "Check CI.",
+        workflow: null,
+        workflowArgs: {},
+        enabled: true,
       });
       vi.setSystemTime(new Date("2026-10-12T08:01:00"));
       await loaded.harness.behavior.setSettings({ paused: true });
@@ -115,7 +167,12 @@ describe("session instructions", () => {
       makePluginAgentConfigurationContext({ pluginMetadata: { standingAgent: "devops" } }),
     );
     expect(JSON.stringify(forAgent)).toContain("bb optio brief devops");
-    for (const pluginMetadata of [{}, { standingAgent: "nope" }, { standingAgent: 7 }] as Record<string, string | number>[]) {
+    const others: Record<string, string | number>[] = [
+      {},
+      { standingAgent: "nope" },
+      { standingAgent: 7 },
+    ];
+    for (const pluginMetadata of others) {
       const other = await harness.behavior.resolveAgentConfiguration(
         makePluginAgentConfigurationContext({ pluginMetadata }),
       );
@@ -128,7 +185,9 @@ describe("the board", () => {
   it("is set up from the page in dry-run and edited without JSON", async () => {
     const { rpc } = await load();
     expect(await rpc("board_get", null)).toMatchObject({ configured: false, mode: "off" });
-    await expect(rpc("board_setup", { projectId: "proj_1", teamKey: "ENG", workflow: "issue-run" })).rejects.toThrow();
+    await expect(
+      rpc("board_setup", { projectId: "proj_1", teamKey: "ENG", workflow: "issue-run" }),
+    ).rejects.toThrow();
     expect(await rpc("board_get", null)).toMatchObject({ configured: false });
     await rpc("board_setup", {
       projectId: "proj_1",
@@ -143,7 +202,9 @@ describe("the board", () => {
     await rpc("board_update", {
       focus: "Launch 1.0",
       maxAttempts: 3,
-      machines: [{ id: "mac", hostId: "host_1", branch: "origin/main", cap: 1, capabilities: ["postgres"] }],
+      machines: [
+        { id: "mac", hostId: "host_1", branch: "origin/main", cap: 1, capabilities: ["postgres"] },
+      ],
       requirements: [{ capability: "postgres", labels: ["api"], scope: [] }],
     });
     const board = await rpc("board_get", null);
@@ -189,7 +250,16 @@ describe("POST /trigger", () => {
 
   it("starts an agent that allows it, once per delivery", async () => {
     const loaded = await load();
-    expect((await post(loaded, { agent: "devops", task: "CI failed.", payload: { run: 7 }, deliveryId: "d1" })).status).toBe(202);
+    expect(
+      (
+        await post(loaded, {
+          agent: "devops",
+          task: "CI failed.",
+          payload: { run: 7 },
+          deliveryId: "d1",
+        })
+      ).status,
+    ).toBe(202);
     await vi.waitFor(() => expect(spawns(loaded)).toHaveLength(1));
     await post(loaded, { agent: "devops", task: "CI failed.", deliveryId: "d1" });
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -199,7 +269,12 @@ describe("POST /trigger", () => {
   it("refuses unknown agents, agents that do not allow it, bad bodies, and everything while paused", async () => {
     const loaded = await load();
     await loaded.rpc("agent_create", {
-      name: "Frontend", description: "", projectId: "proj_1", instructions: "", enabled: true, httpTrigger: false,
+      name: "Frontend",
+      description: "",
+      projectId: "proj_1",
+      instructions: "",
+      enabled: true,
+      httpTrigger: false,
     });
     expect((await post(loaded, { agent: "nope" })).status).toBe(404);
     expect((await post(loaded, { agent: "frontend" })).status).toBe(409);
@@ -225,7 +300,9 @@ describe("POST /linear", () => {
   it("accepts a signed delivery and rejects another secret", async () => {
     const { harness } = await load();
     expect((await harness.behavior.fetchHttp("POST", "/linear", request())).status).toBe(200);
-    expect((await harness.behavior.fetchHttp("POST", "/linear", request("other"))).status).toBe(401);
+    expect((await harness.behavior.fetchHttp("POST", "/linear", request("other"))).status).toBe(
+      401,
+    );
   });
 
   it("answers 503 until the signing secret is set", async () => {
@@ -237,9 +314,18 @@ describe("POST /linear", () => {
 describe("bb optio", () => {
   it("triggers by hand and closes the session when the thread goes idle", async () => {
     const { harness } = await load();
-    const started = await harness.behavior.runCli(["trigger", "devops", "--task", "Check the deploy.", "--json"]);
+    const started = await harness.behavior.runCli([
+      "trigger",
+      "devops",
+      "--task",
+      "Check the deploy.",
+      "--json",
+    ]);
     expect(started.exitCode).toBe(0);
-    expect(JSON.parse(started.stdout ?? "{}")).toMatchObject({ status: "running", threadId: "thr_1" });
+    expect(JSON.parse(started.stdout ?? "{}")).toMatchObject({
+      status: "running",
+      threadId: "thr_1",
+    });
     await harness.behavior.emitThreadEvent("thread.idle", {
       thread: makeThreadResponse({ id: "thr_1" }),
       lastAssistantText: "done",
@@ -252,9 +338,12 @@ describe("bb optio", () => {
     const loaded = await load();
     const { harness, rpc } = loaded;
     harness.sdk.stub("threads.send", async () => ({}));
-    const scheduled = await harness.behavior.runCli(["follow-up", "add", "devops", "--task", "Check the deploy."], {
-      threadId: "thr_origin",
-    });
+    const scheduled = await harness.behavior.runCli(
+      ["follow-up", "add", "devops", "--task", "Check the deploy."],
+      {
+        threadId: "thr_origin",
+      },
+    );
     expect(scheduled.exitCode).toBe(0);
     expect(scheduled.stdout).toContain("its report comes back to this thread");
     expect((await rpc("agent_get", { id: "devops" })).followUps).toHaveLength(1);
@@ -274,7 +363,15 @@ describe("bb optio", () => {
 
   it("refuses a follow-up time it cannot read", async () => {
     const { harness } = await load();
-    const bad = await harness.behavior.runCli(["follow-up", "add", "devops", "--task", "x", "--at", "tomorrow-ish"]);
+    const bad = await harness.behavior.runCli([
+      "follow-up",
+      "add",
+      "devops",
+      "--task",
+      "x",
+      "--at",
+      "tomorrow-ish",
+    ]);
     expect(bad.exitCode).not.toBe(0);
     expect(bad.stderr).toContain("is not a time");
   });
@@ -282,11 +379,18 @@ describe("bb optio", () => {
   it("keeps Linear triggers per agent", async () => {
     const { rpc } = await load();
     const trigger = await rpc("linear_trigger_add", {
-      agentId: "devops", teamKey: "ENG", project: null, event: "created", value: "ignored", task: "Triage it.",
+      agentId: "devops",
+      teamKey: "ENG",
+      project: null,
+      event: "created",
+      value: "ignored",
+      task: "Triage it.",
     });
     expect(trigger).toMatchObject({ event: "created", value: null, enabled: true });
     await rpc("linear_trigger_toggle", { id: trigger.id, enabled: false });
-    expect((await rpc("agent_get", { id: "devops" })).linearTriggers[0]).toMatchObject({ enabled: false });
+    expect((await rpc("agent_get", { id: "devops" })).linearTriggers[0]).toMatchObject({
+      enabled: false,
+    });
     await rpc("linear_trigger_delete", { id: trigger.id });
     expect((await rpc("agent_get", { id: "devops" })).linearTriggers).toEqual([]);
     // No Linear key in this host: the form is told why it has no teams.

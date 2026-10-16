@@ -64,8 +64,11 @@ const toDispatch = (row: Row): Dispatch => ({
 
 export function createDispatchStore(db: Database) {
   const forIssue = (issue: string) =>
+    // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
     (
-      db.prepare(`SELECT * FROM dispatches WHERE issue = ? ORDER BY started_at DESC, rowid DESC`).all(issue) as Row[]
+      db
+        .prepare(`SELECT * FROM dispatches WHERE issue = ? ORDER BY started_at DESC, rowid DESC`)
+        .all(issue) as Row[]
     ).map(toDispatch);
 
   return {
@@ -97,12 +100,18 @@ export function createDispatchStore(db: Database) {
     /** Lifts a stall so the issue is planned again. Returns false when there was none. */
     release(issue: string): boolean {
       return (
-        db.prepare(`UPDATE dispatches SET status = 'released' WHERE issue = ? AND status = 'stalled'`).run(issue)
-          .changes > 0
+        db
+          .prepare(
+            `UPDATE dispatches SET status = 'released' WHERE issue = ? AND status = 'stalled'`,
+          )
+          .run(issue).changes > 0
       );
     },
     active(): Dispatch[] {
-      return (db.prepare(`SELECT * FROM dispatches WHERE status = 'active'`).all() as Row[]).map(toDispatch);
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+      return (db.prepare(`SELECT * FROM dispatches WHERE status = 'active'`).all() as Row[]).map(
+        toDispatch,
+      );
     },
     latest: (issue: string): Dispatch | null => forIssue(issue)[0] ?? null,
     /** Runs in a row, newest first, that ended stalled. */
@@ -113,7 +122,10 @@ export function createDispatchStore(db: Database) {
     },
     history(): Map<string, IssueHistory> {
       const history = new Map<string, IssueHistory>();
-      const rows = db.prepare(`SELECT * FROM dispatches ORDER BY started_at ASC, rowid ASC`).all() as Row[];
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+      const rows = db
+        .prepare(`SELECT * FROM dispatches ORDER BY started_at ASC, rowid ASC`)
+        .all() as Row[];
       for (const row of rows) {
         // Rows arrive oldest first, so the last one written per issue is its latest run.
         history.set(row.issue, {
@@ -126,8 +138,13 @@ export function createDispatchStore(db: Database) {
     },
     list(limit: number): Dispatch[] {
       return (
-        db.prepare(`SELECT * FROM dispatches ORDER BY started_at DESC, rowid DESC LIMIT ?`).all(limit) as Row[]
-      ).map(toDispatch);
+        // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+        (
+          db
+            .prepare(`SELECT * FROM dispatches ORDER BY started_at DESC, rowid DESC LIMIT ?`)
+            .all(limit) as Row[]
+        ).map(toDispatch)
+      );
     },
   };
 }

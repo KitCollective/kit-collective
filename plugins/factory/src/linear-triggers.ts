@@ -2,7 +2,7 @@
 // agent sessions. Linear cannot reach bb with a webhook, so the plugin asks.
 import type { AgentStore, LinearEvent, LinearTrigger, SeenIssue } from "./agent-store.js";
 import type { LinearIssue } from "./linear-api.js";
-import { taskWithPayload, type Sessions } from "./sessions.js";
+import { type Sessions, taskWithPayload } from "./sessions.js";
 
 export interface IssueEvent {
   event: LinearEvent;
@@ -16,7 +16,11 @@ export interface IssueEvent {
  * poll; an older one is recorded and yields nothing, because its previous
  * state is unknown.
  */
-export function deriveEvents(previous: SeenIssue | null, issue: LinearIssue, lastPoll: string): IssueEvent[] {
+export function deriveEvents(
+  previous: SeenIssue | null,
+  issue: LinearIssue,
+  lastPoll: string,
+): IssueEvent[] {
   if (previous === null) {
     return issue.createdAt > lastPoll ? [{ event: "created", value: null }] : [];
   }
@@ -31,7 +35,11 @@ export function deriveEvents(previous: SeenIssue | null, issue: LinearIssue, las
 const same = (a: string | null, b: string | null) =>
   a !== null && b !== null && a.trim().toLowerCase() === b.trim().toLowerCase();
 
-export function triggerMatches(trigger: LinearTrigger, issue: LinearIssue, event: IssueEvent): boolean {
+export function triggerMatches(
+  trigger: LinearTrigger,
+  issue: LinearIssue,
+  event: IssueEvent,
+): boolean {
   if (!trigger.enabled || trigger.event !== event.event) return false;
   if (!same(trigger.teamKey, issue.teamKey)) return false;
   if (trigger.project !== null && !same(trigger.project, issue.project)) return false;
@@ -78,7 +86,11 @@ export function createLinearPoller(deps: PollerDeps) {
             if (agent === null || !agent.enabled) continue;
             const run = await deps.sessions.start(agent, {
               source: "linear",
-              task: taskWithPayload(trigger.task, { event: event.event, value: event.value, issue }),
+              task: taskWithPayload(trigger.task, {
+                event: event.event,
+                value: event.value,
+                issue,
+              }),
               deliveryId: `${trigger.id}:${issue.id}:${event.event}:${event.value ?? ""}:${issue.updatedAt}`,
               label: `${issue.identifier} ${event.event === "created" ? "created" : event.value}`,
             });

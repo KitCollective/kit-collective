@@ -1,9 +1,4 @@
-import {
-  createContext,
-  createElement,
-  useContext,
-  type ReactNode,
-} from "react";
+import { createContext, createElement, type ReactNode, useContext } from "react";
 
 import { useMediaQuery } from "./use-media-query.js";
 

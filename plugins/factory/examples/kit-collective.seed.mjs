@@ -50,7 +50,8 @@ const agents = [
   },
   {
     name: "Frontend",
-    description: "Collector UI: React Native, Expo Router, Expo Web, layout, accessibility and UI copy.",
+    description:
+      "Collector UI: React Native, Expo Router, Expo Web, layout, accessibility and UI copy.",
     instructions: [
       `You are the Frontend agent for kit-collective. ${contract}`,
       "Your area and its rules are in .cursor/agents/frontend.md; docs/design-system.md is the authority on how things look and behave. Flag a gap in it instead of inventing taste.",
@@ -75,8 +76,20 @@ export const boardSetup = {
 
 export const boardRouting = {
   machines: [
-    { id: "harness", hostId: "host_new78xp362", branch: "origin/development", cap: 2, capabilities: [] },
-    { id: "mac", hostId: "host_kttknna49n", branch: "origin/development", cap: 1, capabilities: ["postgres", "simulator"] },
+    {
+      id: "harness",
+      hostId: "host_new78xp362",
+      branch: "origin/development",
+      cap: 2,
+      capabilities: [],
+    },
+    {
+      id: "mac",
+      hostId: "host_kttknna49n",
+      branch: "origin/development",
+      cap: 1,
+      capabilities: ["postgres", "simulator"],
+    },
   ],
   requirements: [{ capability: "postgres", labels: ["api"], scope: ["apps/api/", "packages/db/"] }],
 };

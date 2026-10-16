@@ -70,7 +70,16 @@ export function planBoard(input: {
   history: Map<string, IssueHistory>;
 }): Plan {
   const { issues, config, focus, history } = input;
-  const plan: Plan = { focus, running: [], start: [], waiting: [], unblock: [], ready: 0, room: 0, promotable: [] };
+  const plan: Plan = {
+    focus,
+    running: [],
+    start: [],
+    waiting: [],
+    unblock: [],
+    ready: 0,
+    room: 0,
+    promotable: [],
+  };
 
   const used = new Map<string, number>(config.machines.map((machine) => [machine.id, 0]));
   /** Issues being worked on: each holds its declared write scope. */
@@ -82,7 +91,8 @@ export function planBoard(input: {
       used.set(activeOn, (used.get(activeOn) ?? 0) + 1);
     }
     if (activeOn !== null || config.activeStates.includes(issue.state)) holders.push(issue);
-    if (issue.state === config.blockedState && issue.blockedBy.length === 0) plan.unblock.push(issue);
+    if (issue.state === config.blockedState && issue.blockedBy.length === 0)
+      plan.unblock.push(issue);
   }
 
   const rank = (issue: BoardIssue) => {
@@ -116,7 +126,9 @@ export function planBoard(input: {
 
   // Machines with the fewest capabilities first, so the one that can do
   // everything stays free for the issues that need it.
-  const machines = [...config.machines].sort((a, b) => a.capabilities.length - b.capabilities.length);
+  const machines = [...config.machines].sort(
+    (a, b) => a.capabilities.length - b.capabilities.length,
+  );
 
   for (const issue of candidates) {
     const wait = (reason: string) => plan.waiting.push({ identifier: issue.identifier, reason });
@@ -135,7 +147,9 @@ export function planBoard(input: {
       continue;
     }
     const clash = holders.find(
-      (holder) => holder.identifier !== issue.identifier && scopesOverlap(issue.writeScope, holder.writeScope),
+      (holder) =>
+        holder.identifier !== issue.identifier &&
+        scopesOverlap(issue.writeScope, holder.writeScope),
     );
     if (clash !== undefined) {
       wait(`write scope overlaps ${clash.identifier}`);
@@ -172,9 +186,12 @@ export function summarizeBoard(issues: BoardIssue[], config: SchedulerConfig): B
   const summary: BoardSummary = { states: {}, milestones: {} };
   for (const issue of issues) {
     summary.states[issue.state] = (summary.states[issue.state] ?? 0) + 1;
-    const milestone = (summary.milestones[issue.milestone ?? "(no milestone)"] ??= { open: 0, ready: 0 });
+    const key = issue.milestone ?? "(no milestone)";
+    const milestone = summary.milestones[key] ?? { open: 0, ready: 0 };
+    summary.milestones[key] = milestone;
     milestone.open += 1;
-    if (issue.state === config.dispatchState && issue.labels.includes(config.readyLabel)) milestone.ready += 1;
+    if (issue.state === config.dispatchState && issue.labels.includes(config.readyLabel))
+      milestone.ready += 1;
   }
   return summary;
 }

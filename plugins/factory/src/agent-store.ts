@@ -239,6 +239,7 @@ const toAutomation = (row: AutomationRow): Automation => ({
   cron: row.cron,
   prompt: row.prompt,
   workflow: row.workflow,
+  // SAFETY: workflow_args is only written by this store, as JSON.stringify of a Record<string, string>.
   workflowArgs: JSON.parse(row.workflow_args) as Record<string, string>,
   enabled: row.enabled === 1,
   lastRunAt: row.last_run_at,
@@ -255,10 +256,14 @@ export function slugify(name: string): string {
     .slice(0, 48);
 }
 
-export type AgentInput = Pick<Agent, "name" | "description" | "projectId" | "instructions" | "enabled" | "httpTrigger">;
+export type AgentInput = Pick<
+  Agent,
+  "name" | "description" | "projectId" | "instructions" | "enabled" | "httpTrigger"
+>;
 
 export function createAgentStore(db: Database) {
   const get = (id: string): Agent | null => {
+    // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
     const row = db.prepare(`SELECT * FROM agents WHERE id = ?`).get(id) as AgentRow | undefined;
     return row === undefined ? null : toAgent(row);
   };
@@ -267,7 +272,12 @@ export function createAgentStore(db: Database) {
   return {
     get,
     list(): Agent[] {
-      return (db.prepare(`SELECT * FROM agents ORDER BY name COLLATE NOCASE`).all() as AgentRow[]).map(toAgent);
+      return (
+        // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+        (db.prepare(`SELECT * FROM agents ORDER BY name COLLATE NOCASE`).all() as AgentRow[]).map(
+          toAgent,
+        )
+      );
     },
     /** Creates the agent under an id derived from its name; a taken id gets a suffix. */
     create(input: AgentInput, now: number, preferredId?: string): Agent {
@@ -277,14 +287,35 @@ export function createAgentStore(db: Database) {
       db.prepare(
         `INSERT INTO agents (id, name, description, project_id, instructions, enabled, http_trigger, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(id, input.name, input.description, input.projectId, input.instructions, input.enabled ? 1 : 0, input.httpTrigger ? 1 : 0, now, now);
-      return get(id) as Agent;
+      ).run(
+        id,
+        input.name,
+        input.description,
+        input.projectId,
+        input.instructions,
+        input.enabled ? 1 : 0,
+        input.httpTrigger ? 1 : 0,
+        now,
+        now,
+      );
+      const created = get(id);
+      if (created === null) throw new Error(`agent ${id} was not saved`);
+      return created;
     },
     update(id: string, input: AgentInput, now: number): Agent | null {
       db.prepare(
         `UPDATE agents SET name = ?, description = ?, project_id = ?, instructions = ?, enabled = ?, http_trigger = ?, updated_at = ?
          WHERE id = ?`,
-      ).run(input.name, input.description, input.projectId, input.instructions, input.enabled ? 1 : 0, input.httpTrigger ? 1 : 0, now, id);
+      ).run(
+        input.name,
+        input.description,
+        input.projectId,
+        input.instructions,
+        input.enabled ? 1 : 0,
+        input.httpTrigger ? 1 : 0,
+        now,
+        id,
+      );
       return get(id);
     },
     /** Removes the agent with its memory, automations, follow-ups and triggers. */
@@ -300,18 +331,21 @@ export function createAgentStore(db: Database) {
 
     memories(agentId: string): Memory[] {
       return (
-        db.prepare(`SELECT * FROM memories WHERE agent_id = ? ORDER BY created_at DESC, rowid DESC`).all(agentId) as MemoryRow[]
-      ).map(toMemory);
+        // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+        (
+          db
+            .prepare(
+              `SELECT * FROM memories WHERE agent_id = ? ORDER BY created_at DESC, rowid DESC`,
+            )
+            .all(agentId) as MemoryRow[]
+        ).map(toMemory)
+      );
     },
     remember(agentId: string, text: string, threadId: string | null, now: number): Memory {
       const id = shortId("mem");
-      db.prepare(`INSERT INTO memories (id, agent_id, text, thread_id, created_at) VALUES (?, ?, ?, ?, ?)`).run(
-        id,
-        agentId,
-        text,
-        threadId,
-        now,
-      );
+      db.prepare(
+        `INSERT INTO memories (id, agent_id, text, thread_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+      ).run(id, agentId, text, threadId, now);
       return { id, agentId, text, threadId, createdAt: now };
     },
     forget(memoryId: string): boolean {
@@ -322,15 +356,24 @@ export function createAgentStore(db: Database) {
       const rows =
         agentId === undefined
           ? db.prepare(`SELECT * FROM automations ORDER BY created_at`).all()
-          : db.prepare(`SELECT * FROM automations WHERE agent_id = ? ORDER BY created_at`).all(agentId);
+          : db
+              .prepare(`SELECT * FROM automations WHERE agent_id = ? ORDER BY created_at`)
+              .all(agentId);
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
       return (rows as AutomationRow[]).map(toAutomation);
     },
     automation(id: string): Automation | null {
-      const row = db.prepare(`SELECT * FROM automations WHERE id = ?`).get(id) as AutomationRow | undefined;
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+      const row = db.prepare(`SELECT * FROM automations WHERE id = ?`).get(id) as
+        | AutomationRow
+        | undefined;
       return row === undefined ? null : toAutomation(row);
     },
     saveAutomation(
-      input: Pick<Automation, "agentId" | "name" | "cron" | "prompt" | "workflow" | "workflowArgs" | "enabled"> & {
+      input: Pick<
+        Automation,
+        "agentId" | "name" | "cron" | "prompt" | "workflow" | "workflowArgs" | "enabled"
+      > & {
         id?: string;
       },
       now: number,
@@ -352,7 +395,10 @@ export function createAgentStore(db: Database) {
         input.enabled ? 1 : 0,
         now,
       );
-      return toAutomation(db.prepare(`SELECT * FROM automations WHERE id = ?`).get(id) as AutomationRow);
+      return toAutomation(
+        // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+        db.prepare(`SELECT * FROM automations WHERE id = ?`).get(id) as AutomationRow,
+      );
     },
     removeAutomation(id: string): boolean {
       return db.prepare(`DELETE FROM automations WHERE id = ?`).run(id).changes > 0;
@@ -361,7 +407,10 @@ export function createAgentStore(db: Database) {
       db.prepare(`UPDATE automations SET last_run_at = ? WHERE id = ?`).run(now, id);
     },
 
-    addFollowUp(input: Pick<FollowUp, "agentId" | "task" | "dueAt" | "reportThreadId">, now: number): FollowUp {
+    addFollowUp(
+      input: Pick<FollowUp, "agentId" | "task" | "dueAt" | "reportThreadId">,
+      now: number,
+    ): FollowUp {
       const id = shortId("fup");
       db.prepare(
         `INSERT INTO follow_ups (id, agent_id, task, due_at, report_thread_id, status, created_at)
@@ -373,29 +422,51 @@ export function createAgentStore(db: Database) {
     openFollowUps(agentId?: string): FollowUp[] {
       const rows =
         agentId === undefined
-          ? db.prepare(`SELECT * FROM follow_ups WHERE status IN ('pending', 'started') ORDER BY due_at`).all()
+          ? db
+              .prepare(
+                `SELECT * FROM follow_ups WHERE status IN ('pending', 'started') ORDER BY due_at`,
+              )
+              .all()
           : db
-              .prepare(`SELECT * FROM follow_ups WHERE agent_id = ? AND status IN ('pending', 'started') ORDER BY due_at`)
+              .prepare(
+                `SELECT * FROM follow_ups WHERE agent_id = ? AND status IN ('pending', 'started') ORDER BY due_at`,
+              )
               .all(agentId);
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
       return (rows as FollowUpRow[]).map(toFollowUp);
     },
     dueFollowUps(now: number): FollowUp[] {
       return (
-        db.prepare(`SELECT * FROM follow_ups WHERE status = 'pending' AND due_at <= ? ORDER BY due_at`).all(now) as FollowUpRow[]
-      ).map(toFollowUp);
+        // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+        (
+          db
+            .prepare(
+              `SELECT * FROM follow_ups WHERE status = 'pending' AND due_at <= ? ORDER BY due_at`,
+            )
+            .all(now) as FollowUpRow[]
+        ).map(toFollowUp)
+      );
     },
     /** Moves a follow-up on, only from the status it is expected to be in. */
-    setFollowUp(id: string, from: FollowUp["status"], to: FollowUp["status"], threadId?: string): boolean {
+    setFollowUp(
+      id: string,
+      from: FollowUp["status"],
+      to: FollowUp["status"],
+      threadId?: string,
+    ): boolean {
       return (
         db
-          .prepare(`UPDATE follow_ups SET status = ?, thread_id = COALESCE(?, thread_id) WHERE id = ? AND status = ?`)
+          .prepare(
+            `UPDATE follow_ups SET status = ?, thread_id = COALESCE(?, thread_id) WHERE id = ? AND status = ?`,
+          )
           .run(to, threadId ?? null, id, from).changes > 0
       );
     },
     startedFollowUpByThread(threadId: string): FollowUp | null {
-      const row = db.prepare(`SELECT * FROM follow_ups WHERE thread_id = ? AND status = 'started'`).get(threadId) as
-        | FollowUpRow
-        | undefined;
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+      const row = db
+        .prepare(`SELECT * FROM follow_ups WHERE thread_id = ? AND status = 'started'`)
+        .get(threadId) as FollowUpRow | undefined;
       return row === undefined ? null : toFollowUp(row);
     },
 
@@ -403,7 +474,10 @@ export function createAgentStore(db: Database) {
       const rows =
         agentId === undefined
           ? db.prepare(`SELECT * FROM linear_triggers ORDER BY created_at`).all()
-          : db.prepare(`SELECT * FROM linear_triggers WHERE agent_id = ? ORDER BY created_at`).all(agentId);
+          : db
+              .prepare(`SELECT * FROM linear_triggers WHERE agent_id = ? ORDER BY created_at`)
+              .all(agentId);
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
       return (rows as LinearTriggerRow[]).map(toLinearTrigger);
     },
     addLinearTrigger(input: Omit<LinearTrigger, "id" | "createdAt">, now: number): LinearTrigger {
@@ -411,20 +485,37 @@ export function createAgentStore(db: Database) {
       db.prepare(
         `INSERT INTO linear_triggers (id, agent_id, team_key, project, event, value, task, enabled, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(id, input.agentId, input.teamKey, input.project, input.event, input.value, input.task, input.enabled ? 1 : 0, now);
+      ).run(
+        id,
+        input.agentId,
+        input.teamKey,
+        input.project,
+        input.event,
+        input.value,
+        input.task,
+        input.enabled ? 1 : 0,
+        now,
+      );
       return { ...input, id, createdAt: now };
     },
     setLinearTriggerEnabled(id: string, enabled: boolean): boolean {
-      return db.prepare(`UPDATE linear_triggers SET enabled = ? WHERE id = ?`).run(enabled ? 1 : 0, id).changes > 0;
+      return (
+        db.prepare(`UPDATE linear_triggers SET enabled = ? WHERE id = ?`).run(enabled ? 1 : 0, id)
+          .changes > 0
+      );
     },
     removeLinearTrigger(id: string): boolean {
       return db.prepare(`DELETE FROM linear_triggers WHERE id = ?`).run(id).changes > 0;
     },
     seenIssue(issueId: string): SeenIssue | null {
-      const row = db.prepare(`SELECT state, labels FROM linear_seen WHERE issue_id = ?`).get(issueId) as
-        | { state: string; labels: string }
-        | undefined;
-      return row === undefined ? null : { state: row.state, labels: JSON.parse(row.labels) as string[] };
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+      const row = db
+        .prepare(`SELECT state, labels FROM linear_seen WHERE issue_id = ?`)
+        .get(issueId) as { state: string; labels: string } | undefined;
+      return row === undefined
+        ? null
+        : // SAFETY: labels is only written by this store, as JSON.stringify of a string array.
+          { state: row.state, labels: JSON.parse(row.labels) as string[] };
     },
     rememberIssue(issueId: string, seen: SeenIssue): void {
       db.prepare(

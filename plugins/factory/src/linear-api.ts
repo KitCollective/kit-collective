@@ -51,7 +51,9 @@ query Board($team: String!, $first: Int!, $after: String) {
 const pageSchema = z.object({
   teams: z.object({
     nodes: z.array(
-      z.object({ states: z.object({ nodes: z.array(z.object({ id: z.string(), name: z.string() })) }) }),
+      z.object({
+        states: z.object({ nodes: z.array(z.object({ id: z.string(), name: z.string() })) }),
+      }),
     ),
   }),
   issues: z.object({
@@ -85,7 +87,7 @@ const pageSchema = z.object({
 export function parseWriteScope(description: string | null): string[] {
   const line = /^[ \t>*-]*write-scope:[ \t]*(.+)$/im.exec(description ?? "");
   if (line === null) return [];
-  return (line[1] as string)
+  return (line[1] ?? "")
     .split(",")
     .map((glob) => glob.replaceAll("`", "").trim())
     .filter((glob) => glob !== "");
@@ -93,16 +95,19 @@ export function parseWriteScope(description: string | null): string[] {
 
 export type Fetch = typeof fetch;
 
+const graphqlBody = z.object({
+  data: z.unknown().optional(),
+  errors: z.array(z.object({ message: z.string().optional() })).optional(),
+});
+
 async function graphql(apiKey: string, fetchImpl: Fetch, query: string, variables: unknown) {
   const response = await fetchImpl(ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: apiKey },
     body: JSON.stringify({ query, variables }),
   });
-  const body = (await response.json().catch(() => null)) as {
-    data?: unknown;
-    errors?: { message?: string }[];
-  } | null;
+  const parsed = graphqlBody.safeParse(await response.json().catch(() => null));
+  const body = parsed.success ? parsed.data : null;
   if (!response.ok || body === null || body.errors !== undefined) {
     throw new Error(
       `Linear answered ${response.status}: ${body?.errors?.[0]?.message ?? "no usable body"}`,
@@ -112,7 +117,11 @@ async function graphql(apiKey: string, fetchImpl: Fetch, query: string, variable
 }
 
 /** Every backlog, unstarted and started issue of the team, with blockers and write scope. */
-export async function fetchBoard(apiKey: string, teamKey: string, fetchImpl: Fetch = fetch): Promise<Board> {
+export async function fetchBoard(
+  apiKey: string,
+  teamKey: string,
+  fetchImpl: Fetch = fetch,
+): Promise<Board> {
   const states: Record<string, string> = {};
   const issues: BoardIssue[] = [];
   let after: string | null = null;
@@ -177,7 +186,9 @@ export async function promoteIssue(
   const found = z
     .object({
       issueLabels: z.object({
-        nodes: z.array(z.object({ id: z.string(), team: z.object({ key: z.string() }).nullable() })),
+        nodes: z.array(
+          z.object({ id: z.string(), team: z.object({ key: z.string() }).nullable() }),
+        ),
       }),
     })
     .parse(
@@ -188,8 +199,11 @@ export async function promoteIssue(
         { name: input.label },
       ),
     ).issueLabels.nodes;
-  const label = found.find((node) => node.team?.key === input.teamKey) ?? found.find((node) => node.team === null);
-  if (label === undefined) throw new Error(`Linear has no label "${input.label}" for team ${input.teamKey}`);
+  const label =
+    found.find((node) => node.team?.key === input.teamKey) ??
+    found.find((node) => node.team === null);
+  if (label === undefined)
+    throw new Error(`Linear has no label "${input.label}" for team ${input.teamKey}`);
   await graphql(
     apiKey,
     fetchImpl,
@@ -263,7 +277,12 @@ export async function fetchUpdatedIssues(
   let after: string | null = null;
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const data = updatedSchema.parse(
-      await graphql(apiKey, fetchImpl, UPDATED_QUERY, { teams: teamKeys, since, first: 100, after }),
+      await graphql(apiKey, fetchImpl, UPDATED_QUERY, {
+        teams: teamKeys,
+        since,
+        first: 100,
+        after,
+      }),
     );
     for (const node of data.issues.nodes) {
       issues.push({
@@ -306,7 +325,10 @@ const optionsSchema = z.object({
 });
 
 /** The workspace's teams with their states and projects, for the trigger form. */
-export async function fetchLinearOptions(apiKey: string, fetchImpl: Fetch = fetch): Promise<LinearTeamOptions[]> {
+export async function fetchLinearOptions(
+  apiKey: string,
+  fetchImpl: Fetch = fetch,
+): Promise<LinearTeamOptions[]> {
   const data = optionsSchema.parse(
     await graphql(
       apiKey,

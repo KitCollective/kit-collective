@@ -31,13 +31,17 @@ function pluginFiles(dir: string): string[] {
 
 describe("product neutrality", () => {
   it("names no product outside the example seeds", () => {
-    const files = pluginFiles(root).filter((file) => file !== self && /\.(ts|tsx|md|json)$/.test(file));
+    const files = pluginFiles(root).filter(
+      (file) => file !== self && /\.(ts|tsx|md|json)$/.test(file),
+    );
     expect(files).toContain("server.ts");
     const hits = files.flatMap((file) =>
       readFileSync(join(root, file), "utf8")
         .split("\n")
         .flatMap((line, index) =>
-          productNames.filter((name) => name.test(line)).map((name) => `${file}:${index + 1} ${name}`),
+          productNames
+            .filter((name) => name.test(line))
+            .map((name) => `${file}:${index + 1} ${name}`),
         ),
     );
     expect(hits).toEqual([]);

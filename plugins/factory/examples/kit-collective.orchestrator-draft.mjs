@@ -3,6 +3,8 @@
 // Usage: node examples/kit-collective.orchestrator-draft.mjs http://127.0.0.1:<bb port>
 const base = `${process.argv[2] ?? "http://127.0.0.1:38886"}/api/v1/plugins/optio/rpc`;
 
+const say = (line) => process.stdout.write(`${line}\n`);
+
 async function rpc(method, input) {
   const response = await fetch(`${base}/${method}`, {
     method: "POST",
@@ -78,13 +80,14 @@ const { agent } = await rpc("agent_get", { id: "orchestrator" });
 await rpc("agent_update", {
   id: agent.id,
   name: agent.name,
-  description: "Keeps the factory moving: the board, milestone focus, stopped runs, and an honest overview.",
+  description:
+    "Keeps the factory moving: the board, milestone focus, stopped runs, and an honest overview.",
   projectId: agent.projectId,
   instructions,
   enabled: agent.enabled,
   httpTrigger: agent.httpTrigger,
 });
-console.log("instructions saved");
+say("instructions saved");
 
 const automations = [
   {
@@ -118,7 +121,9 @@ const automations = [
       "Write the weekly status. Per milestone: issues done last week, issues in progress, issues ready, issues waiting and why. Then: runs that stalled last week and what the cause was (from `bb optio dispatches`), and any failure pattern you saw twice. Save a pattern you saw twice to your memory. Keep it under a page.",
   },
 ];
-const existing = new Set((await rpc("agent_get", { id: "orchestrator" })).automations.map((a) => a.name));
+const existing = new Set(
+  (await rpc("agent_get", { id: "orchestrator" })).automations.map((a) => a.name),
+);
 for (const automation of automations) {
   if (existing.has(automation.name)) continue;
   await rpc("automation_save", {
@@ -128,7 +133,7 @@ for (const automation of automations) {
     workflowArgs: {},
     enabled: false,
   });
-  console.log(`automation (off): ${automation.name}`);
+  say(`automation (off): ${automation.name}`);
 }
 
 const triggers = [
@@ -154,7 +159,9 @@ const triggers = [
   },
 ];
 const have = new Set(
-  (await rpc("agent_get", { id: "orchestrator" })).linearTriggers.map((t) => `${t.event}:${t.value}`),
+  (await rpc("agent_get", { id: "orchestrator" })).linearTriggers.map(
+    (t) => `${t.event}:${t.value}`,
+  ),
 );
 for (const trigger of triggers) {
   if (have.has(`${trigger.event}:${trigger.value}`)) continue;
@@ -165,5 +172,5 @@ for (const trigger of triggers) {
     project: null,
   });
   await rpc("linear_trigger_toggle", { id: created.id, enabled: false });
-  console.log(`trigger (off): ${trigger.event} ${trigger.value}`);
+  say(`trigger (off): ${trigger.event} ${trigger.value}`);
 }

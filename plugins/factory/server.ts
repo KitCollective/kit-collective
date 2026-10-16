@@ -15,17 +15,12 @@
 //
 // This file only wires registrations; the logic lives in src/.
 import { readFile } from "node:fs/promises";
-import {
-  PluginCliError,
-  cliCommand,
-  defineCli,
-  type BbPluginApi,
-} from "@get-bb/plugin-sdk";
+import { type BbPluginApi, cliCommand, defineCli, PluginCliError } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { AGENT_MIGRATIONS, createAgentStore, type Agent } from "./src/agent-store.js";
+import { AGENT_MIGRATIONS, type Agent, createAgentStore } from "./src/agent-store.js";
 import type { BoardSummary, Plan } from "./src/board.js";
-import { CHANGED, rpcContract, type BoardDto } from "./src/contract.js";
-import { DISPATCH_MIGRATIONS, createDispatchStore } from "./src/dispatch-store.js";
+import { type BoardDto, CHANGED, rpcContract } from "./src/contract.js";
+import { createDispatchStore, DISPATCH_MIGRATIONS } from "./src/dispatch-store.js";
 import { verifyLinearWebhook } from "./src/linear.js";
 import {
   fetchBoard,
@@ -42,11 +37,11 @@ import {
   createSessions,
   mentionContext,
   renderBrief,
+  type SpawnRequest,
   sessionInstructions,
   taskWithPayload,
-  type SpawnRequest,
 } from "./src/sessions.js";
-import { MIGRATIONS, createRunStore, type Run } from "./src/store.js";
+import { createRunStore, MIGRATIONS, type Run } from "./src/store.js";
 
 const httpTriggerBody = z
   .object({
@@ -83,15 +78,26 @@ function describeRun(run: Run): string {
 function describePlan(plan: Plan, summary: BoardSummary, mode: string): string {
   const lines = [
     `Mode: ${mode}. Focus: ${plan.focus ?? "none"}.`,
-    `Open issues: ${Object.entries(summary.states).map(([state, count]) => `${state} ${count}`).join(", ") || "none"}.`,
+    `Open issues: ${
+      Object.entries(summary.states)
+        .map(([state, count]) => `${state} ${count}`)
+        .join(", ") || "none"
+    }.`,
     "Milestones (open / ready to start):",
-    ...Object.entries(summary.milestones).map(([name, count]) => `  ${name}: ${count.open} / ${count.ready}`),
+    ...Object.entries(summary.milestones).map(
+      ([name, count]) => `  ${name}: ${count.open} / ${count.ready}`,
+    ),
   ];
   const section = (title: string, rows: string[]) => {
     lines.push("", `${title} (${rows.length})`, ...rows.map((row) => `  ${row}`));
   };
-  lines.push(`Queue: ${plan.ready} ready, room for ${plan.room} more; ${plan.promotable.length} backlog issues could be promoted.`);
-  section("Running", plan.running.map((run) => `${run.identifier}  on ${run.machineId}`));
+  lines.push(
+    `Queue: ${plan.ready} ready, room for ${plan.room} more; ${plan.promotable.length} backlog issues could be promoted.`,
+  );
+  section(
+    "Running",
+    plan.running.map((run) => `${run.identifier}  on ${run.machineId}`),
+  );
   section(
     mode === "live" ? "Starting now" : "Would start",
     plan.start.map(
@@ -99,8 +105,14 @@ function describePlan(plan: Plan, summary: BoardSummary, mode: string): string {
         `${issue.identifier}  on ${machineId}${resume ? " (resume)" : ""}  P${issue.priority}  ${issue.milestone ?? "no milestone"}  ${issue.title}`,
     ),
   );
-  section("Waiting", plan.waiting.map((wait) => `${wait.identifier}  ${wait.reason}`));
-  section("Unblocked, moving back", plan.unblock.map((issue) => issue.identifier));
+  section(
+    "Waiting",
+    plan.waiting.map((wait) => `${wait.identifier}  ${wait.reason}`),
+  );
+  section(
+    "Unblocked, moving back",
+    plan.unblock.map((issue) => issue.identifier),
+  );
   return lines.join("\n");
 }
 
@@ -127,7 +139,8 @@ export default async function plugin(bb: BbPluginApi) {
     linearWebhookSecret: {
       type: "string",
       label: "Linear webhook signing secret",
-      description: "Optional. With it, a Linear webhook makes the board plan at once instead of at the next minute.",
+      description:
+        "Optional. With it, a Linear webhook makes the board plan at once instead of at the next minute.",
       secret: true,
     },
   });
@@ -141,8 +154,8 @@ export default async function plugin(bb: BbPluginApi) {
 
   const changed = () => bb.realtime.publish(CHANGED, {});
   const spawnThread = (request: SpawnRequest) =>
-    // The environment is built in src/ and validated again by the server; the
-    // SDK's own union type is narrower than that object.
+    // SAFETY: the environment is built by machineEnvironment in src/ and validated again
+    // by the server; the SDK's own union type is narrower than that object.
     bb.sdk.threads.spawn(request as Parameters<typeof bb.sdk.threads.spawn>[0]);
 
   const sessions = createSessions({
@@ -175,13 +188,23 @@ export default async function plugin(bb: BbPluginApi) {
       const needle = query.trim().toLowerCase();
       return agents
         .list()
-        .filter((agent) => agent.enabled && `${agent.name} ${agent.id}`.toLowerCase().includes(needle))
+        .filter(
+          (agent) => agent.enabled && `${agent.name} ${agent.id}`.toLowerCase().includes(needle),
+        )
         .slice(0, 20)
-        .map((agent) => ({ id: agent.id, title: agent.name, subtitle: agent.description, icon: "Bot" }));
+        .map((agent) => ({
+          id: agent.id,
+          title: agent.name,
+          subtitle: agent.description,
+          icon: "Bot",
+        }));
     },
     resolve(itemId) {
       const agent = agents.get(itemId);
-      if (agent === null) throw new Error(`The agent "${itemId}" no longer exists. Remove the mention and send again.`);
+      if (agent === null)
+        throw new Error(
+          `The agent "${itemId}" no longer exists. Remove the mention and send again.`,
+        );
       return { context: mentionContext(agent, agents.memories(agent.id)) };
     },
   });
@@ -229,13 +252,17 @@ export default async function plugin(bb: BbPluginApi) {
       if (thread !== null && thread.archivedAt === null) return saved;
     }
     const agent = agents.get(config.orchestratorAgent);
-    if (agent === null) throw new Error(`the board's orchestrator agent "${config.orchestratorAgent}" does not exist`);
+    if (agent === null)
+      throw new Error(
+        `the board's orchestrator agent "${config.orchestratorAgent}" does not exist`,
+      );
     const run = await sessions.start(agent, {
       source: "manual",
       task: "Run `bb optio board` and reply with a three-line summary. Reports about stopped runs will arrive in this thread.",
       label: "board",
     });
-    if (run === null || run.threadId === null) throw new Error(run?.reason ?? "could not start the orchestrator thread");
+    if (run === null || run.threadId === null)
+      throw new Error(run?.reason ?? "could not start the orchestrator thread");
     await bb.storage.kv.set("orchestratorThread", run.threadId);
     return run.threadId;
   }
@@ -251,8 +278,11 @@ export default async function plugin(bb: BbPluginApi) {
       return thread?.status ?? null;
     },
     async workflowRuns(threadId) {
-      const call = <T,>(method: string, input: Record<string, string | null>, outputSchema: z.ZodType<T>) =>
-        bb.sdk.plugins.callRpc({ pluginId: "workflows", method, input, outputSchema });
+      const call = <T>(
+        method: string,
+        input: Record<string, string | null>,
+        outputSchema: z.ZodType<T>,
+      ) => bb.sdk.plugins.callRpc({ pluginId: "workflows", method, input, outputSchema });
       const { runs: active } = await call(
         "workflowActiveRuns",
         { threadId },
@@ -306,7 +336,10 @@ export default async function plugin(bb: BbPluginApi) {
     try {
       schedulerConfig = config;
       const result = await scheduler.tick(config, true);
-      if (result.started.length + result.stalled.length + result.unblocked.length > 0 || result.refillRequested) {
+      if (
+        result.started.length + result.stalled.length + result.unblocked.length > 0 ||
+        result.refillRequested
+      ) {
         changed();
       }
     } finally {
@@ -316,14 +349,18 @@ export default async function plugin(bb: BbPluginApi) {
   bb.background.schedule("orchestrator-tick", "* * * * *", liveTick);
   bb.background.schedule("automations", "* * * * *", async () => {
     if ((await settings.get()).paused) return;
-    const started = [...(await sessions.runDueAutomations()), ...(await sessions.runDueFollowUps())];
+    const started = [
+      ...(await sessions.runDueAutomations()),
+      ...(await sessions.runDueFollowUps()),
+    ];
     if (started.length > 0) changed();
   });
 
   const poller = createLinearPoller({
     agents,
     sessions,
-    fetchUpdated: async (teamKeys, since) => fetchUpdatedIssues(await linearApiKey(), teamKeys, since),
+    fetchUpdated: async (teamKeys, since) =>
+      fetchUpdatedIssues(await linearApiKey(), teamKeys, since),
     getCursor: async () => (await bb.storage.kv.get<string>("linearCursor")) ?? null,
     setCursor: (cursor) => bb.storage.kv.set("linearCursor", cursor),
     now: Date.now,
@@ -367,7 +404,10 @@ export default async function plugin(bb: BbPluginApi) {
     async (c) => {
       const body = httpTriggerBody.safeParse(await c.req.json().catch(() => null));
       if (!body.success) {
-        return c.json({ ok: false, error: "expected { agent, task?, payload?, deliveryId? }" }, 400);
+        return c.json(
+          { ok: false, error: "expected { agent, task?, payload?, deliveryId? }" },
+          400,
+        );
       }
       const agent = agents.get(body.data.agent);
       if (agent === null) return c.json({ ok: false, error: "unknown agent" }, 404);
@@ -410,7 +450,9 @@ export default async function plugin(bb: BbPluginApi) {
           },
         ],
       })
-      .catch((error: unknown) => bb.log.error(`could not deliver follow-up ${followUp.id}: ${String(error)}`));
+      .catch((error: unknown) =>
+        bb.log.error(`could not deliver follow-up ${followUp.id}: ${String(error)}`),
+      );
   });
   bb.events.on("thread.failed", ({ thread, error }) => {
     runs.finishByThread(thread.id, "failed", error ?? "thread failed", Date.now());
@@ -429,7 +471,8 @@ export default async function plugin(bb: BbPluginApi) {
     return agent;
   };
   const threadOf = (run: Run | null): { threadId: string } => {
-    if (run === null || run.threadId === null) throw new Error(run?.reason ?? "the thread could not be started");
+    if (run === null || run.threadId === null)
+      throw new Error(run?.reason ?? "the thread could not be started");
     return { threadId: run.threadId };
   };
 
@@ -477,8 +520,15 @@ export default async function plugin(bb: BbPluginApi) {
       requirements: config.requirements,
       stalled: dispatches
         .list(200)
-        .filter((dispatch) => dispatch.status === "stalled" && dispatches.latest(dispatch.issue)?.id === dispatch.id)
-        .map((dispatch) => ({ issue: dispatch.issue, machineId: dispatch.machineId, outcome: dispatch.outcome })),
+        .filter(
+          (dispatch) =>
+            dispatch.status === "stalled" && dispatches.latest(dispatch.issue)?.id === dispatch.id,
+        )
+        .map((dispatch) => ({
+          issue: dispatch.issue,
+          machineId: dispatch.machineId,
+          outcome: dispatch.outcome,
+        })),
     };
     try {
       const { plan, summary } = await scheduler.tick(config, false);
@@ -632,7 +682,8 @@ export default async function plugin(bb: BbPluginApi) {
         if (focus === null) await bb.storage.kv.delete("focus");
         else await bb.storage.kv.set("focus", focus);
       }
-      if (Object.keys(patch).length > 0) await saveScheduler({ ...(await requireScheduler()), ...patch });
+      if (Object.keys(patch).length > 0)
+        await saveScheduler({ ...(await requireScheduler()), ...patch });
       changed();
       return { ok: true as const };
     },
@@ -642,9 +693,11 @@ export default async function plugin(bb: BbPluginApi) {
 
   const json = { type: "boolean", description: "Emit machine-readable JSON" } as const;
   /** Turns a rejected promise into a CLI failure with the error's own text. */
-  const cliFailure = (code: string) => (error: unknown): never => {
-    throw new PluginCliError(error instanceof Error ? error.message : String(error), { code });
-  };
+  const cliFailure =
+    (code: string) =>
+    (error: unknown): never => {
+      throw new PluginCliError(error instanceof Error ? error.message : String(error), { code });
+    };
   const cliAgent = (id: string): Agent => {
     const agent = agents.get(id);
     if (agent === null) {
@@ -683,7 +736,8 @@ export default async function plugin(bb: BbPluginApi) {
           },
         }),
         brief: cliCommand({
-          summary: "Print an agent's instructions and memory; an agent runs this first in every session",
+          summary:
+            "Print an agent's instructions and memory; an agent runs this first in every session",
           positionals: [agentPositional],
           run(input) {
             const agent = cliAgent(input.positionals.agent);
@@ -694,13 +748,20 @@ export default async function plugin(bb: BbPluginApi) {
           summary: "Save one durable fact or decision to an agent's memory",
           positionals: [
             agentPositional,
-            { name: "text", description: "One self-contained sentence, at most 2000 characters", required: true, variadic: true },
+            {
+              name: "text",
+              description: "One self-contained sentence, at most 2000 characters",
+              required: true,
+              variadic: true,
+            },
           ],
           run(input, ctx) {
             const agent = cliAgent(input.positionals.agent);
             const text = input.positionals.text.join(" ").trim();
             if (text === "" || text.length > 2000) {
-              throw new PluginCliError("a memory is 1 to 2000 characters", { code: "invalid_value" });
+              throw new PluginCliError("a memory is 1 to 2000 characters", {
+                code: "invalid_value",
+              });
             }
             const memory = agents.remember(agent.id, text, ctx.threadId ?? null, Date.now());
             changed();
@@ -719,34 +780,53 @@ export default async function plugin(bb: BbPluginApi) {
               stdout:
                 memories.length === 0
                   ? "No memories."
-                  : memories.map((memory) => `${memory.id}  ${new Date(memory.createdAt).toISOString().slice(0, 10)}  ${memory.text}`).join("\n"),
+                  : memories
+                      .map(
+                        (memory) =>
+                          `${memory.id}  ${new Date(memory.createdAt).toISOString().slice(0, 10)}  ${memory.text}`,
+                      )
+                      .join("\n"),
             };
           },
         }),
         "memory remove": cliCommand({
           summary: "Delete a memory that is wrong or was replaced",
-          positionals: [{ name: "memory", description: "Memory id, e.g. mem_1a2b3c4d", required: true }],
+          positionals: [
+            { name: "memory", description: "Memory id, e.g. mem_1a2b3c4d", required: true },
+          ],
           run(input) {
             if (!agents.forget(input.positionals.memory)) {
-              throw new PluginCliError(`no memory "${input.positionals.memory}"`, { code: "memory_not_found" });
+              throw new PluginCliError(`no memory "${input.positionals.memory}"`, {
+                code: "memory_not_found",
+              });
             }
             changed();
             return { exitCode: 0, stdout: `Removed ${input.positionals.memory}` };
           },
         }),
         "follow-up add": cliCommand({
-          summary: "Schedule a new thread of an agent that does a task and reports back to this thread",
+          summary:
+            "Schedule a new thread of an agent that does a task and reports back to this thread",
           positionals: [agentPositional],
           options: {
-            task: { type: "string", required: true, description: "What to investigate or do", stdin: true },
+            task: {
+              type: "string",
+              required: true,
+              description: "What to investigate or do",
+              stdin: true,
+            },
             in: {
               type: "duration",
               defaultUnit: "m",
               min: 0,
               max: 30 * 24 * 3600 * 1000,
-              description: "How long from now: 30m, 2h, 3d (at most 30 days). Omit --in and --at to start now",
+              description:
+                "How long from now: 30m, 2h, 3d (at most 30 days). Omit --in and --at to start now",
             },
-            at: { type: "string", description: "A time, e.g. 2026-10-13T08:00, in the server's time zone" },
+            at: {
+              type: "string",
+              description: "A time, e.g. 2026-10-13T08:00, in the server's time zone",
+            },
           },
           constraints: [{ kind: "at-most-one", options: ["in", "at"] }],
           run(input, ctx) {
@@ -763,7 +843,12 @@ export default async function plugin(bb: BbPluginApi) {
               }
             }
             const followUp = agents.addFollowUp(
-              { agentId: agent.id, task: input.options.task, dueAt, reportThreadId: ctx.threadId ?? null },
+              {
+                agentId: agent.id,
+                task: input.options.task,
+                dueAt,
+                reportThreadId: ctx.threadId ?? null,
+              },
               now,
             );
             changed();
@@ -784,16 +869,25 @@ export default async function plugin(bb: BbPluginApi) {
               stdout:
                 rows.length === 0
                   ? "No follow-ups."
-                  : rows.map((row) => `${row.id}  ${row.agentId}  ${row.status}  ${new Date(row.dueAt).toISOString()}  ${row.task.slice(0, 100)}`).join("\n"),
+                  : rows
+                      .map(
+                        (row) =>
+                          `${row.id}  ${row.agentId}  ${row.status}  ${new Date(row.dueAt).toISOString()}  ${row.task.slice(0, 100)}`,
+                      )
+                      .join("\n"),
             };
           },
         }),
         "follow-up cancel": cliCommand({
           summary: "Cancel a follow-up that has not started",
-          positionals: [{ name: "id", description: "Follow-up id, e.g. fup_1a2b3c4d", required: true }],
+          positionals: [
+            { name: "id", description: "Follow-up id, e.g. fup_1a2b3c4d", required: true },
+          ],
           run(input) {
             if (!agents.setFollowUp(input.positionals.id, "pending", "cancelled")) {
-              throw new PluginCliError(`${input.positionals.id} is not a waiting follow-up`, { code: "not_pending" });
+              throw new PluginCliError(`${input.positionals.id} is not a waiting follow-up`, {
+                code: "not_pending",
+              });
             }
             changed();
             return { exitCode: 0, stdout: `Cancelled ${input.positionals.id}` };
@@ -803,20 +897,34 @@ export default async function plugin(bb: BbPluginApi) {
           summary: "Show recent agent sessions, newest first",
           options: {
             agent: { type: "string", description: "Only sessions of this agent id" },
-            limit: { type: "integer", min: 1, max: 200, default: 20, description: "How many to show (1-200, default 20)" },
+            limit: {
+              type: "integer",
+              min: 1,
+              max: 200,
+              default: 20,
+              description: "How many to show (1-200, default 20)",
+            },
             json,
           },
           run(input) {
             const rows = runs.list(input.options.limit, input.options.agent);
             if (input.options.json) return { exitCode: 0, stdout: JSON.stringify(rows) };
-            return { exitCode: 0, stdout: rows.length === 0 ? "No runs." : rows.map(describeRun).join("\n") };
+            return {
+              exitCode: 0,
+              stdout: rows.length === 0 ? "No runs." : rows.map(describeRun).join("\n"),
+            };
           },
         }),
         trigger: cliCommand({
           summary: "Start an agent now with a task",
           positionals: [agentPositional],
           options: {
-            task: { type: "string", required: true, description: "What the agent should do", stdin: true },
+            task: {
+              type: "string",
+              required: true,
+              description: "What the agent should do",
+              stdin: true,
+            },
             json,
           },
           async run(input) {
@@ -837,23 +945,33 @@ export default async function plugin(bb: BbPluginApi) {
           options: { json },
           async run(input) {
             const config = await requireScheduler().catch(cliFailure("board_unavailable"));
-            const { plan, summary } = await scheduler.tick(config, false).catch(cliFailure("board_unavailable"));
+            const { plan, summary } = await scheduler
+              .tick(config, false)
+              .catch(cliFailure("board_unavailable"));
             const mode = (await settings.get()).paused ? "paused" : config.mode;
             return {
               exitCode: 0,
-              stdout: input.options.json ? JSON.stringify({ mode, summary, ...plan }) : describePlan(plan, summary, mode),
+              stdout: input.options.json
+                ? JSON.stringify({ mode, summary, ...plan })
+                : describePlan(plan, summary, mode),
             };
           },
         }),
         "focus set": cliCommand({
           summary: "Take a milestone's issues first; other issues fill the capacity that is left",
-          positionals: [{ name: "milestone", description: "Milestone name as Linear shows it", required: true }],
-          options: { force: { type: "boolean", description: "Accept a name no open issue carries" } },
+          positionals: [
+            { name: "milestone", description: "Milestone name as Linear shows it", required: true },
+          ],
+          options: {
+            force: { type: "boolean", description: "Accept a name no open issue carries" },
+          },
           async run(input) {
             const name = input.positionals.milestone.trim();
             if (!input.options.force) {
               const config = await requireScheduler().catch(cliFailure("board_unavailable"));
-              const board = await fetchBoard(await linearApiKey(), config.teamKey).catch(cliFailure("board_unavailable"));
+              const board = await fetchBoard(await linearApiKey(), config.teamKey).catch(
+                cliFailure("board_unavailable"),
+              );
               const known = [...new Set(board.issues.flatMap((issue) => issue.milestone ?? []))];
               if (!known.some((milestone) => milestone.toLowerCase() === name.toLowerCase())) {
                 throw new PluginCliError(`no open issue is in a milestone named "${name}"`, {
@@ -879,7 +997,10 @@ export default async function plugin(bb: BbPluginApi) {
           summary: "Start a stalled issue's workflow again with resume, within the attempt cap",
           positionals: [{ name: "issue", description: "Issue key, e.g. ENG-12", required: true }],
           options: {
-            machine: { type: "string", description: "Machine id; defaults to the machine of the stalled run" },
+            machine: {
+              type: "string",
+              description: "Machine id; defaults to the machine of the stalled run",
+            },
           },
           async run(input) {
             const config = await requireScheduler().catch(cliFailure("board_unavailable"));
@@ -891,38 +1012,56 @@ export default async function plugin(bb: BbPluginApi) {
               .resume(config, input.positionals.issue, input.options.machine)
               .catch(cliFailure("resume_refused"));
             changed();
-            return { exitCode: 0, stdout: `Resumed ${dispatch.issue} on ${dispatch.machineId} in ${dispatch.threadId}` };
+            return {
+              exitCode: 0,
+              stdout: `Resumed ${dispatch.issue} on ${dispatch.machineId} in ${dispatch.threadId}`,
+            };
           },
         }),
         promote: cliCommand({
-          summary: "Move a backlog issue to the dispatch state with the ready label, so the board starts it",
+          summary:
+            "Move a backlog issue to the dispatch state with the ready label, so the board starts it",
           description:
             "Refused when the issue is not in the backlog, is blocked, carries a skip label, or the ready queue is already as long as the machines' capacity.",
           positionals: [{ name: "issue", description: "Issue key, e.g. ENG-12", required: true }],
           options: {
-            reason: { type: "string", required: true, description: "Why this issue is the right next step; written as a comment on the issue" },
+            reason: {
+              type: "string",
+              required: true,
+              description:
+                "Why this issue is the right next step; written as a comment on the issue",
+            },
           },
           async run(input) {
             const config = await requireScheduler().catch(cliFailure("board_unavailable"));
             if (config.mode !== "live") {
-              throw new PluginCliError(`the board is in ${config.mode} mode: nothing would start it`, {
-                code: "not_live",
-              });
+              throw new PluginCliError(
+                `the board is in ${config.mode} mode: nothing would start it`,
+                {
+                  code: "not_live",
+                },
+              );
             }
             schedulerConfig = config;
             const issue = await scheduler
               .promote(config, input.positionals.issue, input.options.reason)
               .catch(cliFailure("promote_refused"));
             changed();
-            return { exitCode: 0, stdout: `Promoted ${issue.identifier} to ${config.dispatchState}: ${issue.title}` };
+            return {
+              exitCode: 0,
+              stdout: `Promoted ${issue.identifier} to ${config.dispatchState}: ${issue.title}`,
+            };
           },
         }),
         release: cliCommand({
-          summary: "Clear an issue's stall, so it is planned again once it is back in the dispatch state",
+          summary:
+            "Clear an issue's stall, so it is planned again once it is back in the dispatch state",
           positionals: [{ name: "issue", description: "Issue key, e.g. ENG-12", required: true }],
           run(input) {
             if (!dispatches.release(input.positionals.issue)) {
-              throw new PluginCliError(`${input.positionals.issue} is not stalled`, { code: "not_stalled" });
+              throw new PluginCliError(`${input.positionals.issue} is not stalled`, {
+                code: "not_stalled",
+              });
             }
             changed();
             return { exitCode: 0, stdout: `Released ${input.positionals.issue}` };
@@ -931,7 +1070,13 @@ export default async function plugin(bb: BbPluginApi) {
         dispatches: cliCommand({
           summary: "Show the workflow runs the board started, newest first",
           options: {
-            limit: { type: "integer", min: 1, max: 200, default: 20, description: "How many to show (1-200, default 20)" },
+            limit: {
+              type: "integer",
+              min: 1,
+              max: 200,
+              default: 20,
+              description: "How many to show (1-200, default 20)",
+            },
             json,
           },
           run(input) {
@@ -944,7 +1089,14 @@ export default async function plugin(bb: BbPluginApi) {
                   ? "No dispatches."
                   : rows
                       .map((row) =>
-                        [new Date(row.startedAt).toISOString(), row.issue, row.machineId, row.status, row.threadId ?? "-", row.outcome ?? ""]
+                        [
+                          new Date(row.startedAt).toISOString(),
+                          row.issue,
+                          row.machineId,
+                          row.status,
+                          row.threadId ?? "-",
+                          row.outcome ?? "",
+                        ]
                           .join("  ")
                           .trimEnd(),
                       )
