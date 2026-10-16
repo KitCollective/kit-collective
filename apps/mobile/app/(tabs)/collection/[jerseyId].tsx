@@ -182,7 +182,14 @@ export default function JerseyDetailScreen() {
 
   if (loadFailed) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
+      <View
+        testID="jersey-detail-load-error"
+        style={[
+          styles.errorScreen,
+          { backgroundColor: theme.canvas, paddingTop: insets.top + space.insetSm },
+        ]}
+      >
+        <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
         <View style={styles.loadError}>
           <Banner
             tone="danger"
@@ -190,14 +197,16 @@ export default function JerseyDetailScreen() {
             action={<Button label="Prøv igen" variant="tertiary" onPress={retryLoad} />}
           />
         </View>
-        <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
       </View>
     );
   }
 
   if (!jersey) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
+      <View
+        testID="jersey-detail-not-found"
+        style={[styles.centered, { backgroundColor: theme.canvas }]}
+      >
         <Text style={[typography.body, { color: theme.contentSecondary }]}>Trøjen findes ikke</Text>
         <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
       </View>
@@ -373,9 +382,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: space.gapMd,
   },
+  errorScreen: {
+    flex: 1,
+    alignItems: "flex-start",
+    gap: space.gapMd,
+    paddingHorizontal: space.insetMd,
+  },
   loadError: {
     alignSelf: "stretch",
-    paddingHorizontal: space.insetMd,
   },
   stage: {
     ...StyleSheet.absoluteFill,
