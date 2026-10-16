@@ -68,6 +68,7 @@ import {
   user,
   userJersey,
   userJerseyFavorite,
+  userJerseyPatch,
   userJerseyPhoto,
   verification,
   visionLog,
@@ -991,6 +992,9 @@ export class IdentityService {
         await tx
           .delete(userJerseyPhoto)
           .where(inArray(userJerseyPhoto.userJerseyId, ownedJerseyIds));
+        await tx
+          .delete(userJerseyPatch)
+          .where(inArray(userJerseyPatch.userJerseyId, ownedJerseyIds));
         await tx.delete(userJersey).where(eq(userJersey.userId, userId));
       }
 
