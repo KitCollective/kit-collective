@@ -164,11 +164,22 @@
   //   the threshold.
   const landing = [];
   const landingStates = { start: ["In Review"], finish: ["Merging", "Post-Merge"] };
-  if (board.some((issue) => [...landingStates.start, ...landingStates.finish].includes(issue.state))) {
+  if (
+    board.some((issue) => [...landingStates.start, ...landingStates.finish].includes(issue.state))
+  ) {
     const read = JSON.parse(
       execFileSync(
         bb,
-        ["file", "read", `${runCheckout}/.factory/run-log.jsonl`, "--host", machine, "--root", runCheckout, "--json"],
+        [
+          "file",
+          "read",
+          `${runCheckout}/.factory/run-log.jsonl`,
+          "--host",
+          machine,
+          "--root",
+          runCheckout,
+          "--json",
+        ],
         { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
       ),
     );
@@ -186,7 +197,16 @@
     const prs = JSON.parse(
       execFileSync(
         "gh",
-        ["pr", "list", "--state", "open", "--limit", "100", "--json", "number,headRefName,headRefOid"],
+        [
+          "pr",
+          "list",
+          "--state",
+          "open",
+          "--limit",
+          "100",
+          "--json",
+          "number,headRefName,headRefOid",
+        ],
         { encoding: "utf8" },
       ),
     );
@@ -199,7 +219,9 @@
       const after = (e) => own.slice(own.lastIndexOf(e) + 1);
       let sha;
       if (step === "start") {
-        const review = own.findLast((e) => e.event === "gate" && e.gate === "review" && e.outcome === "open");
+        const review = own.findLast(
+          (e) => e.event === "gate" && e.gate === "review" && e.outcome === "open",
+        );
         const reviewer = own.findLast((e) => e.event === "result" && e.step === "reviewer");
         if (!review || reviewer?.outcome !== "green") continue;
         if (after(review).some((e) => ["auto-land", "start"].includes(e.event))) continue;
@@ -210,11 +232,20 @@
         sha = start.sha;
       }
       const slug = issue.key.toLowerCase();
-      const pr = prs.find((p) => p.headRefName.includes(`${slug}-`) || p.headRefName.endsWith(slug));
+      const pr = prs.find(
+        (p) => p.headRefName.includes(`${slug}-`) || p.headRefName.endsWith(slug),
+      );
       if (!pr || (step === "start" && pr.headRefOid !== sha)) continue;
       const thread = /thr_[a-z0-9]+/.exec(pr.headRefName)?.[0] ?? null;
       const environmentId = threadList.find((t) => t.id === thread)?.environmentId ?? null;
-      landing.push({ issue: issue.key, step, pr: pr.number, sha: sha?.slice(0, 7), thread, environmentId });
+      landing.push({
+        issue: issue.key,
+        step,
+        pr: pr.number,
+        sha: sha?.slice(0, 7),
+        thread,
+        environmentId,
+      });
     }
   }
 
