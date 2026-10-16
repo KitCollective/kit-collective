@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -23,6 +24,7 @@ import {
   club,
   country,
   createDb,
+  jerseyDraft,
   kit,
   league,
   nationalTeam,
@@ -34,6 +36,7 @@ import {
   season,
   teamSeason,
   userJersey,
+  userJerseyFavorite,
   userJerseyPatch,
   visionLog,
 } from "@kit/db";
@@ -1391,6 +1394,68 @@ describe("Collection /v1", () => {
     });
     expect(deleteResponse.statusCode).toBe(204);
     expect(await findOwnJersey(app, owner, ownerJersey.id)).toBeUndefined();
+  });
+
+  it("owner DELETE removes a jersey with a favourite, a Vision log, a draft and a patch (owner)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "delete-dependents-owner@example.com");
+    const favoriter = await registerSession(app, "delete-dependents-favoriter@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const [insertedPatch] = await db
+      .insert(patch)
+      .values({ seasonId: fixture.seasonId })
+      .returning({ id: patch.id });
+    await db.insert(userJerseyFavorite).values({
+      collectorId: favoriter.user.id,
+      userJerseyId: ownerJersey.id,
+    });
+    await db.insert(visionLog).values({ userId: owner.user.id, userJerseyId: ownerJersey.id });
+    await db
+      .insert(jerseyDraft)
+      .values({ id: randomUUID(), userId: owner.user.id, userJerseyId: ownerJersey.id });
+    await db
+      .insert(userJerseyPatch)
+      .values({ userJerseyId: ownerJersey.id, patchId: insertedPatch!.id });
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/v1/collection/jerseys/${ownerJersey.id}`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(deleteResponse.statusCode).toBe(204);
+
+    const remaining = {
+      userJersey: await db
+        .select({ id: userJersey.id })
+        .from(userJersey)
+        .where(eq(userJersey.id, ownerJersey.id)),
+      favorites: await db
+        .select({ id: userJerseyFavorite.id })
+        .from(userJerseyFavorite)
+        .where(eq(userJerseyFavorite.userJerseyId, ownerJersey.id)),
+      visionLogs: await db
+        .select({ id: visionLog.id })
+        .from(visionLog)
+        .where(eq(visionLog.userJerseyId, ownerJersey.id)),
+      drafts: await db
+        .select({ id: jerseyDraft.id })
+        .from(jerseyDraft)
+        .where(eq(jerseyDraft.userJerseyId, ownerJersey.id)),
+      patches: await db
+        .select({ patchId: userJerseyPatch.patchId })
+        .from(userJerseyPatch)
+        .where(eq(userJerseyPatch.userJerseyId, ownerJersey.id)),
+    };
+    await pool.end();
+    expect(remaining).toEqual({
+      userJersey: [],
+      favorites: [],
+      visionLogs: [],
+      drafts: [],
+      patches: [],
+    });
   });
 
   it("peer DELETE of foreign jersey returns 404 (peer)", async () => {

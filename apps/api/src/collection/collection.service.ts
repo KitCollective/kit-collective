@@ -73,7 +73,6 @@ import {
   userJerseyFavorite,
   userJerseyPatch,
   userJerseyPhoto,
-  visionLog,
 } from "@kit/db";
 import type { JerseySize, KitType, LabelLocale } from "@kit/domain";
 import {
@@ -114,7 +113,7 @@ import { PhotoDerivativeQueueService } from "./photo-derivative-queue.service.js
 import { derivativeKeysForPhoto, storeGpsStrippedOriginal } from "./photo-derivatives.js";
 import { gridObjectKeyForNewPhoto, resolveStoredPhotoBytes } from "./photo-variant-resolve.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
-import { declinePendingBudsOnUserJersey } from "./user-jersey-buds.js";
+import { deleteUserJerseyRows } from "./user-jersey-delete.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");
 
@@ -1211,15 +1210,7 @@ export class CollectionService {
     }
 
     await this.db.transaction(async (tx) => {
-      await declinePendingBudsOnUserJersey(tx, jerseyId);
-
-      await tx.delete(visionLog).where(eq(visionLog.userJerseyId, jerseyId));
-      await tx.delete(jerseyDraft).where(eq(jerseyDraft.userJerseyId, jerseyId));
-      await tx.delete(userJerseyFavorite).where(eq(userJerseyFavorite.userJerseyId, jerseyId));
-      await tx.delete(userJerseyPhoto).where(eq(userJerseyPhoto.userJerseyId, jerseyId));
-      await tx
-        .delete(userJersey)
-        .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)));
+      await deleteUserJerseyRows(tx, { userJerseyId: jerseyId, userId });
     });
   }
 
