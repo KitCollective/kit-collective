@@ -20,8 +20,9 @@ import { deleteUserJersey, fetchCollectionJerseys, resolvePhotoUrl } from "@/api
 import { useAuth } from "@/auth/AuthProvider";
 import { createEditCaptureSession } from "@/capture/captureSession";
 import { createSqliteCaptureSessionStore } from "@/capture/captureSessionSqliteStore";
-import { Sheet } from "@/components/catalog-ui";
+import { Banner, Sheet } from "@/components/catalog-ui";
 import { Button, IconButton } from "@/components/ui";
+import { loadOwnJersey } from "@/jersey-detail/own-jersey-load";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -45,6 +46,7 @@ export default function JerseyDetailScreen() {
   const pagerRef = useRef<ScrollView>(null);
 
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [jersey, setJersey] = useState<CollectionJersey | null>(null);
   const [biddingEnabled, setBiddingEnabled] = useState(false);
   const [savingBidding, setSavingBidding] = useState(false);
@@ -62,38 +64,37 @@ export default function JerseyDetailScreen() {
     };
   }, [navigation]);
 
-  const loadJersey = useCallback(async () => {
-    if (!accessToken || !jerseyId) {
-      return;
-    }
+  const loadSeq = useRef(0);
 
-    const response = await fetchCollectionJerseys(accessToken);
-    const found = response.jerseys.find((item) => item.id === jerseyId) ?? null;
-    setJersey(found);
-    setBiddingEnabled(found?.biddingEnabled ?? false);
-    setIsPrivate(found?.private ?? false);
-    setPhotoIndex(0);
+  const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
+    if (accessToken && jerseyId) {
+      const outcome = await loadOwnJersey(() => fetchCollectionJerseys(accessToken), jerseyId);
+      if (seq !== loadSeq.current) {
+        return;
+      }
+      const found = outcome.kind === "found" ? outcome.jersey : null;
+      setLoadFailed(outcome.kind === "error");
+      setJersey(found);
+      setBiddingEnabled(found?.biddingEnabled ?? false);
+      setIsPrivate(found?.private ?? false);
+      setPhotoIndex(0);
+    }
+    setLoading(false);
   }, [accessToken, jerseyId]);
 
   useEffect(() => {
-    let active = true;
-
-    async function run() {
-      try {
-        await loadJersey();
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void run();
+    void load();
 
     return () => {
-      active = false;
+      loadSeq.current += 1;
     };
-  }, [loadJersey]);
+  }, [load]);
+
+  const retryLoad = () => {
+    setLoading(true);
+    void load();
+  };
 
   const toggleBidding = async (nextValue: boolean) => {
     if (!accessToken || !jerseyId) {
@@ -175,6 +176,21 @@ export default function JerseyDetailScreen() {
     return (
       <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
         <ActivityIndicator color={theme.fillPrimary} />
+      </View>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
+        <View style={styles.loadError}>
+          <Banner
+            tone="danger"
+            message="Kunne ikke hente trøjen. Prøv igen."
+            action={<Button label="Prøv igen" variant="tertiary" onPress={retryLoad} />}
+          />
+        </View>
+        <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
       </View>
     );
   }
@@ -356,6 +372,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: space.gapMd,
+  },
+  loadError: {
+    alignSelf: "stretch",
+    paddingHorizontal: space.insetMd,
   },
   stage: {
     ...StyleSheet.absoluteFill,
