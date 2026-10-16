@@ -41,7 +41,7 @@ import { BillingService } from "../billing/billing.service.js";
 import { OBJECT_STORE } from "../collection/collection.service.js";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { resolveStoredPhotoBytes } from "../collection/photo-variant-resolve.js";
-import { declinePendingBudsOnUserJersey } from "../collection/user-jersey-buds.js";
+import { deleteUserJerseyRows } from "../collection/user-jersey-delete.js";
 import { DB } from "../db/db.module.js";
 
 function pickAdminLabel(
@@ -438,11 +438,7 @@ export class AdminCollectionService {
     }
 
     await this.db.transaction(async (tx) => {
-      await declinePendingBudsOnUserJersey(tx, jerseyId);
-      await tx.delete(userJerseyPhoto).where(eq(userJerseyPhoto.userJerseyId, jerseyId));
-      await tx
-        .delete(userJersey)
-        .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)));
+      await deleteUserJerseyRows(tx, { userJerseyId: jerseyId, userId });
     });
   }
 
