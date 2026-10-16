@@ -185,3 +185,54 @@ test("KIT-367: a different call name with the same title is full", () => {
   const verdict = classifyFixDiff(diff(testFile, '-test("a", () => {', '+it("b", () => {'));
   assert.equal(verdict.kind, "full");
 });
+
+test("KIT-373: setup() moved below the test line is full", () => {
+  const verdict = classifyFixDiff(
+    diff(testFile, "@@ -1 +0,0 @@", "-setup();", "@@ -2,0 +2 @@", "+setup();"),
+  );
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-373: a move plus a test-title change is full", () => {
+  const verdict = classifyFixDiff(
+    diff(testFile, "@@ -0,0 +1 @@", '+test("b", () => {', "@@ -2 +2,0 @@", '-test("a", () => {'),
+  );
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-373: a moved line inside one hunk is full", () => {
+  const verdict = classifyFixDiff(
+    diff("+++ b/scripts/lib/thing.mjs", "-a();", "-b();", "+b();", "+a();"),
+  );
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-373: a single-hunk title-only rename with a header stays light", () => {
+  const verdict = classifyFixDiff(
+    diff(testFile, "@@ -1 +1 @@", '-test("a", () => {', '+test("b", () => {'),
+  );
+  assert.equal(verdict.kind, "light");
+});
+
+test("KIT-373: a single-hunk comment change with a header stays light", () => {
+  const verdict = classifyFixDiff(
+    diff("+++ b/scripts/lib/thing.mjs", "@@ -1 +1 @@", "-// because A", "+// because B"),
+  );
+  assert.equal(verdict.kind, "light");
+});
+
+test("KIT-373: a single-hunk consistent rename with headers stays light", () => {
+  const verdict = classifyFixDiff(
+    diff(
+      "+++ b/apps/mobile/src/door.tsx",
+      "@@ -1 +1 @@",
+      "-export function KomIGangFace(props: Props) {",
+      "+export function DoorFace(props: Props) {",
+      "+++ b/apps/mobile/src/door.test.tsx",
+      "@@ -1 +1 @@",
+      "-import { KomIGangFace } from './door';",
+      "+import { DoorFace } from './door';",
+    ),
+  );
+  assert.equal(verdict.kind, "light");
+});
