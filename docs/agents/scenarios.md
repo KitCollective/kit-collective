@@ -8,7 +8,7 @@ Where the Holdout lives, how a milestone's Scenarios are written, and the one co
 - One Markdown file per milestone: `<project-slug>/<milestone-slug>.md`. A slug is the Linear name lowercased with each run of characters other than letters and digits turned into one `-` (`Holdout Scenarios` is `holdout-scenarios`).
 - The milestone `Fixture` of the project `Holdout Scenarios` is a fixture file for tests and demos: `node scripts/scenarios.mjs titles --project "Holdout Scenarios" --milestone Fixture`. It holds no real Scenarios. The setup for a fresh Holdout repo is `docs/agents/scenarios-repo-wizard.sh`.
 - Reading it takes the Holdout token (below): `SCENARIOS_GH_TOKEN` on bb-harness, your own `gh` login on the Mac. Prove a machine's read with the fixture command above: it exits 0 and ends with `SCENARIOS titles ...: 2 Scenarios`, and exit 4 names the cause.
-- The Holdout repo also holds the producer workflow `.github/workflows/scenario-flow.yml`, which turns a flow into a run artifact there (KIT-366). Its source is `docs/agents/holdout-scenario-flow.yml` in this repo; `scripts/holdout-flows-wizard.sh` (stage 1) pushes it to the Holdout's `main`.
+- The Holdout repo also holds the producer workflow (its `scenario-flow.yml` under `.github/workflows` there, not in this repo), which turns a flow into a run artifact there (KIT-366). Its source is `docs/agents/holdout-scenario-flow.yml` in this repo; `scripts/holdout-flows-wizard.sh` (stage 1) pushes it to the Holdout's `main`.
 
 ### The Holdout token (KIT-366)
 
