@@ -1041,31 +1041,42 @@ function evidence({ dir }) {
 }
 
 /**
- * The proof of the token split (KIT-366): the Holdout's artifact list read twice, with the gh login
- * (as every agent thread on this machine reads GitHub) and with SCENARIOS_GH_TOKEN. Open (exit 0)
- * only when the first is denied and the second reads. Prints no artifact name and no repo name.
+ * The proof of the token split (KIT-366). Each side, the gh login (as every agent thread on this
+ * machine reads GitHub) and SCENARIOS_GH_TOKEN, probes the Holdout repo itself (`repos/<holdout>`,
+ * which a token needs for its files) and its artifact list. A probe reads (exit 0 of gh) or is denied
+ * (HTTP 404, which is what GitHub answers a token that does not select a private repo); anything
+ * else (401 bad or revoked credentials, 403 a missing permission or a rate limit, a network error)
+ * proves nothing, so it is exit 4 naming the side and the cause. A side is `denied` only when both
+ * probes are 404; `reads` for the gh login when either reads, for the CLI only when both read.
+ * Open (exit 0) only for `ambient denied, cli reads`. Prints no artifact name and no repo name.
  */
 function access() {
   const repo = config().scenarios.holdoutRepo;
-  const probe = (env) => {
-    const result = ghCall(
-      ["api", `repos/${repo}/actions/artifacts?per_page=1`, "--jq", ".total_count"],
-      undefined,
-      60000,
-      env,
-    );
-    if (result.status === 0) {
-      return "reads";
-    }
-    if (!result.error && /HTTP 40[134]\b/.test(result.stderr)) {
-      return "denied";
-    }
-    return unknown(
-      `cannot probe the Holdout's artifacts: ${firstLine(result.error?.message ?? result.stderr)}`,
-    );
-  };
-  const ambient = probe(process.env);
-  const cli = holdoutToken() ? probe(holdoutEnv()) : "unset";
+  const probes = [
+    ["api", `repos/${repo}`, "--jq", ".private"],
+    ["api", `repos/${repo}/actions/artifacts?per_page=1`, "--jq", ".total_count"],
+  ];
+  const side = (env, who) =>
+    probes.map((args) => {
+      const result = ghCall(args, undefined, 60000, env);
+      if (result.status === 0) {
+        return "reads";
+      }
+      if (!result.error && /HTTP 404\b/.test(result.stderr)) {
+        return "denied";
+      }
+      const cause = firstLine(result.error?.message ?? result.stderr)
+        .split(repo)
+        .join("<holdout>");
+      return unknown(`cannot probe the Holdout with ${who}: ${cause}`);
+    });
+  const seen = side(process.env, "the gh login");
+  const ambient = seen.includes("reads") ? "reads" : "denied";
+  const cli = holdoutToken()
+    ? side(holdoutEnv(), HOLDOUT_TOKEN_NAME).every((p) => p === "reads")
+      ? "reads"
+      : "denied"
+    : "unset";
   const open = ambient === "denied" && cli === "reads";
   const why = open
     ? ""
@@ -1073,7 +1084,7 @@ function access() {
       ? `: ${HOLDOUT_TOKEN_NAME} is not set (env or the main checkout's .env)`
       : ambient === "reads"
         ? ": the gh login still reads the Holdout"
-        : `: ${HOLDOUT_TOKEN_NAME} cannot read the Holdout's artifacts`;
+        : `: ${HOLDOUT_TOKEN_NAME} gets 404 on the Holdout repo or its artifacts`;
   oneLine(open ? GATE_EXIT.open : GATE_EXIT.closed, {
     verdict: `SCENARIOS access: ambient ${ambient}, cli ${cli}${why}`,
     ambient,

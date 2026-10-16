@@ -1296,17 +1296,29 @@ test("the Holdout token comes from the main checkout's .env when the env has non
 // -- access (KIT-366): the proof that the gh login cannot reach the Holdout and the CLI's token can.
 
 const ARTIFACTS = `repos/${HOLDOUT}/actions/artifacts`;
-const accessGh = ({ ambient, cli }) =>
+/** The repo probe's argv: `api repos/<holdout> --jq ...` (its files: a fine-grained token that does not select the repo gets 404). */
+const REPO_PROBE = `api repos/${HOLDOUT} --jq`;
+/** Answers for the two probes of each side; `repo` defaults to the same answer as `artifacts`. */
+const accessGh = ({ ambient, cli, ambientRepo = ambient, cliRepo = cli }) =>
   scriptedGh([
     { match: ARTIFACTS, withToken: false, answers: [ambient] },
     { match: ARTIFACTS, withToken: true, answers: [cli] },
+    { match: REPO_PROBE, withToken: false, answers: [ambientRepo] },
+    { match: REPO_PROBE, withToken: true, answers: [cliRepo] },
   ]);
 const reads = { stdout: "3" };
 const notFound = { code: 1, stderr: "gh: Not Found (HTTP 404)\n" };
+const badCredentials = { code: 1, stderr: "gh: Bad credentials (HTTP 401)\n" };
+const forbidden = {
+  code: 1,
+  stderr: "gh: Resource not accessible by personal access token (HTTP 403)\n",
+};
+const accessRun = (gh) =>
+  run(["access"], { env: { ...gh.env, SCENARIOS_GH_TOKEN: HOLDOUT_TOKEN } });
 
-test("access: the gh login denied and the CLI's token reading is exit 0, one JSON line, no artifact names", () => {
+test("access: the gh login denied (404 on the repo and its artifacts) and the CLI's token reading both is exit 0, one JSON line, no names", () => {
   const gh = accessGh({ ambient: notFound, cli: reads });
-  const result = run(["access"], { env: { ...gh.env, SCENARIOS_GH_TOKEN: HOLDOUT_TOKEN } });
+  const result = accessRun(gh);
   assert.equal(result.status, GATE_EXIT.open, result.stdout);
   assert.equal(result.lines.length, 1);
   const answer = JSON.parse(result.verdict);
@@ -1315,26 +1327,48 @@ test("access: the gh login denied and the CLI's token reading is exit 0, one JSO
     { ambient: "denied", cli: "reads" },
   );
   assert.match(answer.verdict, /^SCENARIOS access: ambient denied, cli reads$/);
+  assert.ok(!result.stdout.includes(HOLDOUT));
   const calls = gh.calls();
-  assert.deepEqual(
-    calls.map((c) => c.withToken),
-    [false, true],
-  );
-  for (const call of calls) {
-    assert.match(call.argv.join(" "), new RegExp(`^api ${ARTIFACTS}\\?per_page=1 --jq `));
+  // Each side probes the repo itself (its files) and its artifact list.
+  for (const withToken of [false, true]) {
+    const side = calls.filter((c) => c.withToken === withToken).map((c) => c.argv.join(" "));
+    assert.equal(side.length, 2, side.join("\n"));
+    assert.ok(side.some((a) => a.startsWith(REPO_PROBE)));
+    assert.ok(side.some((a) => new RegExp(`^api ${ARTIFACTS}\\?per_page=1 --jq `).test(a)));
   }
 });
 
-test("access: a gh login that still reads the Holdout is exit 1; so is a CLI token that cannot", () => {
-  const leaky = accessGh({ ambient: reads, cli: reads });
-  const open = run(["access"], { env: { ...leaky.env, SCENARIOS_GH_TOKEN: HOLDOUT_TOKEN } });
-  assert.equal(open.status, GATE_EXIT.closed, open.stdout);
-  assert.equal(JSON.parse(open.verdict).ambient, "reads");
+test("access: a gh login that still reads the repo or its artifacts is exit 1; so is a CLI token that gets 404", () => {
+  for (const leak of [
+    { ambient: reads },
+    { ambient: notFound, ambientRepo: reads },
+    { ambient: reads, ambientRepo: notFound },
+  ]) {
+    const result = accessRun(accessGh({ cli: reads, ...leak }));
+    assert.equal(result.status, GATE_EXIT.closed, result.stdout);
+    assert.equal(JSON.parse(result.verdict).ambient, "reads", JSON.stringify(leak));
+  }
+  const blind = accessRun(accessGh({ ambient: notFound, cli: notFound, cliRepo: reads }));
+  assert.equal(blind.status, GATE_EXIT.closed, blind.stdout);
+  assert.equal(JSON.parse(blind.verdict).cli, "denied");
+});
 
-  const blind = accessGh({ ambient: notFound, cli: { code: 1, stderr: "gh: (HTTP 403)\n" } });
-  const shut = run(["access"], { env: { ...blind.env, SCENARIOS_GH_TOKEN: HOLDOUT_TOKEN } });
-  assert.equal(shut.status, GATE_EXIT.closed, shut.stdout);
-  assert.deepEqual(JSON.parse(shut.verdict).cli, "denied");
+test("access: a 401 or 403 on either side is never 'denied' and never exit 0: exit 4 naming the side and the cause", () => {
+  for (const [answers, side, cause] of [
+    [{ ambient: badCredentials, cli: reads }, "the gh login", /401/],
+    [{ ambient: forbidden, cli: reads }, "the gh login", /403/],
+    [{ ambient: notFound, ambientRepo: forbidden, cli: reads }, "the gh login", /403/],
+    [{ ambient: notFound, cli: badCredentials }, "SCENARIOS_GH_TOKEN", /401/],
+    [{ ambient: notFound, cli: forbidden, cliRepo: reads }, "SCENARIOS_GH_TOKEN", /403/],
+  ]) {
+    const result = accessRun(accessGh(answers));
+    assert.equal(result.status, GATE_EXIT.unknown, `${JSON.stringify(answers)}: ${result.stdout}`);
+    assert.equal(result.lines.length, 1);
+    assert.match(result.verdict, /^UNKNOWN: cannot probe the Holdout with /);
+    assert.ok(result.verdict.includes(side), result.verdict);
+    assert.match(result.verdict, cause);
+    assert.ok(!result.verdict.includes(HOLDOUT), result.verdict);
+  }
 });
 
 test("access without SCENARIOS_GH_TOKEN is exit 1 naming the variable; a gh that fails otherwise is exit 4", () => {
@@ -1346,10 +1380,14 @@ test("access without SCENARIOS_GH_TOKEN is exit 1 naming the variable; a gh that
   assert.match(answer.verdict, /SCENARIOS_GH_TOKEN/);
   assert.ok(gh.calls().every((c) => !c.withToken));
 
-  const down = accessGh({ ambient: { code: 1, stderr: "connection refused\n" }, cli: reads });
-  const unknown = run(["access"], { env: { ...down.env, SCENARIOS_GH_TOKEN: HOLDOUT_TOKEN } });
-  assert.equal(unknown.status, GATE_EXIT.unknown);
-  assert.match(unknown.verdict, /^UNKNOWN: cannot probe the Holdout's artifacts/);
+  const down = accessRun(
+    accessGh({ ambient: { code: 1, stderr: "connection refused\n" }, cli: reads }),
+  );
+  assert.equal(down.status, GATE_EXIT.unknown);
+  assert.match(
+    down.verdict,
+    /^UNKNOWN: cannot probe the Holdout with the gh login: .*connection refused/,
+  );
   assert.equal(run(["access", "--dir", "x"]).status, GATE_EXIT.usage);
 });
 
