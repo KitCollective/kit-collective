@@ -4,18 +4,6 @@ import { z } from "zod";
 const MESSAGE_KINDS = ["text", "image", "bid"] as const;
 const BID_STATUSES = ["pending", "accepted", "declined"] as const;
 
-export const collectionConversationJerseyContextSchema = z
-  .object({
-    clubLabel: z.string().min(1),
-    seasonLabel: z.string().min(1),
-    type: z.enum(KIT_TYPES),
-  })
-  .strict();
-
-export type CollectionConversationJerseyContext = z.infer<
-  typeof collectionConversationJerseyContextSchema
->;
-
 export const collectionConversationReplyToSchema = z
   .object({
     id: z.string().uuid(),
@@ -60,7 +48,6 @@ export const collectionConversationDetailSchema = z
   .object({
     id: z.string().uuid(),
     peerHandle: z.string().min(1),
-    jerseyContext: collectionConversationJerseyContextSchema.optional(),
     messages: z.array(collectionConversationMessageSchema),
   })
   .strict();
