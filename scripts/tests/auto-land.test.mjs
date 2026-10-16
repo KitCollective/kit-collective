@@ -58,7 +58,15 @@ fs.appendFileSync(dir + "/gh-calls.log", args.join(" ") + "\\n");
 const s = state();
 const joined = args.join(" ");
 if (args[0] === "pr" && args[1] === "view") {
+  // Like the real gh: --json fields it does not know are an error (isInMergeQueue is GraphQL-only).
+  const fields = (args[args.indexOf("--json") + 1] || "").split(",");
+  if (fields.includes("isInMergeQueue")) {
+    console.error('Unknown JSON field: "isInMergeQueue"');
+    process.exit(1);
+  }
   console.log(JSON.stringify(s.pr));
+} else if (args[0] === "api" && args[1] === "graphql" && /isInMergeQueue/.test(joined)) {
+  console.log(JSON.stringify({ data: { repository: { pullRequest: { isInMergeQueue: s.pr.isInMergeQueue === true } } } }));
 } else if (args[0] === "pr" && args[1] === "merge") {
   if (s.mergeFails) { console.error("GraphQL: merge queue refused"); process.exit(1); }
   console.log("enqueued");
@@ -755,6 +763,59 @@ test("a lane that moves into a conflict while the checks run is refused as confl
   );
 });
 
+// A git that answers like the one in the bb-harness container (2.39, no merge-tree --quiet), or one
+// whose merge-tree fails on its second call (the trial merge under the lock); everything else goes
+// to the real git.
+const REAL_GIT = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+const FAKE_GIT = `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
+const args = process.argv.slice(2);
+if (args[0] === "merge-tree") {
+  if (process.env.FAKE_GIT_MODE === "old" && args.includes("--quiet")) {
+    process.stderr.write("usage: git merge-tree [--write-tree] [<options>] <branch1> <branch2>\\n");
+    process.exit(129);
+  }
+  if (process.env.FAKE_GIT_MODE === "fail-second") {
+    const file = path.join(process.env.WORLD, "merge-tree-calls");
+    const calls = (fs.existsSync(file) ? Number(fs.readFileSync(file, "utf8")) : 0) + 1;
+    fs.writeFileSync(file, String(calls));
+    if (calls >= 2) {
+      process.stderr.write("fatal: simulated merge-tree failure\\n");
+      process.exit(128);
+    }
+  }
+}
+const result = spawnSync(process.env.REAL_GIT, args, { stdio: "inherit" });
+process.exit(result.status ?? 1);
+`;
+
+test("a trial merge works on a git without merge-tree --quiet (2.39, as in the bb-harness container)", () => {
+  const w = world();
+  script(w.bin, "git", FAKE_GIT);
+  moveLane(laneClone(w), "later.txt");
+  const result = w.start([], { FAKE_GIT_MODE: "old", REAL_GIT });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /^ENQUEUED/);
+  assert.match(w.read("gh-calls.log"), /pr merge 12 --merge --auto/);
+});
+
+test("a trial merge that fails under the lock is UNKNOWN and gives the lock back", () => {
+  const w = world();
+  script(w.bin, "git", FAKE_GIT);
+  moveLane(laneClone(w), "later.txt");
+  const result = w.start([], { FAKE_GIT_MODE: "fail-second", REAL_GIT });
+  assert.equal(result.status, 4, result.stdout + result.stderr);
+  assert.match(
+    result.stdout,
+    /^UNKNOWN \(auto-land\): the trial merge with origin\/development failed/,
+  );
+  assert.equal(w.lockOnOrigin(), "", "the lock was released");
+  assert.doesNotMatch(w.read("gh-calls.log"), /pr merge/);
+  assert.doesNotMatch(w.read("linear-writes.log"), /state KIT-9 Merging/);
+});
+
 test("a push to the PR while the checks ran is refused: the audit is for the head the reviewer judged", () => {
   const w = world();
   // The PR head moves when the check runs are read (after the audit, before the lock).
@@ -854,6 +915,18 @@ test("finish: still in the queue is waiting (exit 3); nothing is written", () =>
   assert.equal(result.status, 3, result.stdout);
   assert.match(result.stdout, /^WAITING \(auto-land\)/);
   assert.doesNotMatch(w.read("linear-writes.log"), /Approval|Done/);
+  assert.match(w.lockOnOrigin(), /merge-lock/, "the lock is kept while waiting");
+});
+
+test("finish: a PR held only by the merge queue (auto-merge off) is waiting, read through GraphQL", () => {
+  const w = started({ autoMergeRequest: null, isInMergeQueue: true });
+  const result = w.run(["finish", "12", "--issue", "KIT-9", "--timeout", "1"], {
+    AUTO_LAND_POLL_SECONDS: "5",
+  });
+  assert.equal(result.status, 3, result.stdout + result.stderr);
+  assert.match(result.stdout, /^WAITING \(auto-land\)/);
+  assert.match(w.read("gh-calls.log"), /api graphql .*isInMergeQueue/);
+  assert.doesNotMatch(w.read("gh-calls.log"), /--json [^\n]*isInMergeQueue/);
   assert.match(w.lockOnOrigin(), /merge-lock/, "the lock is kept while waiting");
 });
 

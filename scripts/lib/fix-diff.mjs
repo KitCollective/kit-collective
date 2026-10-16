@@ -35,6 +35,34 @@ function stringFlags(tokens) {
   });
 }
 
+const TEST_FILE = /(?:^|\/)(?:tests?|__tests__)\/|\.(?:test|spec)\./;
+/** `<indent>test|it|describe[.modifier](<quote>title<quote><rest>`: the title is the first quoted string. */
+const TEST_CALL = /^(\s*(?:test|it|describe)(?:\.\w+)?\()(["'`])((?:\\.|(?!\2).)*)\2(.*)$/;
+
+/**
+ * True when two lines are the same `test(...)` / `it(...)` / `describe(...)` call and only the
+ * title string differs (KIT-367). A template title with an interpolation is code, not text.
+ * @param {string} before
+ * @param {string} after
+ */
+function isTestTitleOnlyChange(before, after) {
+  const a = TEST_CALL.exec(before);
+  const b = TEST_CALL.exec(after);
+  if (!a || !b) {
+    return false;
+  }
+  const [, prefixA, quoteA, titleA, restA] = a;
+  const [, prefixB, quoteB, titleB, restB] = b;
+  return (
+    prefixA === prefixB &&
+    quoteA === quoteB &&
+    restA === restB &&
+    titleA !== titleB &&
+    !titleA.includes("${") &&
+    !titleB.includes("${")
+  );
+}
+
 /**
  * @param {string} diffText unified diff, `-U0` preferred
  * @returns {Map<string, { removed: string[], added: string[] }>}
@@ -72,14 +100,13 @@ export function classifyFixDiff(diffText, options = {}) {
   }
   /** @type {Map<string, string>} */
   const renames = new Map();
+  let titleChanged = false;
   for (const [file, { removed, added }] of files) {
     if (/\.mdx?$/.test(file)) {
       continue;
     }
-    if (
-      /(?:^|\/)(?:tests?|__tests__)\/|\.(?:test|spec)\./.test(file) &&
-      removed.length > added.length
-    ) {
+    const isTestFile = TEST_FILE.test(file);
+    if (isTestFile && removed.length > added.length) {
       return { kind: "full", reason: `${file}: a test lost lines` };
     }
     const code = (lines) => lines.filter((line) => line.trim() !== "" && !COMMENT_LINE.test(line));
@@ -89,6 +116,10 @@ export function classifyFixDiff(diffText, options = {}) {
       return { kind: "full", reason: `${file}: code lines added or removed` };
     }
     for (let i = 0; i < removedCode.length; i += 1) {
+      if (isTestFile && isTestTitleOnlyChange(removedCode[i], addedCode[i])) {
+        titleChanged = true;
+        continue;
+      }
       const before = removedCode[i].match(TOKEN) ?? [];
       const after = addedCode[i].match(TOKEN) ?? [];
       if (before.length !== after.length) {
@@ -121,5 +152,8 @@ export function classifyFixDiff(diffText, options = {}) {
     }
   }
   const renamed = [...renames].map(([from, to]) => `${from} -> ${to}`).join(", ");
-  return { kind: "light", reason: renamed ? `rename only: ${renamed}` : "docs and comments only" };
+  if (renamed) {
+    return { kind: "light", reason: `rename only: ${renamed}` };
+  }
+  return { kind: "light", reason: titleChanged ? "test title only" : "docs and comments only" };
 }

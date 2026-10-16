@@ -250,6 +250,6 @@ git -C "$DIR" push -u origin HEAD:main
 stage "Check the read"
 say "Reads the fixture with the scenarios CLI."
 node scripts/scenarios.mjs titles --project "Holdout Scenarios" --milestone Fixture
-note "Run the same command from a kit-collective checkout on the Mac and on the bb-harness machine. Exit 4 means that machine's GH_TOKEN lacks repo access: name it in the PR."
+note "Run the same command from a kit-collective checkout on the Mac and on the bb-harness machine. On bb-harness the CLI reads the Holdout with SCENARIOS_GH_TOKEN, not GH_TOKEN (KIT-366): exit 4 there means that token is missing or lacks access; scripts/holdout-flows-wizard.sh sets it up."
 
 finish

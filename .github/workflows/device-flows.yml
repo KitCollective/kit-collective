@@ -24,9 +24,13 @@ name: Device flows
 #     branch name, e.g. claude/kit-279-59e33d). `node scripts/request-device-flows.mjs`
 #     sets the label; a new head needs the label set again.
 #   - manual: pick regression or slice (and an issue key; no status)
-#   - manual, flows: artifact: one flow taken from a named run artifact, for example
-#     one `scenario-flow.yml` made (KIT-352, ADR-0060). It runs exactly as a slice
-#     run does, sets no status and commits nothing; the flow is never in the repo.
+#   - manual, flows: artifact: one flow taken from a named run artifact of the
+#     Holdout repo's producer (KIT-352, KIT-366, ADR-0060; its source is
+#     docs/agents/holdout-scenario-flow.yml). It is downloaded cross-repo with the
+#     secret SCENARIO_FLOWS_TOKEN (Actions: read on the Holdout repo only) and runs
+#     exactly as a slice run does. It sets no status and commits nothing, and none of
+#     the flow's text reaches this repository: Maestro's console stays on the runner
+#     and only the kc__ screenshots and recordings are uploaded.
 
 on:
   schedule:
@@ -67,8 +71,6 @@ concurrency:
 permissions:
   contents: read
   statuses: write
-  # Reading another run's artifact (flows: artifact).
-  actions: read
 
 jobs:
   ios:
@@ -126,13 +128,31 @@ jobs:
           [[ "$FLOW_ARTIFACT" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "flow_artifact must be an artifact name." >&2; exit 2; }
           [[ -z "$FLOW" || "$FLOW" =~ ^[a-z0-9][a-z0-9-]*\.ya?ml$ ]] || { echo "flow must be a file name like scenario-smoke.yaml." >&2; exit 2; }
 
+      # The flow's artifact lives in the Holdout repo (KIT-366). Its name is read from
+      # factory.config.json, never typed here; the token reads that repo's Actions only.
+      - name: The Holdout repo and its token
+        id: holdout
+        if: env.E2E_FLOWS == 'artifact'
+        env:
+          # Whether the secret is set, never its value: only the download step gets that.
+          HAS_FLOWS_TOKEN: ${{ secrets.SCENARIO_FLOWS_TOKEN != '' }}
+        run: |
+          if [[ "$HAS_FLOWS_TOKEN" != true ]]; then
+            echo "The Actions secret SCENARIO_FLOWS_TOKEN is not set; run bash scripts/holdout-flows-wizard.sh (stage 2)." >&2
+            exit 2
+          fi
+          repo="$(jq -r '.scenarios.holdoutRepo // empty' factory.config.json)"
+          [[ "$repo" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]] || { echo "factory.config.json has no scenarios.holdoutRepo." >&2; exit 2; }
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+
       - name: Download the flow artifact
         if: env.E2E_FLOWS == 'artifact'
         uses: actions/download-artifact@v4
         with:
+          repository: ${{ steps.holdout.outputs.repo }}
           run-id: ${{ inputs.flow_run }}
           name: ${{ inputs.flow_artifact }}
-          github-token: ${{ github.token }}
+          github-token: ${{ secrets.SCENARIO_FLOWS_TOKEN }}
           path: apps/mobile/.maestro/external
 
       # build-local.sh (through simulator.sh) and run-local.sh read E2E_FLOW_FILE, so the app
@@ -238,10 +258,40 @@ jobs:
       - name: Run the flows
         id: flows
         # An artifact run names its one flow; the others pick theirs from E2E_FLOWS and the branch.
-        run: apps/mobile/.maestro/run-local.sh ${E2E_FLOW_FILE:+"$E2E_FLOW_FILE"}
+        # Maestro prints every step of the flow it runs, so on an artifact run its console goes to a
+        # file on the runner that is never uploaded, and the log shows only the exit code (KIT-366).
+        run: |
+          if [[ "$E2E_FLOWS" == artifact ]]; then
+            code=0
+            apps/mobile/.maestro/run-local.sh "$E2E_FLOW_FILE" > "$RUNNER_TEMP/flows-console.log" 2>&1 || code=$?
+            echo "The flow from the artifact exited $code; its console output stays on the runner."
+            exit "$code"
+          fi
+          apps/mobile/.maestro/run-local.sh
+        env:
+          # Milliseconds Maestro waits for its iOS driver. Its default is 120000 (cli-2.11.0);
+          # run 38801470319 hit IOSDriverTimeoutException on a cold runner, before any flow step.
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000"
+
+      # An artifact run's Maestro output also holds the flow (commands.json, logs, step screenshot
+      # names): keep only the kc__ screenshots and recordings, failure screenshots renamed, as the
+      # scenarios CLI's `wait` does (KIT-371). The API log is not uploaded either.
+      - name: Keep only the evidence
+        id: evidence
+        if: always() && env.E2E_FLOWS == 'artifact'
+        run: node scripts/scenarios.mjs evidence --dir apps/mobile/.maestro/out
+
+      - name: Upload the evidence of the artifact run
+        if: always() && env.E2E_FLOWS == 'artifact' && steps.evidence.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-flows-${{ github.sha }}
+          path: apps/mobile/.maestro/out
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Upload screenshots and recordings
-        if: always()
+        if: always() && env.E2E_FLOWS != 'artifact'
         uses: actions/upload-artifact@v4
         with:
           # Named after the commit the flows ran on. On a PR run github.sha is the merge
