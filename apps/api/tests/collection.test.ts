@@ -2354,10 +2354,10 @@ describe("Collection /v1", () => {
     expect(patchRows.map((entry) => entry.patchId)).toEqual([insertedPatch!.id]);
   });
 
-  describe("Gem is atomic and one bad UserJersey does not break Samling (KIT-379)", () => {
+  describe("Save is atomic and one bad UserJersey does not break Samling (KIT-379)", () => {
     const NOT_AN_IMAGE_BASE64 = Buffer.from("not an image at all").toString("base64");
 
-    function gem(
+    function postSave(
       session: Session,
       fixture: Awaited<ReturnType<typeof insertClubSeasonFixture>>,
       photos: { role: "front" | "back"; contentBase64: string }[],
@@ -2405,11 +2405,11 @@ describe("Collection /v1", () => {
       }
     }
 
-    it("a Gem whose photo fails validation answers 400 and leaves no jersey or photo rows", async () => {
+    it("a Save whose photo fails validation answers 400 and leaves no jersey or photo rows", async () => {
       const session = await registerSession(app, "kit379-invalid@example.com");
       const fixture = await insertClubSeasonFixture();
 
-      const response = await gem(session, fixture, [
+      const response = await postSave(session, fixture, [
         { role: "front", contentBase64: JPEG_BASE64 },
         { role: "back", contentBase64: NOT_AN_IMAGE_BASE64 },
       ]);
@@ -2418,7 +2418,7 @@ describe("Collection /v1", () => {
       expect(await ownRowCounts(session.user.id)).toEqual({ jerseys: 0, photos: 0 });
     });
 
-    it("a Gem whose object-store put fails leaves no rows and removes the objects it put", async () => {
+    it("a Save whose object-store put fails leaves no rows and removes the objects it put", async () => {
       const session = await registerSession(app, "kit379-put-fails@example.com");
       const fixture = await insertClubSeasonFixture();
       const objectStore = app.get<ObjectStoreAdapter>(OBJECT_STORE);
@@ -2432,9 +2432,9 @@ describe("Collection /v1", () => {
         await originalPut(key, bytes);
       };
 
-      let response: Awaited<ReturnType<typeof gem>>;
+      let response: Awaited<ReturnType<typeof postSave>>;
       try {
-        response = await gem(session, fixture, [
+        response = await postSave(session, fixture, [
           { role: "front", contentBase64: JPEG_BASE64 },
           { role: "back", contentBase64: JPEG_BASE64 },
         ]);
@@ -2448,10 +2448,12 @@ describe("Collection /v1", () => {
       expect(await objectStore.objectExists(putKeys[0]!)).toBe(false);
     });
 
-    it("lists the existing jerseys while a Gem is in flight with its photo put held open", async () => {
+    it("lists the existing jerseys while a Save is in flight with its photo put held open", async () => {
       const session = await registerSession(app, "kit379-in-flight@example.com");
       const fixture = await insertClubSeasonFixture();
-      const first = await gem(session, fixture, [{ role: "front", contentBase64: JPEG_BASE64 }]);
+      const first = await postSave(session, fixture, [
+        { role: "front", contentBase64: JPEG_BASE64 },
+      ]);
       expect(first.statusCode).toBe(201);
       const firstId = collectionSaveResponseSchema.parse(JSON.parse(first.body)).jersey.id;
 
@@ -2472,9 +2474,9 @@ describe("Collection /v1", () => {
       };
 
       let listDuringGem: Awaited<ReturnType<typeof listOwn>>;
-      let second: Awaited<ReturnType<typeof gem>>;
+      let second: Awaited<ReturnType<typeof postSave>>;
       try {
-        const pending = gem(session, fixture, [{ role: "front", contentBase64: JPEG_BASE64 }]);
+        const pending = postSave(session, fixture, [{ role: "front", contentBase64: JPEG_BASE64 }]);
         await putReached;
         listDuringGem = await listOwn(session);
         release();
@@ -2496,14 +2498,14 @@ describe("Collection /v1", () => {
       expect(await findOwnJersey(app, session, firstId)).toBeDefined();
     });
 
-    it("a retried Gem after a failed one answers 201 and both jerseys are listed", async () => {
+    it("a retried Save after a failed one answers 201 and both jerseys are listed", async () => {
       const session = await registerSession(app, "kit379-retry@example.com");
       const fixture = await insertClubSeasonFixture();
-      const ok = await gem(session, fixture, [{ role: "front", contentBase64: JPEG_BASE64 }]);
+      const ok = await postSave(session, fixture, [{ role: "front", contentBase64: JPEG_BASE64 }]);
       const okId = collectionSaveResponseSchema.parse(JSON.parse(ok.body)).jersey.id;
       const draftId = randomUUID();
 
-      const bad = await gem(
+      const bad = await postSave(
         session,
         fixture,
         [{ role: "front", contentBase64: NOT_AN_IMAGE_BASE64 }],
@@ -2511,7 +2513,7 @@ describe("Collection /v1", () => {
       );
       expect(bad.statusCode).toBe(400);
 
-      const retry = await gem(
+      const retry = await postSave(
         session,
         fixture,
         [{ role: "front", contentBase64: JPEG_BASE64 }],
@@ -2524,7 +2526,7 @@ describe("Collection /v1", () => {
       expect(await findOwnJersey(app, session, retryId)).toBeDefined();
       expect(await ownRowCounts(session.user.id)).toEqual({ jerseys: 2, photos: 2 });
 
-      const again = await gem(
+      const again = await postSave(
         session,
         fixture,
         [{ role: "front", contentBase64: JPEG_BASE64 }],
@@ -2536,7 +2538,7 @@ describe("Collection /v1", () => {
     it("a legacy jersey with no photo rows does not 404 the list; the others are returned and the row is logged", async () => {
       const session = await registerSession(app, "kit379-legacy@example.com");
       const fixture = await insertClubSeasonFixture();
-      const ok = await gem(session, fixture, [{ role: "front", contentBase64: JPEG_BASE64 }]);
+      const ok = await postSave(session, fixture, [{ role: "front", contentBase64: JPEG_BASE64 }]);
       const okId = collectionSaveResponseSchema.parse(JSON.parse(ok.body)).jersey.id;
 
       const { db, pool } = createDb(DATABASE_URL);
