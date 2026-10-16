@@ -209,17 +209,29 @@ _Avoid_: kit-issue (its former name, ADR-0058); calling it the planner or a disp
 The bb workflow in which the Scenario judge runs one milestone's Holdout against `development` and sets the `Scenarios` status on the promotion PR (ADR-0060).
 _Avoid_: milestone promotion (Promotion is the PR itself); running it per issue
 
-**Factory**:
-The bb plugin that runs KitCollective's Loops from Linear: the Board, the Loop registry, the record of runs and its page in bb. Its code names no product; KitCollective's names live in `factory.config.json`.
-_Avoid_: meta-agents (its former name); the PI worker (archived); harness (the machine the runs use)
+**Optio**:
+The software factory built on bb: the bb plugin that runs KitCollective's Loops from Linear (the Board, the Loop registry, the record of runs, its pages in bb) and its Staff. Its code names no product; KitCollective's names live in `factory.config.json`.
+_Avoid_: Factory (its working name until 2026-10-15); meta-agents (its former plugin); the stand-alone Optio Factory and Optio Run (retired, replaced by this); the PI worker (archived); harness (the machine the runs use)
 
 **Loop**:
 One registered kind of unattended work: a trigger (a Linear condition or a schedule), the bb workflow it runs, the roles in it, and the hand-over it ends in. AFK developer and Milestone scenarios are Loops.
 _Avoid_: workflow as a synonym (a workflow is the file a Loop runs); session (a person is present); automation (bb's scheduling primitive)
 
 **Board**:
-The Factory's dispatcher: every tick it reads Linear, finds what triggers a Loop, and starts runs within each machine's capacity and without write-scope overlap. The only dispatcher.
+Optio's dispatcher: every tick it reads Linear, finds what triggers a Loop, and starts runs within each machine's capacity and without write-scope overlap. The only dispatcher.
 _Avoid_: planner (the archived claim agent); kit-dispatch or a dispatcher thread; a second dispatcher beside it
+
+**Staff**:
+Optio's standing agents: each has a first name and a job title ("Max, Engineering Manager"), a Charter, a Heartbeat and a budget, and owns one area of repetitive work. Staff pull only levers a person could pull and never start a run; the Board does. Today: Max (Engineering Manager), Chris (DevOps Engineer), Sophie (Reliability Engineer), Brad (Data Analyst).
+_Avoid_: calling Loop roles (Lead, Engineer, Reviewer, Scenario judge) Staff, since they are spawned for one run; agent names with æ, ø or å, or two with the same first letter; bot, worker
+
+**Charter**:
+The file that defines one Staff member: name and title, who they are, what they own, their Heartbeat, budget and tools, and what they must never do. Hiring or changing a Staff member is a reviewed change to their Charter.
+_Avoid_: a Staff member defined only in a plugin's database or a chat; system prompt as a synonym (the prompt is one part of the Charter)
+
+**Heartbeat**:
+When a Staff member wakes on their own: a schedule or a trigger, after which they do their routine, record what they did, and stop.
+_Avoid_: polling in a loop; automation as a synonym (a bb automation is how a Heartbeat is scheduled)
 
 **Football Data Seed**:
 The Linear project for vendor ingest: Transfermarkt hierarchy, then Football Kit Archive hierarchy, then Join workflow, then Cross MCP. Successor to KitCollective Seed. Still the one seed board beside the KitCollective product project.
