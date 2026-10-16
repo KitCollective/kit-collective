@@ -215,9 +215,14 @@ test("an artifact run downloads the flow from the Holdout repo with SCENARIO_FLO
   const holdout = steps(yaml).find((step) => /id: holdout\n/.test(step));
   assert.ok(holdout, "a step with id holdout");
   assert.match(holdout, /scenarios\.holdoutRepo/);
-  // An empty secret stops the run in seconds, naming the wizard.
-  assert.match(yaml, /secrets\.SCENARIO_FLOWS_TOKEN[\s\S]*holdout-flows-wizard\.sh/);
-  assert.equal((yaml.match(/secrets\.SCENARIO_FLOWS_TOKEN/g) ?? []).length, 2);
+  // An empty secret stops the run in seconds, naming the wizard; that check gets a boolean only.
+  assert.match(holdout, /HAS_FLOWS_TOKEN: \$\{\{ secrets\.SCENARIO_FLOWS_TOKEN != '' \}\}/);
+  assert.match(holdout, /holdout-flows-wizard\.sh/);
+  // The token's value reaches the download step and nothing else.
+  const valued = steps(yaml).filter((step) =>
+    /\$\{\{ secrets\.SCENARIO_FLOWS_TOKEN \}\}/.test(step),
+  );
+  assert.deepEqual(valued, [download]);
   assert.doesNotMatch(yaml, /actions: read/);
 });
 

@@ -134,9 +134,10 @@ jobs:
         id: holdout
         if: env.E2E_FLOWS == 'artifact'
         env:
-          SCENARIO_FLOWS_TOKEN: ${{ secrets.SCENARIO_FLOWS_TOKEN }}
+          # Whether the secret is set, never its value: only the download step gets that.
+          HAS_FLOWS_TOKEN: ${{ secrets.SCENARIO_FLOWS_TOKEN != '' }}
         run: |
-          if [[ -z "$SCENARIO_FLOWS_TOKEN" ]]; then
+          if [[ "$HAS_FLOWS_TOKEN" != true ]]; then
             echo "The Actions secret SCENARIO_FLOWS_TOKEN is not set; run bash scripts/holdout-flows-wizard.sh (stage 2)." >&2
             exit 2
           fi
