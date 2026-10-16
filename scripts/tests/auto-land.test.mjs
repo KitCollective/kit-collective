@@ -58,7 +58,15 @@ fs.appendFileSync(dir + "/gh-calls.log", args.join(" ") + "\\n");
 const s = state();
 const joined = args.join(" ");
 if (args[0] === "pr" && args[1] === "view") {
+  // Like the real gh: --json fields it does not know are an error (isInMergeQueue is GraphQL-only).
+  const fields = (args[args.indexOf("--json") + 1] || "").split(",");
+  if (fields.includes("isInMergeQueue")) {
+    console.error('Unknown JSON field: "isInMergeQueue"');
+    process.exit(1);
+  }
   console.log(JSON.stringify(s.pr));
+} else if (args[0] === "api" && args[1] === "graphql" && /isInMergeQueue/.test(joined)) {
+  console.log(JSON.stringify({ data: { repository: { pullRequest: { isInMergeQueue: s.pr.isInMergeQueue === true } } } }));
 } else if (args[0] === "pr" && args[1] === "merge") {
   if (s.mergeFails) { console.error("GraphQL: merge queue refused"); process.exit(1); }
   console.log("enqueued");
@@ -907,6 +915,18 @@ test("finish: still in the queue is waiting (exit 3); nothing is written", () =>
   assert.equal(result.status, 3, result.stdout);
   assert.match(result.stdout, /^WAITING \(auto-land\)/);
   assert.doesNotMatch(w.read("linear-writes.log"), /Approval|Done/);
+  assert.match(w.lockOnOrigin(), /merge-lock/, "the lock is kept while waiting");
+});
+
+test("finish: a PR held only by the merge queue (auto-merge off) is waiting, read through GraphQL", () => {
+  const w = started({ autoMergeRequest: null, isInMergeQueue: true });
+  const result = w.run(["finish", "12", "--issue", "KIT-9", "--timeout", "1"], {
+    AUTO_LAND_POLL_SECONDS: "5",
+  });
+  assert.equal(result.status, 3, result.stdout + result.stderr);
+  assert.match(result.stdout, /^WAITING \(auto-land\)/);
+  assert.match(w.read("gh-calls.log"), /api graphql .*isInMergeQueue/);
+  assert.doesNotMatch(w.read("gh-calls.log"), /--json [^\n]*isInMergeQueue/);
   assert.match(w.lockOnOrigin(), /merge-lock/, "the lock is kept while waiting");
 });
 
