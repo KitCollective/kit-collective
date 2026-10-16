@@ -114,6 +114,7 @@ import { PhotoDerivativeQueueService } from "./photo-derivative-queue.service.js
 import { derivativeKeysForPhoto, storeGpsStrippedOriginal } from "./photo-derivatives.js";
 import { gridObjectKeyForNewPhoto, resolveStoredPhotoBytes } from "./photo-variant-resolve.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
+import { declinePendingBudsOnUserJersey } from "./user-jersey-buds.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");
 
@@ -1210,17 +1211,7 @@ export class CollectionService {
     }
 
     await this.db.transaction(async (tx) => {
-      // The Conversation and its messages stay; a pending Bud on the UserJersey is declined.
-      await tx
-        .update(conversationMessage)
-        .set({ bidStatus: "declined" })
-        .where(
-          and(
-            eq(conversationMessage.userJerseyId, jerseyId),
-            eq(conversationMessage.kind, "bid"),
-            eq(conversationMessage.bidStatus, "pending"),
-          ),
-        );
+      await declinePendingBudsOnUserJersey(tx, jerseyId);
 
       await tx.delete(visionLog).where(eq(visionLog.userJerseyId, jerseyId));
       await tx.delete(jerseyDraft).where(eq(jerseyDraft.userJerseyId, jerseyId));

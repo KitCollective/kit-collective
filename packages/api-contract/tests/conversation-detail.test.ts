@@ -31,18 +31,50 @@ describe("collectionConversationMessageSchema", () => {
 });
 
 describe("collectionConversationDetailSchema", () => {
-  it("accepts a conversation with jersey context and messages", () => {
+  it("accepts a conversation whose message carries its UserJersey", () => {
     const parsed = collectionConversationDetailSchema.parse({
       id: "00000000-0000-0000-0000-000000000099",
       peerHandle: "mikkel_fck",
-      jerseyContext: {
-        clubLabel: "FC København",
-        seasonLabel: "2024/25",
-        type: "home",
-      },
-      messages: [],
+      messages: [
+        {
+          id: "00000000-0000-0000-0000-000000000001",
+          kind: "text",
+          role: "incoming",
+          text: "Hej",
+          createdAt: "2026-01-01T12:00:00.000Z",
+          jersey: {
+            userJerseyId: "00000000-0000-0000-0000-000000000042",
+            clubLabel: "FC København",
+            seasonLabel: "2024/25",
+            type: "home",
+            size: "m",
+          },
+        },
+      ],
     });
     expect(parsed.peerHandle).toBe("mikkel_fck");
+    expect(parsed.messages[0]?.jersey).toEqual({
+      userJerseyId: "00000000-0000-0000-0000-000000000042",
+      clubLabel: "FC København",
+      seasonLabel: "2024/25",
+      type: "home",
+      size: "m",
+    });
+  });
+
+  it("rejects a conversation with a jerseyContext", () => {
+    expect(() =>
+      collectionConversationDetailSchema.parse({
+        id: "00000000-0000-0000-0000-000000000099",
+        peerHandle: "mikkel_fck",
+        jerseyContext: {
+          clubLabel: "FC København",
+          seasonLabel: "2024/25",
+          type: "home",
+        },
+        messages: [],
+      }),
+    ).toThrow();
   });
 });
 
