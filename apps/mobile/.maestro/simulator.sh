@@ -30,14 +30,27 @@ simulator_photos() {
     tr ',' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | grep -v '^$' || true
 }
 
-E2E_SIMULATOR_PHOTOS="$(simulator_photos)"
-if [[ -n "$E2E_SIMULATOR_PHOTOS" ]]; then
+# check_simulator_photos: return 2 when an entry of E2E_SIMULATOR_PHOTOS is not a fixture photo.
+# A flow from a run artifact (KIT-366) is a Scenario's flow, kept out of every log: its bad entry is
+# named by its position only, never by its text. A slice flow is in the repo, so its name is shown.
+check_simulator_photos() {
+  local photo n=0
   while IFS= read -r photo; do
+    n=$((n + 1))
     if [[ ! "$photo" =~ ^[a-z0-9][a-z0-9-]*$ || ! -f "$maestro_dir/fixtures/photos/$photo.jpg" ]]; then
-      echo "simulator-photos: no fixture photo named '$photo' (see apps/mobile/.maestro/fixtures/photos/catalog.json)." >&2
+      if [[ "${E2E_FLOWS:-}" == artifact || -n "${E2E_FLOW_FILE:-}" ]]; then
+        echo "simulator-photos: entry $n of the flow's header is no fixture photo (not shown: the flow is from a run artifact; see apps/mobile/.maestro/fixtures/photos/catalog.json)." >&2
+      else
+        echo "simulator-photos: no fixture photo named '$photo' (see apps/mobile/.maestro/fixtures/photos/catalog.json)." >&2
+      fi
       return 2
     fi
   done <<< "$E2E_SIMULATOR_PHOTOS"
+}
+
+E2E_SIMULATOR_PHOTOS="$(simulator_photos)"
+if [[ -n "$E2E_SIMULATOR_PHOTOS" ]]; then
+  check_simulator_photos || return 2
   photo_set="$(printf '%s' "$E2E_SIMULATOR_PHOTOS" | git hash-object --stdin | cut -c1-8)"
   E2E_SIMULATOR="${E2E_SIMULATOR:-KitCollective Device Flows photos-$photo_set}"
 else

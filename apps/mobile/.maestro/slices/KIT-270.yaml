@@ -1,0 +1,88 @@
+# KIT-270: Send bud opens with the number pad up and the form clear of the tab bar.
+#
+# design-sections: Send bid, Button dock
+#
+# The slice changes one screen, Send bud. The jersey photo and the "Seneste bud" line are gone,
+# the amount field takes focus on arrival, Send bud sits in a dock above the number pad, and
+# Færdig in the keyboard accessory dismisses the pad. The path to Send bud is the one of
+# regression/search-bid.yaml, with no screenshots and none of its old workarounds (no scroll,
+# no point tap).
+#
+# AC 4 (the chrome test) is apps/mobile/tests/send-bid-chrome.test.ts, not a screen.
+appId: app.kitcollective.mobile
+name: kit-270
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-270
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 15000
+- tapOn:
+    id: search-input
+# The second test Collector's jersey is on this catalog side.
+- inputText: OB
+- extendedWaitUntil:
+    visible:
+      id: typeahead-clubs
+    timeout: 15000
+- hideKeyboard
+- tapOn:
+    id: typeahead-club-row
+- extendedWaitUntil:
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    timeout: 15000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+- extendedWaitUntil:
+    visible:
+      id: send-bid-open
+    timeout: 15000
+- tapOn:
+    id: send-bid-open
+- extendedWaitUntil:
+    visible:
+      id: bid-amount
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+# AC 2: on open the amount field is focused with the number pad up, and the field and the
+# Send bud button are both visible above the pad.
+- assertVisible:
+    id: bid-amount
+- assertVisible:
+    id: bid-submit
+- takeScreenshot: kc__kit-270__01-open-with-pad
+# AC 3 and AC 1: Færdig in the keyboard accessory dismisses the pad; "Dit bud" and its amount
+# field then sit fully above the tab bar.
+- tapOn:
+    id: bid-keyboard-done
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-270__02-pad-dismissed
+# AC 1: the amount field can be tapped (no tap lands on the tab bar and pops the stack), and
+# Send bud is still the open screen.
+- tapOn:
+    id: bid-amount
+- assertVisible:
+    id: bid-submit
+# AC 2: the amount is typed with the pad up; the field and Send bud på 250 kr stay visible.
+- inputText: "250"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible:
+    id: bid-submit
+- takeScreenshot: kc__kit-270__03-amount-with-pad
+# Sent: Send bud closes and the jersey is back.
+- tapOn:
+    id: bid-submit
+- extendedWaitUntil:
+    visible:
+      id: send-bid-open
+    timeout: 15000
+- stopRecording
