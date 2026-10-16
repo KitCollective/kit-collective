@@ -6,13 +6,13 @@
 #   gitignored `.env`, written there with `bb secret request ... --write-env <main>/.env`.
 # - LINEAR_API_KEY: a value already in the process env wins (scripts/linear.mjs does the same).
 # - scripts/linear.mjs reads the same main-checkout `.env`, so Linear needs no copy.
-# - gh: the stored login must hold the `.env` GH_TOKEN, so agents in every worktree share
-#   gh's credential store with the current token. Here `.env` wins over the process env
-#   (a stale GH_TOKEN exported in a shell must not undo a rotation); the process env is
-#   used only when `.env` has no GH_TOKEN. Python compares that value with
-#   `gh auth token` and runs `gh auth login --with-token` when gh is logged out or the
-#   two differ. Login overwrites the stored token, including one stored with no account
-#   name, which `gh auth logout` cannot match. No logout is needed after a rotation.
+# - gh: agents in every worktree share gh's credential store. A logged-out gh logs in
+#   from `.env`'s GH_TOKEN, else the process env (`gh auth login --with-token`). A
+#   logged-in gh is kept, with one opt-in: when `.env` also holds GH_LOGIN_FROM_ENV=1
+#   (set on bb-harness only) and the token gh uses differs from `.env`'s GH_TOKEN,
+#   gh logs in again from `.env`. Login overwrites the stored token without a logout,
+#   including one stored with no account name, which `gh auth logout` cannot match.
+#   The shell's GH_TOKEN never replaces a stored login. The comparison runs in Python.
 # - This hook never writes a `.env` into the worktree and never prints a secret value.
 set -euo pipefail
 
@@ -48,7 +48,8 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 
-# Syncs gh's stored login with the `.env` GH_TOKEN. Every value stays inside Python:
+# Logs gh in when it is logged out; replaces a stored login only on the GH_LOGIN_FROM_ENV=1
+# opt-in (see the header). Every value stays inside Python:
 # none reaches a bash variable, argv, stdout or stderr. Prints one status line.
 # Exit 1 when gh ends up without a usable login.
 sync_gh_login() {
@@ -70,9 +71,8 @@ def from_env_file(name):
         pass
     return val
 
-want, source = from_env_file("GH_TOKEN"), ".env"
-if not want:
-    want, source = os.environ.get("GH_TOKEN", "").strip(), "the process env"
+env_token = from_env_file("GH_TOKEN")
+replace_login = from_env_file("GH_LOGIN_FROM_ENV") == "1"
 gh_env = {k: v for k, v in os.environ.items() if k not in ("GH_TOKEN", "GITHUB_TOKEN")}
 
 def stored_token():
@@ -84,14 +84,20 @@ def same(a, b):
     return hmac.compare_digest(a.encode(), b.encode())
 
 have = stored_token()
-if not want:
-    if have:
-        print(".bb-env-setup.sh: gh auth OK (no GH_TOKEN in .env; kept the stored login)")
+want, source = env_token, ".env"
+if have:
+    if env_token and same(have, env_token):
+        print(".bb-env-setup.sh: gh auth OK")
         sys.exit(0)
-    sys.exit(1)
-if have and same(have, want):
-    print(".bb-env-setup.sh: gh auth OK")
-    sys.exit(0)
+    # Only .env's token, and only on opt-in, may replace a stored login.
+    if not (replace_login and env_token):
+        print(".bb-env-setup.sh: gh auth OK (kept the stored login)")
+        sys.exit(0)
+else:
+    if not want:
+        want, source = os.environ.get("GH_TOKEN", "").strip(), "the process env"
+    if not want:
+        sys.exit(1)
 r = subprocess.run(["gh", "auth", "login", "--with-token", "-h", "github.com"], env=gh_env,
                    input=want + "\n", capture_output=True, text=True)
 if r.returncode != 0 or not same(stored_token(), want):
@@ -102,7 +108,7 @@ PY
 }
 
 if ! sync_gh_login; then
-  echo ".bb-env-setup.sh: ERROR — gh not authenticated with the GH_TOKEN in $env_file (or env)." >&2
+  echo ".bb-env-setup.sh: ERROR — gh login with the GH_TOKEN in $env_file (or env) failed or found no token." >&2
   echo "  Run: bb secret request GH_TOKEN LINEAR_API_KEY --write-env $env_file" >&2
   exit 1
 fi
