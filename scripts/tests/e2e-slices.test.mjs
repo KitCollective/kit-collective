@@ -99,6 +99,50 @@ test("every slice flow asks only for photos that exist", () => {
   }
 });
 
+// check_simulator_photos() cut out of simulator.sh, run on its own: exit code and stderr.
+function checkSimulatorPhotos(env) {
+  const shell = readFileSync(join(MAESTRO, "simulator.sh"), "utf8");
+  const fn = /^check_simulator_photos\(\) \{[\s\S]*?^\}$/m.exec(shell)?.[0];
+  assert.ok(fn, "simulator.sh has check_simulator_photos()");
+  const script = `maestro_dir=${JSON.stringify(MAESTRO)}\n${fn}\ncheck_simulator_photos\n`;
+  try {
+    execFileSync("bash", ["-c", script], {
+      env: { PATH: process.env.PATH, ...env },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { status: 0, stderr: "" };
+  } catch (error) {
+    return { status: error.status, stderr: String(error.stderr) };
+  }
+}
+
+test("a malformed simulator-photos entry of an artifact run is named by its position only, never its text (KIT-366)", () => {
+  const secret = "the-collector-SECRET-WORDS";
+  const real = readdirSync(PHOTOS)
+    .find((file) => file.endsWith(".jpg"))
+    .replace(/\.jpg$/, "");
+  const photos = `${real}\n${secret}`;
+  for (const env of [
+    { E2E_FLOWS: "artifact", E2E_FLOW_FILE: "/x/apps/mobile/.maestro/external/scn.yaml" },
+    { E2E_FLOWS: "slice", E2E_FLOW_FILE: "/x/apps/mobile/.maestro/external/scn.yaml" },
+    { E2E_FLOWS: "artifact" },
+  ]) {
+    const result = checkSimulatorPhotos({ ...env, E2E_SIMULATOR_PHOTOS: photos });
+    assert.equal(result.status, 2, JSON.stringify(env));
+    assert.ok(!result.stderr.includes(secret), result.stderr);
+    assert.match(result.stderr, /entry 2 /);
+  }
+  // A slice flow is in the repo: its bad name is shown, as before.
+  const slice = checkSimulatorPhotos({ E2E_FLOWS: "slice", E2E_SIMULATOR_PHOTOS: photos });
+  assert.equal(slice.status, 2);
+  assert.ok(slice.stderr.includes(secret), slice.stderr);
+  assert.equal(
+    checkSimulatorPhotos({ E2E_FLOWS: "artifact", E2E_SIMULATOR_PHOTOS: real }).status,
+    0,
+  );
+});
+
 test("a flow from a run artifact names its photos in its own header", () => {
   const dir = mkdtempSync(join(tmpdir(), "e2e-flow-"));
   const flow = join(dir, "scenario-smoke.yaml");
