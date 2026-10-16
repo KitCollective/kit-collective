@@ -556,7 +556,7 @@ Authorization on that same User that opens Admin SPA. Stored as `User.role` `adm
 _Avoid_: a second IdP; a parallel `staff_access` column; calling the grant authentication; locking admins out of Expo; self-demote; demoting the last admin
 
 **Take-down**:
-Removing one UserJersey and its UserJerseyPhoto bytes. The User remains. Not a Kit delete. Not a hide flag.
+Removing one UserJersey and its UserJerseyPhoto bytes. Its patches, Vision logs and jersey drafts go with it, and so does every Favorit another collector holds on it (it disappears from their Profil); its pending Bud are declined. The User remains. Not a Kit delete. Not a hide flag.
 _Avoid_: unpublish; soft-hide without a column; deleting the collector by default
 
 **Signal**:

@@ -35,28 +35,79 @@ function stringFlags(tokens) {
   });
 }
 
+const TEST_FILE = /(?:^|\/)(?:tests?|__tests__)\/|\.(?:test|spec)\./;
+/** `<indent>test|it|describe[.modifier](<quote>title<quote><rest>`: the title is the first quoted string. */
+const TEST_CALL = /^(\s*(?:test|it|describe)(?:\.\w+)?\()(["'`])((?:\\.|(?!\2).)*)\2(.*)$/;
+
 /**
+ * True when two lines are the same `test(...)` / `it(...)` / `describe(...)` call and only the
+ * title string differs (KIT-367). A template title with an interpolation is code, not text.
+ * @param {string} before
+ * @param {string} after
+ */
+function isTestTitleOnlyChange(before, after) {
+  const a = TEST_CALL.exec(before);
+  const b = TEST_CALL.exec(after);
+  if (!a || !b) {
+    return false;
+  }
+  const [, prefixA, quoteA, titleA, restA] = a;
+  const [, prefixB, quoteB, titleB, restB] = b;
+  return (
+    prefixA === prefixB &&
+    quoteA === quoteB &&
+    restA === restB &&
+    titleA !== titleB &&
+    !titleA.includes("${") &&
+    !titleB.includes("${")
+  );
+}
+
+/**
+ * @typedef {{ removed: string[], added: string[] }} Hunk
+ * @typedef {{ removed: string[], added: string[], hunks: Hunk[] }} FileLines
+ */
+
+/**
+ * Lines per file, and per hunk inside it (KIT-373). A line starting with `@@ ` opens a hunk;
+ * lines before any header belong to one implicit hunk, so header-less input behaves as one hunk.
  * @param {string} diffText unified diff, `-U0` preferred
- * @returns {Map<string, { removed: string[], added: string[] }>}
+ * @returns {Map<string, FileLines>}
  */
 function perFile(diffText) {
-  /** @type {Map<string, { removed: string[], added: string[] }>} */
+  /** @type {Map<string, FileLines>} */
   const files = new Map();
   let current = "";
+  /** @type {Hunk | null} */
+  let hunk = null;
   for (const raw of String(diffText).split("\n")) {
     if (raw.startsWith("+++ ")) {
       current = raw.slice(4).replace(/^b\//, "");
-      files.set(current, files.get(current) ?? { removed: [], added: [] });
+      files.set(current, files.get(current) ?? { removed: [], added: [], hunks: [] });
+      hunk = null;
     } else if (current && !raw.startsWith("--- ")) {
-      if (raw.startsWith("-")) {
-        files.get(current)?.removed.push(raw.slice(1));
-      } else if (raw.startsWith("+")) {
-        files.get(current)?.added.push(raw.slice(1));
+      const file = files.get(current);
+      if (!file) {
+        continue;
+      }
+      if (raw.startsWith("@@ ")) {
+        hunk = { removed: [], added: [] };
+        file.hunks.push(hunk);
+      } else if (raw.startsWith("-") || raw.startsWith("+")) {
+        if (!hunk) {
+          hunk = { removed: [], added: [] };
+          file.hunks.push(hunk);
+        }
+        const side = raw.startsWith("-") ? "removed" : "added";
+        file[side].push(raw.slice(1));
+        hunk[side].push(raw.slice(1));
       }
     }
   }
   return files;
 }
+
+const code = (lines) => lines.filter((line) => line.trim() !== "" && !COMMENT_LINE.test(line));
 
 /**
  * @param {string} diffText
@@ -72,25 +123,42 @@ export function classifyFixDiff(diffText, options = {}) {
   }
   /** @type {Map<string, string>} */
   const renames = new Map();
-  for (const [file, { removed, added }] of files) {
+  let titleChanged = false;
+  for (const [file, { removed, added, hunks }] of files) {
     if (/\.mdx?$/.test(file)) {
       continue;
     }
-    if (
-      /(?:^|\/)(?:tests?|__tests__)\/|\.(?:test|spec)\./.test(file) &&
-      removed.length > added.length
-    ) {
+    const isTestFile = TEST_FILE.test(file);
+    if (isTestFile && removed.length > added.length) {
       return { kind: "full", reason: `${file}: a test lost lines` };
     }
-    const code = (lines) => lines.filter((line) => line.trim() !== "" && !COMMENT_LINE.test(line));
     const removedCode = code(removed);
     const addedCode = code(added);
     if (removedCode.length !== addedCode.length) {
       return { kind: "full", reason: `${file}: code lines added or removed` };
     }
-    for (let i = 0; i < removedCode.length; i += 1) {
-      const before = removedCode[i].match(TOKEN) ?? [];
-      const after = addedCode[i].match(TOKEN) ?? [];
+    // KIT-373: lines pair within a hunk only, and a line on both sides is a move, not an edit.
+    for (const hunk of hunks) {
+      if (code(hunk.removed).length !== code(hunk.added).length) {
+        return { kind: "full", reason: `${file}: code lines moved, added or removed` };
+      }
+    }
+    const addedTexts = new Set(addedCode.map((line) => line.trim()));
+    if (removedCode.some((line) => addedTexts.has(line.trim()))) {
+      return { kind: "full", reason: `${file}: a code line moved` };
+    }
+    const pairs = hunks.flatMap((hunk) => {
+      const hunkRemoved = code(hunk.removed);
+      const hunkAdded = code(hunk.added);
+      return hunkRemoved.map((line, i) => [line, hunkAdded[i]]);
+    });
+    for (const [beforeLine, afterLine] of pairs) {
+      if (isTestFile && isTestTitleOnlyChange(beforeLine, afterLine)) {
+        titleChanged = true;
+        continue;
+      }
+      const before = beforeLine.match(TOKEN) ?? [];
+      const after = afterLine.match(TOKEN) ?? [];
       if (before.length !== after.length) {
         return { kind: "full", reason: `${file}: a code line changed shape` };
       }
@@ -121,5 +189,8 @@ export function classifyFixDiff(diffText, options = {}) {
     }
   }
   const renamed = [...renames].map(([from, to]) => `${from} -> ${to}`).join(", ");
-  return { kind: "light", reason: renamed ? `rename only: ${renamed}` : "docs and comments only" };
+  if (renamed) {
+    return { kind: "light", reason: `rename only: ${renamed}` };
+  }
+  return { kind: "light", reason: titleChanged ? "test title only" : "docs and comments only" };
 }

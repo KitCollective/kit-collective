@@ -73,7 +73,6 @@ import {
   userJerseyFavorite,
   userJerseyPatch,
   userJerseyPhoto,
-  visionLog,
 } from "@kit/db";
 import type { JerseySize, KitType, LabelLocale } from "@kit/domain";
 import {
@@ -108,11 +107,13 @@ import {
   uniqueNonNullIds,
 } from "./catalog-side.js";
 import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
+import { collectorImageContentType } from "./image-content-type.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store.js";
 import { PhotoDerivativeQueueService } from "./photo-derivative-queue.service.js";
 import { derivativeKeysForPhoto, storeGpsStrippedOriginal } from "./photo-derivatives.js";
 import { gridObjectKeyForNewPhoto, resolveStoredPhotoBytes } from "./photo-variant-resolve.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
+import { deleteUserJerseyRows } from "./user-jersey-delete.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");
 
@@ -225,6 +226,9 @@ function decodeBase64Photo(contentBase64: string, maxBytes?: number): Uint8Array
   }
   if (maxBytes !== undefined && bytes.length > maxBytes) {
     throw new BadRequestException("Photo exceeds the maximum upload size");
+  }
+  if (!collectorImageContentType(bytes)) {
+    throw new BadRequestException("Photo is not a JPEG, PNG, WebP or HEIC image");
   }
   return Uint8Array.from(bytes);
 }
@@ -1206,25 +1210,7 @@ export class CollectionService {
     }
 
     await this.db.transaction(async (tx) => {
-      // The Conversation and its messages stay; a pending Bud on the UserJersey is declined.
-      await tx
-        .update(conversationMessage)
-        .set({ bidStatus: "declined" })
-        .where(
-          and(
-            eq(conversationMessage.userJerseyId, jerseyId),
-            eq(conversationMessage.kind, "bid"),
-            eq(conversationMessage.bidStatus, "pending"),
-          ),
-        );
-
-      await tx.delete(visionLog).where(eq(visionLog.userJerseyId, jerseyId));
-      await tx.delete(jerseyDraft).where(eq(jerseyDraft.userJerseyId, jerseyId));
-      await tx.delete(userJerseyFavorite).where(eq(userJerseyFavorite.userJerseyId, jerseyId));
-      await tx.delete(userJerseyPhoto).where(eq(userJerseyPhoto.userJerseyId, jerseyId));
-      await tx
-        .delete(userJersey)
-        .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)));
+      await deleteUserJerseyRows(tx, { userJerseyId: jerseyId, userId });
     });
   }
 

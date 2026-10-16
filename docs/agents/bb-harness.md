@@ -36,16 +36,16 @@ What the missing pieces mean in practice:
 
 ## Secrets
 
-- The names are listed in `bb.env` (names only, safe to commit): `GH_TOKEN`, `LINEAR_API_KEY`, `OPERATOR_EMAIL`. Add a name there only when something reads it.
+- The names are listed in `bb.env` (names only, safe to commit): `GH_TOKEN`, `LINEAR_API_KEY`, `OPERATOR_EMAIL`, `SCENARIOS_GH_TOKEN`. Add a name there only when something reads it.
 - The values live in the main checkout's gitignored `.env`, mode 0600. They get there through one command, run from a bb thread on that machine:
 
   ```bash
-  bb secret request GH_TOKEN LINEAR_API_KEY OPERATOR_EMAIL --write-env /home/node/work/kit-collective/.env
+  bb secret request GH_TOKEN LINEAR_API_KEY OPERATOR_EMAIL SCENARIOS_GH_TOKEN --write-env /home/node/work/kit-collective/.env
   ```
 
   It opens a secure form for the person; the values are typed into that form and never pass through the chat, a prompt or a command line. Existing assignments in the file are preserved.
 - Posting the `kc/audit` status needs "Commit statuses: Read and write"; the AFK developer run never posts it (the receipt runs only as a dry run), so the person who merges asks for that permission when they need it.
-- The same `GH_TOKEN` reads the Holdout repo: `docs/agents/scenarios.md` has the format, the CLI and the command that proves a machine's read.
+- `GH_TOKEN` is, from stage 4 of `scripts/holdout-flows-wizard.sh` on (KIT-366), a fine-grained token that selects `kit-collective` only: Actions, Commit statuses, Contents, Issues, Pull requests and Workflows read and write, Checks read. It does not reach the Holdout repo, its files or its run artifacts. The scenarios CLI reads and writes the Holdout with its own `SCENARIOS_GH_TOKEN` (Contents and Actions read and write on the Holdout only), which nothing else reads. `.bb-env-setup.sh` logs a logged-out `gh` in from `.env`'s `GH_TOKEN` (else the process env) and otherwise keeps the stored login. On this machine the main checkout's `.env` also holds `GH_LOGIN_FROM_ENV=1`, a setting rather than a secret, so it is not listed in `bb.env`; add the line by hand. With it, when the token `gh` uses differs from `.env`'s `GH_TOKEN`, the hook runs `gh auth login --with-token` from `.env`, which overwrites the stored token without a logout, including one stored with no account name that `gh auth logout` cannot match. The comparison runs inside Python: no value reaches a bash variable, argv or output. A `GH_TOKEN` in the shell's env never replaces a stored login. So after replacing `GH_TOKEN` here, open a new worktree or run `bash .bb-env-setup.sh` from the main checkout; it prints `gh re-logged in from .env`. Set the flag on bb-harness only: the owner's Mac `.env` holds a different `GH_TOKEN` from the owner's own `gh` login, and with the flag every bb worktree hook there would replace that login. `node scripts/scenarios.mjs access` proves the split on this machine (`ambient denied, cli reads`); `bash scripts/holdout-flows-wizard.sh --from 3` walks the setup. Details: "The Holdout token" in `docs/agents/scenarios.md`.
 - Nothing on this page, in a prompt or in a thread message carries a value. If a run needs a new secret, add its name to `bb.env` and request it with the command above.
 
 ## Updating the clone
@@ -101,7 +101,7 @@ bb workflows run --file .bb/workflows/milestone-scenarios.js --args '{"project":
 | `pr` | Required. The number of the open `development → staging` PR. |
 | `machine` | Only written to the run log; it routes nothing. |
 
-`run` starts a real run: it posts a commit status that everyone sees on the `development` tip and spends macOS minutes (runsPerScenario hosted runs per Scenario, at ten times the Linux rate), so it is a person's decision. The run refuses, posting nothing, unless every issue of the milestone is `Done` or `Canceled`, the PR is an open `development → staging` PR and the milestone has a Holdout file. It needs, on top of the AFK developer's: a `GH_TOKEN` that may dispatch workflows (`actions: write`) and write commit statuses (`statuses: write`), and reads the Holdout; and `ffmpeg` on the machine for the judge to see the recording (without it the judge judges from the screenshots). It can wait about 4 hours for the hosted runs.
+`run` starts a real run: it posts a commit status that everyone sees on the `development` tip and spends macOS minutes (runsPerScenario hosted runs per Scenario, at ten times the Linux rate), so it is a person's decision. The run refuses, posting nothing, unless every issue of the milestone is `Done` or `Canceled`, the PR is an open `development → staging` PR and the milestone has a Holdout file. It needs, on top of the AFK developer's: a `GH_TOKEN` that may dispatch workflows (`actions: write`) and write commit statuses (`statuses: write`) in `kit-collective`; `SCENARIOS_GH_TOKEN`, which reads the Holdout and dispatches its producer workflow (the flow artifact is made in the Holdout repo, KIT-366); the `kit-collective` Actions secret `SCENARIO_FLOWS_TOKEN`, with which the hosted runs download it; and `ffmpeg` on the machine for the judge to see the recording (without it the judge judges from the screenshots). It can wait about 4 hours for the hosted runs.
 
 ### Promotion path
 

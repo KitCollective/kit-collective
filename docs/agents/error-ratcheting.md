@@ -375,6 +375,10 @@ OpenRouter workspace guardrail allows only `tencent/hy4-preview` on every worksp
 
 `scripts/lib/review-matrix.mjs` (`LOCK_ROWS`, `planRecheck`) and `scripts/review-matrix.mjs` keep the workpad `### Review matrix` complete and say which rows a later review re-checks. `scripts/lib/fix-diff.mjs` and `scripts/classify-fix-diff.mjs` decide whether a `[text]` / `[name]` fix is light. Tests in `scripts/tests/review-matrix.test.mjs` and `scripts/tests/fix-diff.test.mjs`. A new lock-set row needs its path globs and a test.
 
+Loosened (KIT-367): the classifier also calls a fix `light` when its only code change is the title string of a `test(...)`, `it(...)` or `describe(...)` call in a test file, with the rest of the line identical. A title change plus any other change on that line, a changed test body, or an added or removed test stays `full`. Why: KIT-348 (`8a051734`) and KIT-351 (`69ff9738`) fixed a `[text]` / `[name]` finding by rewording a test title, and the classifier called both `full`, forcing a whole extra fresh review. Nicklas approved this loosening on 2026-10-15 in KIT-367; it is an exception to "Tighten only" granted by a person, not by an agent.
+
+Tightened (KIT-373): the classifier pairs removed and added lines within one `git diff -U0` hunk only, and a code line whose text is on both the removed and the added side is a move, so the fix is `full`. A move combined with a test-title change is `full` too; a title-only rename and a docs-only change stay `light`. Why: moving `test("a", () => {` above `setup();` used to classify `light` by position pairing (found by the KIT-367 review, PR #359).
+
 `scripts/wait-for-checks.mjs` (tests in `scripts/tests/pr-checks.test.mjs`) is the sanctioned wait for required checks. `.cursor/hooks/block-pi-ci-sleep.sh` still denies the watch flag, sleeps and loops; its message names the script. `scripts/check-factory-ci-tests.mjs` requires the five test files on the CI `test` job.
 
 ### English code identifiers (Pi implement / helper / checker)

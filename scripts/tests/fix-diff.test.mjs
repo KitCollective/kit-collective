@@ -94,3 +94,145 @@ test("a rename that leaves the old name in use is full", () => {
   assert.equal(classifyFixDiff(change, { isStillUsed: () => true }).kind, "full");
   assert.equal(classifyFixDiff(change, { isStillUsed: () => false }).kind, "light");
 });
+
+const KIT348_OLD =
+  'test("Bash: process substitution and redirections cannot smuggle a Holdout path past the CLI", () => {';
+const KIT348_NEW =
+  'test("Bash: process substitution cannot smuggle a Holdout path past the CLI, and redirections carry no Holdout path", () => {';
+const KIT351_OLD =
+  'test("the guard lets a lone `titles --issue` through and still denies it when chained", () => {';
+const KIT351_NEW =
+  'test("the guard lets `titles --issue` through alone and runner-wrapped, and still denies a direct gh read of the Holdout", () => {';
+
+const testFile = "+++ b/scripts/tests/guard.test.mjs";
+
+test("KIT-367: the KIT-348 fix (8a051734), a reworded test title, is light", () => {
+  const verdict = classifyFixDiff(
+    diff("+++ b/scripts/tests/holdout-guard.test.mjs", `-${KIT348_OLD}`, `+${KIT348_NEW}`),
+  );
+  assert.equal(verdict.kind, "light");
+  assert.match(verdict.reason, /test title/);
+});
+
+test("KIT-367: the KIT-351 fix (69ff9738), a double-quoted title with backticks, is light", () => {
+  const verdict = classifyFixDiff(
+    diff("+++ b/scripts/tests/scenarios.test.mjs", `-${KIT351_OLD}`, `+${KIT351_NEW}`),
+  );
+  assert.equal(verdict.kind, "light");
+});
+
+test("KIT-367: it and describe titles, with a modifier, are light", () => {
+  const verdict = classifyFixDiff(
+    diff(
+      testFile,
+      '-  it("does a thing", () => {',
+      '+  it("does the thing well", () => {',
+      '-describe.skip("group", () => {',
+      '+describe.skip("the group", () => {',
+    ),
+  );
+  assert.equal(verdict.kind, "light");
+});
+
+test("KIT-367: a title change plus another change on the same line is full", () => {
+  const verdict = classifyFixDiff(diff(testFile, '-test("a", () => {', '+test("b", async () => {'));
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-367: a title change plus a changed body line is full", () => {
+  const verdict = classifyFixDiff(
+    diff(
+      testFile,
+      '-test("a", () => {',
+      '+test("b", () => {',
+      "-  assert.equal(a, 1);",
+      "+  assert.equal(a, 2);",
+    ),
+  );
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-367: a new test is full", () => {
+  const verdict = classifyFixDiff(diff(testFile, '+test("new", () => {', "+  run();", "+});"));
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-367: a removed test is full", () => {
+  const verdict = classifyFixDiff(diff(testFile, '-test("old", () => {', "-  run();", "-});"));
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-367: a string change in a non-test call is full", () => {
+  const verdict = classifyFixDiff(diff(testFile, '-  run("a", x);', '+  run("b", x);'));
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-367: a title string change in a non-test file is full", () => {
+  const verdict = classifyFixDiff(
+    diff("+++ b/scripts/lib/thing.mjs", '-test("a", () => {', '+test("b", () => {'),
+  );
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-367: a template-literal title gaining an interpolation is full", () => {
+  const verdict = classifyFixDiff(
+    diff(testFile, "-test(`a`, () => {", `+test(\`a \${name}\`, () => {`),
+  );
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-367: a different call name with the same title is full", () => {
+  const verdict = classifyFixDiff(diff(testFile, '-test("a", () => {', '+it("b", () => {'));
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-373: setup() moved below the test line is full", () => {
+  const verdict = classifyFixDiff(
+    diff(testFile, "@@ -1 +0,0 @@", "-setup();", "@@ -2,0 +2 @@", "+setup();"),
+  );
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-373: a move plus a test-title change is full", () => {
+  const verdict = classifyFixDiff(
+    diff(testFile, "@@ -0,0 +1 @@", '+test("b", () => {', "@@ -2 +2,0 @@", '-test("a", () => {'),
+  );
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-373: a moved line inside one hunk is full", () => {
+  const verdict = classifyFixDiff(
+    diff("+++ b/scripts/lib/thing.mjs", "-a();", "-b();", "+b();", "+a();"),
+  );
+  assert.equal(verdict.kind, "full");
+});
+
+test("KIT-373: a single-hunk title-only rename with a header stays light", () => {
+  const verdict = classifyFixDiff(
+    diff(testFile, "@@ -1 +1 @@", '-test("a", () => {', '+test("b", () => {'),
+  );
+  assert.equal(verdict.kind, "light");
+});
+
+test("KIT-373: a single-hunk comment change with a header stays light", () => {
+  const verdict = classifyFixDiff(
+    diff("+++ b/scripts/lib/thing.mjs", "@@ -1 +1 @@", "-// because A", "+// because B"),
+  );
+  assert.equal(verdict.kind, "light");
+});
+
+test("KIT-373: a single-hunk consistent rename with headers stays light", () => {
+  const verdict = classifyFixDiff(
+    diff(
+      "+++ b/apps/mobile/src/door.tsx",
+      "@@ -1 +1 @@",
+      "-export function KomIGangFace(props: Props) {",
+      "+export function DoorFace(props: Props) {",
+      "+++ b/apps/mobile/src/door.test.tsx",
+      "@@ -1 +1 @@",
+      "-import { KomIGangFace } from './door';",
+      "+import { DoorFace } from './door';",
+    ),
+  );
+  assert.equal(verdict.kind, "light");
+});

@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -11,21 +12,28 @@ import {
 import {
   catalogLabel,
   club,
+  conversation,
+  conversationMessage,
   country,
   createDb,
+  jerseyDraft,
   kit,
   kitPhoto,
   league,
+  patch,
   resetDatabase,
   season,
   teamSeason,
   user,
   userJersey,
+  userJerseyFavorite,
+  userJerseyPatch,
   userJerseyPhoto,
+  visionLog,
 } from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ADMIN_OBJECT_STORE } from "../dist/admin/admin-catalog.service.js";
 import { AppModule } from "../dist/app.module.js";
@@ -601,5 +609,200 @@ describe("Admin collectors /v1", () => {
     } finally {
       await failingApp.close();
     }
+  });
+  it("declines pending Buds on take-down and leaves answered Buds untouched", async () => {
+    const collector = await registerUser(app, "bud-takedown-owner@example.com");
+    const bidder = await registerUser(app, "bud-takedown-bidder@example.com");
+    await promoteToAdmin("staff-b@example.com");
+    const adminSession = await loginAdmin(app, "staff-b@example.com");
+
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "SE" })
+      .returning({ id: country.id });
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+    const [insertedClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+    const [insertedSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2022/23",
+        startsOn: "2022-07-01",
+        endsOn: "2023-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+
+    const jerseyValues = {
+      userId: collector.user.id,
+      clubId: insertedClub!.id,
+      seasonId: insertedSeason!.id,
+      type: "home" as const,
+      size: "m" as const,
+      condition: "used" as const,
+    };
+    const [pendingJersey, acceptedJersey, noBudJersey] = await db
+      .insert(userJersey)
+      .values([jerseyValues, jerseyValues, jerseyValues])
+      .returning({ id: userJersey.id });
+
+    const [lowerId, upperId] = [collector.user.id, bidder.user.id].sort();
+    const [insertedConversation] = await db
+      .insert(conversation)
+      .values({ lowerCollectorId: lowerId!, upperCollectorId: upperId! })
+      .returning({ id: conversation.id });
+
+    const budValues = {
+      conversationId: insertedConversation!.id,
+      senderId: bidder.user.id,
+      kind: "bid" as const,
+      bidAmountDkk: 500,
+      jerseyClubId: insertedClub!.id,
+      jerseySeasonId: insertedSeason!.id,
+      jerseyType: "home" as const,
+      jerseySize: "m" as const,
+    };
+    const [pendingBud, acceptedBud] = await db
+      .insert(conversationMessage)
+      .values([
+        { ...budValues, userJerseyId: pendingJersey!.id, bidStatus: "pending" as const },
+        { ...budValues, userJerseyId: acceptedJersey!.id, bidStatus: "accepted" as const },
+      ])
+      .returning({ id: conversationMessage.id });
+
+    for (const jersey of [pendingJersey!, acceptedJersey!, noBudJersey!]) {
+      const response = await app.inject({
+        method: "DELETE",
+        url: `/v1/admin/collectors/${collector.user.id}/jerseys/${jersey.id}`,
+        headers: {
+          authorization: `Bearer ${adminSession.accessToken}`,
+        },
+      });
+      expect(response.statusCode).toBe(204);
+    }
+
+    const buds = await db
+      .select({ id: conversationMessage.id, bidStatus: conversationMessage.bidStatus })
+      .from(conversationMessage)
+      .where(inArray(conversationMessage.id, [pendingBud!.id, acceptedBud!.id]));
+    expect(buds.find((bud) => bud.id === pendingBud!.id)?.bidStatus).toBe("declined");
+    expect(buds.find((bud) => bud.id === acceptedBud!.id)?.bidStatus).toBe("accepted");
+
+    const remainingJerseys = await db
+      .select({ id: userJersey.id })
+      .from(userJersey)
+      .where(inArray(userJersey.id, [pendingJersey!.id, acceptedJersey!.id, noBudJersey!.id]));
+    expect(remainingJerseys).toHaveLength(0);
+
+    await pool.end();
+  });
+
+  it("takes down a jersey with a favourite, a Vision log, a draft and a patch, leaving no rows behind", async () => {
+    const collector = await registerUser(app, "dependents-takedown-owner@example.com");
+    const favoriter = await registerUser(app, "dependents-takedown-favoriter@example.com");
+    await registerUser(app, "staff-dependents@example.com");
+    await promoteToAdmin("staff-dependents@example.com");
+    const adminSession = await loginAdmin(app, "staff-dependents@example.com");
+
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "FI" })
+      .returning({ id: country.id });
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+    const [insertedClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+    const [insertedSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2021/22",
+        startsOn: "2021-07-01",
+        endsOn: "2022-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+    const [insertedPatch] = await db
+      .insert(patch)
+      .values({ seasonId: insertedSeason!.id })
+      .returning({ id: patch.id });
+
+    const [insertedJersey] = await db
+      .insert(userJersey)
+      .values({
+        userId: collector.user.id,
+        clubId: insertedClub!.id,
+        seasonId: insertedSeason!.id,
+        type: "home",
+        size: "m",
+        condition: "used",
+      })
+      .returning({ id: userJersey.id });
+    const jerseyId = insertedJersey!.id;
+
+    await db.insert(userJerseyFavorite).values({
+      collectorId: favoriter.user.id,
+      userJerseyId: jerseyId,
+    });
+    await db.insert(visionLog).values({ userId: collector.user.id, userJerseyId: jerseyId });
+    await db
+      .insert(jerseyDraft)
+      .values({ id: randomUUID(), userId: collector.user.id, userJerseyId: jerseyId });
+    await db.insert(userJerseyPatch).values({ userJerseyId: jerseyId, patchId: insertedPatch!.id });
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/v1/admin/collectors/${collector.user.id}/jerseys/${jerseyId}`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(response.statusCode).toBe(204);
+
+    const remaining = {
+      userJersey: await db
+        .select({ id: userJersey.id })
+        .from(userJersey)
+        .where(eq(userJersey.id, jerseyId)),
+      favorites: await db
+        .select({ id: userJerseyFavorite.id })
+        .from(userJerseyFavorite)
+        .where(eq(userJerseyFavorite.userJerseyId, jerseyId)),
+      visionLogs: await db
+        .select({ id: visionLog.id })
+        .from(visionLog)
+        .where(eq(visionLog.userJerseyId, jerseyId)),
+      drafts: await db
+        .select({ id: jerseyDraft.id })
+        .from(jerseyDraft)
+        .where(eq(jerseyDraft.userJerseyId, jerseyId)),
+      patches: await db
+        .select({ patchId: userJerseyPatch.patchId })
+        .from(userJerseyPatch)
+        .where(eq(userJerseyPatch.userJerseyId, jerseyId)),
+    };
+    expect(remaining).toEqual({
+      userJersey: [],
+      favorites: [],
+      visionLogs: [],
+      drafts: [],
+      patches: [],
+    });
+
+    await pool.end();
   });
 });
