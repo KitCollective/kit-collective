@@ -156,6 +156,10 @@ name: kit-287
 - takeScreenshot: kc__kit-287__08-photo-added-count-2-of-2
 # AC 11: More holds Rediger trøjen and Slet trøjen (danger); the detail itself has no
 # destructive button.
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-more
+    direction: UP
 - tapOn:
     id: jersey-detail-more
 - extendedWaitUntil:
