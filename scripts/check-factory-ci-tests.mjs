@@ -39,6 +39,15 @@ export const FACTORY_NODE_TEST_NEEDLES = [
   "milestone-scenarios-workflow",
 ];
 
+/**
+ * Workspace plugin checks (KIT-357) that must run in a gated job's run body, after
+ * `pnpm <script>` expansion. Not `node --test`, so separate from the node-test needles.
+ */
+export const PLUGIN_TEST_NEEDLES = [
+  "--filter @kit/bb-plugin-optio typecheck",
+  "--filter @kit/bb-plugin-optio test",
+];
+
 export const MOBILE_CHECK_NEEDLES = [
   "check:mobile-tab-bar",
   "scripts/check-mobile-profile-settings-hub.mjs",
@@ -243,6 +252,22 @@ export function missingFactoryCiCoverage({ workflowSource, packageSource }) {
     );
     if (matching.length === 0) {
       missing.push(`${needle} via node --test`);
+      continue;
+    }
+    if (matching.some((step) => /continue-on-error:\s*true/.test(step))) {
+      missing.push(`continue-on-error: true on ${needle}`);
+    }
+  }
+
+  for (const needle of PLUGIN_TEST_NEEDLES) {
+    // Whole command only: `... test:watch` must not satisfy `... test`.
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`${escaped}(?![\\w:-])`);
+    const matching = steps.filter((step) =>
+      pattern.test(expandPnpmScripts(stepRunSource(step), scripts)),
+    );
+    if (matching.length === 0) {
+      missing.push(`plugin check ${needle}`);
       continue;
     }
     if (matching.some((step) => /continue-on-error:\s*true/.test(step))) {
