@@ -323,6 +323,24 @@ stage_3() {
   pause "Does the line say 'cli reads'? If it says 'cli denied', approve the token in $ORG first. Press Enter."
 }
 
+# Decides from the hook's status lines whether gh now holds the .env token. Returns 1 with the fix.
+stage4_hook_verdict() {
+  case "$1" in
+    *"gh re-logged in from .env"*) ;;
+    *"gh logged in from .env"*) ;;
+    *"gh auth OK (kept the stored login)"*)
+      warn "The hook kept the old gh login, so the new GH_TOKEN never reached gh."
+      warn "Set GH_LOGIN_FROM_ENV=1 in $HARNESS_MAIN/.env (a setting, not a secret; bb-harness only),"
+      warn "then run --from 4 again. Nothing is revoked yet."
+      return 1 ;;
+    *"gh auth OK"*) say "  gh already holds the .env token (a rerun after a successful rotation)." ;;
+    *)
+      warn "The hook did not say gh was logged in from .env. Do not revoke the old token."
+      warn "Set GH_LOGIN_FROM_ENV=1 in $HARNESS_MAIN/.env, then run --from 4 again."
+      return 1 ;;
+  esac
+}
+
 stage_4() {
   harness_or_stop 4
   stage "bb-harness — a GH_TOKEN that selects kit-collective only"
@@ -344,12 +362,17 @@ stage_4() {
   step "Every other permission: No access. Generate it and copy it."
   pause "Token copied? Press Enter."
   request_secret GH_TOKEN
-  say "gh keeps the old token in its credential store until it logs out; .bb-env-setup.sh logs"
-  say "in again from the new GH_TOKEN in the .env (it logs in only when gh is logged out, and a"
-  say "GH_TOKEN in this shell's env would win over the .env, so it runs without one)."
-  confirm "Log gh out and back in from the new GH_TOKEN?" || { warn "skipped"; exit 1; }
-  env -u GH_TOKEN -u GITHUB_TOKEN gh auth logout -h github.com || true
-  (cd "$HARNESS_MAIN" && env -u GH_TOKEN -u GITHUB_TOKEN bash .bb-env-setup.sh)
+  say "gh does not need to be logged out first. .bb-env-setup.sh logs gh in again from the new GH_TOKEN in the"
+  say ".env whenever the token gh stores differs (it needs GH_LOGIN_FROM_ENV=1 in that .env;"
+  say "a GH_TOKEN in this shell's env never replaces the stored login, so it runs without one)."
+  say "Expect 'gh re-logged in from .env'. A rerun after a successful rotation shows 'gh auth OK'."
+  say "'gh auth OK (kept the stored login)' means GH_LOGIN_FROM_ENV=1 is missing: the wizard stops there."
+  confirm "Run the hook so gh logs in again from the new GH_TOKEN?" || { warn "skipped"; exit 1; }
+  local hook_out
+  hook_out="$(cd "$HARNESS_MAIN" && env -u GH_TOKEN -u GITHUB_TOKEN bash .bb-env-setup.sh)" || { printf '%s\n' "$hook_out"; warn "The hook failed: fix what it names, then run --from 4 again."; exit 1; }
+  printf '%s\n' "$hook_out"
+  # The hook is the one reader of .env: its status lines (no secret) decide, not a second parser here.
+  stage4_hook_verdict "$hook_out" || exit 1
   env -u GH_TOKEN -u GITHUB_TOKEN gh auth status -h github.com || { warn "gh is not logged in"; exit 1; }
   say "Checking that the stored token reads $OWNER_REPO before the old one goes:"
   local seen
@@ -377,7 +400,7 @@ stage_5() {
   if env -u GH_TOKEN -u GITHUB_TOKEN node scripts/scenarios.mjs access; then
     say "   ✓ Paste that line to the KIT-366 session (it goes under Evidence on the issue)."
   else
-    warn "   Not the split yet. 'ambient reads': gh still has the old token (stage 4's logout) or it"
+    warn "   Not the split yet. 'ambient reads': gh still has the old token (stage 4's re-login did not happen) or it"
     warn "   is not revoked. 'cli unset' or 'cli denied': stage 3. 'UNKNOWN: ... 401/403': a revoked"
     warn "   token, a missing permission or a rate limit on the side it names; nothing is proven."
   fi
