@@ -2473,12 +2473,12 @@ describe("Collection /v1", () => {
         await originalPut(key, bytes);
       };
 
-      let listDuringGem: Awaited<ReturnType<typeof listOwn>>;
+      let listDuringSave: Awaited<ReturnType<typeof listOwn>>;
       let second: Awaited<ReturnType<typeof postSave>>;
       try {
         const pending = postSave(session, fixture, [{ role: "front", contentBase64: JPEG_BASE64 }]);
         await putReached;
-        listDuringGem = await listOwn(session);
+        listDuringSave = await listOwn(session);
         release();
         second = await pending;
       } finally {
@@ -2486,9 +2486,9 @@ describe("Collection /v1", () => {
         objectStore.putObject = originalPut;
       }
 
-      expect(listDuringGem.statusCode).toBe(200);
+      expect(listDuringSave.statusCode).toBe(200);
       const duringIds = collectionJerseysSchema
-        .parse(JSON.parse(listDuringGem.body))
+        .parse(JSON.parse(listDuringSave.body))
         .jerseys.map((jersey) => jersey.id);
       expect(duringIds).toContain(firstId);
 
