@@ -15,7 +15,10 @@ import {
 
 const MAESTRO = join(fileURLToPath(new URL("../..", import.meta.url)), "apps/mobile/.maestro");
 const PHOTOS = join(MAESTRO, "fixtures/photos");
-const WORKFLOWS = join(fileURLToPath(new URL("../..", import.meta.url)), ".github/workflows");
+const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+const WORKFLOWS = join(REPO_ROOT, ".github/workflows");
+/** The Holdout producer's source (KIT-366): pushed to the Holdout repo, never run from here. */
+const PRODUCER = join(REPO_ROOT, "docs/agents/holdout-scenario-flow.yml");
 
 // simulator_photos() cut out of simulator.sh: the rest of the file needs xcrun.
 function simulatorPhotos(env) {
@@ -96,6 +99,50 @@ test("every slice flow asks only for photos that exist", () => {
   }
 });
 
+// check_simulator_photos() cut out of simulator.sh, run on its own: exit code and stderr.
+function checkSimulatorPhotos(env) {
+  const shell = readFileSync(join(MAESTRO, "simulator.sh"), "utf8");
+  const fn = /^check_simulator_photos\(\) \{[\s\S]*?^\}$/m.exec(shell)?.[0];
+  assert.ok(fn, "simulator.sh has check_simulator_photos()");
+  const script = `maestro_dir=${JSON.stringify(MAESTRO)}\n${fn}\ncheck_simulator_photos\n`;
+  try {
+    execFileSync("bash", ["-c", script], {
+      env: { PATH: process.env.PATH, ...env },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { status: 0, stderr: "" };
+  } catch (error) {
+    return { status: error.status, stderr: String(error.stderr) };
+  }
+}
+
+test("a malformed simulator-photos entry of an artifact run is named by its position only, never its text (KIT-366)", () => {
+  const secret = "the-collector-SECRET-WORDS";
+  const real = readdirSync(PHOTOS)
+    .find((file) => file.endsWith(".jpg"))
+    .replace(/\.jpg$/, "");
+  const photos = `${real}\n${secret}`;
+  for (const env of [
+    { E2E_FLOWS: "artifact", E2E_FLOW_FILE: "/x/apps/mobile/.maestro/external/scn.yaml" },
+    { E2E_FLOWS: "slice", E2E_FLOW_FILE: "/x/apps/mobile/.maestro/external/scn.yaml" },
+    { E2E_FLOWS: "artifact" },
+  ]) {
+    const result = checkSimulatorPhotos({ ...env, E2E_SIMULATOR_PHOTOS: photos });
+    assert.equal(result.status, 2, JSON.stringify(env));
+    assert.ok(!result.stderr.includes(secret), result.stderr);
+    assert.match(result.stderr, /entry 2 /);
+  }
+  // A slice flow is in the repo: its bad name is shown, as before.
+  const slice = checkSimulatorPhotos({ E2E_FLOWS: "slice", E2E_SIMULATOR_PHOTOS: photos });
+  assert.equal(slice.status, 2);
+  assert.ok(slice.stderr.includes(secret), slice.stderr);
+  assert.equal(
+    checkSimulatorPhotos({ E2E_FLOWS: "artifact", E2E_SIMULATOR_PHOTOS: real }).status,
+    0,
+  );
+});
+
 test("a flow from a run artifact names its photos in its own header", () => {
   const dir = mkdtempSync(join(tmpdir(), "e2e-flow-"));
   const flow = join(dir, "scenario-smoke.yaml");
@@ -130,8 +177,8 @@ function runBlocks(yaml) {
 }
 
 test("dispatch inputs reach the Device flow workflows' shell only through env", () => {
-  for (const file of ["device-flows.yml", "scenario-flow.yml"]) {
-    const blocks = runBlocks(readFileSync(join(WORKFLOWS, file), "utf8"));
+  for (const file of [join(WORKFLOWS, "device-flows.yml"), PRODUCER]) {
+    const blocks = runBlocks(readFileSync(file, "utf8"));
     assert.ok(blocks.length > 0, `${file} has run steps`);
     for (const block of blocks) {
       assert.doesNotMatch(
@@ -141,6 +188,63 @@ test("dispatch inputs reach the Device flow workflows' shell only through env", 
       );
     }
   }
+});
+
+/** The `- name:` steps of a workflow, each as its text, in order. */
+function steps(yaml) {
+  return yaml.split(/\n(?=\s*- (?:name|uses):)/).slice(1);
+}
+
+test("no producer runs in kit-collective: the flow's text never enters this repo's runs (KIT-366)", () => {
+  assert.ok(!existsSync(join(WORKFLOWS, "scenario-flow.yml")));
+  const producer = readFileSync(PRODUCER, "utf8");
+  assert.match(producer, /^on:\n {2}workflow_dispatch:\n/m);
+  assert.doesNotMatch(producer, /pull_request/);
+  assert.match(producer, /retention-days: 1\n/);
+  assert.match(producer, /name: scenario-flow-\$\{\{ inputs\.name \}\}/);
+});
+
+test("an artifact run downloads the flow from the Holdout repo with SCENARIO_FLOWS_TOKEN only", () => {
+  const yaml = readFileSync(join(WORKFLOWS, "device-flows.yml"), "utf8");
+  const download = steps(yaml).find((step) => step.includes("actions/download-artifact"));
+  assert.ok(download, "device-flows.yml has a download step");
+  assert.match(download, /repository: \$\{\{ steps\.holdout\.outputs\.repo \}\}/);
+  assert.match(download, /github-token: \$\{\{ secrets\.SCENARIO_FLOWS_TOKEN \}\}/);
+  assert.match(download, /run-id: \$\{\{ inputs\.flow_run \}\}/);
+  // The repo is read from factory.config.json, never typed into the workflow.
+  const holdout = steps(yaml).find((step) => /id: holdout\n/.test(step));
+  assert.ok(holdout, "a step with id holdout");
+  assert.match(holdout, /scenarios\.holdoutRepo/);
+  // An empty secret stops the run in seconds, naming the wizard; that check gets a boolean only.
+  assert.match(holdout, /HAS_FLOWS_TOKEN: \$\{\{ secrets\.SCENARIO_FLOWS_TOKEN != '' \}\}/);
+  assert.match(holdout, /holdout-flows-wizard\.sh/);
+  // The token's value reaches the download step and nothing else.
+  const valued = steps(yaml).filter((step) =>
+    /\$\{\{ secrets\.SCENARIO_FLOWS_TOKEN \}\}/.test(step),
+  );
+  assert.deepEqual(valued, [download]);
+  assert.doesNotMatch(yaml, /actions: read/);
+});
+
+test("an artifact run keeps Maestro's console out of the log and uploads only the pruned evidence", () => {
+  const yaml = readFileSync(join(WORKFLOWS, "device-flows.yml"), "utf8");
+  const all = steps(yaml);
+  const flows = all.find((step) => /id: flows\n/.test(step));
+  assert.match(flows, /RUNNER_TEMP/);
+  assert.match(flows, /E2E_FLOWS" == artifact/);
+  const evidenceAt = all.findIndex((step) => step.includes("scripts/scenarios.mjs evidence --dir"));
+  assert.ok(evidenceAt > all.indexOf(flows), "evidence runs after the flows");
+  const uploads = all
+    .map((step, index) => ({ step, index }))
+    .filter(({ step }) => step.includes("actions/upload-artifact"));
+  assert.equal(uploads.length, 2);
+  const artifactUpload = uploads.find(({ step }) => step.includes("== 'artifact'"));
+  const otherUpload = uploads.find(({ step }) => step.includes("!= 'artifact'"));
+  assert.ok(artifactUpload && otherUpload, "one upload per kind of run");
+  assert.ok(artifactUpload.index > evidenceAt);
+  assert.match(artifactUpload.step, /steps\.evidence\.outcome == 'success'/);
+  assert.doesNotMatch(artifactUpload.step, /local-api\.log/);
+  assert.match(otherUpload.step, /local-api\.log/);
 });
 
 // The macOS runner and the approver's Mac run these under /bin/bash 3.2, which has none of these.

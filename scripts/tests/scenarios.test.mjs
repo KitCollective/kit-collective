@@ -70,7 +70,15 @@ function run(args, { dir, env } = {}) {
   if (dir) argv.push("--dir", dir);
   const result = spawnSync(process.execPath, argv, {
     encoding: "utf8",
-    env: { ...process.env, BB_THREAD_ID: "", KC_RUN_LOG: tmpLog(), ...env },
+    // No Holdout token from the developer's own env or main checkout `.env` unless a test sets one.
+    env: {
+      ...process.env,
+      BB_THREAD_ID: "",
+      KC_RUN_LOG: tmpLog(),
+      SCENARIOS_GH_TOKEN: "",
+      KC_ENV_FILE: join(tmpdir(), "no-such-dir", ".env"),
+      ...env,
+    },
   });
   const lines = result.stdout.trimEnd().split("\n");
   return { ...result, lines, verdict: lines.at(-1) };
@@ -632,12 +640,16 @@ test("the guard lets `titles --issue` through alone and runner-wrapped, and stil
 const SHA40 = "c".repeat(40);
 const OTHER_SHA = "d".repeat(40);
 const REPO = "KitCollective/kit-collective";
+const HOLDOUT = "KitCollective/kit-scenarios";
+/** A fake Holdout-only token (KIT-366); the scripted gh records whether a call carried it. */
+const HOLDOUT_TOKEN = "holdout-test-token-366";
 
 /**
  * A scripted fake `gh` on PATH. Each rule is `{ match, answers }`: the first rule whose `match` (a
  * substring of the joined argv) fits answers with the next of its `answers` (the last one repeats).
  * An answer is `{ stdout?, stderr?, code?, files? }`; `files` are written into the `--dir` argument.
- * Every call is recorded with its argv and stdin.
+ * A rule with `withToken` fits only calls that do (true) or do not (false) carry HOLDOUT_TOKEN as
+ * GH_TOKEN. Every call is recorded with its argv, stdin and `withToken`.
  */
 function scriptedGh(rules) {
   const dir = mkdtempSync(join(tmpdir(), "scripted-gh-"));
@@ -651,10 +663,13 @@ const dir = ${JSON.stringify(dir)};
 const argv = process.argv.slice(2);
 let stdin = "";
 try { stdin = argv.includes("--input") ? fs.readFileSync(0, "utf8") : ""; } catch {}
-fs.appendFileSync(path.join(dir, "calls.jsonl"), JSON.stringify({ argv, stdin }) + "\\n");
+const withToken = process.env.GH_TOKEN === ${JSON.stringify(HOLDOUT_TOKEN)};
+fs.appendFileSync(path.join(dir, "calls.jsonl"), JSON.stringify({ argv, stdin, withToken }) + "\\n");
 const rules = JSON.parse(fs.readFileSync(path.join(dir, "rules.json"), "utf8"));
 const joined = argv.join(" ");
-const index = rules.findIndex((r) => joined.includes(r.match));
+const index = rules.findIndex(
+  (r) => joined.includes(r.match) && (r.withToken === undefined || r.withToken === withToken),
+);
 if (index < 0) { process.stderr.write("fake gh: no rule for " + joined + "\\n"); process.exit(97); }
 const counter = path.join(dir, "count-" + index);
 const n = fs.existsSync(counter) ? Number(fs.readFileSync(counter, "utf8")) : 0;
@@ -696,6 +711,8 @@ function workEnv(extra = {}) {
       KC_SCENARIO_WORK: work,
       KC_POLL_SECONDS: "0",
       KC_FFMPEG: "/nonexistent/ffmpeg",
+      // Set on purpose: the Holdout calls must carry it and no kit-collective call may.
+      SCENARIOS_GH_TOKEN: HOLDOUT_TOKEN,
       ...extra,
     },
   };
@@ -1021,7 +1038,7 @@ function flowFile(work, name, text = FLOW) {
   writeFileSync(join(work, "scenario-flows", `${name}.yaml`), text);
 }
 
-test("flow dispatches the producer with the flow on stdin, waits for it, deletes the file and prints its run", () => {
+test("flow dispatches the producer in the Holdout repo with the flow on stdin and the Holdout token, waits for it, deletes the file and prints its run", () => {
   const { work, env } = workEnv();
   flowFile(work, "scn-0a1b2c3d-1");
   const gh = scriptedGh([
@@ -1042,19 +1059,30 @@ test("flow dispatches the producer with the flow on stdin, waits for it, deletes
   assert.equal(result.lines.length, 1);
   const answer = JSON.parse(result.verdict);
   assert.deepEqual({ name: answer.name, run: answer.run }, { name: "scn-0a1b2c3d-1", run: 501 });
-  const [dispatch] = gh.calls();
+  const [dispatch, ...polls] = gh.calls();
   assert.match(
     dispatch.argv.join(" "),
     new RegExp(
-      `api --method POST repos/${REPO}/actions/workflows/scenario-flow.yml/dispatches --input -`,
+      `api --method POST repos/${HOLDOUT}/actions/workflows/scenario-flow.yml/dispatches --input -`,
     ),
   );
   const body = JSON.parse(dispatch.stdin);
+  // The Holdout's default branch: its producer workflow lives there (docs/agents/holdout-scenario-flow.yml).
   assert.deepEqual(body, {
-    ref: "development",
+    ref: "main",
     inputs: { name: "scn-0a1b2c3d-1", flow: FLOW },
     return_run_details: true,
   });
+  assert.ok(polls.length > 0);
+  for (const poll of polls) {
+    assert.equal(poll.argv.join(" "), `api repos/${HOLDOUT}/actions/runs/501`);
+  }
+  // Every call goes to the Holdout with its own token; none reaches kit-collective.
+  assert.ok(
+    gh.calls().every((c) => c.withToken),
+    "a Holdout call ran without SCENARIOS_GH_TOKEN",
+  );
+  assert.ok(gh.calls().every((c) => !c.argv.join(" ").includes(REPO)));
   // The flow text is in the request body only: never in argv, never on stdout.
   assert.ok(gh.calls().every((c) => !c.argv.join(" ").includes("SECRET-SCENARIO-WORDS")));
   assert.ok(!result.stdout.includes("SECRET-SCENARIO-WORDS"));
@@ -1092,6 +1120,12 @@ test("flow without a run id in the answer finds the producer run by its unique r
   const result = run(["flow", "--name", "scn-0a1b2c3d-2"], { env: { ...env, ...gh.env } });
   assert.equal(result.status, GATE_EXIT.open, result.stdout);
   assert.equal(JSON.parse(result.verdict).run, 901);
+  const lists = gh.calls().filter((c) => c.argv.join(" ").includes("scenario-flow.yml/runs"));
+  assert.ok(lists.length > 0);
+  for (const list of lists) {
+    assert.match(list.argv.join(" "), new RegExp(`^api repos/${HOLDOUT}/actions/workflows/`));
+    assert.ok(list.withToken);
+  }
 });
 
 test("flow: a failed producer is exit 1; a missing or foreign flow file is exit 2 and dispatches nothing", () => {
@@ -1153,6 +1187,208 @@ test("run dispatches device-flows.yml as an artifact run of the named flow and p
     run(["run", "--flow-run", "x", "--name", "scn-0a1b2c3d-1"], { env: gh.env }).status,
     GATE_EXIT.usage,
   );
+});
+
+// -- The token split (KIT-366): Holdout calls carry SCENARIOS_GH_TOKEN, kit-collective calls never.
+
+test("no kit-collective call carries the Holdout token: run, status, check's PR read and wait", () => {
+  const { env } = workEnv();
+  const gh = scriptedGh([
+    { match: "dispatches", answers: [{ stdout: json({ workflow_run_id: 7001 }) }] },
+    { match: "statuses/", answers: [{ stdout: "{}" }] },
+    ...finished(11),
+  ]);
+  const all = { ...env, ...gh.env };
+  assert.equal(
+    run(["run", "--flow-run", "501", "--name", "scn-0a1b2c3d-1"], { env: all }).status,
+    GATE_EXIT.open,
+  );
+  assert.equal(
+    run(["status", "--sha", SHA40, "--state", "pending"], { env: all }).status,
+    GATE_EXIT.open,
+  );
+  assert.equal(
+    run(["wait", "--runs", "11", "--sha", SHA40, "--timeout", "60"], { env: all }).status,
+    GATE_EXIT.open,
+  );
+  const checked = check({ env: { ...env } });
+  assert.equal(checked.status, GATE_EXIT.open, checked.stdout);
+  const calls = [...gh.calls(), ...checked.gh.calls()];
+  assert.ok(calls.length >= 5);
+  for (const call of calls) {
+    assert.equal(call.withToken, false, call.argv.join(" "));
+    assert.ok(!call.argv.join(" ").includes(HOLDOUT), call.argv.join(" "));
+  }
+});
+
+test("titles, check and report read the Holdout file with the Holdout token; the PR read stays on the gh login", () => {
+  const { env } = workEnv();
+  const holdoutFile = {
+    match: `repos/${HOLDOUT}/contents/holdout-scenarios/holdout.md`,
+    withToken: true,
+    answers: [{ stdout: SCENARIO_A }],
+  };
+  const titles = scriptedGh([holdoutFile]);
+  const listed = run(["titles", ...MILESTONE], { env: { ...env, ...titles.env } });
+  assert.equal(listed.status, GATE_EXIT.open, listed.stdout);
+  assert.equal(listed.lines[0], "A Collector adds a shirt");
+
+  const linear = fakeLinearList([done(1)]);
+  const checkGh = scriptedGh([
+    { match: "pr view", withToken: false, answers: [{ stdout: json(promotionPr) }] },
+    holdoutFile,
+  ]);
+  const checked = run(CHECK, { env: { ...env, ...linear.env, ...checkGh.env } });
+  assert.equal(checked.status, GATE_EXIT.open, checked.stdout);
+
+  const reportGh = scriptedGh([holdoutFile]);
+  const reported = run(
+    [
+      "report",
+      ...MILESTONE,
+      "--sha",
+      SHA40,
+      "--scenarios",
+      "1",
+      "--verdicts",
+      "1:s:1,1:s:2,1:s:3",
+      "--dry-run",
+    ],
+    { env: { ...env, ...reportGh.env } },
+  );
+  assert.equal(reported.status, GATE_EXIT.open, reported.stdout);
+  for (const gh of [titles, checkGh, reportGh]) {
+    for (const call of gh.calls().filter((c) => c.argv.join(" ").includes(HOLDOUT))) {
+      assert.ok(call.withToken, call.argv.join(" "));
+    }
+  }
+});
+
+test("the Holdout token comes from the main checkout's .env when the env has none; without either the gh login is used and a failure names the variable", () => {
+  const dir = mkdtempSync(join(tmpdir(), "scenarios-env-"));
+  const envFile = join(dir, ".env");
+  writeFileSync(envFile, `LINEAR_API_KEY=x\nexport SCENARIOS_GH_TOKEN="${HOLDOUT_TOKEN}"\n`);
+  const gh = scriptedGh([
+    {
+      match: `repos/${HOLDOUT}/contents/`,
+      withToken: true,
+      answers: [{ stdout: SCENARIO_A }],
+    },
+  ]);
+  const fromFile = run(["titles", ...MILESTONE], { env: { ...gh.env, KC_ENV_FILE: envFile } });
+  assert.equal(fromFile.status, GATE_EXIT.open, fromFile.stdout);
+  assert.ok(gh.calls().every((c) => c.withToken));
+
+  const denied = scriptedGh([
+    {
+      match: `repos/${HOLDOUT}`,
+      withToken: false,
+      answers: [{ code: 1, stderr: "gh: Not Found (HTTP 404)\n" }],
+    },
+  ]);
+  const ambient = run(["titles", ...MILESTONE], { env: denied.env });
+  assert.equal(ambient.status, GATE_EXIT.unknown);
+  assert.match(ambient.verdict, /^UNKNOWN: cannot read KitCollective\/kit-scenarios: .*404/);
+  assert.match(ambient.verdict, /SCENARIOS_GH_TOKEN is not set/);
+  assert.ok(denied.calls().every((c) => !c.withToken));
+});
+
+// -- access (KIT-366): the proof that the gh login cannot reach the Holdout and the CLI's token can.
+
+const ARTIFACTS = `repos/${HOLDOUT}/actions/artifacts`;
+/** The repo probe's argv: `api repos/<holdout> --jq ...` (its files: a fine-grained token that does not select the repo gets 404). */
+const REPO_PROBE = `api repos/${HOLDOUT} --jq`;
+/** Answers for the two probes of each side; `repo` defaults to the same answer as `artifacts`. */
+const accessGh = ({ ambient, cli, ambientRepo = ambient, cliRepo = cli }) =>
+  scriptedGh([
+    { match: ARTIFACTS, withToken: false, answers: [ambient] },
+    { match: ARTIFACTS, withToken: true, answers: [cli] },
+    { match: REPO_PROBE, withToken: false, answers: [ambientRepo] },
+    { match: REPO_PROBE, withToken: true, answers: [cliRepo] },
+  ]);
+const reads = { stdout: "3" };
+const notFound = { code: 1, stderr: "gh: Not Found (HTTP 404)\n" };
+const badCredentials = { code: 1, stderr: "gh: Bad credentials (HTTP 401)\n" };
+const forbidden = {
+  code: 1,
+  stderr: "gh: Resource not accessible by personal access token (HTTP 403)\n",
+};
+const accessRun = (gh) =>
+  run(["access"], { env: { ...gh.env, SCENARIOS_GH_TOKEN: HOLDOUT_TOKEN } });
+
+test("access: the gh login denied (404 on the repo and its artifacts) and the CLI's token reading both is exit 0, one JSON line, no names", () => {
+  const gh = accessGh({ ambient: notFound, cli: reads });
+  const result = accessRun(gh);
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  assert.equal(result.lines.length, 1);
+  const answer = JSON.parse(result.verdict);
+  assert.deepEqual(
+    { ambient: answer.ambient, cli: answer.cli },
+    { ambient: "denied", cli: "reads" },
+  );
+  assert.match(answer.verdict, /^SCENARIOS access: ambient denied, cli reads$/);
+  assert.ok(!result.stdout.includes(HOLDOUT));
+  const calls = gh.calls();
+  // Each side probes the repo itself (its files) and its artifact list.
+  for (const withToken of [false, true]) {
+    const side = calls.filter((c) => c.withToken === withToken).map((c) => c.argv.join(" "));
+    assert.equal(side.length, 2, side.join("\n"));
+    assert.ok(side.some((a) => a.startsWith(REPO_PROBE)));
+    assert.ok(side.some((a) => new RegExp(`^api ${ARTIFACTS}\\?per_page=1 --jq `).test(a)));
+  }
+});
+
+test("access: a gh login that still reads the repo or its artifacts is exit 1; so is a CLI token that gets 404", () => {
+  for (const leak of [
+    { ambient: reads },
+    { ambient: notFound, ambientRepo: reads },
+    { ambient: reads, ambientRepo: notFound },
+  ]) {
+    const result = accessRun(accessGh({ cli: reads, ...leak }));
+    assert.equal(result.status, GATE_EXIT.closed, result.stdout);
+    assert.equal(JSON.parse(result.verdict).ambient, "reads", JSON.stringify(leak));
+  }
+  const blind = accessRun(accessGh({ ambient: notFound, cli: notFound, cliRepo: reads }));
+  assert.equal(blind.status, GATE_EXIT.closed, blind.stdout);
+  assert.equal(JSON.parse(blind.verdict).cli, "denied");
+});
+
+test("access: a 401 or 403 on either side is never 'denied' and never exit 0: exit 4 naming the side and the cause", () => {
+  for (const [answers, side, cause] of [
+    [{ ambient: badCredentials, cli: reads }, "the gh login", /401/],
+    [{ ambient: forbidden, cli: reads }, "the gh login", /403/],
+    [{ ambient: notFound, ambientRepo: forbidden, cli: reads }, "the gh login", /403/],
+    [{ ambient: notFound, cli: badCredentials }, "SCENARIOS_GH_TOKEN", /401/],
+    [{ ambient: notFound, cli: forbidden, cliRepo: reads }, "SCENARIOS_GH_TOKEN", /403/],
+  ]) {
+    const result = accessRun(accessGh(answers));
+    assert.equal(result.status, GATE_EXIT.unknown, `${JSON.stringify(answers)}: ${result.stdout}`);
+    assert.equal(result.lines.length, 1);
+    assert.match(result.verdict, /^UNKNOWN: cannot probe the Holdout with /);
+    assert.ok(result.verdict.includes(side), result.verdict);
+    assert.match(result.verdict, cause);
+    assert.ok(!result.verdict.includes(HOLDOUT), result.verdict);
+  }
+});
+
+test("access without SCENARIOS_GH_TOKEN is exit 1 naming the variable; a gh that fails otherwise is exit 4", () => {
+  const gh = accessGh({ ambient: notFound, cli: reads });
+  const unset = run(["access"], { env: gh.env });
+  assert.equal(unset.status, GATE_EXIT.closed, unset.stdout);
+  const answer = JSON.parse(unset.verdict);
+  assert.equal(answer.cli, "unset");
+  assert.match(answer.verdict, /SCENARIOS_GH_TOKEN/);
+  assert.ok(gh.calls().every((c) => !c.withToken));
+
+  const down = accessRun(
+    accessGh({ ambient: { code: 1, stderr: "connection refused\n" }, cli: reads }),
+  );
+  assert.equal(down.status, GATE_EXIT.unknown);
+  assert.match(
+    down.verdict,
+    /^UNKNOWN: cannot probe the Holdout with the gh login: .*connection refused/,
+  );
+  assert.equal(run(["access", "--dir", "x"]).status, GATE_EXIT.usage);
 });
 
 /** The gh answers for one finished device-flows run. */
@@ -1464,6 +1700,53 @@ test("wait names a Maestro screenshot `maestro` when its flow folder is not a fl
     files.map((f) => basename(f)),
     ["kc__maestro__failure-01.png", "kc__maestro__failure-02.png"],
   );
+});
+
+/** Writes `files` (path → text) under a fresh temp dir and returns it. */
+function tree(files) {
+  const dir = mkdtempSync(join(tmpdir(), "scenarios-evidence-"));
+  for (const [name, body] of Object.entries(files)) {
+    mkdirSync(join(dir, name, ".."), { recursive: true });
+    writeFileSync(join(dir, name), body);
+  }
+  return dir;
+}
+
+test("evidence --dir leaves only kc__ files in Maestro's output, failure screenshots renamed, before the hosted upload (KIT-366)", () => {
+  const out = tree({
+    "2026-10-15_203230/scn-0a1b2c3d-1/takeScreenshot/kc__scn-0a1b2c3d-1__01-start.png": "png",
+    "kc__scn-0a1b2c3d-1.mp4": "mp4",
+    ...Object.fromEntries(
+      Object.entries(maestroTree("scn-0a1b2c3d-1"))
+        .filter(([name]) => name.startsWith(MAESTRO_OUT))
+        .map(([name, body]) => [name.slice(MAESTRO_OUT.length - "2026-10-15_203230".length), body]),
+    ),
+  });
+  const result = run(["evidence", "--dir", out]);
+  assert.equal(result.status, GATE_EXIT.open, result.stdout);
+  assert.equal(result.lines.length, 1);
+  const answer = JSON.parse(result.verdict);
+  assert.deepEqual({ kept: answer.kept, renamed: answer.renamed }, { kept: 4, renamed: 2 });
+  const flowDir = "2026-10-15_203230/scn-0a1b2c3d-1";
+  assert.deepEqual(evidenceFiles(out), [
+    `${flowDir}/screenshots/kc__scn-0a1b2c3d-1__failure-01.png`,
+    `${flowDir}/screenshots/kc__scn-0a1b2c3d-1__failure-02.png`,
+    `${flowDir}/takeScreenshot/kc__scn-0a1b2c3d-1__01-start.png`,
+    "kc__scn-0a1b2c3d-1.mp4",
+  ]);
+  // Idempotent: wait runs the same rename and prune again on the downloaded copy.
+  const again = run(["evidence", "--dir", out]);
+  assert.equal(again.status, GATE_EXIT.open);
+  assert.deepEqual(JSON.parse(again.verdict).renamed, 0);
+  assert.equal(evidenceFiles(out).length, 4);
+});
+
+test("evidence: a missing --dir (Maestro never started) is exit 0 with nothing kept; no --dir is usage", () => {
+  const missing = run(["evidence", "--dir", join(tmpdir(), "no-such-maestro-out")]);
+  assert.equal(missing.status, GATE_EXIT.open, missing.stdout);
+  assert.equal(JSON.parse(missing.verdict).kept, 0);
+  assert.equal(run(["evidence"]).status, GATE_EXIT.usage);
+  assert.equal(run(["evidence", "--dir", "x", "--name", "y"]).status, GATE_EXIT.usage);
 });
 
 test("wait: a failed run with no screenshot at all is a hosted-run-error, never judged, and stays one on a resume", () => {

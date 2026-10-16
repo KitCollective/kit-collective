@@ -474,6 +474,44 @@ test("a judge without a usable result, a flow that cannot be written and a faile
   for (const r of [noVerdict, cannot, producer, dispatch]) assertNeverLeftPending(r.commands);
 });
 
+test("the Flows phase hands each flow to the CLI by name only; a producer run id (a Holdout run) never links the status (KIT-366)", async () => {
+  const green = await run();
+  const flows = scenarioCommands(green.commands, "flow");
+  assert.deepEqual(flows, [
+    `node scripts/scenarios.mjs flow --name scn-${NONCE}-1`,
+    `node scripts/scenarios.mjs flow --name scn-${NONCE}-2`,
+  ]);
+  // The CLI holds the repos: the workflow names neither the Holdout nor kit-collective.
+  for (const command of green.commands) {
+    assert.doesNotMatch(command, /kit-scenarios|KitCollective\//, command);
+  }
+  const producerIds = ["501", "502"];
+  const unreachable = await run({
+    shell: (c) =>
+      c.includes("scenarios.mjs flow")
+        ? {
+            code: 4,
+            line: "UNKNOWN: cannot dispatch scenario-flow.yml: HTTP 404 (SCENARIOS_GH_TOKEN is not set, so the gh login was used)",
+          }
+        : undefined,
+  });
+  assert.match(
+    statusCommands(unreachable.commands).at(-1),
+    /--state error --code dispatch-failed$/,
+  );
+  for (const r of [green, unreachable]) {
+    for (const status of statusCommands(r.commands)) {
+      const linked = / --run (\d+)/.exec(status)?.[1];
+      assert.ok(!producerIds.includes(linked), `a producer run linked the status: ${status}`);
+    }
+    assertNeverLeftPending(r.commands);
+  }
+  // The producer's run ids only ever reach `run --flow-run`.
+  for (const command of green.commands.filter((c) => /\b50[12]\b/.test(c))) {
+    assert.match(command, /^node scripts\/scenarios\.mjs run --flow-run 50[12] --name /, command);
+  }
+});
+
 test("a not-satisfied run fails the milestone, links the status to that run and returns the judge's sentences", async () => {
   const { result, commands } = await run({
     judge: (_label, n) => ({
