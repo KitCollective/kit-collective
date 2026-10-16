@@ -40,26 +40,38 @@ if ! git rev-parse --verify origin/development >/dev/null 2>&1; then
   allow
 fi
 
-CANDIDATES=$(printf '%s' "$COMMAND" | grep -oE 'packages/db/migrations/[0-9]{4}_[^[:space:]]+\.sql' || true)
-if [ -z "${CANDIDATES}" ]; then
-  CANDIDATES=$(git ls-files -co --exclude-standard -- packages/db/migrations 2>/dev/null | grep -E '^packages/db/migrations/[0-9]{4}_.+\.sql$' || true)
+# Bash variables cannot hold NUL, so both git lists are read NUL-separated (-z) into arrays:
+# without -z git quotes a non-ASCII name ("9999_\303\246ble.sql") and it never matches.
+# Plain `bash` may be 3.2 (macOS): no mapfile, and an empty array is never expanded under set -u.
+MIGRATION_RE='^packages/db/migrations/([0-9]{4})_.+\.sql$'
+
+CANDIDATES=()
+while IFS= read -r NAMED; do
+  [ -n "${NAMED}" ] && CANDIDATES+=("${NAMED}")
+done < <(printf '%s' "$COMMAND" | grep -oE 'packages/db/migrations/[0-9]{4}_[^[:space:]]+\.sql' || true)
+
+if [ "${#CANDIDATES[@]}" -eq 0 ]; then
+  while IFS= read -r -d '' FILE; do
+    [[ $FILE =~ $MIGRATION_RE ]] && CANDIDATES+=("${FILE}")
+  done < <(git ls-files -z -co --exclude-standard -- packages/db/migrations 2>/dev/null || true)
 fi
-[ -z "${CANDIDATES}" ] && allow
+[ "${#CANDIDATES[@]}" -eq 0 ] && allow
 
-BASE_LIST=$(git ls-tree -r --name-only origin/development -- packages/db/migrations 2>/dev/null || true)
+BASE_LIST=()
+while IFS= read -r -d '' FILE; do
+  BASE_LIST+=("${FILE}")
+done < <(git ls-tree -r -z --name-only origin/development -- packages/db/migrations 2>/dev/null || true)
+[ "${#BASE_LIST[@]}" -eq 0 ] && allow
 
-while IFS= read -r ADDED; do
-  [ -z "${ADDED}" ] && continue
-  PREFIX=$(printf '%s' "$ADDED" | grep -oE '[0-9]{4}' | head -1 || true)
-  [ -z "${PREFIX}" ] && continue
-  BASE=$(printf '%s' "$BASE_LIST" | grep -E "^packages/db/migrations/${PREFIX}_" | head -1 || true)
-  [ -z "${BASE}" ] && continue
-  if [ "${ADDED}" = "${BASE}" ]; then
-    continue
-  fi
-  deny "BLOCKED: migration prefix ${PREFIX} already exists on origin/development (${BASE}). Take the next prefix from git ls-tree origin/development -- packages/db/migrations, update _journal.json, and commit."
-done <<EOF
-${CANDIDATES}
-EOF
+for ADDED in "${CANDIDATES[@]}"; do
+  [[ $ADDED =~ $MIGRATION_RE ]] || continue
+  PREFIX="${BASH_REMATCH[1]}"
+  for BASE in "${BASE_LIST[@]}"; do
+    [[ $BASE == "packages/db/migrations/${PREFIX}_"* ]] || continue
+    # Only the first lane file with this prefix counts, as before.
+    [ "${ADDED}" = "${BASE}" ] && break
+    deny "BLOCKED: migration prefix ${PREFIX} already exists on origin/development (${BASE}). Take the next prefix from git ls-tree origin/development -- packages/db/migrations, update _journal.json, and commit."
+  done
+done
 
 allow

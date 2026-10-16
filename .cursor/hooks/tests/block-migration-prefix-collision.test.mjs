@@ -46,6 +46,25 @@ function makeLaneWith0009() {
   return cwd;
 }
 
+/**
+ * A scratch repo whose origin/development holds one migration. quotePath is forced on so a
+ * machine-wide core.quotePath=false cannot hide a non-ASCII name from the test.
+ * @param {string} baseName
+ */
+function makeLaneWith(baseName) {
+  const cwd = mkdtempSync(join(tmpdir(), "kc-migration-prefix-"));
+  execFileSync("git", ["init"], { cwd, encoding: "utf8" });
+  execFileSync("git", ["config", "core.quotePath", "true"], { cwd });
+  mkdirSync(join(cwd, "packages/db/migrations"), { recursive: true });
+  writeFileSync(join(cwd, "packages/db/migrations", baseName), "-- lane\n");
+  execFileSync("git", ["add", "packages/db/migrations"], { cwd });
+  execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "lane"], {
+    cwd,
+  });
+  execFileSync("git", ["update-ref", "refs/remotes/origin/development", "HEAD"], { cwd });
+  return cwd;
+}
+
 test("allows git status", () => {
   const result = runHook(process.cwd(), "git status");
   assert.equal(result.permission, "allow");
@@ -96,6 +115,55 @@ test("denies git add of the migrations directory when the worktree has a collidi
     const result = runHook(cwd, "git add packages/db/migrations");
     assert.equal(result.permission, "deny");
     assert.match(result.message, /0009/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("denies a non-ASCII migration in the worktree that collides with the lane", () => {
+  const cwd = makeLaneWith("9999_base.sql");
+  try {
+    writeFileSync(join(cwd, "packages/db/migrations/9999_æble.sql"), "-- collide\n");
+    const result = runHook(cwd, "git add packages/db/migrations");
+    assert.equal(result.permission, "deny");
+    assert.equal(result.status, 2);
+    assert.match(result.message, /9999/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("denies a migration that collides with a non-ASCII migration on the lane", () => {
+  const cwd = makeLaneWith("9999_æble.sql");
+  try {
+    writeFileSync(join(cwd, "packages/db/migrations/9999_base.sql"), "-- collide\n");
+    const result = runHook(cwd, "git add packages/db/migrations");
+    assert.equal(result.permission, "deny");
+    assert.equal(result.status, 2);
+    assert.match(result.message, /9999/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("denies a named non-ASCII migration that collides with the lane", () => {
+  const cwd = makeLaneWith("9999_base.sql");
+  try {
+    const result = runHook(cwd, "git add packages/db/migrations/9999_æble.sql");
+    assert.equal(result.permission, "deny");
+    assert.match(result.message, /9999/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("allows a non-ASCII migration with a free prefix", () => {
+  const cwd = makeLaneWith("9999_base.sql");
+  try {
+    writeFileSync(join(cwd, "packages/db/migrations/9998_æble.sql"), "-- free\n");
+    const result = runHook(cwd, "git add packages/db/migrations");
+    assert.equal(result.permission, "allow");
+    assert.equal(result.status, 0);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
