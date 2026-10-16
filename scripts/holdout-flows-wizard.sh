@@ -323,6 +323,24 @@ stage_3() {
   pause "Does the line say 'cli reads'? If it says 'cli denied', approve the token in $ORG first. Press Enter."
 }
 
+# Decides from the hook's status lines whether gh now holds the .env token. Returns 1 with the fix.
+stage4_hook_verdict() {
+  case "$1" in
+    *"gh re-logged in from .env"*) ;;
+    *"gh logged in from .env"*) ;;
+    *"gh auth OK (kept the stored login)"*)
+      warn "The hook kept the old gh login, so the new GH_TOKEN never reached gh."
+      warn "Set GH_LOGIN_FROM_ENV=1 in $HARNESS_MAIN/.env (a setting, not a secret; bb-harness only),"
+      warn "then run --from 4 again. Nothing is revoked yet."
+      return 1 ;;
+    *"gh auth OK"*) say "  gh already holds the .env token (a rerun after a successful rotation)." ;;
+    *)
+      warn "The hook did not say gh was logged in from .env. Do not revoke the old token."
+      warn "Set GH_LOGIN_FROM_ENV=1 in $HARNESS_MAIN/.env, then run --from 4 again."
+      return 1 ;;
+  esac
+}
+
 stage_4() {
   harness_or_stop 4
   stage "bb-harness — a GH_TOKEN that selects kit-collective only"
@@ -331,12 +349,6 @@ stage_4() {
   warn "CLI gave no usable answer)' and Milestone scenarios cannot read the Holdout. If a milestone"
   warn "is about to be judged, stop here and run --from 4 after KIT-366 lands."
   confirm "Go on with stage 4 now?" || { warn "stopped before stage 4"; finish; exit 0; }
-  if ! grep -qE '^(export )?GH_LOGIN_FROM_ENV=["'\'']?1["'\'']?$' "$HARNESS_MAIN/.env" 2>/dev/null; then
-    warn "$HARNESS_MAIN/.env has no GH_LOGIN_FROM_ENV=1 line. Without it .bb-env-setup.sh keeps the"
-    warn "old gh login and the new GH_TOKEN would never reach gh. Add the line GH_LOGIN_FROM_ENV=1"
-    warn "to that file (a setting, not a secret; bb-harness only), then run --from 4 again."
-    exit 1
-  fi
   say "The bb-harness GH_TOKEN today is a classic token with the repo scope, which reads every"
   say "repo of $ORG, the Holdout included. Replace it with a fine-grained one:"
   step "$new_token_page"
@@ -353,9 +365,14 @@ stage_4() {
   say "gh does not need to be logged out first. .bb-env-setup.sh logs gh in again from the new GH_TOKEN in the"
   say ".env whenever the token gh stores differs (it needs GH_LOGIN_FROM_ENV=1 in that .env;"
   say "a GH_TOKEN in this shell's env never replaces the stored login, so it runs without one)."
-  say "Expect 'gh re-logged in from .env'. 'gh auth OK (kept the stored login)' means the flag is missing."
+  say "Expect 'gh re-logged in from .env'. A rerun after a successful rotation shows 'gh auth OK'."
+  say "'gh auth OK (kept the stored login)' means GH_LOGIN_FROM_ENV=1 is missing: the wizard stops there."
   confirm "Run the hook so gh logs in again from the new GH_TOKEN?" || { warn "skipped"; exit 1; }
-  (cd "$HARNESS_MAIN" && env -u GH_TOKEN -u GITHUB_TOKEN bash .bb-env-setup.sh)
+  local hook_out
+  hook_out="$(cd "$HARNESS_MAIN" && env -u GH_TOKEN -u GITHUB_TOKEN bash .bb-env-setup.sh)" || { printf '%s\n' "$hook_out"; warn "The hook failed: fix what it names, then run --from 4 again."; exit 1; }
+  printf '%s\n' "$hook_out"
+  # The hook is the one reader of .env: its status lines (no secret) decide, not a second parser here.
+  stage4_hook_verdict "$hook_out" || exit 1
   env -u GH_TOKEN -u GITHUB_TOKEN gh auth status -h github.com || { warn "gh is not logged in"; exit 1; }
   say "Checking that the stored token reads $OWNER_REPO before the old one goes:"
   local seen
@@ -383,7 +400,7 @@ stage_5() {
   if env -u GH_TOKEN -u GITHUB_TOKEN node scripts/scenarios.mjs access; then
     say "   ✓ Paste that line to the KIT-366 session (it goes under Evidence on the issue)."
   else
-    warn "   Not the split yet. 'ambient reads': gh still has the old token (stage 4's re-login did not run) or it"
+    warn "   Not the split yet. 'ambient reads': gh still has the old token (stage 4's re-login did not happen) or it"
     warn "   is not revoked. 'cli unset' or 'cli denied': stage 3. 'UNKNOWN: ... 401/403': a revoked"
     warn "   token, a missing permission or a rate limit on the side it names; nothing is proven."
   fi
