@@ -345,11 +345,21 @@ stage_4() {
   pause "Token copied? Press Enter."
   request_secret GH_TOKEN
   say "gh keeps the old token in its credential store until it logs out; .bb-env-setup.sh logs"
-  say "in again from the new GH_TOKEN in the .env (it logs in only when gh is logged out)."
+  say "in again from the new GH_TOKEN in the .env (it logs in only when gh is logged out, and a"
+  say "GH_TOKEN in this shell's env would win over the .env, so it runs without one)."
   confirm "Log gh out and back in from the new GH_TOKEN?" || { warn "skipped"; exit 1; }
   env -u GH_TOKEN -u GITHUB_TOKEN gh auth logout -h github.com || true
-  (cd "$HARNESS_MAIN" && bash .bb-env-setup.sh)
+  (cd "$HARNESS_MAIN" && env -u GH_TOKEN -u GITHUB_TOKEN bash .bb-env-setup.sh)
   env -u GH_TOKEN -u GITHUB_TOKEN gh auth status -h github.com || { warn "gh is not logged in"; exit 1; }
+  say "Checking that the stored token reads $OWNER_REPO before the old one goes:"
+  local seen
+  seen="$(env -u GH_TOKEN -u GITHUB_TOKEN gh api "repos/$OWNER_REPO" --jq .full_name)" || seen=""
+  if [[ "$seen" != "$OWNER_REPO" ]]; then
+    warn "The new GH_TOKEN cannot read $OWNER_REPO (approval pending in $ORG, or the repo is not selected)."
+    warn "Do not revoke the old token. Fix the new one, then run --from 4 again."
+    exit 1
+  fi
+  say "  ✓ $seen"
   say "Now revoke the old classic token, so it reads nothing anywhere:"
   open_url "https://github.com/settings/tokens"
   step "Find the classic token bb-harness used (scope repo) and Delete it."
@@ -360,19 +370,22 @@ stage_4() {
 stage_5() {
   harness_or_stop 5
   stage "bb-harness — prove the split"
-  say "1. The gh login cannot read the Holdout; the CLI's token can. Expect exit 0 and"
-  say "   'SCENARIOS access: ambient denied, cli reads':"
-  if node scripts/scenarios.mjs access; then
+  note "Every check runs without GH_TOKEN in its env, so it sees the gh login a new thread gets,"
+  note "not a stale token this shell may still hold."
+  say "1. The gh login gets 404 on the Holdout repo and its artifacts; the CLI's token reads both."
+  say "   Expect exit 0 and 'SCENARIOS access: ambient denied, cli reads':"
+  if env -u GH_TOKEN -u GITHUB_TOKEN node scripts/scenarios.mjs access; then
     say "   ✓ Paste that line to the KIT-366 session (it goes under Evidence on the issue)."
   else
     warn "   Not the split yet. 'ambient reads': gh still has the old token (stage 4's logout) or it"
-    warn "   is not revoked. 'cli unset' or 'cli denied': stage 3."
+    warn "   is not revoked. 'cli unset' or 'cli denied': stage 3. 'UNKNOWN: ... 401/403': a revoked"
+    warn "   token, a missing permission or a rate limit on the side it names; nothing is proven."
   fi
   say "2. The fixture titles through the CLI (expect exit 0, 2 Scenarios):"
-  node scripts/scenarios.mjs titles --project "Holdout Scenarios" --milestone Fixture || warn "exit $?: see docs/agents/scenarios.md"
+  env -u GH_TOKEN -u GITHUB_TOKEN node scripts/scenarios.mjs titles --project "Holdout Scenarios" --milestone Fixture || warn "exit $?: see docs/agents/scenarios.md"
   say "3. kit-collective with the new GH_TOKEN (expect a PR number or nothing, and the workflow count):"
-  gh pr list --repo "$OWNER_REPO" --limit 1 --json number --jq '.[].number' || warn "gh pr list failed: a missing permission in stage 4"
-  gh api "repos/$OWNER_REPO/actions/workflows" --jq '"workflows: " + (.total_count | tostring)' || warn "Actions read failed: stage 4"
+  env -u GH_TOKEN -u GITHUB_TOKEN gh pr list --repo "$OWNER_REPO" --limit 1 --json number --jq '.[].number' || warn "gh pr list failed: a missing permission in stage 4"
+  env -u GH_TOKEN -u GITHUB_TOKEN gh api "repos/$OWNER_REPO/actions/workflows" --jq '"workflows: " + (.total_count | tostring)' || warn "Actions read failed: stage 4"
   note "The next AFK developer run is the full check of the stage 4 permissions; watch it."
   pause "Press Enter to finish."
 }
