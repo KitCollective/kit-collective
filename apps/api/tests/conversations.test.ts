@@ -810,9 +810,14 @@ describe("Collection conversations /v1", () => {
       [awayBid.messageId, "F.C. København · 2023/24 · Ude", "pending", true],
       [homeBid.messageId, "F.C. København · 2023/24 · Hjemme", "pending", true],
     ]);
+    expect(items.map((item) => item.userJerseyId)).toEqual([awayJersey.id, homeJersey.id]);
     expect(items.map((item) => item.title)).toEqual([
       "Nyt bud på din trøje",
       "Nyt bud på din trøje",
+    ]);
+    expect((await listActivity(bidder)).map((item) => item.userJerseyId)).toEqual([
+      awayJersey.id,
+      homeJersey.id,
     ]);
     expect((await listActivity(bidder)).map((item) => item.title)).toEqual([
       "Dit bud afventer",
@@ -837,6 +842,7 @@ describe("Collection conversations /v1", () => {
       [awayBid.messageId, "F.C. København · 2023/24 · Ude", "pending"],
       [homeBid.messageId, "F.C. København · 2023/24 · Hjemme", "declined"],
     ]);
+    expect(afterDelete.map((item) => item.userJerseyId)).toEqual([awayJersey.id, null]);
   });
 
   it("serves the photo of an image message whose bytes sit under another Conversation id", async () => {

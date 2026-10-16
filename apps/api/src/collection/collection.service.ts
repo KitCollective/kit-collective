@@ -18,6 +18,7 @@ import {
   type CollectionFavorites,
   type CollectionJersey,
   type CollectionJerseys,
+  type CollectionJerseyUpdateResponse,
   type CollectionPeerJersey,
   type CollectionPeerJerseys,
   type CollectionRespondBidResponse,
@@ -45,6 +46,7 @@ import {
   collectionPrivatePatchSchema,
   collectionRespondBidRequestSchema,
   collectionRespondBidResponseSchema,
+  collectionSavePhotoSchema,
   collectionSaveRequestSchema,
   collectionSaveResponseSchema,
   collectionSendBidRequestSchema,
@@ -572,6 +574,7 @@ export class CollectionService {
         id: conversationMessage.id,
         conversationId: conversationMessage.conversationId,
         senderId: conversationMessage.senderId,
+        userJerseyId: conversationMessage.userJerseyId,
         bidAmountDkk: conversationMessage.bidAmountDkk,
         bidStatus: conversationMessage.bidStatus,
         createdAt: conversationMessage.createdAt,
@@ -649,6 +652,7 @@ export class CollectionService {
       return {
         id: row.id,
         conversationId: row.conversationId,
+        userJerseyId: row.userJerseyId,
         title: activityTitle(viewerIsOwner, row.bidStatus),
         kitLine,
         amountDkk: row.bidAmountDkk,
@@ -1160,6 +1164,52 @@ export class CollectionService {
         })),
       );
     }
+
+    return { jersey: await this.loadOwnJerseyOrThrow(userId, jerseyId) };
+  }
+
+  /**
+   * Adds one photo to a UserJersey the caller owns. The set after the add (existing photos plus
+   * the new one) must still pass the same role and cap rules as Save.
+   */
+  async addJerseyPhoto(
+    userId: string,
+    jerseyId: string,
+    rawBody: unknown,
+  ): Promise<CollectionJerseyUpdateResponse> {
+    const parsed = collectionSavePhotoSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+    const photo = parsed.data;
+
+    const [existing] = await this.db
+      .select({ id: userJersey.id })
+      .from(userJersey)
+      .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)))
+      .limit(1);
+    if (!existing) {
+      throw new NotFoundException("UserJersey not found");
+    }
+
+    const existingPhotos = await this.db
+      .select({ role: userJerseyPhoto.role, label: userJerseyPhoto.label })
+      .from(userJerseyPhoto)
+      .where(eq(userJerseyPhoto.userJerseyId, jerseyId));
+
+    const photoValidationError = validateJerseyPhotos([
+      ...existingPhotos.map((row) => ({ role: row.role, label: row.label ?? undefined })),
+      photo,
+    ]);
+    if (photoValidationError) {
+      throw new BadRequestException({ code: photoValidationError });
+    }
+
+    await this.persistPhotos(userId, jerseyId, [photo]);
+    await this.db
+      .update(userJersey)
+      .set({ updatedAt: new Date() })
+      .where(eq(userJersey.id, jerseyId));
 
     return { jersey: await this.loadOwnJerseyOrThrow(userId, jerseyId) };
   }

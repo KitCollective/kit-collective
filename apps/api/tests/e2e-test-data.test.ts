@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { identitySessionSchema } from "@kit/api-contract";
+import { collectionJerseysSchema, identitySessionSchema } from "@kit/api-contract";
 import {
   catalogLabel,
   collectionShortcut,
@@ -30,6 +30,9 @@ import {
   TEST_COLLECTOR_ID,
   TEST_DATA_CATALOG,
   TEST_PEER_ID,
+  TEST_SECOND_PEER_HANDLE,
+  TEST_SECOND_PEER_ID,
+  TEST_TWO_BIDDER_BIDS,
   TEST_UNANSWERED_BID,
 } from "../dist/e2e/test-data.fixture.js";
 import { applyTestData } from "../dist/e2e/test-data.js";
@@ -134,6 +137,8 @@ async function snapshot(db: Db, userIds: string[]) {
   };
 }
 
+const TEST_IDS = [TEST_COLLECTOR_ID, TEST_PEER_ID, TEST_SECOND_PEER_ID];
+
 const SNAPSHOT_KEYS = [
   "users",
   "jerseys",
@@ -220,28 +225,44 @@ describe("device-flow test data", () => {
       .where(eq(entitlement.userId, TEST_PEER_ID));
     expect(peerEntitlement).toMatchObject({ source: null, trialUsed: true });
 
-    // One Bud from the peer waits unanswered on the Collector's first jersey (KIT-286).
-    const bidThreads = await db.select().from(conversation);
-    expect(bidThreads).toHaveLength(1);
-    expect(bidThreads[0]).toMatchObject({ id: TEST_UNANSWERED_BID.conversationId });
-    expect(await db.select().from(conversationParticipant)).toHaveLength(2);
+    // Buds wait unanswered on the Collector's jerseys: one bidder on the first jersey (KIT-286),
+    // two different bidders on the second (KIT-287).
+    const bidThreads = await db.select().from(conversation).orderBy(asc(conversation.id));
+    expect(bidThreads.map((row) => row.id)).toEqual([
+      TEST_UNANSWERED_BID.conversationId,
+      TEST_TWO_BIDDER_BIDS[1]!.conversationId,
+    ]);
+    expect(await db.select().from(conversationParticipant)).toHaveLength(4);
     // The Bud, not the Conversation, carries the UserJersey (one Conversation per pair, KIT-295).
-    const bids = await db.select().from(conversationMessage);
-    expect(bids).toHaveLength(1);
+    const bids = await db.select().from(conversationMessage).orderBy(asc(conversationMessage.id));
+    expect(bids).toHaveLength(3);
+    expect(bids.every((bid) => bid.kind === "bid" && bid.bidStatus === "pending")).toBe(true);
     expect(bids[0]).toMatchObject({
+      id: TEST_UNANSWERED_BID.messageId,
       senderId: TEST_PEER_ID,
       userJerseyId: TEST_UNANSWERED_BID.jerseyId,
-      kind: "bid",
       bidAmountDkk: TEST_UNANSWERED_BID.amountDkk,
-      bidStatus: "pending",
     });
+    const twoBidderJerseyId = TEST_TWO_BIDDER_BIDS[0]!.jerseyId;
+    const onTwoBidderJersey = bids.filter((bid) => bid.userJerseyId === twoBidderJerseyId);
+    expect(onTwoBidderJersey.map((bid) => bid.senderId).sort()).toEqual(
+      [TEST_PEER_ID, TEST_SECOND_PEER_ID].sort(),
+    );
+    expect(twoBidderJerseyId).not.toBe(TEST_UNANSWERED_BID.jerseyId);
+    // The second bidder's Bud is the newer one.
+    const [newest] = [...onTwoBidderJersey].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
+    expect(newest?.senderId).toBe(TEST_SECOND_PEER_ID);
+    const [secondPeer] = await db.select().from(user).where(eq(user.id, TEST_SECOND_PEER_ID));
+    expect(secondPeer?.handle).toBe(TEST_SECOND_PEER_HANDLE);
   });
 
   it("is idempotent: a second run leaves the same rows", async () => {
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });
-    const first = await snapshot(db, [TEST_COLLECTOR_ID, TEST_PEER_ID]);
+    const first = await snapshot(db, TEST_IDS);
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });
-    const second = await snapshot(db, [TEST_COLLECTOR_ID, TEST_PEER_ID]);
+    const second = await snapshot(db, TEST_IDS);
 
     for (const key of SNAPSHOT_KEYS) {
       expect(stable(second[key])).toEqual(stable(first[key]));
@@ -250,7 +271,7 @@ describe("device-flow test data", () => {
 
   it("removes what a flow run left behind", async () => {
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });
-    const before = await snapshot(db, [TEST_COLLECTOR_ID, TEST_PEER_ID]);
+    const before = await snapshot(db, TEST_IDS);
 
     // What the flows leave behind (an added UserJersey, a bid thread), plus stray rows no flow
     // writes today (a favourite, a new Ønske), so the reset is proven against more than it needs.
@@ -301,18 +322,29 @@ describe("device-flow test data", () => {
       .where(eq(userJersey.id, peerJersey!.id));
 
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });
-    const after = await snapshot(db, [TEST_COLLECTOR_ID, TEST_PEER_ID]);
+    const after = await snapshot(db, TEST_IDS);
 
     for (const key of SNAPSHOT_KEYS) {
       expect(stable(after[key])).toEqual(stable(before[key]));
     }
-    // The flow's own Bud is gone; only the fixture's Conversation and unanswered Bud are left.
-    expect(await db.select({ id: conversation.id }).from(conversation)).toEqual([
-      { id: TEST_UNANSWERED_BID.conversationId },
-    ]);
-    expect(await db.select({ id: conversationMessage.id }).from(conversationMessage)).toEqual([
-      { id: TEST_UNANSWERED_BID.messageId },
-    ]);
+    // The flow's own Bud is gone; only the fixture's Conversations and unanswered Buds are left.
+    expect(
+      await db.select({ id: conversation.id }).from(conversation).orderBy(asc(conversation.id)),
+    ).toEqual(
+      [TEST_UNANSWERED_BID.conversationId, TEST_TWO_BIDDER_BIDS[1]!.conversationId].map((id) => ({
+        id,
+      })),
+    );
+    expect(
+      await db
+        .select({ id: conversationMessage.id })
+        .from(conversationMessage)
+        .orderBy(asc(conversationMessage.id)),
+    ).toEqual(
+      [TEST_UNANSWERED_BID.messageId, ...TEST_TWO_BIDDER_BIDS.map((bid) => bid.messageId)]
+        .sort()
+        .map((id) => ({ id })),
+    );
   });
 
   it("changes only the two test Collectors", async () => {
@@ -320,7 +352,7 @@ describe("device-flow test data", () => {
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });
     expect(await snapshot(db, [BYSTANDER_ID])).toEqual(before);
-    expect(await db.select({ id: user.id }).from(user)).toHaveLength(3);
+    expect(await db.select({ id: user.id }).from(user)).toHaveLength(4);
   });
 
   it("refuses when the test Collector's e-mail belongs to another Collector", async () => {
@@ -365,6 +397,27 @@ describe("device-flow test data", () => {
       expect(response.statusCode).toBeLessThan(300);
       const session = identitySessionSchema.parse(JSON.parse(response.body));
       expect(session.user.id).toBe(TEST_COLLECTOR_ID);
+
+      // KIT-287: one bidder on the first jersey (it opens the thread), two on the second (it
+      // opens Indbakke filtered to the jersey), the newest bidder's initial first.
+      const listed = await app.inject({
+        method: "GET",
+        url: "/v1/collection/jerseys",
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      });
+      const jerseys = collectionJerseysSchema.parse(JSON.parse(listed.body)).jerseys;
+      const oneBidder = jerseys.find((jersey) => jersey.id === TEST_UNANSWERED_BID.jerseyId);
+      expect(oneBidder).toMatchObject({
+        unansweredBidCount: 1,
+        unansweredBidderInitials: ["E"],
+        unansweredBidConversationId: TEST_UNANSWERED_BID.conversationId,
+      });
+      const twoBidders = jerseys.find((jersey) => jersey.id === TEST_TWO_BIDDER_BIDS[0]!.jerseyId);
+      expect(twoBidders).toMatchObject({
+        unansweredBidCount: 2,
+        unansweredBidderInitials: [TEST_SECOND_PEER_HANDLE[0]!.toUpperCase(), "E"],
+        unansweredBidConversationId: null,
+      });
     } finally {
       await app.close();
     }

@@ -1497,6 +1497,150 @@ describe("Collection /v1", () => {
     expect(await findOwnJersey(app, owner, ownerJersey.id)).toBeDefined();
   });
 
+  it("rejects unauthenticated photo add with 401", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/00000000-0000-0000-0000-000000000001/photos",
+      payload: { role: "back", source: "gallery", contentBase64: JPEG_BASE64 },
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("owner adds one photo to an existing jersey (owner)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "add-photo-owner@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+    expect(ownerJersey.photos).toHaveLength(1);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/collection/jerseys/${ownerJersey.id}/photos`,
+      headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+      payload: { role: "back", source: "camera", contentBase64: JPEG_BASE64 },
+    });
+    expect(response.statusCode).toBe(201);
+    const body = collectionJerseyUpdateResponseSchema.parse(JSON.parse(response.body));
+    expect(body.jersey.id).toBe(ownerJersey.id);
+    expect(body.jersey.photos).toHaveLength(2);
+    const added = body.jersey.photos.find((photo) => photo.role === "back");
+    expect(added?.source).toBe("camera");
+    expect(added?.objectKey.startsWith(`user/${owner.user.id}/`)).toBe(true);
+    expect(added?.objectKey.endsWith("/grid.jpg")).toBe(true);
+
+    const listed = await findOwnJersey(app, owner, ownerJersey.id);
+    expect(listed?.photos.map((photo) => photo.id)).toContain(added?.id);
+
+    const photoResponse = await app.inject({
+      method: "GET",
+      url: added!.photoUrl,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(photoResponse.statusCode).toBe(200);
+    expect(photoResponse.headers["content-type"]).toContain("image/jpeg");
+  });
+
+  it("adds an other-role photo with a label to an existing jersey (owner)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "add-photo-other@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    for (const label of ["Vaskemærke", "Lynlås"]) {
+      const response = await app.inject({
+        method: "POST",
+        url: `/v1/collection/jerseys/${ownerJersey.id}/photos`,
+        headers: { authorization: `Bearer ${owner.accessToken}` },
+        payload: { role: "other", source: "gallery", contentBase64: JPEG_BASE64, label },
+      });
+      expect(response.statusCode).toBe(201);
+    }
+
+    const listed = await findOwnJersey(app, owner, ownerJersey.id);
+    expect(listed?.photos.filter((photo) => photo.role === "other").map((p) => p.label)).toEqual([
+      "Vaskemærke",
+      "Lynlås",
+    ]);
+  });
+
+  it("returns 404 when adding a photo to another collector's or an unknown jersey (peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "add-photo-peer-owner@example.com");
+    const peer = await registerSession(app, "add-photo-peer@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    for (const jerseyId of [ownerJersey.id, "00000000-0000-4000-8000-000000000999"]) {
+      const response = await app.inject({
+        method: "POST",
+        url: `/v1/collection/jerseys/${jerseyId}/photos`,
+        headers: { authorization: `Bearer ${peer.accessToken}` },
+        payload: { role: "back", source: "gallery", contentBase64: JPEG_BASE64 },
+      });
+      expect(response.statusCode).toBe(404);
+    }
+    expect((await findOwnJersey(app, owner, ownerJersey.id))?.photos).toHaveLength(1);
+  });
+
+  it("rejects a photo add past the ten-photo cap with too_many_photos (owner)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "add-photo-cap@example.com");
+    const saveResponse = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        photos: [
+          { role: "front", source: "gallery", contentBase64: JPEG_BASE64 },
+          ...Array.from({ length: 9 }, () => ({
+            role: "other" as const,
+            source: "gallery" as const,
+            contentBase64: JPEG_BASE64,
+          })),
+        ],
+      },
+    });
+    expect(saveResponse.statusCode).toBe(201);
+    const full = collectionSaveResponseSchema.parse(JSON.parse(saveResponse.body)).jersey;
+    expect(full.photos).toHaveLength(10);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/collection/jerseys/${full.id}/photos`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { role: "back", source: "gallery", contentBase64: JPEG_BASE64 },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body).code).toBe("too_many_photos");
+    expect((await findOwnJersey(app, owner, full.id))?.photos).toHaveLength(10);
+  });
+
+  it("rejects a second photo of a universal role and a label on a universal role (owner)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "add-photo-dup@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const duplicate = await app.inject({
+      method: "POST",
+      url: `/v1/collection/jerseys/${ownerJersey.id}/photos`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { role: "front", source: "gallery", contentBase64: JPEG_BASE64 },
+    });
+    expect(duplicate.statusCode).toBe(400);
+    expect(JSON.parse(duplicate.body).code).toBe("duplicate_universal_role");
+
+    const labelled = await app.inject({
+      method: "POST",
+      url: `/v1/collection/jerseys/${ownerJersey.id}/photos`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { role: "back", source: "gallery", contentBase64: JPEG_BASE64, label: "Bagside" },
+    });
+    expect(labelled.statusCode).toBe(400);
+    expect((await findOwnJersey(app, owner, ownerJersey.id))?.photos).toHaveLength(1);
+  });
+
   it("peer profile GET by handle returns public fields only (peer)", async () => {
     const fixture = await insertClubSeasonFixture();
     const owner = await registerSession(app, "peer-profile-owner@example.com");

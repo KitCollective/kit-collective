@@ -5,6 +5,7 @@ import { Sheet } from "@/components/catalog-ui";
 import { ListDangerRow, ListNavigateRow } from "@/components/profile-ui";
 import { Button } from "@/components/ui";
 import { jerseyDeleteConfirmCopy } from "@/jersey-detail/jersey-detail-view-model";
+import { THUMB_HEIGHT, THUMB_WIDTH } from "@/jersey-detail/jersey-photos";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -13,26 +14,32 @@ type MoreSheetProps = {
   visible: boolean;
   onDismiss: () => void;
   onModalHide: () => void;
-  onChangePhotos: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 };
 
-/** More: Tilføj eller skift fotos, and Slet trøjen as a `danger` row. */
+/**
+ * More: Rediger trøjen (the existing edit screen) and Slet trøjen as a `danger` row. Adding a
+ * photo is the thumb strip's tile, not a row here. The edit row has no leading icon (List row:
+ * `icon` is for own Profil home rows); the `danger` row keeps its icon because the lock's
+ * `danger` variant is "icon + label, never color alone".
+ */
 export function JerseyMoreSheet({
   visible,
   onDismiss,
   onModalHide,
-  onChangePhotos,
+  onEdit,
   onDelete,
 }: MoreSheetProps) {
   return (
     <Sheet visible={visible} title="Mere" onDismiss={onDismiss} onModalHide={onModalHide}>
-      <ListNavigateRow
-        title="Tilføj eller skift fotos"
-        icon="images-outline"
-        onPress={onChangePhotos}
+      <ListNavigateRow title="Rediger trøjen" onPress={onEdit} testID="jersey-detail-more-edit" />
+      <ListDangerRow
+        title="Slet trøjen"
+        icon="trash-outline"
+        onPress={onDelete}
+        testID="jersey-detail-more-delete"
       />
-      <ListDangerRow title="Slet trøjen" icon="trash-outline" onPress={onDelete} />
     </Sheet>
   );
 }
@@ -126,8 +133,8 @@ const styles = StyleSheet.create({
     gap: space.gapMd,
   },
   thumb: {
-    width: 56,
-    height: 70,
+    width: THUMB_WIDTH,
+    height: THUMB_HEIGHT,
     borderRadius: radius.sm,
     overflow: "hidden",
   },

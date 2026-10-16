@@ -1,10 +1,14 @@
 import type { CollectionJersey } from "@kit/api-contract";
+import { MAX_USER_JERSEY_PHOTOS } from "@kit/domain";
 import { describe, expect, it } from "vitest";
 import {
   buildJerseyDetailView,
+  canAddJerseyPhoto,
+  JERSEY_PHOTO_ADD_ERROR,
   jerseyDeleteConfirmCopy,
   jerseyPhotoCountLabel,
   jerseySettingsView,
+  replaceJerseyInList,
 } from "@/jersey-detail/jersey-detail-view-model";
 
 let counter = 0;
@@ -291,5 +295,39 @@ describe("photo count", () => {
   it("reads current/total", () => {
     expect(jerseyPhotoCountLabel(0, 2)).toBe("1/2");
     expect(jerseyPhotoCountLabel(1, 2)).toBe("2/2");
+  });
+});
+
+describe("add photo tile", () => {
+  it("is offered below the photo cap", () => {
+    expect(canAddJerseyPhoto(0)).toBe(true);
+    expect(canAddJerseyPhoto(MAX_USER_JERSEY_PHOTOS - 1)).toBe(true);
+  });
+
+  it("is not offered at or above the photo cap", () => {
+    expect(canAddJerseyPhoto(MAX_USER_JERSEY_PHOTOS)).toBe(false);
+    expect(canAddJerseyPhoto(MAX_USER_JERSEY_PHOTOS + 1)).toBe(false);
+  });
+
+  it("has a short Danish failure message", () => {
+    expect(JERSEY_PHOTO_ADD_ERROR).toBe("Fotoet kunne ikke tilføjes. Prøv igen.");
+  });
+});
+
+describe("replaceJerseyInList", () => {
+  it("swaps the matching jersey and keeps order and the others", () => {
+    const first = jersey();
+    const second = jersey();
+    const updated = { ...second, seasonLabel: "2024/25" };
+
+    const next = replaceJerseyInList([first, second], updated);
+
+    expect(next).toEqual([first, updated]);
+    expect(next[0]).toBe(first);
+  });
+
+  it("leaves the list alone when the jersey is not in it", () => {
+    const list = [jersey()];
+    expect(replaceJerseyInList(list, jersey())).toEqual(list);
   });
 });

@@ -17,6 +17,8 @@ const BID_ROW_HEIGHT = 48;
 const INITIAL_DISC = 26;
 const DISC_OVERLAP = 8;
 const ROW_MIN_HEIGHT = 56;
+/** The lock sets the bid text in label 15 (500); the type scale has no 15 step (design gap). */
+const BID_TEXT_FONT_SIZE = 15;
 
 type TitleBlockProps = {
   caption: string;
@@ -24,13 +26,21 @@ type TitleBlockProps = {
   season: string;
 };
 
-/** Caption line, then the club in display 32 with the season in numeral 44 on the same baseline. */
+/**
+ * Caption line, then the club in display 32 with the season in numeral 44 on the same baseline.
+ *
+ * Nothing here can clip, whatever the Dynamic Type size: the line wraps, so when the club and the
+ * season do not fit side by side the season drops to its own line instead of squeezing the club;
+ * the club has no line limit (it grows downwards) and the season may shrink to the column width,
+ * where a Text wraps rather than clips. The numeral keeps the taller line box
+ * `collectionFactsNumeralStyle` gives it, so the digit tops are not cut either.
+ */
 export function JerseyTitleBlock({ caption, title, season }: TitleBlockProps) {
   const theme = useTheme();
   const typography = useTypography();
 
   return (
-    <View style={styles.titleBlock}>
+    <View style={styles.titleBlock} testID="jersey-detail-title">
       <Text style={[typography.caption, { color: theme.contentSecondary }]}>{caption}</Text>
       <View
         style={styles.titleLine}
@@ -38,10 +48,7 @@ export function JerseyTitleBlock({ caption, title, season }: TitleBlockProps) {
         accessibilityRole="header"
         accessibilityLabel={`${title}, ${season}`}
       >
-        <Text
-          style={[typography.displayLarge, styles.titleText, { color: theme.contentPrimary }]}
-          numberOfLines={2}
-        >
+        <Text style={[typography.displayLarge, styles.titleText, { color: theme.contentPrimary }]}>
           {title}
         </Text>
         <Text
@@ -77,6 +84,7 @@ export function JerseyBidRow({ row, onPress }: JerseyBidRowProps) {
       accessibilityLabel={row.accessibilityLabel}
       accessibilityHint={row.accessibilityHint}
       onPress={onPress}
+      testID="jersey-detail-bid-row"
       style={({ pressed }) => [
         styles.bidRow,
         { backgroundColor: theme.fillSecondary, opacity: pressed ? 0.92 : 1 },
@@ -100,7 +108,11 @@ export function JerseyBidRow({ row, onPress }: JerseyBidRowProps) {
         ))}
       </View>
       <Text
-        style={[typography.label, styles.bidText, { color: theme.contentPrimary }]}
+        style={[
+          typography.label,
+          styles.bidText,
+          { fontSize: BID_TEXT_FONT_SIZE, color: theme.contentPrimary },
+        ]}
         numberOfLines={1}
       >
         {row.text}
@@ -118,10 +130,7 @@ export function JerseyBidRow({ row, onPress }: JerseyBidRowProps) {
   );
 }
 
-/**
- * Player row. Read-only in KIT-287 (editing arrives with the next issue), so there is no
- * chevron yet: a chevron on a row that does nothing would lie.
- */
+/** Player row. No chevron: a chevron on a row that does nothing would lie. */
 export function JerseyPlayerRow({ row }: { row: PlayerRowView }) {
   const theme = useTheme();
   const typography = useTypography();
@@ -130,6 +139,7 @@ export function JerseyPlayerRow({ row }: { row: PlayerRowView }) {
     <View
       accessible
       accessibilityLabel={row.accessibilityLabel}
+      testID="jersey-detail-player-row"
       style={[styles.playerRow, { backgroundColor: theme.fillSecondary }]}
     >
       {row.kind === "player" ? (
@@ -156,7 +166,7 @@ export function JerseyPlayerRow({ row }: { row: PlayerRowView }) {
   );
 }
 
-/** Label-left / value-right List row. Read-only in KIT-287. */
+/** Label-left / value-right List row. No chevron: the row does nothing when pressed. */
 export function JerseyFactRow({ row, hairline }: { row: FactRowView; hairline: boolean }) {
   const theme = useTheme();
   const typography = useTypography();
@@ -165,6 +175,7 @@ export function JerseyFactRow({ row, hairline }: { row: FactRowView; hairline: b
     <View
       accessible
       accessibilityLabel={row.accessibilityLabel}
+      testID={`jersey-detail-fact-${row.key}`}
       style={[
         styles.factRow,
         hairline && {
@@ -173,12 +184,12 @@ export function JerseyFactRow({ row, hairline }: { row: FactRowView; hairline: b
         },
       ]}
     >
-      <Text style={[typography.body, { color: theme.contentPrimary }]}>{row.label}</Text>
+      <Text style={[typography.body, { color: theme.contentSecondary }]}>{row.label}</Text>
       <Text
         style={[
-          typography.body,
+          typography.label,
           styles.factValue,
-          { color: row.muted ? theme.contentMuted : theme.contentSecondary },
+          { color: row.muted ? theme.contentMuted : theme.contentPrimary },
         ]}
       >
         {row.value}
@@ -233,16 +244,17 @@ const styles = StyleSheet.create({
   },
   titleLine: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "baseline",
     justifyContent: "space-between",
-    gap: space.gapMd,
+    columnGap: space.gapMd,
+    rowGap: space.gapSm,
   },
   titleText: {
-    flex: 1,
     flexShrink: 1,
   },
   season: {
-    flexShrink: 0,
+    flexShrink: 1,
   },
   bidRow: {
     minHeight: BID_ROW_HEIGHT,

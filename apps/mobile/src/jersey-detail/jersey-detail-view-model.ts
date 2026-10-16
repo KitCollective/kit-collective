@@ -1,5 +1,10 @@
 import type { CollectionJersey } from "@kit/api-contract";
-import { JERSEY_CONDITION_LABELS_DA, JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
+import {
+  JERSEY_CONDITION_LABELS_DA,
+  JERSEY_SIZE_LABELS_DA,
+  KIT_TYPE_LABELS_DA,
+  MAX_USER_JERSEY_PHOTOS,
+} from "@kit/domain";
 
 /**
  * View logic for the own UserJersey detail (docs/design-system.md -> Own UserJersey detail).
@@ -231,4 +236,19 @@ export function jerseyDeleteConfirmCopy(jersey: CollectionJersey): JerseyDeleteC
 
 export function jerseyPhotoCountLabel(index: number, total: number): string {
   return `${index + 1}/${total}`;
+}
+
+/** The add-photo tile ends the thumb strip until the jersey holds the most photos it may. */
+export function canAddJerseyPhoto(photoCount: number): boolean {
+  return photoCount < MAX_USER_JERSEY_PHOTOS;
+}
+
+export const JERSEY_PHOTO_ADD_ERROR = "Fotoet kunne ikke tilføjes. Prøv igen.";
+
+/** The updated jersey takes the place of the one with the same id; order is kept. */
+export function replaceJerseyInList(
+  list: readonly CollectionJersey[],
+  updated: CollectionJersey,
+): CollectionJersey[] {
+  return list.map((item) => (item.id === updated.id ? updated : item));
 }

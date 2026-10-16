@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { CollectionJersey } from "@kit/api-contract";
 import type { RefObject } from "react";
 import {
+  ActivityIndicator,
   Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -23,9 +24,10 @@ type Photos = CollectionJersey["photos"];
 
 const PHOTO_ASPECT = 5 / 4;
 const CHROME_BUTTON = 44;
-const THUMB_WIDTH = 48;
-const THUMB_HEIGHT = 60;
+export const THUMB_WIDTH = 48;
+export const THUMB_HEIGHT = 60;
 const CURRENT_OUTLINE = 2;
+const COUNT_PILL_PADDING_VERTICAL = 4;
 
 type RoundButtonProps = {
   name: string;
@@ -114,7 +116,12 @@ export function JerseyPhotoPager({
         pointerEvents="box-none"
         style={[styles.chrome, { paddingTop: insets.top + space.insetSm }]}
       >
-        <RoundButton name="Tilbage" icon="arrow-back" onPress={onBack} />
+        <RoundButton
+          name="Tilbage"
+          icon="arrow-back"
+          onPress={onBack}
+          testID="jersey-detail-back"
+        />
         <RoundButton
           name="Mere"
           icon="ellipsis-horizontal"
@@ -127,6 +134,7 @@ export function JerseyPhotoPager({
         style={[styles.countPill, { backgroundColor: theme.surface }]}
         accessible
         accessibilityLabel={`Foto ${index + 1} af ${photos.length}`}
+        testID="jersey-detail-photo-count"
       >
         <Text style={[typography.monoSm, { color: theme.contentPrimary }]}>
           {jerseyPhotoCountLabel(index, photos.length)}
@@ -141,6 +149,10 @@ type JerseyThumbStripProps = {
   accessToken: string | null;
   index: number;
   onSelect: (index: number) => void;
+  /** False at the photo cap: the strip then ends without the add-photo tile. */
+  canAddPhoto: boolean;
+  /** True while a picked photo uploads: the tile shows a spinner and takes no taps. */
+  addingPhoto: boolean;
   onAddPhoto: () => void;
 };
 
@@ -150,6 +162,8 @@ export function JerseyThumbStrip({
   accessToken,
   index,
   onSelect,
+  canAddPhoto,
+  addingPhoto,
   onAddPhoto,
 }: JerseyThumbStripProps) {
   const theme = useTheme();
@@ -190,16 +204,29 @@ export function JerseyThumbStrip({
           </Pressable>
         );
       })}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Tilføj foto"
-        onPress={onAddPhoto}
-        hitSlop={space.gapSm}
-        testID="jersey-detail-add-photo"
-        style={[styles.thumb, styles.addTile, { backgroundColor: theme.fillSecondary }]}
-      >
-        <Ionicons name="add" size={24} color={theme.contentPrimary} accessibilityElementsHidden />
-      </Pressable>
+      {canAddPhoto ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Tilføj foto"
+          accessibilityState={{ busy: addingPhoto, disabled: addingPhoto }}
+          disabled={addingPhoto}
+          onPress={onAddPhoto}
+          hitSlop={space.gapSm}
+          testID="jersey-detail-add-photo"
+          style={[styles.thumb, styles.addTile, { backgroundColor: theme.fillSecondary }]}
+        >
+          {addingPhoto ? (
+            <ActivityIndicator color={theme.contentPrimary} />
+          ) : (
+            <Ionicons
+              name="add"
+              size={24}
+              color={theme.contentPrimary}
+              accessibilityElementsHidden
+            />
+          )}
+        </Pressable>
+      ) : null}
     </ScrollView>
   );
 }
@@ -225,8 +252,10 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: space.insetMd,
     bottom: space.insetMd,
-    minHeight: 28,
-    paddingHorizontal: space.insetSm + 2,
+    // The lock gives the count pill no padding: the smallest scale steps (8 and 4) around the
+    // 18 high monoSm line.
+    paddingHorizontal: space.insetSm,
+    paddingVertical: COUNT_PILL_PADDING_VERTICAL,
     borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",

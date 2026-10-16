@@ -1,0 +1,179 @@
+# KIT-287: the own UserJersey detail in its new composition (Revision 2026-10-10).
+#
+# design-sections: Own UserJersey detail, List row, Switch, Sheet, Number emblem, Banner, Chip, Inbox, Button
+#
+# FIXTURE THIS FLOW NEEDS (apps/api/src/e2e/test-data.fixture.ts), all owned by the Test Collector:
+# - FC København (...0101): two photos, one unanswered Bud from one bidder (e2e_peer), one thread.
+# - Brøndby IF (...0102): one photo, unanswered Buds from two bidders (e2e_peer and freja_e2e) in
+#   two threads, so its bid row opens Indbakke filtered to the jersey instead of one thread.
+# - AGF (...0104): private, one photo, no Bud. It is the jersey the flow adds a photo to and then
+#   deletes.
+#
+# The photo is added through the system photo picker; the simulator holds one photo, so the first
+# cell is it (as in regression/add-jersey.yaml). A single-select picker closes on that tap, so
+# there is no confirm tap: at the top right sits the detail's More button.
+#
+# Not shown here: the title block at the largest Dynamic Type size (AC 14). Nothing in .maestro
+# sets the simulator's content size and this slice adds no such infra. The title block cannot
+# clip by construction (the club and the season wrap onto separate lines), see
+# apps/mobile/src/jersey-detail/jersey-detail-rows.tsx.
+appId: app.kitcollective.mobile
+name: kit-287
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-287
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000101
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+# AC 1, 2: the photo at 4:5 with Back and More over it and the count pill (1/2), no dots, no
+# Tab bar; under it the thumb strip with the current thumb outlined and the trailing add tile.
+- takeScreenshot: kc__kit-287__01-photo-thumb-strip-and-add-tile
+# AC 3, 4, 8: the title block (caption, club in display, season in numeral on the same line), the
+# quiet bid row with ONE bidder under it, then the player row.
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-bid-row
+    centerElement: true
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-287__02-title-bid-row-and-player-row
+# AC 9, 10: the fact rows (label secondary, value primary, hairlines) and the two switch rows.
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-private
+    centerElement: true
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-287__03-fact-rows-and-switch-rows
+# AC 4: with one bidder the bid row opens that bidder's thread.
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-bid-row
+    direction: UP
+    centerElement: true
+- tapOn:
+    id: jersey-detail-bid-row
+- extendedWaitUntil:
+    visible:
+      id: bid-card
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-287__04-one-bidder-opens-the-thread
+# AC 5: with several bidders the bid row opens Indbakke filtered to the jersey (Aktivitet, the
+# Brøndby IF Buds only, a chip with a clear cross).
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 30000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000102
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-bid-row
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-bid-row
+    centerElement: true
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-287__05-several-bidders-bid-row
+- tapOn:
+    id: jersey-detail-bid-row
+- extendedWaitUntil:
+    visible:
+      id: inbox-jersey-filter
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-287__06-indbakke-filtered-to-the-jersey
+# AC 5: the chip's cross returns to the whole Indbakke.
+- tapOn:
+    id: inbox-jersey-filter
+- extendedWaitUntil:
+    notVisible:
+      id: inbox-jersey-filter
+    timeout: 10000
+# AC 10, 2: AGF is private, so Privat is on and the bidding switch is disabled with its helper.
+# Adding a photo through the tile: the system picker, then the count reads 2/2 on the new photo.
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000104
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000104
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-private
+    centerElement: true
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-287__07-private-on-disables-bidding
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-add-photo
+    direction: UP
+- tapOn:
+    id: jersey-detail-add-photo
+# The system photo picker has no stable ids: the simulator holds exactly one photo, the first cell.
+- waitForAnimationToEnd:
+    timeout: 8000
+- tapOn:
+    point: 16%,25%
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-photo-count
+      text: "Foto 2 af 2"
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-287__08-photo-added-count-2-of-2
+# AC 11: More holds Rediger trøjen and Slet trøjen (danger); the detail itself has no
+# destructive button.
+- tapOn:
+    id: jersey-detail-more
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-more-delete
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-287__09-more-sheet
+# AC 12: the confirmation shows the jersey and what happens to its photos and Buds.
+- tapOn:
+    id: jersey-detail-more-delete
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-delete-confirm
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-287__10-delete-confirmation
+# AC 13: after Slet trøjen the collector is back in Samling and the jersey is gone.
+- tapOn:
+    id: jersey-detail-delete-confirm
+- extendedWaitUntil:
+    visible:
+      id: collection-add
+    timeout: 30000
+- assertNotVisible:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000104
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-287__11-samling-without-the-jersey
+- stopRecording

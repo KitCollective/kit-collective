@@ -12,10 +12,19 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { patchJerseyBidding, patchJerseyPrivate } from "@/api/bidding";
-import { deleteUserJersey, fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
+import {
+  addUserJerseyPhoto,
+  deleteUserJersey,
+  fetchCollectionJerseys,
+  resolvePhotoUrl,
+} from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
 import { createEditCaptureSession } from "@/capture/captureSession";
 import { createSqliteCaptureSessionStore } from "@/capture/captureSessionSqliteStore";
+import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
+import { captureQualityForRole, readPreparedPhotoBase64 } from "@/capture/photoBytes";
+import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
+import { Banner } from "@/components/catalog-ui";
 import { formatThreadTime } from "@/components/thread-row";
 import { IconButton } from "@/components/ui";
 import {
@@ -29,7 +38,10 @@ import { JerseyDeleteConfirmSheet, JerseyMoreSheet } from "@/jersey-detail/jerse
 import {
   type BidRowTarget,
   buildJerseyDetailView,
+  canAddJerseyPhoto,
+  JERSEY_PHOTO_ADD_ERROR,
   jerseySettingsView,
+  replaceJerseyInList,
 } from "@/jersey-detail/jersey-detail-view-model";
 import { JerseyPhotoPager, JerseyThumbStrip } from "@/jersey-detail/jersey-photos";
 import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
@@ -45,6 +57,8 @@ const TAB_BAR_STYLE_VISIBLE = {
 };
 
 type PendingMoreAction = "edit" | "delete";
+
+const PICKED_PHOTO_ROLE = "other";
 
 export default function JerseyDetailScreen() {
   const { jerseyId } = useLocalSearchParams<{ jerseyId: string }>();
@@ -70,6 +84,10 @@ export default function JerseyDetailScreen() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [addingPhoto, setAddingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  // Set when a photo was just added: the pager jumps to the new (last) photo once it is rendered.
+  const jumpToNewPhoto = useRef(false);
 
   useLayoutEffect(() => {
     const tabNav = navigation.getParent();
@@ -179,6 +197,54 @@ export default function JerseyDetailScreen() {
     });
   };
 
+  // Samling's place-overview cache only refetches when the place goes live again: a jersey it
+  // holds gets its new photo list, so the tile and the count there stay true.
+  const syncCollectionCache = (updated: CollectionJersey) => {
+    const previous = readPlaceOverview("collection");
+    if (!previous) {
+      return;
+    }
+    writePlaceOverview("collection", {
+      ...previous,
+      jerseys: replaceJerseyInList(previous.jerseys, updated),
+      allJerseys: replaceJerseyInList(previous.allJerseys, updated),
+    });
+  };
+
+  const handleAddPhoto = async () => {
+    if (!accessToken || !jersey || addingPhoto) {
+      return;
+    }
+
+    setPhotoError(null);
+    try {
+      const uris = await pickGalleryPhotos(
+        { quality: captureQualityForRole(PICKED_PHOTO_ROLE) },
+        expoGalleryPickerAdapter,
+      );
+      const uri = uris?.[0];
+      if (!uri) {
+        return;
+      }
+
+      setAddingPhoto(true);
+      const contentBase64 = await readPreparedPhotoBase64(uri, PICKED_PHOTO_ROLE, "display");
+      const updated = await addUserJerseyPhoto(accessToken, jersey.id, {
+        role: PICKED_PHOTO_ROLE,
+        source: "gallery",
+        contentBase64,
+      });
+      jumpToNewPhoto.current = true;
+      setJersey(updated);
+      setList((current) => replaceJerseyInList(current, updated));
+      syncCollectionCache(updated);
+    } catch {
+      setPhotoError(JERSEY_PHOTO_ADD_ERROR);
+    } finally {
+      setAddingPhoto(false);
+    }
+  };
+
   // Samling keeps a place-overview cache that only refetches when the place goes live again;
   // drop the deleted jersey from it so Samling never shows it.
   const dropFromCollectionCache = (deletedId: string) => {
@@ -226,12 +292,10 @@ export default function JerseyDetailScreen() {
 
   const chooseMoreAction = (action: PendingMoreAction) => {
     setMoreOpen(false);
-    if (Platform.OS === "ios") {
-      pendingMoreAction.current = action;
-      return;
-    }
     pendingMoreAction.current = action;
-    runPendingMoreAction();
+    if (Platform.OS !== "ios") {
+      runPendingMoreAction();
+    }
   };
 
   const openBidTarget = (target: BidRowTarget) => {
@@ -239,8 +303,7 @@ export default function JerseyDetailScreen() {
       router.push(`/(tabs)/inbox/${target.conversationId}`);
       return;
     }
-    // Indbakke filtered to this jersey. The filter itself lives in Indbakke (outside KIT-287's
-    // write-scope); the route carries the jersey id for it.
+    // Several bidders: Indbakke opens filtered to this jersey (it reads the `jerseyId` param).
     router.push({ pathname: "/(tabs)/inbox", params: { jerseyId: target.jerseyId } });
   };
 
@@ -248,6 +311,20 @@ export default function JerseyDetailScreen() {
     setPhotoIndex(index);
     pagerRef.current?.scrollTo({ x: index * screenWidth, animated: true });
   };
+
+  const photoCount = jersey?.photos.length ?? 0;
+  useEffect(() => {
+    if (!jumpToNewPhoto.current || photoCount === 0) {
+      return;
+    }
+    jumpToNewPhoto.current = false;
+    const lastIndex = photoCount - 1;
+    setPhotoIndex(lastIndex);
+    // After the frame that lays out the new page, so the offset is not clamped to the old width.
+    requestAnimationFrame(() => {
+      pagerRef.current?.scrollTo({ x: lastIndex * screenWidth, animated: true });
+    });
+  }, [photoCount, screenWidth]);
 
   const view = useMemo(
     () => (jersey ? buildJerseyDetailView({ jersey, list, formatTime: formatThreadTime }) : null),
@@ -296,10 +373,13 @@ export default function JerseyDetailScreen() {
           accessToken={accessToken}
           index={photoIndex}
           onSelect={selectPhoto}
-          onAddPhoto={handleEdit}
+          canAddPhoto={canAddJerseyPhoto(jersey.photos.length)}
+          addingPhoto={addingPhoto}
+          onAddPhoto={() => void handleAddPhoto()}
         />
 
         <View style={styles.column}>
+          {photoError ? <Banner tone="danger" message={photoError} /> : null}
           <JerseyTitleBlock caption={view.caption} title={view.title} season={view.season} />
 
           {bidRow ? (
@@ -336,7 +416,7 @@ export default function JerseyDetailScreen() {
           setMoreOpen(false);
         }}
         onModalHide={runPendingMoreAction}
-        onChangePhotos={() => chooseMoreAction("edit")}
+        onEdit={() => chooseMoreAction("edit")}
         onDelete={() => chooseMoreAction("delete")}
       />
 
