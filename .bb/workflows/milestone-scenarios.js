@@ -31,7 +31,7 @@ export const meta = {
   },
   phases: [
     { title: "Session", detail: "harness check, run log start, scenarios check, Scenarios pending" },
-    { title: "Flows", detail: "the Scenario judge writes one Device flow per Scenario; each becomes a run artifact" },
+    { title: "Flows", detail: "the Scenario judge writes one Device flow per Scenario; each becomes a run artifact in the Holdout repo" },
     { title: "Hosted runs", detail: "runsPerScenario hosted Device flow runs per Scenario, waited for in slices" },
     { title: "Judge runs", detail: "a fresh Scenario judge per run, from the screenshots and the recording only" },
     { title: "Score", detail: "scenarios.mjs status --verdicts sets Scenarios to success or failure" },
@@ -45,7 +45,10 @@ export const meta = {
 // after a pattern check, its slugs, the PR number, the checked sha, the nonce, run ids, fixed codes).
 // No agent text enters a command. The Scenario judge is the only role that reads the Holdout, and it
 // does so through `scenarios.mjs read` (logged). Its flow text goes into a gitignored file the
-// scenarios CLI reads and deletes; it never passes through this script. Its run verdicts reach the
+// scenarios CLI reads and deletes; it never passes through this script. The CLI sends it to the
+// Holdout repo's producer with the Holdout-only SCENARIOS_GH_TOKEN, and the hosted run downloads it
+// from there (KIT-366), so no kit-collective run, log or artifact holds it. This script names no
+// repo: the CLI holds both. Its run verdicts reach the
 // score as `s`/`n` tokens through `pick`; its sentences go into the output and, through files the
 // scenarios CLI reads, into the failure issues `report` files.
 // The `Scenarios` status: once pending is posted, every return goes through `finish()` (error) or the
@@ -421,7 +424,7 @@ for (let i = 1; i <= n; i += 1) {
       `1. Read the milestone's Scenarios with exactly this command; run it alone, with nothing chained to it (no pipe, no &&, no redirect): \`${readCmd}\`. Use Scenario ${i} only.`,
       `2. Write it as one Maestro flow to \`.factory/scenario-flows/${name}.yaml\` and nowhere else. Learn the syntax from apps/mobile/.maestro/slices/TEMPLATE.yaml.example, apps/mobile/.maestro/subflows/ and docs/agents/device-flows.md. The hosted run puts the file in apps/mobile/.maestro/external/, so a subflow is \`../subflows/sign-in.yaml\`. The file starts with \`appId: app.kitcollective.mobile\` and \`name: ${name}\`, sets up the Starting situation, does the Actions the way a Collector would (by testID where one exists, else by visible text), records with \`startRecording: kc__${name}\`, and takes a \`takeScreenshot\` after every Action, named \`kc__${name}__NN-what-it-shows\` (NN counting up from 01), and one more at every point where the End state, or the lack of it, can be seen. Prefer screenshots to assertions: the run judge decides from them, and a flow that stops early leaves only the screenshots taken before it stopped.`,
       `When the flow picks a photo from the photo library, its header names the photos the Simulator holds, in a line \`# simulator-photos: <name>, <name>, ...\` chosen from apps/mobile/.maestro/fixtures/photos/catalog.json by what the flow must show (README.md there); without that line the library holds one drawn shirt.`,
-      "3. Never commit, push or copy the flow, and never put the Scenario's text in your reply, a commit, a command or any other file. The scenarios CLI sends the file to the hosted run and deletes it.",
+      "3. Never commit, push or copy the flow, and never put the Scenario's text in your reply, a commit, a command or any other file. The scenarios CLI sends the file to the Holdout repo, from where the hosted run takes it, and deletes it.",
       "Return outcome written (the file exists) or cannot (the Scenario cannot be expressed as a flow of this app), one sentence that does not retell the Scenario, and your own thread id ($BB_THREAD_ID) in threadId.",
     ].join("\n"),
     `flow-writer:${i}`,
