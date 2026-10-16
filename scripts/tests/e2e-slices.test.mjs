@@ -15,7 +15,10 @@ import {
 
 const MAESTRO = join(fileURLToPath(new URL("../..", import.meta.url)), "apps/mobile/.maestro");
 const PHOTOS = join(MAESTRO, "fixtures/photos");
-const WORKFLOWS = join(fileURLToPath(new URL("../..", import.meta.url)), ".github/workflows");
+const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+const WORKFLOWS = join(REPO_ROOT, ".github/workflows");
+/** The Holdout producer's source (KIT-366): pushed to the Holdout repo, never run from here. */
+const PRODUCER = join(REPO_ROOT, "docs/agents/holdout-scenario-flow.yml");
 
 // simulator_photos() cut out of simulator.sh: the rest of the file needs xcrun.
 function simulatorPhotos(env) {
@@ -130,8 +133,8 @@ function runBlocks(yaml) {
 }
 
 test("dispatch inputs reach the Device flow workflows' shell only through env", () => {
-  for (const file of ["device-flows.yml", "scenario-flow.yml"]) {
-    const blocks = runBlocks(readFileSync(join(WORKFLOWS, file), "utf8"));
+  for (const file of [join(WORKFLOWS, "device-flows.yml"), PRODUCER]) {
+    const blocks = runBlocks(readFileSync(file, "utf8"));
     assert.ok(blocks.length > 0, `${file} has run steps`);
     for (const block of blocks) {
       assert.doesNotMatch(
@@ -141,6 +144,58 @@ test("dispatch inputs reach the Device flow workflows' shell only through env", 
       );
     }
   }
+});
+
+/** The `- name:` steps of a workflow, each as its text, in order. */
+function steps(yaml) {
+  return yaml.split(/\n(?=\s*- (?:name|uses):)/).slice(1);
+}
+
+test("no producer runs in kit-collective: the flow's text never enters this repo's runs (KIT-366)", () => {
+  assert.ok(!existsSync(join(WORKFLOWS, "scenario-flow.yml")));
+  const producer = readFileSync(PRODUCER, "utf8");
+  assert.match(producer, /^on:\n {2}workflow_dispatch:\n/m);
+  assert.doesNotMatch(producer, /pull_request/);
+  assert.match(producer, /retention-days: 1\n/);
+  assert.match(producer, /name: scenario-flow-\$\{\{ inputs\.name \}\}/);
+});
+
+test("an artifact run downloads the flow from the Holdout repo with SCENARIO_FLOWS_TOKEN only", () => {
+  const yaml = readFileSync(join(WORKFLOWS, "device-flows.yml"), "utf8");
+  const download = steps(yaml).find((step) => step.includes("actions/download-artifact"));
+  assert.ok(download, "device-flows.yml has a download step");
+  assert.match(download, /repository: \$\{\{ steps\.holdout\.outputs\.repo \}\}/);
+  assert.match(download, /github-token: \$\{\{ secrets\.SCENARIO_FLOWS_TOKEN \}\}/);
+  assert.match(download, /run-id: \$\{\{ inputs\.flow_run \}\}/);
+  // The repo is read from factory.config.json, never typed into the workflow.
+  const holdout = steps(yaml).find((step) => /id: holdout\n/.test(step));
+  assert.ok(holdout, "a step with id holdout");
+  assert.match(holdout, /scenarios\.holdoutRepo/);
+  // An empty secret stops the run in seconds, naming the wizard.
+  assert.match(yaml, /secrets\.SCENARIO_FLOWS_TOKEN[\s\S]*holdout-flows-wizard\.sh/);
+  assert.equal((yaml.match(/secrets\.SCENARIO_FLOWS_TOKEN/g) ?? []).length, 2);
+  assert.doesNotMatch(yaml, /actions: read/);
+});
+
+test("an artifact run keeps Maestro's console out of the log and uploads only the pruned evidence", () => {
+  const yaml = readFileSync(join(WORKFLOWS, "device-flows.yml"), "utf8");
+  const all = steps(yaml);
+  const flows = all.find((step) => /id: flows\n/.test(step));
+  assert.match(flows, /RUNNER_TEMP/);
+  assert.match(flows, /E2E_FLOWS" == artifact/);
+  const evidenceAt = all.findIndex((step) => step.includes("scripts/scenarios.mjs evidence --dir"));
+  assert.ok(evidenceAt > all.indexOf(flows), "evidence runs after the flows");
+  const uploads = all
+    .map((step, index) => ({ step, index }))
+    .filter(({ step }) => step.includes("actions/upload-artifact"));
+  assert.equal(uploads.length, 2);
+  const artifactUpload = uploads.find(({ step }) => step.includes("== 'artifact'"));
+  const otherUpload = uploads.find(({ step }) => step.includes("!= 'artifact'"));
+  assert.ok(artifactUpload && otherUpload, "one upload per kind of run");
+  assert.ok(artifactUpload.index > evidenceAt);
+  assert.match(artifactUpload.step, /steps\.evidence\.outcome == 'success'/);
+  assert.doesNotMatch(artifactUpload.step, /local-api\.log/);
+  assert.match(otherUpload.step, /local-api\.log/);
 });
 
 // The macOS runner and the approver's Mac run these under /bin/bash 3.2, which has none of these.

@@ -1,0 +1,65 @@
+name: Scenario flow
+
+# The SOURCE of the Holdout repo's producer workflow (KIT-366, ADR-0060). It does
+# not run here: `scripts/holdout-flows-wizard.sh` (stage 1) pushes this file as
+# `.github/workflows/scenario-flow.yml` onto the Holdout repo's `main`, the repo
+# named by `scenarios.holdoutRepo` in factory.config.json. Change it here, then run
+# that stage again.
+#
+# It turns a flow into a named run artifact of the Holdout repo, so the flow's
+# text never enters kit-collective: not a dispatch input, a log or an artifact
+# anyone who reads kit-collective can open. `node scripts/scenarios.mjs flow
+# --name <name>` dispatches it with SCENARIOS_GH_TOKEN; the hosted Device flows
+# run (`device-flows.yml`, flows: artifact) downloads `scenario-flow-<name>` from
+# here with the Actions secret SCENARIO_FLOWS_TOKEN. docs/agents/scenarios.md.
+#
+# The artifact holds one file, `<name>.yaml`, and is kept 1 day: the hosted runs
+# start within minutes of it (a Milestone scenarios run waits at most about 4
+# hours). The flow text is never printed to the log.
+
+run-name: ${{ inputs.name && format('Scenario flow {0}', inputs.name) || 'Scenario flow' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: Flow name, lower case letters, digits and hyphens (scenario-smoke)
+        required: true
+        type: string
+      flow:
+        description: The Maestro flow, the whole YAML file
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  flow:
+    name: Flow artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Write the flow
+        env:
+          NAME: ${{ inputs.name }}
+          FLOW: ${{ inputs.flow }}
+        run: |
+          if [[ ! "$NAME" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]]; then
+            echo "The name must be lower case letters, digits and hyphens, at most 63 characters." >&2
+            exit 2
+          fi
+          if ! grep -qE '^appId:[[:space:]]*app\.kitcollective\.mobile[[:space:]]*$' <<< "$FLOW"; then
+            echo "The flow has no 'appId: app.kitcollective.mobile' line; is it a Maestro flow for this app?" >&2
+            exit 2
+          fi
+          mkdir -p "$RUNNER_TEMP/scenario-flow"
+          printf '%s\n' "$FLOW" > "$RUNNER_TEMP/scenario-flow/$NAME.yaml"
+          echo "Wrote $NAME.yaml ($(wc -l < "$RUNNER_TEMP/scenario-flow/$NAME.yaml") lines)."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scenario-flow-${{ inputs.name }}
+          path: ${{ runner.temp }}/scenario-flow/${{ inputs.name }}.yaml
+          retention-days: 1
+          if-no-files-found: error
