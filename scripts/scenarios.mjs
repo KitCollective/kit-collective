@@ -44,6 +44,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -58,6 +59,7 @@ import {
   checkDraft,
   cleanSentence,
   ERROR_CODES,
+  FLOW_NAME,
   FULL_SHA,
   failureIssueBody,
   failureTitle,
@@ -701,7 +703,45 @@ const timedOut = (result) => result.error?.code === "ETIMEDOUT" || result.signal
 /** What a judge may see of a run: the step screenshots, the recording and (later) its stills. */
 const EVIDENCE_FILE = /^kc__[^/]*\.(png|mp4)$/;
 
-/** Deletes every downloaded file but the evidence (the API log and Maestro's own output included). */
+/**
+ * Maestro saves the screen at a failing step as `<flow>/screenshots/step-NNN-<command>-<text>.png`,
+ * a name that holds flow text. Renames each to `kc__<flow>__failure-NN.png` in the same folder,
+ * numbered in step order (the last is the screen at the failing step), so `pruneEvidence` keeps it.
+ * `<flow>` is the Maestro flow folder when it is a flow name, else `maestro`; never the file's text.
+ */
+function renameMaestroScreenshots(dir) {
+  const shots = readdirSync(dir, { recursive: true })
+    .map(String)
+    .filter(
+      (entry) =>
+        basename(dirname(entry)) === "screenshots" &&
+        entry.endsWith(".png") &&
+        !EVIDENCE_FILE.test(basename(entry)) &&
+        statSync(join(dir, entry), { throwIfNoEntry: false })?.isFile(),
+    )
+    .sort();
+  const counts = new Map();
+  for (const entry of shots) {
+    const folder = dirname(entry);
+    const flow = basename(dirname(folder));
+    const n = (counts.get(folder) ?? 0) + 1;
+    counts.set(folder, n);
+    const name = FLOW_NAME.test(flow) ? flow : "maestro";
+    renameSync(
+      join(dir, entry),
+      join(dir, folder, `kc__${name}__failure-${String(n).padStart(2, "0")}.png`),
+    );
+  }
+}
+
+/** True when a run's evidence holds at least one screenshot (a recording's stills do not count). */
+function hasScreenshot(dir) {
+  return readdirSync(dir, { recursive: true })
+    .map(String)
+    .some((entry) => basename(entry).startsWith("kc__") && entry.endsWith(".png"));
+}
+
+/** Deletes every downloaded file but the evidence (the API log and the rest of Maestro's output included). */
 function pruneEvidence(dir) {
   for (const entry of readdirSync(dir, { recursive: true }).map(String)) {
     const file = join(dir, entry);
@@ -858,7 +898,19 @@ async function wait({ runs, sha, timeout = 480 }) {
         ],
       });
     }
+    renameMaestroScreenshots(evidence);
     pruneEvidence(evidence);
+    // A failed run with no screen at all never reached the app (run 38801470319: the Maestro driver
+    // did not start). That is the runner's error, not a Collector's failure, so it is never judged.
+    if (outcomes.get(id) === "flow-failed" && !hasScreenshot(evidence)) {
+      rmSync(evidence, { recursive: true, force: true });
+      finish({
+        code: GATE_EXIT.closed,
+        lines: [
+          `ERROR: hosted-run-error: run ${id} failed with no screenshot in its evidence (Maestro or the Simulator did not start)`,
+        ],
+      });
+    }
     const frames = extractFrames(evidence, deadline);
     if (frames === null) {
       rmSync(evidence, { recursive: true, force: true });
