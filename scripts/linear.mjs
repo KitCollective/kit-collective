@@ -2,6 +2,9 @@
 // Linear access for agent sessions that have no KitCollective Linear MCP
 // (Claude Code Desktop, issue worktrees). Reads LINEAR_API_KEY from the
 // environment, or from the main checkout's gitignored .env, and never prints it.
+// With LINEAR_ACTOR=max it acts as the Max app instead: it requests a client-credentials
+// token (LINEAR_MAX_CLIENT_ID, LINEAR_MAX_CLIENT_SECRET, same two places) once per call,
+// sends it as a Bearer, and neither stores nor prints it. Without it, LINEAR_API_KEY as ever.
 //
 //   node scripts/linear.mjs workspace
 //   node scripts/linear.mjs issue KIT-272
@@ -51,7 +54,7 @@ import {
   parseProjectCommentArgs,
 } from "./lib/linear-issues.mjs";
 
-const API = "https://api.linear.app/graphql";
+const API = process.env.LINEAR_GRAPHQL_URL || "https://api.linear.app/graphql";
 
 function fail(message) {
   process.stderr.write(`linear: ${message}\n`);
@@ -65,22 +68,63 @@ function mainCheckoutRoot() {
   return dirname(common);
 }
 
-function apiKey() {
-  if (process.env.LINEAR_API_KEY) return process.env.LINEAR_API_KEY;
+function envValue(name) {
+  if (process.env[name]) return process.env[name];
   const envPath = join(mainCheckoutRoot(), ".env");
   if (existsSync(envPath)) {
     for (const line of readFileSync(envPath, "utf8").split("\n")) {
-      const match = /^\s*(?:export\s+)?LINEAR_API_KEY\s*=\s*(.*)\s*$/.exec(line);
+      const match = new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=\\s*(.*)\\s*$`).exec(line);
       if (match) return match[1].replace(/^(['"])(.*)\1$/, "$2");
     }
   }
-  return fail("LINEAR_API_KEY is not set and not in the main checkout's .env");
+  return null;
+}
+
+function apiKey() {
+  return (
+    envValue("LINEAR_API_KEY") ??
+    fail("LINEAR_API_KEY is not set and not in the main checkout's .env")
+  );
+}
+
+// Max's client-credentials token, asked for once per process and held in memory only.
+let maxToken = null;
+
+async function requestMaxToken() {
+  const clientId = envValue("LINEAR_MAX_CLIENT_ID");
+  if (!clientId) fail("LINEAR_MAX_CLIENT_ID is not set and not in the main checkout's .env");
+  const clientSecret = envValue("LINEAR_MAX_CLIENT_SECRET");
+  if (!clientSecret)
+    fail("LINEAR_MAX_CLIENT_SECRET is not set and not in the main checkout's .env");
+  const refused = () =>
+    fail(
+      "Linear refused the Max app token: check LINEAR_MAX_CLIENT_ID and LINEAR_MAX_CLIENT_SECRET",
+    );
+  const response = await fetch(new URL("/oauth/token", API), {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "grant_type=client_credentials&scope=read,write",
+  }).catch(() => null);
+  if (!response?.ok) return refused();
+  const payload = await response.json().catch(() => null);
+  return payload?.access_token ?? refused();
+}
+
+async function authorization() {
+  const actor = process.env.LINEAR_ACTOR;
+  if (!actor) return apiKey();
+  if (actor !== "max") fail(`LINEAR_ACTOR must be unset or "max"`);
+  maxToken ??= await requestMaxToken();
+  return `Bearer ${maxToken}`;
 }
 
 async function gql(query, variables = {}) {
   const response = await fetch(API, {
     method: "POST",
-    headers: { Authorization: apiKey(), "Content-Type": "application/json" },
+    headers: { Authorization: await authorization(), "Content-Type": "application/json" },
     body: JSON.stringify({ query, variables }),
   });
   const payload = await response.json().catch(() => null);
