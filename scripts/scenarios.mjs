@@ -31,10 +31,17 @@
  *   score --scenarios <n> --verdicts <i>:<s|n>:<run>,...   the score as one JSON line; exit 0 met, 1 not
  *   status --sha <sha> (--state pending | --state error [--code c] [--run id] | --scenarios n --verdicts list) [--dry-run]
  *       post the `Scenarios` commit status; the state of a verdict list is worked out, never passed in
- *   flow --name <name>          dispatch scenario-flow.yml with .factory/scenario-flows/<name>.yaml, wait for it
+ *   flow --name <name>          dispatch the Holdout repo's scenario-flow.yml with
+ *       .factory/scenario-flows/<name>.yaml, wait for it (the artifact is made in the Holdout, KIT-366)
  *   run --flow-run <id> --name <name>   dispatch device-flows.yml as an artifact run of that flow
  *   wait --runs <ids> --sha <sha> [--timeout s]   exit 3 while a run is unfinished; 0 with the evidence downloaded
+ *   evidence --dir <path>       on the hosted runner: keep only kc__ files of Maestro's output (KIT-366)
+ *   access                      prove the token split: the gh login cannot read the Holdout, the CLI can
  * None of them prints a flow's text or a Scenario's text. Exit codes and lines: docs/agents/scenarios.md.
+ *
+ * Every call to the Holdout repo (titles, read, put, check, report, flow) runs gh with GH_TOKEN set to
+ * SCENARIOS_GH_TOKEN (the env, else the main checkout's `.env`), a token that selects the Holdout only;
+ * unset (the approver's Mac), the gh login is used. Calls to kit-collective never carry it (KIT-366).
  */
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -63,6 +70,8 @@ import {
   FULL_SHA,
   failureIssueBody,
   failureTitle,
+  HOLDOUT_REF,
+  HOLDOUT_TOKEN_NAME,
   MAX_FLOW_CHARS,
   MILESTONE_USAGE,
   milestoneComment,
@@ -107,8 +116,59 @@ function readFromDir(dir, path) {
   }
 }
 
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** The main checkout's `.env` (a worktree shares it), or the file `KC_ENV_FILE` names (the tests). */
+function envFile() {
+  if (process.env.KC_ENV_FILE) {
+    return process.env.KC_ENV_FILE;
+  }
+  const common = spawnSync(
+    "git",
+    ["-C", ROOT, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+    { encoding: "utf8" },
+  );
+  return join(common.status === 0 ? dirname(common.stdout.trim()) : ROOT, ".env");
+}
+
+/** SCENARIOS_GH_TOKEN from the env, else from the main checkout's `.env` (as linear.mjs reads its key); or null. */
+let cachedToken;
+function holdoutToken() {
+  if (cachedToken === undefined) {
+    cachedToken = process.env[HOLDOUT_TOKEN_NAME] || tokenFromEnvFile();
+  }
+  return cachedToken;
+}
+
+function tokenFromEnvFile() {
+  try {
+    const assignment = new RegExp(`^\\s*(?:export\\s+)?${HOLDOUT_TOKEN_NAME}\\s*=\\s*(.*?)\\s*$`);
+    for (const line of readFileSync(envFile(), "utf8").split("\n")) {
+      const match = assignment.exec(line);
+      if (match) {
+        return match[1].replace(/^(['"])(.*)\1$/, "$2") || null;
+      }
+    }
+  } catch {
+    // No `.env`: no token.
+  }
+  return null;
+}
+
+/** The env of a gh call to the Holdout repo: GH_TOKEN is the Holdout token when there is one. */
+function holdoutEnv() {
+  const token = holdoutToken();
+  return token ? { ...process.env, GH_TOKEN: token } : process.env;
+}
+
+/** Appended to a failed Holdout call's cause when no Holdout token was used. */
+const tokenHint = () =>
+  holdoutToken() ? "" : ` (${HOLDOUT_TOKEN_NAME} is not set, so the gh login was used)`;
+
 function readFromGitHub(repo, path) {
-  const gh = (args) => spawnSync("gh", args, { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+  const env = holdoutEnv();
+  const gh = (args) =>
+    spawnSync("gh", args, { encoding: "utf8", env, maxBuffer: 16 * 1024 * 1024 });
   const file = gh([
     "api",
     "-H",
@@ -120,12 +180,12 @@ function readFromGitHub(repo, path) {
   }
   const failure = (result) => (result.error?.message ?? result.stderr).trim().split("\n")[0];
   if (file.error || !/HTTP 404/.test(file.stderr)) {
-    unknown(`cannot read ${repo}: ${failure(file)}`);
+    unknown(`cannot read ${repo}: ${failure(file)}${tokenHint()}`);
   }
   // A 404 on the file is "no Holdout file" only when the repo itself answers.
   const probe = gh(["api", `repos/${repo}`]);
   if (probe.status !== 0) {
-    unknown(`cannot read ${repo}: ${failure(probe)}`);
+    unknown(`cannot read ${repo}: ${failure(probe)}${tokenHint()}`);
   }
   return null;
 }
@@ -161,11 +221,11 @@ function putToGitHub(repo, path, text) {
       "-f",
       `content=${Buffer.from(text, "utf8").toString("base64")}`,
     ],
-    { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+    { encoding: "utf8", env: holdoutEnv(), maxBuffer: 16 * 1024 * 1024 },
   );
   if (result.status !== 0) {
     const cause = (result.error?.message ?? result.stderr).trim().split("\n")[0];
-    unknown(`cannot write ${repo}: ${cause}`);
+    unknown(`cannot write ${repo}: ${cause}${tokenHint()}`);
   }
 }
 
@@ -211,7 +271,6 @@ function logRead(path) {
 
 // ---- Milestone scenarios (KIT-353) ---------------------------------------------------------------
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 /** Where the judge writes flows and `wait` puts evidence: the checkout's gitignored `.factory/`. */
 const workDir = () => process.env.KC_SCENARIO_WORK || join(ROOT, ".factory");
 const pollMs = () => Number(process.env.KC_POLL_SECONDS ?? 15) * 1000;
@@ -229,10 +288,14 @@ const usageLine = (command, problem) => ({
 });
 const oneLine = (code, answer) => finish({ code, lines: [JSON.stringify(answer)] });
 
-/** gh, stopped after `timeoutMs` (default two minutes) so no call can hold a slice past its cap. */
-function ghCall(args, input, timeoutMs = 120000) {
+/**
+ * gh, stopped after `timeoutMs` (default two minutes) so no call can hold a slice past its cap.
+ * `env` is the process env (kit-collective, the gh login) unless a Holdout call passes holdoutEnv().
+ */
+function ghCall(args, input, timeoutMs = 120000, env = process.env) {
   return spawnSync("gh", args, {
     encoding: "utf8",
+    env,
     input,
     maxBuffer: 64 * 1024 * 1024,
     timeout: Math.max(1, timeoutMs),
@@ -240,10 +303,10 @@ function ghCall(args, input, timeoutMs = 120000) {
 }
 
 /** A gh api answer as JSON; exit 4 naming `what` when gh fails or answers something else. */
-function ghJson(args, what, deadline) {
+function ghJson(args, what, deadline, env = process.env) {
   // A read near the deadline still gets 5 s; the caller stops reading POLL_GRACE after it.
   const limit = deadline ? Math.max(5000, Math.min(60000, deadline - Date.now())) : undefined;
-  const result = ghCall(args, undefined, limit);
+  const result = ghCall(args, undefined, limit, env);
   if (result.status !== 0) {
     return unknown(`cannot read ${what}: ${firstLine(result.error?.message ?? result.stderr)}`);
   }
@@ -255,26 +318,31 @@ function ghJson(args, what, deadline) {
 }
 
 /**
- * Starts a workflow on the integration lane. The body goes on stdin, so the inputs (a flow's text)
- * never appear in a command line or a log; `return_run_details` asks GitHub for the run's id.
+ * Starts a workflow, by default in kit-collective on the integration lane. The body goes on stdin,
+ * so the inputs (a flow's text) never appear in a command line or a log; `return_run_details` asks
+ * GitHub for the run's id. The producer passes the Holdout repo, its ref and holdoutEnv().
  * @returns {number | null} the run id, or null when the answer has none
  */
-function dispatch(workflow, inputs) {
+function dispatch(workflow, inputs, { repo, ref, env } = {}) {
   const cfg = config();
-  const body = { ref: cfg.lanes.integration, inputs, return_run_details: true };
+  const body = { ref: ref ?? cfg.lanes.integration, inputs, return_run_details: true };
   const result = ghCall(
     [
       "api",
       "--method",
       "POST",
-      `repos/${cfg.github.ownerRepo}/actions/workflows/${workflow}/dispatches`,
+      `repos/${repo ?? cfg.github.ownerRepo}/actions/workflows/${workflow}/dispatches`,
       "--input",
       "-",
     ],
     JSON.stringify(body),
+    undefined,
+    env,
   );
   if (result.status !== 0) {
-    unknown(`cannot dispatch ${workflow}: ${firstLine(result.error?.message ?? result.stderr)}`);
+    unknown(
+      `cannot dispatch ${workflow}: ${firstLine(result.error?.message ?? result.stderr)}${repo ? tokenHint() : ""}`,
+    );
   }
   try {
     const id = JSON.parse(result.stdout || "{}").workflow_run_id;
@@ -612,9 +680,12 @@ async function report({ path, project, milestone, sha, scenarios, verdicts, dir,
   });
 }
 
-/** The producer run of one flow name, found by its run name (`Scenario flow <name>`, unique per name). */
+/**
+ * The producer run of one flow name in the Holdout repo, found by its run name (`Scenario flow
+ * <name>`, unique per name).
+ */
 async function producerRunByName(name) {
-  const repo = config().github.ownerRepo;
+  const repo = config().scenarios.holdoutRepo;
   for (let attempt = 1; attempt <= 6; attempt += 1) {
     const runs = ghJson(
       [
@@ -622,6 +693,8 @@ async function producerRunByName(name) {
         `repos/${repo}/actions/workflows/scenario-flow.yml/runs?event=workflow_dispatch&per_page=50`,
       ],
       "the Scenario flow runs",
+      undefined,
+      holdoutEnv(),
     );
     const found = (runs.workflow_runs ?? []).find(
       (r) => r.display_title === `Scenario flow ${name}`,
@@ -636,7 +709,11 @@ async function producerRunByName(name) {
   );
 }
 
-/** Turns the judge's flow file into the run artifact `scenario-flow-<name>` (scenario-flow.yml). */
+/**
+ * Turns the judge's flow file into the run artifact `scenario-flow-<name>` of the Holdout repo's
+ * producer (its scenario-flow.yml on HOLDOUT_REF), with the Holdout token: the flow's text and its
+ * artifact never touch kit-collective (KIT-366).
+ */
 async function flow({ name, timeout = 420 }) {
   const file = join(workDir(), "scenario-flows", `${name}.yaml`);
   let text;
@@ -658,11 +735,14 @@ async function flow({ name, timeout = 420 }) {
       ],
     });
   }
-  const id = dispatch("scenario-flow.yml", { name, flow: text }) ?? (await producerRunByName(name));
-  const repo = config().github.ownerRepo;
+  const repo = config().scenarios.holdoutRepo;
+  const env = holdoutEnv();
+  const id =
+    dispatch("scenario-flow.yml", { name, flow: text }, { repo, ref: HOLDOUT_REF, env }) ??
+    (await producerRunByName(name));
   const started = Date.now();
   for (;;) {
-    const run = ghJson(["api", `repos/${repo}/actions/runs/${id}`], `run ${id}`);
+    const run = ghJson(["api", `repos/${repo}/actions/runs/${id}`], `run ${id}`, undefined, env);
     if (run.status === "completed") {
       if (run.conclusion === "success") {
         oneLine(GATE_EXIT.open, { verdict: `SCENARIOS flow ${name}: run ${id}`, name, run: id });
@@ -929,7 +1009,100 @@ async function wait({ runs, sha, timeout = 480 }) {
   });
 }
 
-const MILESTONE_COMMANDS = { check, score, status, report, flow, run: runFlow, wait };
+/**
+ * On the hosted runner, before the upload (KIT-366): the same rename and prune `wait` does, so the
+ * artifact `device-flows-<sha>` of an artifact run holds only `kc__*.png|mp4`, never Maestro's
+ * flow-bearing output. A missing directory (Maestro never started) keeps nothing and is exit 0.
+ */
+function evidence({ dir }) {
+  if (!existsSync(dir)) {
+    oneLine(GATE_EXIT.open, {
+      verdict: `SCENARIOS evidence ${dir}: 0 files kept`,
+      kept: 0,
+      renamed: 0,
+    });
+  }
+  const count = (test) =>
+    readdirSync(dir, { recursive: true })
+      .map(String)
+      .filter((entry) => statSync(join(dir, entry), { throwIfNoEntry: false })?.isFile())
+      .filter(test).length;
+  const failures = () => count((entry) => /__failure-\d+\.png$/.test(entry));
+  const before = failures();
+  renameMaestroScreenshots(dir);
+  const renamed = failures() - before;
+  pruneEvidence(dir);
+  const kept = count(() => true);
+  oneLine(GATE_EXIT.open, {
+    verdict: `SCENARIOS evidence ${dir}: ${kept} file${kept === 1 ? "" : "s"} kept`,
+    kept,
+    renamed,
+  });
+}
+
+/**
+ * The proof of the token split (KIT-366). Each side, the gh login (as every agent thread on this
+ * machine reads GitHub) and SCENARIOS_GH_TOKEN, probes the Holdout repo itself (`repos/<holdout>`,
+ * which a token needs for its files) and its artifact list. A probe reads (exit 0 of gh) or is denied
+ * (HTTP 404, which is what GitHub answers a token that does not select a private repo); anything
+ * else (401 bad or revoked credentials, 403 a missing permission or a rate limit, a network error)
+ * proves nothing, so it is exit 4 naming the side and the cause. A side is `denied` only when both
+ * probes are 404; `reads` for the gh login when either reads, for the CLI only when both read.
+ * Open (exit 0) only for `ambient denied, cli reads`. Prints no artifact name and no repo name.
+ */
+function access() {
+  const repo = config().scenarios.holdoutRepo;
+  const probes = [
+    ["api", `repos/${repo}`, "--jq", ".private"],
+    ["api", `repos/${repo}/actions/artifacts?per_page=1`, "--jq", ".total_count"],
+  ];
+  const side = (env, who) =>
+    probes.map((args) => {
+      const result = ghCall(args, undefined, 60000, env);
+      if (result.status === 0) {
+        return "reads";
+      }
+      if (!result.error && /HTTP 404\b/.test(result.stderr)) {
+        return "denied";
+      }
+      const cause = firstLine(result.error?.message ?? result.stderr)
+        .split(repo)
+        .join("<holdout>");
+      return unknown(`cannot probe the Holdout with ${who}: ${cause}`);
+    });
+  const seen = side(process.env, "the gh login");
+  const ambient = seen.includes("reads") ? "reads" : "denied";
+  const cli = holdoutToken()
+    ? side(holdoutEnv(), HOLDOUT_TOKEN_NAME).every((p) => p === "reads")
+      ? "reads"
+      : "denied"
+    : "unset";
+  const open = ambient === "denied" && cli === "reads";
+  const why = open
+    ? ""
+    : cli === "unset"
+      ? `: ${HOLDOUT_TOKEN_NAME} is not set (env or the main checkout's .env)`
+      : ambient === "reads"
+        ? ": the gh login still reads the Holdout"
+        : `: ${HOLDOUT_TOKEN_NAME} gets 404 on the Holdout repo or its artifacts`;
+  oneLine(open ? GATE_EXIT.open : GATE_EXIT.closed, {
+    verdict: `SCENARIOS access: ambient ${ambient}, cli ${cli}${why}`,
+    ambient,
+    cli,
+  });
+}
+
+const MILESTONE_COMMANDS = {
+  check,
+  score,
+  status,
+  report,
+  flow,
+  run: runFlow,
+  wait,
+  evidence,
+  access,
+};
 
 const args = parseArgs(process.argv.slice(2));
 if (args.error) {

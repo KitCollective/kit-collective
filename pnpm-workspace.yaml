@@ -4,3 +4,4 @@ packages:
   # seed/mcp, seed/apify, seed/fkapi, seed/shared. There is no seed/jobs package;
   # Coolify jobs live in seed/coolify/ (compose + Dockerfile, not a workspace member).
   - "seed/*"
+  - "plugins/*"

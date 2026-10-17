@@ -176,7 +176,7 @@ describe("device-flow test data", () => {
     await insertBystander(db);
   });
 
-  it("puts the two test Collectors into the known state", async () => {
+  it("puts the test Collectors into the known state", async () => {
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });
 
     const own = await db.select().from(userJersey).where(eq(userJersey.userId, TEST_COLLECTOR_ID));
@@ -347,7 +347,7 @@ describe("device-flow test data", () => {
     );
   });
 
-  it("changes only the two test Collectors", async () => {
+  it("changes only the test Collectors", async () => {
     const before = await snapshot(db, [BYSTANDER_ID]);
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });

@@ -1,0 +1,102 @@
+# Optio
+
+Standing agents for [bb](https://getbb.app): an orchestrator, a devops agent, a
+frontend agent, or whatever areas a project has. Each agent has its own
+instructions, a memory that grows as you decide things with it, and
+automations that run recurring work.
+
+Everything is set up on the **Agents** page in the bb sidebar.
+
+## What an agent is
+
+- **Instructions**: its area, its rules, what it may touch.
+- **Chat**: "Start chat" opens a new bb thread as the agent. The thread first
+  runs `bb optio brief <agent>`, which prints the instructions and the
+  memory.
+- **Memory**: one-sentence facts and decisions. The agent saves them with
+  `bb optio memory add` while you talk; you can add, correct and remove
+  them on the page.
+- **Automations**: a schedule plus either a task for the agent or a named bb
+  workflow (`.bb/workflows/<name>.js`) to start with arguments.
+- **Linear triggers**: start the agent when an issue of a chosen team (and
+  project) is created, moves to a status or gets a label. Polled once a minute.
+- **Follow-ups**: the agent schedules a new thread of itself for later with
+  `bb optio follow-up add`; the report comes back to the thread that asked.
+- **In the composer**: type `@` and pick an agent, or use the Agent picker
+  beside the send button, to address an agent from any thread.
+- **HTTP trigger** (optional): another system starts the agent with a task.
+
+## The board
+
+The Board view is the orchestrator's scheduler. In `live` mode, every minute, it
+reads a Linear team's issues and starts the configured workflow for what is
+unblocked, in focus-milestone and priority order, within each machine's
+capacity and without write-scope overlap. A run that stops at a gate is
+reported to the orchestrator agent's thread, which resumes it or parks it.
+
+The Linear states and the ready label the board reads (dispatch, backlog,
+active and blocked states) are set when the board is set up; they have no
+default. Mode, focus milestone, machines, capacity and routing rules are form
+fields on the page. A new board starts in `dry-run`: it shows the plan and starts nothing.
+
+## Install
+
+The plugin is the workspace package `@kit/bb-plugin-optio` in `plugins/factory`.
+From the repository root:
+
+```bash
+pnpm install
+bb plugin install plugins/factory
+```
+
+Then, under Settings → Installed plugins → Optio, set the Linear API key
+(or the path of a dotenv file with `LINEAR_API_KEY`) if you use the board.
+
+The seed under `examples/` creates three agents and a board through the
+plugin's RPC; read it as an example of the shapes. It is the only place that
+names one product's team key, workflow, labels and states: the plugin reads
+them from the board's configuration.
+
+## Triggering an agent from another system
+
+```bash
+curl -X POST "$BB_URL/api/v1/plugins/optio/http/trigger" \
+  -H "content-type: application/json" \
+  -H "x-bb-plugin-token: $(bb plugin token optio)" \
+  -d '{"agent":"devops","task":"CI failed on main.","payload":{"run":1234}}'
+```
+
+The agent must allow the HTTP trigger. bb's `getbb.app` URL and `bb connect`
+shares require the owner's session, so a caller outside the machine needs its
+own tunnel to that one path.
+
+## Layout
+
+| Path | What it holds |
+| --- | --- |
+| `server.ts` | Registrations only: settings, schedules, routes, RPC, the CLI. |
+| `app.tsx` | The Agents page: agent list, one agent, the board. |
+| `src/contract.ts` | The RPC contract shared by server and page. |
+| `src/agent-store.ts` | Agents, memory and automations in the plugin's SQLite database. |
+| `src/sessions.ts` | Starting an agent thread; the brief; due automations; workflow launchers. |
+| `src/store.ts` | The ledger of agent sessions. |
+| `src/scheduler-config.ts` | The board's stored configuration. |
+| `src/linear-api.ts` | Reads the team's issues from Linear; moves an unblocked issue. |
+| `src/board.ts` | The plan for one tick: starts, machines, and why the rest wait. |
+| `src/scheduler.ts` | A tick: close ended runs, plan, start, report stalls; `resume`. |
+| `src/dispatch-store.ts` | The ledger of workflow runs the board started. |
+| `src/linear-triggers.ts` | The poller that turns Linear changes into agent sessions. |
+| `src/linear.ts` | Linear webhook signature check. |
+| `src/product-neutral.test.ts` | Fails when plugin code outside `examples/` names one product's values. |
+
+`src/dispatch.test.ts` tests `src/sessions.ts` and `src/agent-store.ts`; the
+file kept its name from the module those replaced.
+
+## Develop
+
+```bash
+pnpm --filter @kit/bb-plugin-optio test       # vitest: pure logic plus the fake plugin host
+pnpm --filter @kit/bb-plugin-optio typecheck
+pnpm test:optio                               # both, as CI runs them
+bb plugin dev plugins/factory                 # rebuild and reload on save against a running bb
+```

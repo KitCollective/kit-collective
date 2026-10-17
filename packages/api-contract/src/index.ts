@@ -253,13 +253,11 @@ export {
 } from "./collection/bidding.js";
 export {
   type CollectionConversationDetail,
-  type CollectionConversationJerseyContext,
   type CollectionConversationMessage,
   type CollectionConversationReplyTo,
   type CollectionSendMessageRequest,
   type CollectionSendMessageResponse,
   collectionConversationDetailSchema,
-  collectionConversationJerseyContextSchema,
   collectionConversationMessageSchema,
   collectionConversationReplyToSchema,
   collectionSendMessageRequestSchema,

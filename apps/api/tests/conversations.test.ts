@@ -699,7 +699,6 @@ describe("Collection conversations /v1", () => {
     expect(jerseyOf(awayBid.messageId)).toEqual(awayJerseyCard);
     expect(jerseyOf(jerseyTextId)).toEqual(awayJerseyCard);
     expect(jerseyOf(plainTextId)).toBeUndefined();
-    expect(detail.jerseyContext).toBeUndefined();
   });
 
   it("keeps the Conversation and declines pending Buds when their UserJersey is deleted", async () => {

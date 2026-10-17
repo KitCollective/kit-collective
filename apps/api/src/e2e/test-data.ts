@@ -109,9 +109,9 @@ function variantKeys(objectKey: string): string[] {
 }
 
 /**
- * Puts the two test Collectors into the known state the device flows start
+ * Puts the test Collectors into the known state the device flows start
  * from. Idempotent. Reads the catalog; writes only rows owned by, or pointing
- * at, the two test Collectors.
+ * at, the test Collectors.
  */
 export async function applyTestData(input: {
   db: Db;

@@ -1,13 +1,15 @@
 # The bb-harness machine and the AFK developer run
 
-How the isolated machine that runs the AFK developer (`afk-developer`) is set up, and how a run is started. This page is a summary of facts that live elsewhere (`.cursor/skills/bb-orchestrate/SKILL.md`, `docs/adr/0058-kit-issue-workflow-and-the-first-run-fixes.md`); when they disagree with this page, they win and this page is stale. Values below were read from inside the container on 2026-10-12; re-read them with the command beside each before relying on them.
+How the isolated machine that runs the AFK developer (`afk-developer`) is set up, and how a run is started. This page is a summary of facts that live elsewhere (`.cursor/skills/bb-orchestrate/SKILL.md`, `docs/adr/0058-kit-issue-workflow-and-the-first-run-fixes.md`); when they disagree with this page, they win and this page is stale. Values below were read from inside the container on 2026-10-12 and, for the image and the limits, on 2026-10-17; re-read them with the command beside each before relying on them.
 
 ## What the machine is
 
 - A Docker container named `bb-harness` on the Hetzner host, enrolled in bb as machine `host_new78xp362` (`bb machine list`). Identify it by that host id, not by hostname: the container's hostname changes when it is rebuilt.
-- The image is built from a Dockerfile with Node 22, pnpm 9.15.4 and a gh that meets the requirement below, plus git, python3 and jq. That Dockerfile is not in this repo (the root `Dockerfile` is the API image, `seed/coolify/` holds the seed images); keep it next to wherever the container is run.
+- The image (`bb-harness:node22`) is built from `node:22-trixie` (Debian 13) with pnpm 9.15.4, a gh that meets the requirement below, git (requirement below), python3 and jq. Its Dockerfile and the script that recreates the container, `run.sh`, live on the Hetzner host in `/opt/bb-harness/`, not in this repo (the root `Dockerfile` is the API image, `seed/coolify/` holds the seed images). `run.sh` recreates both containers; earlier versions sit beside them as `*.prev-<timestamp>`.
+- A test Postgres runs beside it as the container `bb-harness-postgres` (`postgres:16`, volume `bb-harness-pg`). It shares the harness's network namespace, so it answers on `localhost:5432` inside the harness and nowhere else; `run.sh` sets the test `*_DATABASE_URL` variables to it.
+- The home directory is the volume `bb-harness-home`, so the main clone, the worktrees and the bb enrollment survive a rebuild; the host id stayed `host_new78xp362` through the 2026-10-17 rebuild.
 - The main clone is at `/home/node/work/kit-collective`.
-- The owner's Mac is the other machine (`host_kttknna49n`). Work that needs a simulator or Postgres stays there.
+- The owner's Mac is the other machine (`host_kttknna49n`). Work that needs a simulator stays there.
 
 ### The gh requirement
 
@@ -18,34 +20,42 @@ The harness needs a gh whose `pr checks` subcommand supports `--json`. This is a
 
 `scripts/wait-for-checks.mjs` probes this at startup and ends with exit 5 and a verdict line naming the cause when the gh is too old (`scripts/lib/pr-checks.mjs` holds the wording). Do not retry exit 5; replace the gh.
 
+### The git requirement
+
+The harness needs git **2.40 or newer** (`git --version`). The factory scripts are written and tested on the Mac's current git; on 2.39 `scripts/auto-land.mjs` stalled every branch behind the lane (PR #360). Debian bookworm and its backports stop at 2.39, which is why the image is on trixie.
+
+- Known good: 2.47.3 (the container since 2026-10-17).
+- Known bad: 2.39.5.
+
 ## Limits
 
 | Limit | Observed | Read it with |
 | --- | --- | --- |
 | Not root | uid 1000, user `node` | `id` |
 | Capabilities dropped | `CapPrm`, `CapEff` and `CapBnd` all zero, `NoNewPrivs: 1` | `grep -E "^Cap\|NoNewPrivs" /proc/self/status` |
-| Memory cap | 2147483648 bytes (2 GiB) | `cat /sys/fs/cgroup/memory.max` |
-| Process cap | 512 | `cat /sys/fs/cgroup/pids.max` |
-| No Postgres | no `psql` or `postgres` binary | `which psql postgres` |
+| Memory cap | 4294967296 bytes (4 GiB) | `cat /sys/fs/cgroup/memory.max` |
+| Process cap | 2048 | `cat /sys/fs/cgroup/pids.max` |
+| An init as PID 1 | `docker-init` (tini, from `docker run --init`), so orphaned processes are reaped | `cat /proc/1/comm` |
+| No `psql` client | the test Postgres is a separate container; there is no `psql` binary in the harness | `which psql` |
 | No simulator | Linux, so no iOS Simulator, no Maestro device run | `uname -s` |
 
 What the missing pieces mean in practice:
 
-- **No Postgres.** The `api` and `db` suites cannot run. `node scripts/verify.mjs --changed --capability <what this machine has>` skips them and ends `INCOMPLETE` (exit 3), which is never green. Route a slice whose tests need a database to the Mac.
+- **Why the init and the caps.** Until 2026-10-17 the container ran with 512 pids, 2 GiB and bb's `host-daemon` as PID 1, which does not reap orphans. Test runs left `esbuild` and `vitest` zombies behind (275 after two days); they count against the pids cap, and once it was full every new Claude Code process died at start with `Failed to start HTTP Client thread: Resource temporarily unavailable` (KIT-385). If that error comes back, read `pids.current`, `pids.events` and `ps -eo stat | grep -c ^Z` first.
 - **No simulator.** A slice's Device flow runs on a GitHub macOS runner instead (`node scripts/request-device-flows.mjs`, ADR-0059), so a mobile slice no longer needs the Mac. The local `device-run.sh`, with its before/after comparison, stays on the Mac (`docs/agents/device-flows.md`).
 
 ## Secrets
 
-- The names are listed in `bb.env` (names only, safe to commit): `GH_TOKEN`, `LINEAR_API_KEY`, `OPERATOR_EMAIL`. Add a name there only when something reads it.
+- The names are listed in `bb.env` (names only, safe to commit): `GH_TOKEN`, `LINEAR_API_KEY`, `OPERATOR_EMAIL`, `SCENARIOS_GH_TOKEN`. Add a name there only when something reads it.
 - The values live in the main checkout's gitignored `.env`, mode 0600. They get there through one command, run from a bb thread on that machine:
 
   ```bash
-  bb secret request GH_TOKEN LINEAR_API_KEY OPERATOR_EMAIL --write-env /home/node/work/kit-collective/.env
+  bb secret request GH_TOKEN LINEAR_API_KEY OPERATOR_EMAIL SCENARIOS_GH_TOKEN --write-env /home/node/work/kit-collective/.env
   ```
 
   It opens a secure form for the person; the values are typed into that form and never pass through the chat, a prompt or a command line. Existing assignments in the file are preserved.
 - Posting the `kc/audit` status needs "Commit statuses: Read and write"; the AFK developer run never posts it (the receipt runs only as a dry run), so the person who merges asks for that permission when they need it.
-- The same `GH_TOKEN` reads the Holdout repo: `docs/agents/scenarios.md` has the format, the CLI and the command that proves a machine's read.
+- `GH_TOKEN` is, from stage 4 of `scripts/holdout-flows-wizard.sh` on (KIT-366), a fine-grained token that selects `kit-collective` only: Actions, Commit statuses, Contents, Issues, Pull requests and Workflows read and write, Checks read. It does not reach the Holdout repo, its files or its run artifacts. The scenarios CLI reads and writes the Holdout with its own `SCENARIOS_GH_TOKEN` (Contents and Actions read and write on the Holdout only), which nothing else reads. `.bb-env-setup.sh` logs a logged-out `gh` in from `.env`'s `GH_TOKEN` (else the process env) and otherwise keeps the stored login. On this machine the main checkout's `.env` also holds `GH_LOGIN_FROM_ENV=1`, a setting rather than a secret, so it is not listed in `bb.env`; add the line by hand. With it, when the token `gh` uses differs from `.env`'s `GH_TOKEN`, the hook runs `gh auth login --with-token` from `.env`, which overwrites the stored token without a logout, including one stored with no account name that `gh auth logout` cannot match. The comparison runs inside Python: no value reaches a bash variable, argv or output. A `GH_TOKEN` in the shell's env never replaces a stored login. So after replacing `GH_TOKEN` here, open a new worktree or run `bash .bb-env-setup.sh` from the main checkout; it prints `gh re-logged in from .env`. Set the flag on bb-harness only: the owner's Mac `.env` holds a different `GH_TOKEN` from the owner's own `gh` login, and with the flag every bb worktree hook there would replace that login. `node scripts/scenarios.mjs access` proves the split on this machine (`ambient denied, cli reads`); `bash scripts/holdout-flows-wizard.sh --from 3` walks the setup. Details: "The Holdout token" in `docs/agents/scenarios.md`.
 - Nothing on this page, in a prompt or in a thread message carries a value. If a run needs a new secret, add its name to `bb.env` and request it with the command above.
 
 ## Updating the clone
@@ -83,6 +93,8 @@ With auto-land on (the `autoLand` arg, or `flow.autoLand.enabled` in `factory.co
 
 **Switching auto-land on and off.** Any one stops it: the label `hold` on the issue; `touch .factory/auto-land.off` in the main checkout (delete the file to allow it again; it wins over everything); `flow.autoLand.enabled` false in `factory.config.json` and no `autoLand` arg. To turn it on for every run set `flow.autoLand.enabled` to true in the main checkout's `factory.config.json` (a PR cannot do it for itself: the script reads the main checkout's copy). `flow.autoLand.maxPerDay` (default 100) is only a runaway ceiling. The real brake is the circuit breaker: after `flow.autoLand.breakerAfter` (default 3) consecutive failed finishes `start` refuses with `breaker-open` until a person fixes the cause and runs `node scripts/auto-land.mjs reset`. Merges are serialised through the merge lock; a second `start` waits for it. `node scripts/auto-land.mjs start <pr> --issue KIT-n --dry-run` runs every check and changes nothing.
 
+**Auto-land in auto permission mode.** The runner threads and Max's thread run Claude Code in permission mode `auto`, whose classifier refused `auto-land.mjs start ... --force-enabled` as a safety bypass (2026-10-17: KIT-384, KIT-319 and KIT-372 all stopped with `runner-no-result` and the command had never run). The PreToolUse hook `.claude/hooks/auto-land-allow.mjs` approves exactly one shape, `node scripts/auto-land.mjs start|finish <pr> --issue KIT-n` with auto-land's own flags (optionally in the runner's `( ... ); echo "KIT-EXIT:$?"` wrapper), and gives no opinion on anything else. A runner whose shell still refuses a command reports `DENIED`, and the stop note names the refusal. Max's stuck-at-auto-land routine (`staff/max/tick.js`) resumes a run whose last event is `runner-no-result` on the next tick; otherwise it waits `LANDING_STUCK_MINUTES` (30) after the run's last event.
+
 An issue gets at most `flow.maxRunsPerDay` runs (factory.config.json, 3) in 24 hours, resumes included: the session check refuses the next one and names the cap. Raising it is a committed change by a person, never something a run does for itself.
 
 ## Start Milestone scenarios
@@ -101,7 +113,7 @@ bb workflows run --file .bb/workflows/milestone-scenarios.js --args '{"project":
 | `pr` | Required. The number of the open `development → staging` PR. |
 | `machine` | Only written to the run log; it routes nothing. |
 
-`run` starts a real run: it posts a commit status that everyone sees on the `development` tip and spends macOS minutes (runsPerScenario hosted runs per Scenario, at ten times the Linux rate), so it is a person's decision. The run refuses, posting nothing, unless every issue of the milestone is `Done` or `Canceled`, the PR is an open `development → staging` PR and the milestone has a Holdout file. It needs, on top of the AFK developer's: a `GH_TOKEN` that may dispatch workflows (`actions: write`) and write commit statuses (`statuses: write`), and reads the Holdout; and `ffmpeg` on the machine for the judge to see the recording (without it the judge judges from the screenshots). It can wait about 4 hours for the hosted runs.
+`run` starts a real run: it posts a commit status that everyone sees on the `development` tip and spends macOS minutes (runsPerScenario hosted runs per Scenario, at ten times the Linux rate), so it is a person's decision. The run refuses, posting nothing, unless every issue of the milestone is `Done` or `Canceled`, the PR is an open `development → staging` PR and the milestone has a Holdout file. It needs, on top of the AFK developer's: a `GH_TOKEN` that may dispatch workflows (`actions: write`) and write commit statuses (`statuses: write`) in `kit-collective`; `SCENARIOS_GH_TOKEN`, which reads the Holdout and dispatches its producer workflow (the flow artifact is made in the Holdout repo, KIT-366); the `kit-collective` Actions secret `SCENARIO_FLOWS_TOKEN`, with which the hosted runs download it; and `ffmpeg` on the machine for the judge to see the recording (without it the judge judges from the screenshots). It can wait about 4 hours for the hosted runs.
 
 ### Promotion path
 

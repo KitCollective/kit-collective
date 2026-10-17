@@ -5,6 +5,7 @@ import {
   CI_WORKFLOW_PATH,
   missingFactoryCiCoverage,
   PACKAGE_JSON_PATH,
+  PLUGIN_TEST_NEEDLES,
 } from "../check-factory-ci-tests.mjs";
 
 function currentFiles() {
@@ -78,6 +79,51 @@ test("coverage fails when factory tests are continue-on-error", () => {
     packageSource: files.packageSource,
   });
   assert.ok(missing.some((item) => item.includes("continue-on-error")));
+});
+
+test("coverage fails when the test job omits the Optio plugin typecheck and tests", () => {
+  const files = currentFiles();
+  assert.ok(files.workflowSource.includes("run: pnpm test:optio"));
+  const mutated = {
+    ...files,
+    workflowSource: files.workflowSource.replace("run: pnpm test:optio", "run: pnpm omitted:optio"),
+  };
+  const missing = missingFactoryCiCoverage(mutated);
+  for (const needle of PLUGIN_TEST_NEEDLES) {
+    assert.ok(missing.includes(`plugin check ${needle}`), `missing: ${missing.join(", ")}`);
+  }
+});
+
+test("coverage fails when the Optio script stops running the plugin tests", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    packageSource: files.packageSource.replace(" && pnpm --filter @kit/bb-plugin-optio test", ""),
+  };
+  assert.match(mutated.workflowSource, /run: pnpm test:optio/);
+  const missing = missingFactoryCiCoverage(mutated);
+  assert.ok(
+    missing.includes("plugin check --filter @kit/bb-plugin-optio test"),
+    `missing: ${missing.join(", ")}`,
+  );
+});
+
+test("coverage fails when the Optio plugin tests are continue-on-error", () => {
+  const files = currentFiles();
+  const mutatedWorkflow = files.workflowSource.replace(
+    "run: pnpm test:optio",
+    "continue-on-error: true\n        run: pnpm test:optio",
+  );
+  const missing = missingFactoryCiCoverage({
+    workflowSource: mutatedWorkflow,
+    packageSource: files.packageSource,
+  });
+  for (const needle of PLUGIN_TEST_NEEDLES) {
+    assert.ok(
+      missing.includes(`continue-on-error: true on ${needle}`),
+      `missing: ${missing.join(", ")}`,
+    );
+  }
 });
 
 test("coverage fails when pull_request does not include the integration lane", () => {
