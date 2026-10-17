@@ -14,6 +14,15 @@ write-scope: apps/api/**, packages/db/**
 
 `/to-tickets` should set this when the slice is obviously bounded. `/implement` must not edit files outside the globs when they are present.
 
+## Companion paths
+
+These paths are inside every write-scope (ADR-0064), in CI and in auto-land:
+
+- test files under `apps/` and `packages/`: `**/tests/**` and `*.test.*`
+- the issue's own slice flow, `apps/mobile/.maestro/slices/<KEY>.yaml`
+
+Tests under `scripts/` are not companions. Code that a slice's tests need outside the globs is still out of scope.
+
 ## Ratchet exception
 
 When `### Review feedback` or a planner comment on **this** issue requires a ratchet per `docs/agents/error-ratcheting.md`, these paths are in-scope for that PR even if they sit outside the issue’s globs:

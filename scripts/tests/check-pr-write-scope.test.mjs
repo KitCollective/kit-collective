@@ -10,6 +10,7 @@ import {
   findWriteScopeViolations,
   isRatchetException,
   isRatchetShapedPath,
+  issueKeyIn,
   matchesGlob,
   parseWriteScopeGlobs,
   resolveWriteScopeViolations,
@@ -165,6 +166,26 @@ test("findWriteScopeViolations flags out-of-scope files and ignores ratchet path
   assert.deepEqual(findWriteScopeViolations(changedFiles, globs), [
     "seed/fkapi/tests/seed.test.ts",
   ]);
+});
+
+test("findWriteScopeViolations lets apps/ and packages/ tests and the issue's own slice flow through", () => {
+  const globs = ["apps/api/src/collection/**"];
+  const changedFiles = [
+    "apps/api/src/collection/a.ts",
+    "apps/api/tests/collection.test.ts",
+    "packages/api-contract/tests/discover-home.test.ts",
+    "apps/mobile/src/search/view.test.tsx",
+    "apps/mobile/.maestro/slices/KIT-292.yaml",
+    "apps/mobile/.maestro/slices/KIT-1.yaml",
+    "scripts/tests/other.test.mjs",
+  ];
+
+  assert.deepEqual(findWriteScopeViolations(changedFiles, globs, { issue: "KIT-292" }), [
+    "apps/mobile/.maestro/slices/KIT-1.yaml",
+    "scripts/tests/other.test.mjs",
+  ]);
+  assert.equal(issueKeyIn("KIT-292: Søg home\nbody"), "KIT-292");
+  assert.equal(issueKeyIn("bb/kit-292-thr_x"), "KIT-292");
 });
 
 test("check script exits non-zero on synthetic out-of-scope diff", () => {

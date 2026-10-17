@@ -1208,9 +1208,6 @@ function BoardSetup({ act }: { act: (write: (rpc: Rpc) => Promise<unknown>) => P
   const [form, setForm] = useState({
     projectId: "",
     teamKey: "",
-    workflow: "",
-    dispatchState: "",
-    readyLabel: "",
     backlogState: "",
     activeStates: "",
     blockedState: "",
@@ -1222,16 +1219,14 @@ function BoardSetup({ act }: { act: (write: (rpc: Rpc) => Promise<unknown>) => P
   const complete =
     form.projectId !== "" &&
     form.teamKey !== "" &&
-    form.workflow !== "" &&
-    form.dispatchState.trim() !== "" &&
-    form.readyLabel.trim() !== "" &&
     form.backlogState.trim() !== "" &&
     activeStates.length > 0;
   return (
     <Section title="Set up the board">
       <p className="text-sm text-muted-foreground">
-        The board reads one Linear team and starts one workflow per ready issue. It starts in
-        dry-run: it shows the plan and starts nothing.
+        The board reads one Linear team. Which issues start which workflow comes from the Loops in
+        the project's factory.config.json. It starts in dry-run: it shows the plan and starts
+        nothing.
       </p>
       <Labeled label="Project">
         <select
@@ -1251,28 +1246,6 @@ function BoardSetup({ act }: { act: (write: (rpc: Rpc) => Promise<unknown>) => P
         <Input
           value={form.teamKey}
           onChange={(event) => setForm({ ...form, teamKey: event.target.value.toUpperCase() })}
-        />
-      </Labeled>
-      <Labeled label="Workflow per issue" hint="A file under .bb/workflows, without .js.">
-        <Input
-          className="font-mono"
-          value={form.workflow}
-          onChange={(event) => setForm({ ...form, workflow: event.target.value })}
-        />
-      </Labeled>
-      <Labeled label="Dispatch state" hint="The Linear state a ready issue waits in.">
-        <Input
-          value={form.dispatchState}
-          onChange={(event) => setForm({ ...form, dispatchState: event.target.value })}
-        />
-      </Labeled>
-      <Labeled
-        label="Ready label"
-        hint="The label that marks an issue in the dispatch state as ready to start."
-      >
-        <Input
-          value={form.readyLabel}
-          onChange={(event) => setForm({ ...form, readyLabel: event.target.value })}
         />
       </Labeled>
       <Labeled
@@ -1295,7 +1268,7 @@ function BoardSetup({ act }: { act: (write: (rpc: Rpc) => Promise<unknown>) => P
       </Labeled>
       <Labeled
         label="Blocked state"
-        hint="Issues here go back to the dispatch state once their blockers are done. Empty when the team has none."
+        hint="Issues here go back to the first issue Loop's state once their blockers are done. Empty when the team has none."
       >
         <Input
           value={form.blockedState}
@@ -1310,9 +1283,6 @@ function BoardSetup({ act }: { act: (write: (rpc: Rpc) => Promise<unknown>) => P
             rpc.call("board_setup", {
               projectId: form.projectId,
               teamKey: form.teamKey,
-              workflow: form.workflow,
-              dispatchState: form.dispatchState.trim(),
-              readyLabel: form.readyLabel.trim(),
               backlogState: form.backlogState.trim(),
               activeStates,
               blockedState: form.blockedState.trim() === "" ? null : form.blockedState.trim(),
@@ -1541,10 +1511,17 @@ function Board() {
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
-            Team {board.teamKey} · workflow {board.workflow}
+            Team {board.teamKey} · {board.loops.length} Loops from factory.config.json
             {board.paused ? " · paused in Settings" : ""}
           </p>
           <Problem message={board.error} />
+          <Problem
+            message={
+              board.registryError === null
+                ? null
+                : `The registry was refused, so nothing is planned or started: ${board.registryError}`
+            }
+          />
           <div className="mt-2 grid grid-cols-1 gap-x-4 md:grid-cols-3">
             <Labeled
               label="Mode"
@@ -1627,13 +1604,32 @@ function Board() {
               .
             </span>
           </CheckboxRow>
+          <Section title={`Loops (${board.loops.length})`}>
+            <Rows
+              empty="No Loop: the registry was not read."
+              rows={board.loops.map((loop) => (
+                <>
+                  <span className="w-44 shrink-0 font-medium">{loop.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                    {loop.kind === "issue" ? "issue trigger" : "milestone-done trigger"} ·{" "}
+                    {loop.workflow} · {loop.machines.join(", ")}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {loop.enabled ? `${loop.running} of ${loop.maxLive} live` : "disabled"}
+                  </span>
+                </>
+              ))}
+            />
+          </Section>
           <Section title={`Running (${board.running.length})`}>
             <Rows
               empty="Nothing is running."
               rows={board.running.map((run) => (
                 <>
                   <span className="flex-1 font-medium">{run.identifier}</span>
-                  <span className="text-muted-foreground">on {run.machineId}</span>
+                  <span className="text-muted-foreground">
+                    {run.loop === null ? "" : `${run.loop} · `}on {run.machineId}
+                  </span>
                 </>
               ))}
             />
@@ -1648,7 +1644,7 @@ function Board() {
                   <span className="w-20 shrink-0 font-medium">{start.identifier}</span>
                   <span className="min-w-0 flex-1 truncate">{start.title}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {start.milestone ?? "no milestone"} · on {start.machineId}
+                    {start.loop} · {start.milestone ?? "no milestone"} · on {start.machineId}
                     {start.resume ? " · resume" : ""}
                   </span>
                 </>
@@ -1675,7 +1671,27 @@ function Board() {
                 <>
                   <span className="w-20 shrink-0 font-medium">{wait.identifier}</span>
                   <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                    {wait.reason}
+                    {wait.loop} · {wait.reason}
+                  </span>
+                </>
+              ))}
+            />
+          </Section>
+          <Section title="Record of runs">
+            <Rows
+              empty="Nothing recorded yet."
+              rows={board.decisions.map((decision) => (
+                <>
+                  <span className="w-20 shrink-0 font-medium">{decision.issue ?? "registry"}</span>
+                  <span className="w-16 shrink-0 text-xs text-muted-foreground">
+                    {decision.kind}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                    {decision.loop === null ? "" : `${decision.loop} · `}
+                    {decision.reason}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {decision.mode} · {new Date(decision.at).toLocaleString()}
                   </span>
                 </>
               ))}

@@ -8,8 +8,6 @@ import {
   type CollectionConversations,
   type CollectionDiscoverCatalogDrill,
   type CollectionDiscoverHome,
-  type CollectionDiscoverHomeClub,
-  type CollectionDiscoverHomeCollector,
   type CollectionDiscoverHomeNationalTeam,
   type CollectionDiscoverJerseys,
   type CollectionDiscoverTypeahead,
@@ -1032,6 +1030,7 @@ export class CollectionService {
         nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
+        size: userJersey.size,
         seasonLabel: season.label,
         ownerHandle: user.handle,
       })
@@ -1249,6 +1248,7 @@ export class CollectionService {
         nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
+        size: userJersey.size,
         seasonLabel: season.label,
         ownerHandle: user.handle,
       })
@@ -1304,6 +1304,7 @@ export class CollectionService {
           ...side,
           seasonId: row.seasonId,
           type: row.type,
+          size: row.size,
           seasonLabel: row.seasonLabel,
           ownerHandle: row.ownerHandle,
           photos,
@@ -1376,6 +1377,7 @@ export class CollectionService {
         nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
+        size: userJersey.size,
         biddingEnabled: userJersey.biddingEnabled,
         seasonLabel: season.label,
         ownerHandle: user.handle,
@@ -1394,46 +1396,73 @@ export class CollectionService {
 
     const moreJerseys = await this.decorateDiscoverJerseys(visibleRows, locale);
 
-    const clubs: CollectionDiscoverHomeClub[] = [];
-    const seenClubs = new Set<string>();
-    const nationalTeams: CollectionDiscoverHomeNationalTeam[] = [];
-    const seenNationalTeams = new Set<string>();
+    const rowById = new Map(visibleRows.map((row) => [row.id, row]));
+    const clubCopies = new Map<string, { label: string; count: number }>();
+    const nationalTeamCopies = new Map<string, { label: string; count: number }>();
+    const collectorCopies = new Map<
+      string,
+      { row: (typeof visibleRows)[number]; jerseyCount: number; openForBidCount: number }
+    >();
     for (const jersey of moreJerseys) {
+      const row = rowById.get(jersey.id);
+      if (!row) {
+        continue;
+      }
       if (jersey.clubId) {
-        if (seenClubs.has(jersey.clubId)) {
-          continue;
-        }
-        seenClubs.add(jersey.clubId);
-        clubs.push({ clubId: jersey.clubId, clubLabel: jersey.clubLabel });
-        continue;
+        const entry = clubCopies.get(jersey.clubId) ?? { label: jersey.clubLabel, count: 0 };
+        entry.count += 1;
+        clubCopies.set(jersey.clubId, entry);
+      } else if (jersey.nationalTeamId) {
+        const entry = nationalTeamCopies.get(jersey.nationalTeamId) ?? {
+          label: jersey.clubLabel,
+          count: 0,
+        };
+        entry.count += 1;
+        nationalTeamCopies.set(jersey.nationalTeamId, entry);
       }
-      if (jersey.nationalTeamId && !seenNationalTeams.has(jersey.nationalTeamId)) {
-        seenNationalTeams.add(jersey.nationalTeamId);
-        nationalTeams.push({
-          nationalTeamId: jersey.nationalTeamId,
-          nationalTeamLabel: jersey.clubLabel,
-        });
+      const collector = collectorCopies.get(row.ownerId) ?? {
+        row,
+        jerseyCount: 0,
+        openForBidCount: 0,
+      };
+      collector.jerseyCount += 1;
+      if (row.biddingEnabled) {
+        collector.openForBidCount += 1;
       }
+      collectorCopies.set(row.ownerId, collector);
     }
 
-    const openForBid = moreJerseys.filter((jersey) => {
-      const row = visibleRows.find((item) => item.id === jersey.id);
-      return row?.biddingEnabled === true;
-    });
+    const byCopiesThenLabel = (
+      left: { label: string; count: number },
+      right: { label: string; count: number },
+    ) => right.count - left.count || left.label.localeCompare(right.label, "da");
 
-    const collectors: CollectionDiscoverHomeCollector[] = [];
-    const seenCollectors = new Set<string>();
-    for (const row of visibleRows) {
-      if (seenCollectors.has(row.ownerId) || !moreJerseys.some((jersey) => jersey.id === row.id)) {
-        continue;
-      }
-      seenCollectors.add(row.ownerId);
-      collectors.push({
-        handle: row.ownerHandle,
-        initial: handleInitial(row.ownerHandle),
-        avatarUrl: row.ownerAvatarObjectKey ? `/v1/identity/peers/${row.ownerId}/avatar` : null,
-      });
-    }
+    const clubs = [...clubCopies.entries()]
+      .map(([clubId, entry]) => ({ clubId, label: entry.label, count: entry.count }))
+      .sort(byCopiesThenLabel)
+      .map(({ clubId, label, count }) => ({ clubId, clubLabel: label, jerseyCount: count }));
+    const nationalTeams = [...nationalTeamCopies.entries()]
+      .map(([nationalTeamId, entry]) => ({
+        nationalTeamId,
+        label: entry.label,
+        count: entry.count,
+      }))
+      .sort(byCopiesThenLabel)
+      .map(({ nationalTeamId, label, count }) => ({
+        nationalTeamId,
+        nationalTeamLabel: label,
+        jerseyCount: count,
+      }));
+
+    const openForBid = moreJerseys.filter((jersey) => rowById.get(jersey.id)?.biddingEnabled);
+
+    const collectors = [...collectorCopies.entries()].map(([ownerId, entry]) => ({
+      handle: entry.row.ownerHandle,
+      initial: handleInitial(entry.row.ownerHandle),
+      avatarUrl: entry.row.ownerAvatarObjectKey ? `/v1/identity/peers/${ownerId}/avatar` : null,
+      jerseyCount: entry.jerseyCount,
+      openForBidCount: entry.openForBidCount,
+    }));
 
     return collectionDiscoverHomeSchema.parse({
       ...(clubs.length > 0 ? { clubs } : {}),
@@ -1464,6 +1493,7 @@ export class CollectionService {
       nationalTeamId: userJersey.nationalTeamId,
       seasonId: userJersey.seasonId,
       type: userJersey.type,
+      size: userJersey.size,
       seasonLabel: season.label,
       ownerHandle: user.handle,
     } as const;
@@ -1669,6 +1699,7 @@ export class CollectionService {
         nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
+        size: userJersey.size,
         seasonLabel: season.label,
         ownerHandle: user.handle,
       })
@@ -2662,6 +2693,7 @@ export class CollectionService {
       nationalTeamId: string | null;
       seasonId: string;
       type: CollectionDiscoverJerseys["jerseys"][number]["type"];
+      size: CollectionDiscoverJerseys["jerseys"][number]["size"];
       seasonLabel: string;
       ownerHandle: string;
     }>,
@@ -2687,6 +2719,7 @@ export class CollectionService {
           ...side,
           seasonId: row.seasonId,
           type: row.type,
+          size: row.size,
           seasonLabel: row.seasonLabel,
           ownerHandle: row.ownerHandle,
           photos,
