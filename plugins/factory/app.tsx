@@ -22,6 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { Inbox } from "./pages/inbox";
 import type {
   AgentDto,
   AutomationDto,
@@ -1939,6 +1940,14 @@ export default definePluginApp((app) => {
     id: "agent-picker",
     scopes: ["thread", "new-thread"],
     actions: [{ id: "pick-agent", component: AgentPicker }],
+  });
+  // bb lists the panels in the order they are registered, so the Inbox comes first.
+  app.slots.navPanel({
+    id: "inbox",
+    title: "Inbox",
+    icon: "Inbox",
+    path: "inbox",
+    component: Inbox,
   });
   app.slots.navPanel({
     id: "agents",

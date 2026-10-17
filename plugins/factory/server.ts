@@ -31,6 +31,7 @@ import type { GateDeps } from "./src/gate-tool.js";
 import { runGate } from "./src/gate-tool.js";
 import { GATE_CALL_TIMEOUT_MS, hostContract } from "./src/host-contract.js";
 import { type ProbeDeps, probeThread, renderProbe } from "./src/host-probe.js";
+import { createInbox } from "./src/inbox/index.js";
 import { verifyLinearWebhook } from "./src/linear.js";
 import {
   fetchBoard,
@@ -666,6 +667,8 @@ export default async function plugin(bb: BbPluginApi) {
     };
   }
 
+  const inbox = createInbox({ bb, linearApiKey, requireScheduler, registryText, gateRuns });
+
   async function boardDto(): Promise<BoardDto> {
     const paused = (await settings.get()).paused;
     const empty: BoardDto = {
@@ -877,6 +880,7 @@ export default async function plugin(bb: BbPluginApi) {
       return { hosts: hosts.map((host) => ({ id: host.id, name: host.name ?? host.id })) };
     },
     board_get: boardDto,
+    inbox_list: inbox.list,
     runs_list: runsDto,
     async board_setup(input) {
       if ((await storedScheduler()) !== null) throw new Error("the board is already set up");
@@ -1197,6 +1201,7 @@ export default async function plugin(bb: BbPluginApi) {
             };
           },
         }),
+        inbox: inbox.command,
         "focus set": cliCommand({
           summary: "Take a milestone's issues first; other issues fill the capacity that is left",
           positionals: [
