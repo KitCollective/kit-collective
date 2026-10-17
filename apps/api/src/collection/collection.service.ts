@@ -1699,7 +1699,7 @@ export class CollectionService {
     const clubCounts = new Map<string, number>();
     const nationalTeamCounts = new Map<string, number>();
     const kitCounts = new Map<string, number>();
-    const kitPhotos = new Map<string, CollectionJersey["photos"][number]>();
+    const kitThumbByKitId = new Map<string, CollectionJersey["photos"][number]>();
     const ownerCounts = new Map<string, number>();
     const bump = (counts: Map<string, number>, key: string) =>
       counts.set(key, (counts.get(key) ?? 0) + 1);
@@ -1719,8 +1719,8 @@ export class CollectionService {
         bump(kitCounts, row.catalogKitId);
         // Rows are newest first, so the first visible copy of a kit supplies its photo.
         const photo = jersey.photos[0];
-        if (photo && !kitPhotos.has(row.catalogKitId)) {
-          kitPhotos.set(row.catalogKitId, photo);
+        if (photo && !kitThumbByKitId.has(row.catalogKitId)) {
+          kitThumbByKitId.set(row.catalogKitId, photo);
         }
       }
     }
@@ -1838,7 +1838,7 @@ export class CollectionService {
           kitId: row.id,
           label: `${sideLabel} ${row.seasonLabel} ${KIT_TYPE_LABELS_DA[row.type]}`,
           jerseyCount: kitCounts.get(row.id) ?? 0,
-          photo: kitPhotos.get(row.id) ?? null,
+          photo: kitThumbByKitId.get(row.id) ?? null,
         },
       ];
     });
