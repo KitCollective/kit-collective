@@ -44,7 +44,10 @@ export const collectionConversationMessageSchema = z
     imageUrl: z.string().min(1).optional(),
     bidAmountDkk: z.number().int().min(1).optional(),
     bidStatus: z.enum(BID_STATUSES).optional(),
-    /** Set only on `kind: "system"`. A system line also carries the accepted Bud's `bidAmountDkk` and `jersey`. */
+    /**
+     * Set only on `kind: "system"`. A system line also carries the Bud's `jersey` and a `bidAmountDkk`:
+     * the accepted amount on `bid_accepted`, the declined Bud's own amount on `jersey_gone`.
+     */
     systemReason: z.enum(SYSTEM_REASONS).optional(),
     createdAt: z.string().datetime(),
     replyTo: collectionConversationReplyToSchema.optional(),

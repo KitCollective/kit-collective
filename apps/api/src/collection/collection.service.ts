@@ -112,6 +112,7 @@ import { PhotoDerivativeQueueService } from "./photo-derivative-queue.service.js
 import { derivativeKeysForPhoto, storeGpsStrippedOriginal } from "./photo-derivatives.js";
 import { gridObjectKeyForNewPhoto, resolveStoredPhotoBytes } from "./photo-variant-resolve.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
+import { declineOtherPendingBudsOnUserJersey } from "./user-jersey-buds.js";
 import { deleteUserJerseyRows } from "./user-jersey-delete.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");
@@ -136,11 +137,18 @@ type MessageJerseySnapshotRow = {
   jerseySize: JerseySize | null;
 };
 
-/** The UserJersey of a message, read from its snapshot so it outlives the UserJersey. */
+/** What a card shows of a UserJersey that is still there and not private. */
+type MessageJerseyLive = { thumbUrl: string | null; openForBid: boolean };
+
+/**
+ * The UserJersey of a message, read from its snapshot so it outlives the UserJersey.
+ * `live` holds only UserJerseys that exist and are not private; any other is shown as gone.
+ */
 function messageJerseyFromSnapshot(
   row: MessageJerseySnapshotRow,
   clubLabels: Map<string, string>,
   nationalTeamLabels: Map<string, string>,
+  live: Map<string, MessageJerseyLive>,
 ): CollectionConversationMessage["jersey"] {
   if (!row.jerseySeasonLabel || !row.jerseyType || !row.jerseySize) {
     return undefined;
@@ -155,8 +163,12 @@ function messageJerseyFromSnapshot(
     return undefined;
   }
 
+  const liveJersey = row.userJerseyId ? live.get(row.userJerseyId) : undefined;
+
   return {
-    userJerseyId: row.userJerseyId,
+    userJerseyId: liveJersey ? row.userJerseyId : null,
+    thumbUrl: liveJersey?.thumbUrl ?? null,
+    openForBid: liveJersey?.openForBid ?? false,
     clubLabel: side.clubLabel,
     seasonLabel: row.jerseySeasonLabel,
     type: row.jerseyType,
@@ -729,6 +741,7 @@ export class CollectionService {
         replyToMessageId: conversationMessage.replyToMessageId,
         bidAmountDkk: conversationMessage.bidAmountDkk,
         bidStatus: conversationMessage.bidStatus,
+        systemReason: conversationMessage.systemReason,
         createdAt: conversationMessage.createdAt,
         userJerseyId: conversationMessage.userJerseyId,
         jerseyClubId: conversationMessage.jerseyClubId,
@@ -748,6 +761,10 @@ export class CollectionService {
         nationalTeamId: row.jerseyNationalTeamId,
       })),
       locale,
+    );
+
+    const liveJerseys = await this.loadMessageJerseysLive(
+      uniqueNonNullIds(messageRows.map((row) => row.userJerseyId)),
     );
 
     const replyIds = messageRows
@@ -782,12 +799,13 @@ export class CollectionService {
             : undefined,
         bidAmountDkk: row.bidAmountDkk ?? undefined,
         bidStatus: row.bidStatus ?? undefined,
+        systemReason: row.systemReason ?? undefined,
         createdAt: row.createdAt.toISOString(),
         replyTo:
           row.replyToMessageId && replyText
             ? { id: row.replyToMessageId, text: replyText }
             : undefined,
-        jersey: messageJerseyFromSnapshot(row, clubLabels, nationalTeamLabels),
+        jersey: messageJerseyFromSnapshot(row, clubLabels, nationalTeamLabels, liveJerseys),
       };
     });
 
@@ -2265,6 +2283,7 @@ export class CollectionService {
         bidStatus: conversationMessage.bidStatus,
         senderId: conversationMessage.senderId,
         jerseyOwnerId: userJersey.userId,
+        userJerseyId: userJersey.id,
       })
       .from(conversationMessage)
       .leftJoin(userJersey, eq(conversationMessage.userJerseyId, userJersey.id))
@@ -2298,16 +2317,91 @@ export class CollectionService {
     }
 
     const bidStatus = body.decision === "accept" ? "accepted" : "declined";
+    const userJerseyId = messageRow.userJerseyId;
+    if (!userJerseyId) {
+      throw new BadRequestException("Bid is not pending");
+    }
 
-    await this.db
-      .update(conversationMessage)
-      .set({ bidStatus })
-      .where(eq(conversationMessage.id, messageId));
+    await this.db.transaction(async (tx) => {
+      const now = new Date();
 
-    await this.db
-      .update(conversation)
-      .set({ updatedAt: new Date() })
-      .where(eq(conversation.id, conversationId));
+      if (bidStatus === "accepted") {
+        // First, so the UserJersey row lock orders two accepts on one jersey: the second
+        // then finds its Bud declined below and gets a 400.
+        await tx
+          .update(userJersey)
+          .set({ biddingEnabled: false, updatedAt: now })
+          .where(eq(userJersey.id, userJerseyId));
+      }
+
+      const [answered] = await tx
+        .update(conversationMessage)
+        .set({ bidStatus })
+        .where(
+          and(eq(conversationMessage.id, messageId), eq(conversationMessage.bidStatus, "pending")),
+        )
+        .returning({
+          bidAmountDkk: conversationMessage.bidAmountDkk,
+          jerseyClubId: conversationMessage.jerseyClubId,
+          jerseyNationalTeamId: conversationMessage.jerseyNationalTeamId,
+          jerseySeasonId: conversationMessage.jerseySeasonId,
+          jerseyType: conversationMessage.jerseyType,
+          jerseySize: conversationMessage.jerseySize,
+        });
+
+      if (!answered) {
+        throw new BadRequestException("Bid is not pending");
+      }
+
+      const touchedConversationIds = [conversationId];
+
+      if (bidStatus === "accepted") {
+        const declined = await declineOtherPendingBudsOnUserJersey(tx, userJerseyId, messageId);
+        // One line per Conversation, even if a race left two pending Buds of one bidder.
+        const goneByConversation = new Map(declined.map((bud) => [bud.conversationId, bud]));
+        const snapshot = {
+          userJerseyId,
+          jerseyClubId: answered.jerseyClubId,
+          jerseyNationalTeamId: answered.jerseyNationalTeamId,
+          jerseySeasonId: answered.jerseySeasonId,
+          jerseyType: answered.jerseyType,
+          jerseySize: answered.jerseySize,
+        };
+
+        await tx.insert(conversationMessage).values([
+          {
+            conversationId,
+            senderId: userId,
+            kind: "system",
+            systemReason: "bid_accepted",
+            bidAmountDkk: answered.bidAmountDkk,
+            ...snapshot,
+          },
+          // A declined bidder sees their own amount, never the accepted one.
+          ...[...goneByConversation.values()].map((bud) => ({
+            conversationId: bud.conversationId,
+            senderId: userId,
+            kind: "system" as const,
+            systemReason: "jersey_gone" as const,
+            bidAmountDkk: bud.bidAmountDkk,
+            ...snapshot,
+          })),
+        ]);
+
+        touchedConversationIds.push(...goneByConversation.keys());
+
+        // A new message brings a hidden Conversation back for its participants.
+        await tx
+          .update(conversationParticipant)
+          .set({ hiddenAt: null })
+          .where(inArray(conversationParticipant.conversationId, touchedConversationIds));
+      }
+
+      await tx
+        .update(conversation)
+        .set({ updatedAt: now })
+        .where(inArray(conversation.id, touchedConversationIds));
+    });
 
     return collectionRespondBidResponseSchema.parse({ bidStatus });
   }
@@ -2949,6 +3043,34 @@ export class CollectionService {
         },
       ];
     });
+  }
+
+  /**
+   * Live state of the UserJerseys messages are about, for those that exist and are not private.
+   * The thumb uses the showcase scope: it serves any non-private jersey to either Collector,
+   * also once bidding is off.
+   */
+  private async loadMessageJerseysLive(jerseyIds: string[]) {
+    const live = new Map<string, MessageJerseyLive>();
+    if (jerseyIds.length === 0) {
+      return live;
+    }
+
+    const [rows, photosByJersey] = await Promise.all([
+      this.db
+        .select({ id: userJersey.id, biddingEnabled: userJersey.biddingEnabled })
+        .from(userJersey)
+        .where(and(inArray(userJersey.id, jerseyIds), eq(userJersey.private, false))),
+      this.loadPhotosForJerseys(jerseyIds, "showcase"),
+    ]);
+
+    for (const row of rows) {
+      live.set(row.id, {
+        thumbUrl: photosByJersey.get(row.id)?.[0]?.photoUrl ?? null,
+        openForBid: row.biddingEnabled,
+      });
+    }
+    return live;
   }
 
   private async loadPhotosForJerseys(

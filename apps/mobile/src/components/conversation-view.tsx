@@ -1,6 +1,7 @@
 import type { CollectionConversationDetail } from "@kit/api-contract";
 import * as ImagePicker from "expo-image-picker";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -13,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { respondBid } from "@/api/bidding";
+import { resolvePhotoUrl } from "@/api/collection";
 import {
   fetchConversation,
   resolveConversationPhotoUrl,
@@ -23,8 +25,9 @@ import { BidCard } from "@/components/bid-card";
 import { ChatBubble } from "@/components/chat-bubble";
 import { MessageComposer } from "@/components/message-composer";
 import { IconButton } from "@/components/ui";
+import { headerInitial, threadItems } from "@/inbox/thread-view-model";
 import { useTypography } from "@/theme/brand-fonts";
-import { space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 type ConversationViewProps = {
@@ -34,38 +37,10 @@ type ConversationViewProps = {
   onConversationOpened?: () => void;
 };
 
-function formatDateLabel(iso: string): string {
-  const date = new Date(iso);
-  return date.toLocaleDateString("da-DK", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
-
-type TimelineItem =
-  | { type: "date"; id: string; label: string }
-  | { type: "message"; id: string; message: CollectionConversationDetail["messages"][number] };
-
-function buildTimeline(messages: CollectionConversationDetail["messages"]): TimelineItem[] {
-  const items: TimelineItem[] = [];
-  let lastDateKey: string | null = null;
-
-  for (const message of messages) {
-    const dateKey = message.createdAt.slice(0, 10);
-    if (dateKey !== lastDateKey) {
-      items.push({
-        type: "date",
-        id: `date-${dateKey}`,
-        label: formatDateLabel(message.createdAt),
-      });
-      lastDateKey = dateKey;
-    }
-    items.push({ type: "message", id: message.id, message });
-  }
-
-  return items;
-}
+/** Conversation header: a 32px round initial. Not the Avatar primitive, which has no 32 size (lock contradiction, flagged in KIT-297). */
+const HEADER_INITIAL_SIZE = 32;
+/** System line: max 300 wide (Conversation, Composition 4). */
+const SYSTEM_LINE_MAX_WIDTH = 300;
 
 export function ConversationView({
   conversationId,
@@ -77,6 +52,7 @@ export function ConversationView({
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [detail, setDetail] = useState<CollectionConversationDetail | null>(null);
@@ -109,11 +85,14 @@ export function ConversationView({
     }
   }, [accessToken, conversationId, onConversationOpened]);
 
-  useEffect(() => {
-    void loadConversation();
-  }, [loadConversation]);
+  // On focus, not only on mount: a Bud sent from Send nyt bud shows when the thread is back.
+  useFocusEffect(
+    useCallback(() => {
+      void loadConversation();
+    }, [loadConversation]),
+  );
 
-  const timeline = detail ? buildTimeline(detail.messages) : [];
+  const items = useMemo(() => (detail ? threadItems(detail) : []), [detail]);
 
   const handleAttach = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -205,14 +184,38 @@ export function ConversationView({
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={insets.top}
     >
-      <View style={[styles.header, { paddingTop: insets.top + space.insetSm }]}>
+      <View
+        testID="conversation-header"
+        style={[
+          styles.header,
+          { paddingTop: insets.top + space.insetSm, borderBottomColor: theme.borderSubtle },
+        ]}
+      >
         <IconButton name="Tilbage" icon="arrow-back" onPress={onBack} />
         <View style={styles.headerCenter}>
-          <Text style={[typography.headingSm, { color: theme.contentPrimary }]} numberOfLines={1}>
+          <View
+            style={[styles.headerInitial, { backgroundColor: theme.fillSecondary }]}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            <Text style={[typography.headingSm, { color: theme.contentPrimary }]}>
+              {headerInitial(detail.peerHandle)}
+            </Text>
+          </View>
+          <Text
+            style={[typography.label, styles.headerHandle, { color: theme.contentPrimary }]}
+            numberOfLines={1}
+            accessibilityRole="header"
+          >
             {detail.peerHandle}
           </Text>
         </View>
-        <IconButton name="Detaljer" icon="ellipsis-horizontal" onPress={onOpenDetails ?? onBack} />
+        <IconButton
+          testID="conversation-more"
+          name="Mere"
+          icon="ellipsis-horizontal"
+          onPress={onOpenDetails ?? onBack}
+        />
       </View>
 
       {error ? (
@@ -222,7 +225,7 @@ export function ConversationView({
       ) : null}
 
       <FlatList
-        data={timeline}
+        data={items}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => {
@@ -234,30 +237,41 @@ export function ConversationView({
             );
           }
 
+          if (item.type === "system") {
+            return (
+              <Text
+                testID="thread-system-line"
+                style={[typography.caption, styles.systemLine, { color: theme.contentSecondary }]}
+              >
+                {item.text}
+              </Text>
+            );
+          }
+
+          if (item.type === "bid") {
+            const answer = item.card.actions === "answer";
+            const thumbPath = item.card.jersey?.thumbPath;
+            return (
+              <BidCard
+                card={item.card}
+                messageId={item.id}
+                thumbUri={thumbPath ? resolvePhotoUrl(thumbPath, "grid") : null}
+                imageHeaders={imageHeaders}
+                responding={respondingBidId === item.id}
+                onAccept={answer ? () => void handleRespondBid(item.id, "accept") : undefined}
+                onDecline={answer ? () => void handleRespondBid(item.id, "decline") : undefined}
+                // SAFETY: the view-model builds only routes that exist under app/(tabs).
+                onNavigate={(href) => router.push(href as Href)}
+              />
+            );
+          }
+
           const message = {
             ...item.message,
             imageUrl: item.message.imageUrl
               ? resolveConversationPhotoUrl(item.message.imageUrl)
               : undefined,
           };
-
-          if (message.kind === "bid") {
-            const incomingPending = message.role === "incoming" && message.bidStatus === "pending";
-            return (
-              <BidCard
-                message={message}
-                peerHandle={detail.peerHandle}
-                incomingPending={incomingPending}
-                responding={respondingBidId === message.id}
-                onAccept={
-                  incomingPending ? () => void handleRespondBid(message.id, "accept") : undefined
-                }
-                onDecline={
-                  incomingPending ? () => void handleRespondBid(message.id, "decline") : undefined
-                }
-              />
-            );
-          }
 
           return (
             <Pressable
@@ -301,11 +315,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: space.insetMd,
-    paddingBottom: space.insetMd,
+    paddingBottom: space.insetSm,
     gap: space.gapSm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerCenter: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.gapSm,
+  },
+  headerInitial: {
+    width: HEADER_INITIAL_SIZE,
+    height: HEADER_INITIAL_SIZE,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerHandle: {
+    flexShrink: 1,
   },
   listContent: {
     paddingVertical: space.insetMd,
@@ -314,6 +342,13 @@ const styles = StyleSheet.create({
   dateLabel: {
     textAlign: "center",
     marginVertical: space.gapMd,
+  },
+  systemLine: {
+    alignSelf: "center",
+    textAlign: "center",
+    maxWidth: SYSTEM_LINE_MAX_WIDTH,
+    marginVertical: space.gapSm,
+    paddingHorizontal: space.insetMd,
   },
   error: {
     paddingHorizontal: space.insetMd,

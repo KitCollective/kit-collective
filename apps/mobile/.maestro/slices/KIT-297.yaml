@@ -1,0 +1,173 @@
+# KIT-297: the Bid card carries its jersey, and accepting a Bud closes the jersey.
+#
+# design-sections: Conversation, Bid card, Chat bubble, Button
+#
+# FIXTURE THIS FLOW READS (apps/api/src/e2e/test-data.fixture.ts): the Test Collector's thread with
+# e2e_peer (...0501) holds two incoming pending Buds: 250 kr on FC København (TEST_UNANSWERED_BID,
+# message ...0502) and 300 kr on Brøndby IF (TEST_TWO_BIDDER_BIDS[0], message ...0503). freja_e2e
+# holds the other pending Bud on Brøndby IF in her own thread (...0504).
+#
+# The flow first sends the Test Collector's own Bud on e2e_peer's OB jersey (...0105, open for bud;
+# the steps of regression/search-bid.yaml, no screenshots), so the same thread also has an outgoing
+# pending card. The thread is reached as in KIT-287: the FC København jersey's bid row (one bidder)
+# opens it.
+#
+# Not on a screen here, proved by tests instead: accept in one step on the server, decline changes
+# only that Bud, the owner turns åben for bud on again, the declined bidder's jersey_gone line and
+# the new Bud landing in the same thread (apps/api/tests/conversation-bid-accept.test.ts); the
+# bidder's side of the accept line, Send nyt bud, a card whose jersey was deleted or made private,
+# and the accessible names (apps/mobile/tests/thread-view-model.test.ts). Each needs a second
+# Collector to sign in or a jersey the fixture does not have.
+appId: app.kitcollective.mobile
+name: kit-297
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-297
+# ---- The Test Collector sends a Bud on e2e_peer's OB jersey (no screenshots) ----
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 15000
+- tapOn:
+    id: search-input
+# The typeahead's Trøjer grid holds the OB jersey (as in KIT-293).
+- inputText: OB
+- extendedWaitUntil:
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    timeout: 15000
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+- extendedWaitUntil:
+    visible:
+      id: send-bid-open
+    timeout: 15000
+- tapOn:
+    id: send-bid-open
+- extendedWaitUntil:
+    visible:
+      id: bid-amount
+    timeout: 15000
+# The amount field starts underneath the floating tab bar; scroll it clear first.
+- scroll
+- runFlow: ../subflows/settle.yaml
+- tapOn:
+    id: bid-amount
+- inputText: "200"
+# The number pad has no return key and covers the form; a tap on the photo dismisses it.
+- tapOn:
+    point: 50%,25%
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: bid-submit
+- extendedWaitUntil:
+    visible:
+      id: send-bid-open
+    timeout: 15000
+# ---- Open the thread with e2e_peer from the FC København jersey's bid row ----
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000101
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-bid-row
+    centerElement: true
+- tapOn:
+    id: jersey-detail-bid-row
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: bid-card-accept-e2e00000-0000-4000-8000-000000000502
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+# AC 1: the header is Back, a 32px round initial, the Handle and More; no jersey line.
+# AC 2: each Bid card starts with its jersey row (thumb, club and season, type · size, chevron).
+# AC 3, 4, 6: "e2e_peer byder på din trøje", the amount in mono 28 with kr, primary Accepter and
+# secondary Afvis on an incoming pending Bud; incoming cards start-aligned.
+- takeScreenshot: kc__kit-297__01-header-and-incoming-pending-cards
+# AC 3, 4, 6: the Test Collector's own pending Bud reads "Du bød" and Afventer svar, no buttons,
+# end-aligned.
+- scrollUntilVisible:
+    element:
+      id: bid-card-status-pending-sender
+    centerElement: true
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__02-outgoing-pending-afventer-svar
+# AC 5, 8, 14: Accepter on the Brøndby IF Bud: the card shows Accepteret with a filled check and no
+# buttons, and the owner's centred system line (not a bubble) says payment and delivery are agreed
+# here in the thread.
+- scrollUntilVisible:
+    element:
+      id: bid-card-accept-e2e00000-0000-4000-8000-000000000503
+    direction: UP
+    centerElement: true
+- tapOn:
+    id: bid-card-accept-e2e00000-0000-4000-8000-000000000503
+- extendedWaitUntil:
+    visible:
+      id: bid-card-status-accepted
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: thread-system-line
+    centerElement: true
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__03-accepted-and-system-line
+# AC 5, 10: Afvis on the FC København Bud: Afvist, no buttons, and no system line for a plain
+# decline.
+- scrollUntilVisible:
+    element:
+      id: bid-card-decline-e2e00000-0000-4000-8000-000000000502
+    direction: UP
+    centerElement: true
+- tapOn:
+    id: bid-card-decline-e2e00000-0000-4000-8000-000000000502
+- extendedWaitUntil:
+    visible:
+      id: bid-card-status-declined
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__04-declined-afvist
+# AC 2, 7: the jersey row opens that jersey: the owner's own Brøndby IF, no longer åben for bud.
+- scrollUntilVisible:
+    element:
+      id: bid-card-jersey-e2e00000-0000-4000-8000-000000000503
+    centerElement: true
+- tapOn:
+    id: bid-card-jersey-e2e00000-0000-4000-8000-000000000503
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-private
+    centerElement: true
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__05-jersey-row-opens-own-jersey-bidding-off
+- stopRecording
