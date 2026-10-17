@@ -87,6 +87,7 @@ import {
 import bcrypt from "bcryptjs";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { BillingService } from "../billing/billing.service.js";
+import { collectorImageContentType } from "../collection/image-content-type.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
 import { requireBetterAuthSecret, requireBetterAuthUrl } from "../config/better-auth-env.js";
@@ -1077,6 +1078,9 @@ export class IdentityService {
     const bytes = Buffer.from(body.contentBase64, "base64");
     if (bytes.length === 0) {
       throw new BadRequestException("Avatar content is empty");
+    }
+    if (!collectorImageContentType(bytes)) {
+      throw new BadRequestException("Avatar is not a JPEG, PNG, WebP or HEIC image");
     }
 
     const objectKey = avatarObjectKeyForUser(userId);
