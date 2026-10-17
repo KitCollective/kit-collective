@@ -132,7 +132,9 @@ name: kit-287
 - scrollUntilVisible:
     element:
       id: jersey-detail-private
-    centerElement: true
+    # AGF has no bid row, so the page is short: the switch rows are in view without a scroll, and
+    # Maestro cannot centre an element on a page that does not scroll (it lost the element once).
+    centerElement: false
 - runFlow: ../subflows/settle.yaml
 - takeScreenshot: kc__kit-287__07-private-on-disables-bidding
 - scrollUntilVisible:
