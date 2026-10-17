@@ -54,3 +54,5 @@ Team `linear.teamKey` keeps Linear’s **Triage** and **Duplicate** states. They
 ## PRs
 
 Every implement run opens one PR into `lanes.integration`. Title starts with the issue id: `<teamKey>-12: …`.
+
+Linear's GitHub integration moves no issue on a merge (the team's "PR merged" automation was removed on 2026-10-17). It fired on any PR that named an issue, so a design-lock PR titled `… (KIT-394)` moved a To-do issue to `Post-Merge`. The factory sets `Post-Merge` and `Done` itself, after the merge and the land gate (`scripts/auto-land.mjs`, `/land`). Do not add the automation back.
