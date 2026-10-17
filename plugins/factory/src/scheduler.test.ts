@@ -129,6 +129,20 @@ describe("write scope", () => {
     expect(scopesOverlap(["apps/api/**"], ["apps/api/src/auth/**"])).toBe(true);
     expect(scopesOverlap(["apps/api/**"], ["apps/mobile/**"])).toBe(false);
     expect(scopesOverlap([], ["apps/mobile/**"])).toBe(false);
+    // Test globs are companion paths (ADR-0064): they never hold a scope.
+    expect(
+      scopesOverlap(["apps/mobile/tests/**"], ["apps/mobile/tests/capture-overview.test.ts"]),
+    ).toBe(false);
+    expect(
+      scopesOverlap(
+        ["apps/mobile/src/search/**", "apps/mobile/tests/**"],
+        ["apps/mobile/tests/**"],
+      ),
+    ).toBe(false);
+    expect(scopesOverlap(["apps/mobile/src/search/**"], ["apps/mobile/src/**"])).toBe(true);
+    expect(scopesOverlap(["apps/mobile/.maestro/**"], ["apps/mobile/.maestro/flows/a.yaml"])).toBe(
+      true,
+    );
   });
 });
 

@@ -45,10 +45,19 @@ function staticPrefix(glob: string): string {
   return cut === -1 ? glob : glob.slice(0, cut);
 }
 
-/** Two globs may match a common path when one static prefix contains the other. */
+/**
+ * A test glob under apps/ or packages/: a companion path every slice may write (ADR-0064), so it
+ * does not hold a write scope. Two slices editing one test file meet as a merge conflict instead.
+ */
+export function isTestGlob(glob: string): boolean {
+  return /^(apps|packages)\//.test(glob) && (/\/tests\//.test(glob) || /\.test\.[^/]*$/.test(glob));
+}
+
+/** Two globs may match a common path when one static prefix contains the other. Test globs never clash. */
 export function scopesOverlap(a: string[], b: string[]): boolean {
-  return a.some((left) =>
-    b.some((right) => {
+  const held = (globs: string[]) => globs.filter((glob) => !isTestGlob(glob));
+  return held(a).some((left) =>
+    held(b).some((right) => {
       const [x, y] = [staticPrefix(left), staticPrefix(right)];
       return x.startsWith(y) || y.startsWith(x);
     }),
