@@ -43,8 +43,22 @@ name: kit-346
     point: 38%,25%
 - waitForAnimationToEnd:
     timeout: 3000
+# Wait for the picker's selected footer, tap confirm, and tap again while the footer
+# shows (the reason is in regression/add-jersey.yaml).
+- extendedWaitUntil:
+    visible: 2 Photos
+    timeout: 15000
+    optional: true
 - tapOn:
     point: 90%,12%
+- repeat:
+    while:
+      visible: 2 Photos
+    times: 3
+    commands:
+      - runFlow: ../subflows/settle.yaml
+      - tapOn:
+          point: 90%,12%
 - extendedWaitUntil:
     visible:
       id: confirm-save
