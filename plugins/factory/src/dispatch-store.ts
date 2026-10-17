@@ -255,7 +255,8 @@ export function createDispatchStore(db: Database) {
       return rows.map((row) => ({
         ...toDispatch(row),
         state: runState(row.status),
-        // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+        // SAFETY: the query reads `gate_runs`, which GATE_MIGRATIONS (gate-store.ts) creates and server.ts
+        // applies before RUN_MIGRATIONS; GateRow mirrors the columns it selects.
         gates: (gates.all(row.issue, row.started_at, row.ended_at, row.ended_at) as GateRow[]).map(
           (gate) => ({
             at: gate.at,
