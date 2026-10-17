@@ -68,3 +68,7 @@ The install is by path, so `reload` picks up the rebuilt `dist/` and keeps the p
 ## What it replaced
 
 The Meta Agents plugin (`bb meta-agents`, folder `~/Projects/bb-plugin-meta-agents`, repo `KitCollective/bb-plugin-meta-agents`) was removed on 2026-10-17. Its agents were Orchestrator, Max, DevOps and Frontend; the Orchestrator's five automations and four Linear triggers were all disabled and had never run, so none was carried over (KIT-358).
+
+## Live checks
+
+What only the running plugin can prove (it builds and reloads, the host bundle probes a thread, the Board answers) is a named live check in `scripts/lib/live-checks.mjs`: `optio-reload`, `optio-host-probe` and `optio-board`. `node scripts/live-check.mjs list` shows them and `node scripts/live-check.mjs run <name> [--thread thr_x]` runs one from the main checkout, with one `LIVE-CHECK <name> pass|fail <line>` verdict. An issue names its checks on a `live-check:` line, and Max's live-check automation runs them after the merge (`staff/max.md`, Live checks). A new check is a reviewed change to that file, never text from an issue.

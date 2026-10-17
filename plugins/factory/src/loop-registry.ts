@@ -99,12 +99,12 @@ export type IssueLoop = Loop & { trigger: IssueTrigger };
 
 export interface Registry {
   loops: Loop[];
-  /** `github.ownerRepo` (owner/name), or null when the config sets none. */
-  repo: string | null;
   /** `agent.workpadHeading`: what the single workpad comment starts with, or null. */
   workpadHeading: string | null;
   /** `flow.maxRunsPerDay`: starts of one issue in 24 h, or null when the config sets none. */
   maxRunsPerDay: number | null;
+  /** `github.ownerRepo` (`owner/name`), which a run's PR number links into; null when unset. */
+  repo: string | null;
 }
 
 export type ParsedRegistry = { ok: true; registry: Registry } | { ok: false; error: string };

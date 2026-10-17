@@ -20,7 +20,12 @@ import { z } from "zod";
 import { AGENT_MIGRATIONS, type Agent, createAgentStore } from "./src/agent-store.js";
 import type { BoardSummary, Plan } from "./src/board.js";
 import { type BoardDto, CHANGED, rpcContract } from "./src/contract.js";
-import { createDispatchStore, DISPATCH_MIGRATIONS, LOOP_MIGRATIONS } from "./src/dispatch-store.js";
+import {
+  createDispatchStore,
+  DISPATCH_MIGRATIONS,
+  LOOP_MIGRATIONS,
+  RUN_MIGRATIONS,
+} from "./src/dispatch-store.js";
 import { createGateStore, GATE_MIGRATIONS } from "./src/gate-store.js";
 import type { GateDeps } from "./src/gate-tool.js";
 import { runGate } from "./src/gate-tool.js";
@@ -36,6 +41,7 @@ import {
   writeWorkpadNote,
 } from "./src/linear-api.js";
 import { createLinearPoller } from "./src/linear-triggers.js";
+import { parseRegistry, type Registry } from "./src/loop-registry.js";
 import { createScheduler } from "./src/scheduler.js";
 import { parseScheduler, type SchedulerConfig } from "./src/scheduler-config.js";
 import {
@@ -64,8 +70,25 @@ const workflowRunSchema = z
     status: z.string(),
     currentPhase: z.string().nullable(),
     error: z.string().nullable(),
+    /** What the workflow returned, once it ended. */
+    result: z.unknown().optional(),
   })
   .loose();
+
+const workflowResultSchema = z.object({
+  prNumber: z.number().int().positive().nullish().catch(null),
+  note: z.string().nullish().catch(null),
+});
+
+/** The pieces of a workflow's result the runs page shows: the PR it reported and its closing note. */
+function workflowResult(result: unknown): { prNumber: number | null; note: string | null } {
+  const parsed = workflowResultSchema.safeParse(result);
+  const note = parsed.success ? (parsed.data.note ?? "") : "";
+  return {
+    prNumber: parsed.success ? (parsed.data.prNumber ?? null) : null,
+    note: note === "" ? null : note.slice(0, 300),
+  };
+}
 
 function describeRun(run: Run): string {
   return [
@@ -167,6 +190,7 @@ export default async function plugin(bb: BbPluginApi) {
     ...AGENT_MIGRATIONS,
     ...LOOP_MIGRATIONS,
     ...GATE_MIGRATIONS,
+    ...RUN_MIGRATIONS,
   ]);
   const runs = createRunStore(db);
   const dispatches = createDispatchStore(db);
@@ -358,18 +382,21 @@ export default async function plugin(bb: BbPluginApi) {
     return run.threadId;
   }
 
+  /** The text of `factory.config.json` in the project checkout. */
+  async function registryText(config: SchedulerConfig): Promise<string> {
+    const file = await bb.sdk.projects.fileContent({
+      projectId: config.projectId,
+      path: "factory.config.json",
+    });
+    return file.contentEncoding === "base64"
+      ? Buffer.from(file.content, "base64").toString("utf8")
+      : file.content;
+  }
+
   let schedulerConfig: SchedulerConfig | null = null;
   const scheduler = createScheduler({
     store: dispatches,
-    async loadRegistry(config) {
-      const file = await bb.sdk.projects.fileContent({
-        projectId: config.projectId,
-        path: "factory.config.json",
-      });
-      return file.contentEncoding === "base64"
-        ? Buffer.from(file.content, "base64").toString("utf8")
-        : file.content;
-    },
+    loadRegistry: registryText,
     loadBoard: async (config) => fetchBoard(await linearApiKey(), config.teamKey),
     moveIssue: async (issueId, stateId) => moveIssue(await linearApiKey(), issueId, stateId),
     latestReviewGate: gateRuns.latestReview,
@@ -401,12 +428,16 @@ export default async function plugin(bb: BbPluginApi) {
         { threadId, runId: null },
         z.object({ run: workflowRunSchema.nullable() }),
       );
+      const result = workflowResult(run?.result);
       return {
         active: active.length > 0,
         last:
           run === null
             ? null
-            : `workflow run ${run.id} ${run.status}${run.currentPhase === null ? "" : ` in phase "${run.currentPhase}"`}${run.error === null ? "" : `: ${run.error}`}`,
+            : `workflow run ${run.id} ${run.status}${run.currentPhase === null ? "" : ` in phase "${run.currentPhase}"`}${run.error === null ? "" : `: ${run.error}`}${result.note === null ? "" : `; it said: ${result.note}`}`,
+        runId: run?.id ?? active[0]?.id ?? null,
+        step: run?.currentPhase ?? active[0]?.currentPhase ?? null,
+        prNumber: result.prNumber,
       };
     },
     async notify(text) {
@@ -447,7 +478,8 @@ export default async function plugin(bb: BbPluginApi) {
       // records what it would do.
       const result = await scheduler.tick(config, config.mode === "live", true);
       if (
-        result.started.length + result.stalled.length + result.unblocked.length > 0 ||
+        result.started.length + result.stalled.length + result.unblocked.length + result.followed >
+          0 ||
         result.refillRequested ||
         result.recorded.length > 0
       ) {
@@ -586,6 +618,53 @@ export default async function plugin(bb: BbPluginApi) {
       throw new Error(run?.reason ?? "the thread could not be started");
     return { threadId: run.threadId };
   };
+
+  const RUNS_PAGE = 100;
+
+  /** The runs page: every run of the record, per Loop and state, with the links of each. */
+  async function runsDto(input: {
+    loop: string | null;
+    state: "running" | "stopped" | "handed-over" | null;
+  }) {
+    const config = await storedScheduler();
+    // A registry that is refused or unreadable still leaves the record of runs to list.
+    let registry: Registry | null = null;
+    if (config !== null) {
+      const parsed = parseRegistry(await registryText(config).catch(() => ""));
+      if (parsed.ok) registry = parsed.registry;
+    }
+    const repo = registry?.repo ?? null;
+    const found = dispatches.runs({ ...input, limit: RUNS_PAGE + 1 });
+    const known = new Set(registry?.loops.map((loop) => loop.name));
+    for (const run of dispatches.runs({ loop: null, state: null, limit: 200 })) {
+      if (run.loop !== null) known.add(run.loop);
+    }
+    return {
+      loops: [...known],
+      truncated: found.length > RUNS_PAGE,
+      runs: found.slice(0, RUNS_PAGE).map((run) => ({
+        id: run.id,
+        loop: run.loop,
+        issue: run.issue,
+        machineId: run.machineId,
+        state: run.state,
+        resume: run.resume,
+        step: run.step,
+        stopReason: run.state === "stopped" ? run.outcome : null,
+        handedOverTo: run.state === "handed-over" ? run.outcome : null,
+        gates: run.gates.map(({ threadId: _thread, ...gate }) => gate),
+        startedAt: run.startedAt,
+        endedAt: run.endedAt,
+        threadId: run.threadId,
+        workflowRunId: run.workflowRunId,
+        prNumber: run.prNumber,
+        prUrl:
+          run.prNumber === null || repo === null
+            ? null
+            : `https://github.com/${repo}/pull/${run.prNumber}`,
+      })),
+    };
+  }
 
   async function boardDto(): Promise<BoardDto> {
     const paused = (await settings.get()).paused;
@@ -798,6 +877,7 @@ export default async function plugin(bb: BbPluginApi) {
       return { hosts: hosts.map((host) => ({ id: host.id, name: host.name ?? host.id })) };
     },
     board_get: boardDto,
+    runs_list: runsDto,
     async board_setup(input) {
       if ((await storedScheduler()) !== null) throw new Error("the board is already set up");
       await saveScheduler({ ...input, mode: "dry-run" });

@@ -20,8 +20,17 @@ export interface SchedulerDeps {
   spawn(request: SpawnRequest): Promise<{ id: string }>;
   /** The thread's status, or null when the thread is gone. */
   threadStatus(threadId: string): Promise<string | null>;
-  /** Whether a workflow run of the thread is active, and a line about its latest run. */
-  workflowRuns(threadId: string): Promise<{ active: boolean; last: string | null }>;
+  /**
+   * Whether a workflow run of the thread is active, a line about its latest
+   * run, and what the run shows: its id, its phase and the PR it reported.
+   */
+  workflowRuns(threadId: string): Promise<{
+    active: boolean;
+    last: string | null;
+    runId?: string | null;
+    step?: string | null;
+    prNumber?: number | null;
+  }>;
   /** The newest review gate recorded for the issue since `since` (epoch ms), or null. */
   latestReviewGate(issue: string, since: number): GateRun | null;
   /** The pull request's head commit now, read on the machine the gate ran on. */
@@ -46,6 +55,8 @@ export interface TickResult {
   started: Dispatch[];
   stalled: Dispatch[];
   unblocked: string[];
+  /** Runs this tick saw move: a new step, workflow run or PR, or a hand-over. */
+  followed: number;
   /** Whether this tick asked the orchestrator to promote from the backlog. */
   refillRequested: boolean;
   /** Why the registry was refused: nothing was planned or started. Null when it was read. */
@@ -211,27 +222,44 @@ export function createScheduler(deps: SchedulerDeps) {
     return `${decision.reason}; the issue is in ${landed}`;
   }
 
+  /** Writes down what a run's workflow and its issue show now: the run, its phase and its PR. */
+  function observe(
+    dispatch: Dispatch,
+    runs: Awaited<ReturnType<SchedulerDeps["workflowRuns"]>>,
+    issue: BoardIssue | undefined,
+  ): boolean {
+    return store.observe(dispatch.id, {
+      workflowRunId: runs.runId ?? null,
+      step: runs.step ?? null,
+      prNumber: runs.prNumber ?? issue?.pullRequest ?? null,
+    });
+  }
+
   /** Ends every active run whose workflow and launcher thread have both stopped. */
   async function reconcile(
     config: SchedulerConfig,
     registry: Registry,
     board: Board,
-  ): Promise<Dispatch[]> {
+  ): Promise<{ stalled: Dispatch[]; followed: number }> {
     const stalled: Dispatch[] = [];
+    let followed = 0;
     const dispatchStates = registry.loops.flatMap((loop) =>
       loop.trigger.kind === "issue" ? [loop.trigger.state] : [],
     );
     for (const dispatch of store.active()) {
-      if (deps.now() - dispatch.startedAt < config.startGraceSeconds * 1000) continue;
+      const issue = board.issues.find((candidate) => candidate.identifier === dispatch.issue);
       let last: string | null = "the launcher thread never started";
       if (dispatch.threadId !== null) {
         const runs = await deps.workflowRuns(dispatch.threadId);
+        if (observe(dispatch, runs, issue)) followed += 1;
+        if (deps.now() - dispatch.startedAt < config.startGraceSeconds * 1000) continue;
         if (runs.active) continue;
         const status = await deps.threadStatus(dispatch.threadId);
         if (status !== null && status !== "idle" && status !== "error") continue;
         last = runs.last;
+      } else if (deps.now() - dispatch.startedAt < config.startGraceSeconds * 1000) {
+        continue;
       }
-      const issue = board.issues.find((candidate) => candidate.identifier === dispatch.issue);
       if (
         issue !== undefined &&
         config.handOver !== undefined &&
@@ -251,13 +279,14 @@ export function createScheduler(deps: SchedulerDeps) {
         (dispatchStates.includes(issue.state) || config.activeStates.includes(issue.state));
       if (!working) {
         store.end(dispatch.id, "handed-over", issue?.state ?? "closed", deps.now());
+        followed += 1;
         continue;
       }
       const outcome = `${last ?? "no workflow run was recorded"}; the issue is in ${issue.state}`;
       store.end(dispatch.id, "stalled", outcome.slice(0, 500), deps.now());
       stalled.push({ ...dispatch, status: "stalled", outcome });
     }
-    return stalled;
+    return { stalled, followed };
   }
 
   function stallMessage(config: SchedulerConfig, dispatch: Dispatch): string {
@@ -309,6 +338,7 @@ export function createScheduler(deps: SchedulerDeps) {
           started: [],
           stalled: [],
           unblocked: [],
+          followed: 0,
           refillRequested: false,
           refusal: read.error,
           registry: null,
@@ -321,7 +351,9 @@ export function createScheduler(deps: SchedulerDeps) {
       }
       const { registry } = read;
       const board = await deps.loadBoard(config);
-      const stalled = apply ? await reconcile(config, registry, board) : [];
+      const { stalled, followed } = apply
+        ? await reconcile(config, registry, board)
+        : { stalled: [], followed: 0 };
       const plan = await planFor(config, board, registry);
       const result: TickResult = {
         plan,
@@ -329,6 +361,7 @@ export function createScheduler(deps: SchedulerDeps) {
         started: [],
         stalled,
         unblocked: [],
+        followed,
         refillRequested: false,
         refusal: null,
         registry,

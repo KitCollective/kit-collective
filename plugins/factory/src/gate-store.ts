@@ -2,8 +2,10 @@
 import type { Database } from "better-sqlite3";
 
 /**
- * Appended after every other migration list, because the lists run as one
- * sequence and an insert in the middle would move the ones after it.
+ * Appended after the Loop migrations, which development ships it after, so a
+ * database that already ran it keeps its indexes (RUN_MIGRATIONS follow it).
+ * The lists run as one sequence and an insert in the middle would move the
+ * ones after it.
  */
 export const GATE_MIGRATIONS = [
   `CREATE TABLE gate_runs (

@@ -36,6 +36,17 @@ const refused = (text: string) => {
 };
 
 describe("parseRegistry", () => {
+  it("reads the repository a run's PR links into, and refuses a malformed one", () => {
+    const withRepo = (ownerRepo: unknown) =>
+      JSON.stringify({ loops: [issueLoop], github: { ownerRepo, other: 1 } });
+    expect(parseRegistry(withRepo("acme/app"))).toMatchObject({
+      ok: true,
+      registry: { repo: "acme/app" },
+    });
+    expect(parseRegistry(registry())).toMatchObject({ ok: true, registry: { repo: null } });
+    expect(refused(withRepo("not a repo"))).toContain("factory.config.json.github.ownerRepo");
+  });
+
   it("reads the loops and the per-day cap, ignoring the rest of the config", () => {
     const parsed = parseRegistry(registry(undefined, { maxRunsPerDay: 3, runLog: "x" }));
     expect(parsed).toMatchObject({ ok: true, registry: { maxRunsPerDay: 3 } });

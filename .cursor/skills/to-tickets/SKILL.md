@@ -66,6 +66,7 @@ Every issue:
 - Parent **project + milestone** from the spec. Every issue belongs to exactly one milestone. A milestone is a handful of slices that promote to staging **together**. Do not dump the whole product into one milestone.
 - Native `blockedBy`
 - Label `ready-for-agent`
+- A `live-check: <name>[, <name>]` line when an acceptance criterion can only be proven on the owner's machine after the merge (reload Optio, probe a thread, the Board). Names come from `scripts/lib/live-checks.mjs` (`node scripts/live-check.mjs list`); a check that is not there is added there first, in a factory PR. Max runs them after the merge and reopens the issue on a failure.
 - Optional `write-scope: path/globs` in the body when the slice is obviously bounded. If the slice adds a required process env, include `.github/workflows/**`. If it has UI, point the body at `docs/design-system.md`. If it has Nest/auth, point at the relevant `{paths.specs}/Architecture/tech-stack.md` section.
 - **What to build ↔ AC:** every clause in What to build must have a matching acceptance-criterion checkbox. Implement and checker treat the **whole issue body** as spec — an orphan What to build sentence (e.g. national teams in the picker) is still in scope even if AC forgot it. Prefer making it an AC line at publish time.
 - Surface labels from `labels.surfaces` (`surface:<name>`) are hints for `/implement` helpers — **not** a reason to split horizontally

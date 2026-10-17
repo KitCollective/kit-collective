@@ -22,6 +22,17 @@ export interface BoardIssue {
   blockedBy: string[];
   /** Globs from the description's `write-scope:` line; empty when undeclared. */
   writeScope: string[];
+  /** The number of the newest pull request attached to the issue, or null. */
+  pullRequest: number | null;
+}
+
+/** The number in the newest `…/pull/<n>` URL; Linear lists attachments oldest first. */
+export function pullRequestOf(urls: string[]): number | null {
+  const numbers = urls.flatMap((url) => {
+    const match = /\/pull\/(\d+)(?:[/?#]|$)/.exec(url);
+    return match === null ? [] : [Number(match[1])];
+  });
+  return numbers.at(-1) ?? null;
 }
 
 export interface Board {
@@ -43,6 +54,7 @@ query Board($team: String!, $first: Int!, $after: String) {
       labels(first: 25) { nodes { name } }
       projectMilestone { name }
       project { name }
+      attachments(first: 25) { nodes { url } }
       inverseRelations(first: 25) { nodes { type issue { identifier state { type } } } }
     }
   }
@@ -70,6 +82,7 @@ const pageSchema = z.object({
         labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
         projectMilestone: z.object({ name: z.string() }).nullable(),
         project: z.object({ name: z.string() }).nullable(),
+        attachments: z.object({ nodes: z.array(z.object({ url: z.string() })) }),
         inverseRelations: z.object({
           nodes: z.array(
             z.object({
@@ -150,6 +163,7 @@ export async function fetchBoard(
           )
           .map((relation) => relation.issue.identifier),
         writeScope: parseWriteScope(node.description),
+        pullRequest: pullRequestOf(node.attachments.nodes.map((attachment) => attachment.url)),
       });
     }
     if (!data.issues.pageInfo.hasNextPage) return { states, issues };
