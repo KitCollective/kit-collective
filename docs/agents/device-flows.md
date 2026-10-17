@@ -33,7 +33,7 @@ Every flow first calls `POST /v1/e2e/test-data`, so flows are independent and a 
 
 ### The fixed Vision answer
 
-The reset takes an optional JSON body, `{"vision": "<case>"}`, that picks what the fixed Vision of the Test Collector answers until the next reset (the case lives in the API process). `reset-test-data.js` sends it when a `VISION` is defined, and `subflows/sign-in.yaml` passes the `VISION` its caller gives it (default `resolved`).
+The reset takes an optional JSON body, `{"vision": "<case>"}`, that picks what the fixed Vision of the Test Collector answers until the next reset (the case lives in the API process). `reset-test-data.js` sends it when a `VISION` is defined, and `subflows/sign-in.yaml` passes the `VISION` its caller gives it (none means an empty body and the API's default, `resolved`). It sets no `env:` default of its own: Maestro defines a header `env:` after the caller's value, so a default there overrides every caller.
 
 | `vision` | The Test Collector's Vision answers |
 | --- | --- |
