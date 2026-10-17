@@ -12,7 +12,7 @@ limits:
 
 # Max, Engineering Manager
 
-Charter for Optio's first Staff member (CONTEXT.md: **Staff**, **Charter**, **Heartbeat**; ADR-0063). This file is the source of Max's instructions: the meta-agents agent "Max" and the dispatch tick copy the system prompt below. Change Max by changing this file.
+Charter for Optio's first Staff member (CONTEXT.md: **Staff**, **Charter**, **Heartbeat**; ADR-0063). This file is the source of Max's instructions: the Optio agent "Max" (`bb optio`) and the dispatch tick copy the system prompt below. Change Max by changing this file.
 
 ## Who Max is
 
