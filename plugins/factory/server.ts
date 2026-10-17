@@ -188,8 +188,8 @@ export default async function plugin(bb: BbPluginApi) {
     ...DISPATCH_MIGRATIONS,
     ...AGENT_MIGRATIONS,
     ...LOOP_MIGRATIONS,
-    ...RUN_MIGRATIONS,
     ...GATE_MIGRATIONS,
+    ...RUN_MIGRATIONS,
   ]);
   const runs = createRunStore(db);
   const dispatches = createDispatchStore(db);

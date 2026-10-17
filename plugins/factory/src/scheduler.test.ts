@@ -7,6 +7,7 @@ import {
   LOOP_MIGRATIONS,
   RUN_MIGRATIONS,
 } from "./dispatch-store.js";
+import { createGateStore, GATE_MIGRATIONS } from "./gate-store.js";
 import { type Board, type BoardIssue, fetchBoard, parseWriteScope } from "./linear-api.js";
 import { parseRegistry, type Registry } from "./loop-registry.js";
 import { createScheduler } from "./scheduler.js";
@@ -419,7 +420,12 @@ describe("planBoard", () => {
 
 function setup(board: Board) {
   const db = new Database(":memory:");
-  for (const statement of [...DISPATCH_MIGRATIONS, ...LOOP_MIGRATIONS, ...RUN_MIGRATIONS])
+  for (const statement of [
+    ...DISPATCH_MIGRATIONS,
+    ...LOOP_MIGRATIONS,
+    ...GATE_MIGRATIONS,
+    ...RUN_MIGRATIONS,
+  ])
     db.exec(statement);
   const store = createDispatchStore(db);
   const state: {
@@ -479,7 +485,7 @@ function setup(board: Board) {
     now: () => state.clock,
     log: () => {},
   });
-  return { scheduler, store, state };
+  return { scheduler, store, state, db };
 }
 
 describe("refilling the queue from the backlog", () => {
@@ -870,7 +876,7 @@ describe("the record of runs", () => {
   });
 
   it("lists runs per Loop and per state, newest first, with the gates recorded for each", async () => {
-    const { store } = setup({ states, issues: [] });
+    const { store, db } = setup({ states, issues: [] });
     const start = (issueKey: string, loop: string, at: number) =>
       store.start({ issue: issueKey, loop, machineId: "mac", resume: false, now: at });
     const first = start("ENG-1", "Issue run", 1000);
@@ -881,17 +887,28 @@ describe("the record of runs", () => {
     const fourth = start("ENG-4", "Issue run", 6000);
     store.end(fourth.id, "stalled", "x", 6500);
     store.release("ENG-4");
-    store.recordGate(
-      first.id,
-      {
-        gate: "pre-review",
-        exitCode: 0,
-        verdict: "pre-review: open",
-        commit: "abc123",
+    const gates = createGateStore(db);
+    const gate = (over: Partial<Parameters<typeof gates.record>[0]>) =>
+      gates.record({
+        at: 1500,
         threadId: "thr_9",
-      },
-      1500,
-    );
+        gate: "pre-review",
+        pr: 7,
+        issue: "ENG-1",
+        outcome: "ran",
+        exitCode: 0,
+        verdictLine: "pre-review: open",
+        sha: "abc123",
+        hostId: null,
+        reason: null,
+        ...over,
+      });
+    gate({});
+    // Not verdicts of this run: a refused call, another issue's gate, and gates outside the run's time.
+    gate({ outcome: "refused", exitCode: null, verdictLine: null, sha: null, reason: "bad" });
+    gate({ issue: "ENG-2", at: 3500 });
+    gate({ at: 500 });
+    gate({ at: 2500 });
 
     const states_ = (filter: Parameters<typeof store.runs>[0]) =>
       store.runs(filter).map((run) => `${run.issue}:${run.state}`);

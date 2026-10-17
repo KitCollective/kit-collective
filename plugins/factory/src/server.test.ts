@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { readdirSync } from "node:fs";
 import {
   createFakePluginHost,
@@ -8,7 +8,11 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import plugin from "../server.js";
+import { AGENT_MIGRATIONS } from "./agent-store.js";
 import type { rpcContract } from "./contract.js";
+import { DISPATCH_MIGRATIONS, LOOP_MIGRATIONS } from "./dispatch-store.js";
+import { createGateStore, GATE_MIGRATIONS } from "./gate-store.js";
+import { MIGRATIONS } from "./store.js";
 
 type Contract = typeof rpcContract;
 type Rpc = <M extends keyof Contract & string>(
@@ -84,7 +88,7 @@ async function load(settings: Record<string, unknown> = {}) {
     enabled: true,
     httpTrigger: true,
   });
-  return { harness: host.harness, rpc, agent, checkout };
+  return { harness: host.harness, rpc, agent, checkout, db: host.bb.storage.database() };
 }
 
 type Loaded = Awaited<ReturnType<typeof load>>;
@@ -429,6 +433,34 @@ describe("the board reads the Loop registry", () => {
   });
 });
 
+describe("the plugin's migrations", () => {
+  it("keeps the order an installed Optio recorded: the Loop migrations, then the gate runs, then the runs page's", async () => {
+    // Development shipped these lists in this order; a database that ran them
+    // refuses any other order at the first statement that differs.
+    const shipped = [
+      ...MIGRATIONS,
+      ...DISPATCH_MIGRATIONS,
+      ...AGENT_MIGRATIONS,
+      ...LOOP_MIGRATIONS,
+      ...GATE_MIGRATIONS,
+    ];
+    const { db } = await load();
+    const recorded = db
+      .prepare("SELECT id, statement_hash FROM _bb_migrations ORDER BY id")
+      .all() as {
+      id: number;
+      statement_hash: string;
+    }[];
+    expect(recorded.length).toBeGreaterThan(shipped.length);
+    shipped.forEach((statement, index) => {
+      expect(recorded[index]).toEqual({
+        id: index,
+        statement_hash: createHash("sha256").update(statement).digest("hex"),
+      });
+    });
+  });
+});
+
 describe("the runs page", () => {
   const loops = [
     {
@@ -508,6 +540,29 @@ describe("the runs page", () => {
       const afterSeen = published();
       await harness.behavior.runSchedule("orchestrator-tick"); // sees nothing new
       expect(published()).toBe(afterSeen);
+
+      // The gates `optio_gate` records for the issue are the run's verdicts; a refused call, another issue's gate
+      // and a gate from before the run are not.
+      const gates = createGateStore(loaded.db);
+      const gate = (over: Partial<Parameters<typeof gates.record>[0]>) =>
+        gates.record({
+          at: Date.now(),
+          threadId: "thr_2",
+          gate: "pre-review",
+          pr: 7,
+          issue: "ENG-1",
+          outcome: "ran",
+          exitCode: 0,
+          verdictLine: "pre-review: open",
+          sha: "abc123",
+          hostId: "host_1",
+          reason: null,
+          ...over,
+        });
+      gate({});
+      gate({ outcome: "refused", exitCode: null, verdictLine: null, sha: null, reason: "bad" });
+      gate({ issue: "ENG-2" });
+      gate({ at: Date.now() - 60_000 });
       const page = await rpc("runs_list", { loop: "Issue run", state: "running" });
       expect(page.runs).toEqual([
         expect.objectContaining({
@@ -517,7 +572,15 @@ describe("the runs page", () => {
           state: "running",
           step: "Engineer",
           stopReason: null,
-          gates: [],
+          gates: [
+            {
+              at: expect.any(Number),
+              gate: "pre-review",
+              exitCode: 0,
+              verdict: "pre-review: open",
+              commit: "abc123",
+            },
+          ],
           threadId: "thr_1",
           workflowRunId: "wfr_1",
           prNumber: 7,

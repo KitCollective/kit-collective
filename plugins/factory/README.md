@@ -69,9 +69,9 @@ attachment on the Linear issue; the last look before a run ends is kept. A run
 links to its launcher thread (the thread that started the workflow), copies
 `bb workflows status <run id>` for its workflow run, and opens its PR on GitHub
 when `github.ownerRepo` is set in `factory.config.json`. A stopped run's reason
-is the workflow's closing note plus the status the issue is in. Gate verdicts
-appear once Optio records them (`gate_verdicts`); until then the row has
-none.
+is the workflow's closing note plus the status the issue is in. Its gate
+verdicts are the gates `optio_gate` recorded (`gate_runs`) for the run's issue
+while the run lasted; a run with none shows none.
 
 ## Install
 
