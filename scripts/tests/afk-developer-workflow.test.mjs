@@ -366,6 +366,37 @@ test("a red review loops once to a fix pass, logs the red audit, and stops at th
   assert.equal(commands.at(-1), waitingCmds(commands)[0]);
 });
 
+test("a red review with only light findings at the cap gets one extra round, and that one only", async () => {
+  const light = {
+    verdict: "red",
+    sha: SHA,
+    rows: ["architecture"],
+    sentence: "a SAFETY comment names the wrong table",
+    threadId: REVIEWER_THREAD,
+    light: true,
+  };
+  // Light red three times: rounds 1 and 2, then the one extra round, then a person.
+  const capped = await run({ reviewer: () => light });
+  assert.equal(capped.result.status, "Approval");
+  assert.equal(capped.result.rounds, 3);
+  assert.equal(capped.commands.filter((c) => c.includes("--code light-extra-round")).length, 1);
+  assert.equal(
+    agentSpawns(capped.spawns).filter((s) => s.options.label.startsWith("engineer:")).length,
+    3,
+  );
+  // Light red at the cap, then green: the extra round reaches Approval through the normal green path.
+  const fixed = await run({
+    reviewer: (n) =>
+      n <= 2 ? light : { verdict: "green", sha: SHA, sentence: "ok", threadId: REVIEWER_THREAD },
+  });
+  assert.equal(fixed.result.rounds, 3);
+  assert.ok(fixed.commands.some((c) => c.includes("audit-receipt")));
+  // A red that is not light at the cap gets no extra round.
+  const heavy = await run({ reviewer: () => ({ ...light, light: false }) });
+  assert.equal(heavy.result.rounds, 2);
+  assert.ok(!heavy.commands.some((c) => c.includes("light-extra-round")));
+});
+
 test("red then green: the second round reaches Approval", async () => {
   const { result } = await run({
     reviewer: (n) =>
