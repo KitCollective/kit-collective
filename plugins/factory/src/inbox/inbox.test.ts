@@ -272,8 +272,8 @@ describe("the Inbox", () => {
       const inbox = await rpc("inbox_list", null);
       expect(inbox.error).toBeNull();
       expect(inbox.cards.map((card) => card.identifier)).toEqual(["ENG-1", "ENG-2", "ENG-3"]);
-      const [, init] = fetchMock.mock.calls.at(-1) as unknown as [string, { body: string }];
-      expect(JSON.parse(init.body).variables).toMatchObject({ team: "ENG" });
+      // The Linear read went to the team factory.config.json names.
+      expect(JSON.stringify(fetchMock.mock.calls.at(-1))).toContain('\\"team\\":\\"ENG\\"');
     } finally {
       vi.unstubAllGlobals();
     }
