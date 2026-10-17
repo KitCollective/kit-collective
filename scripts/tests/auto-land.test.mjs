@@ -458,7 +458,7 @@ test("refuses a diff that touches a workflow or a factory script even when the s
   noEffects(w);
 });
 
-test("refuses surface:mobile unless no-device-needed", () => {
+test("refuses surface:mobile with neither a slice flow nor no-device-needed", () => {
   const w = world({ labels: ["ready-for-agent", "surface:mobile"] });
   const result = w.start();
   refusedWith(result, "needs-human");
@@ -466,12 +466,41 @@ test("refuses surface:mobile unless no-device-needed", () => {
   noEffects(w);
 });
 
-test("refuses a diff over 400 changed lines", () => {
-  const w = world({ files: { "apps/web/src/big.ts": `${"x\n".repeat(401)}` } });
+test("a surface:mobile slice whose diff holds its own slice flow is not refused for the device", () => {
+  const files = {
+    "apps/web/src/a.ts": "export const a = 1;\n",
+    "apps/mobile/.maestro/slices/KIT-9.yaml": "appId: x\n",
+  };
+  const w = world({ files, labels: ["ready-for-agent", "surface:mobile"] });
+  assert.equal(w.start(["--dry-run"]).status, 0);
+  const other = world({
+    files: { ...files, "apps/mobile/.maestro/slices/KIT-8.yaml": "appId: y\n" },
+    labels: ["ready-for-agent", "surface:mobile"],
+  });
+  refusedWith(other.start(["--dry-run"]), "out-of-scope");
+});
+
+test("refuses a diff over 4000 changed lines", () => {
+  const w = world({ files: { "apps/web/src/big.ts": `${"x\n".repeat(4001)}` } });
   const result = w.start();
   refusedWith(result, "oversize-diff");
-  assert.match(result.stdout, /401 lines/);
+  assert.match(result.stdout, /4001 lines/);
   noEffects(w);
+});
+
+test("test files under apps/ and packages/ are companions of the write-scope; scripts/ tests are not", () => {
+  const ok = world({
+    files: {
+      "apps/web/src/a.ts": "1\n",
+      "apps/api/tests/collection.test.ts": "2\n",
+      "packages/api-contract/tests/discover-home.test.ts": "3\n",
+    },
+  });
+  assert.equal(ok.start(["--dry-run"]).status, 0);
+  const factory = world({
+    files: { "apps/web/src/a.ts": "1\n", "scripts/tests/some.test.mjs": "2\n" },
+  });
+  refusedWith(factory.start(["--dry-run"]), "out-of-scope");
 });
 
 test("refuses a file outside the issue's write-scope, and an issue with no write-scope", () => {

@@ -9,6 +9,7 @@ import { assertRef, nulList } from "./lib/git-files.mjs";
 import {
   changedFilesDiffArgs,
   findWriteScopeViolations,
+  issueKeyIn,
   parseWriteScopeGlobs,
   shouldEnforceWriteScope,
 } from "./lib/pr-write-scope.mjs";
@@ -85,7 +86,9 @@ function main() {
     process.exit(2);
   }
   const changedFiles = getChangedFiles(baseRef);
-  const violations = findWriteScopeViolations(changedFiles, globs);
+  const violations = findWriteScopeViolations(changedFiles, globs, {
+    issue: issueKeyIn(scopeText),
+  });
 
   if (violations.length > 0) {
     console.error("PR write-scope ratchet failed — files outside declared write-scope:\n");
@@ -94,7 +97,7 @@ function main() {
     }
     console.error(`\nDeclared write-scope: ${globs.join(", ")}`);
     console.error(
-      "Ratchet-exception paths: .cursor/hooks/**, .cursor/rules/**, docs/agents/error-ratcheting.md, .github/workflows/** (CI wiring), and named ratchet scripts listed in scripts/lib/pr-write-scope.mjs",
+      "Ratchet-exception paths: .cursor/hooks/**, .cursor/rules/**, docs/agents/error-ratcheting.md, .github/workflows/** (CI wiring), and named ratchet scripts listed in scripts/lib/pr-write-scope.mjs. Companion paths: test files under apps/ and packages/, and the issue's own slice flow.",
     );
     process.exit(1);
   }
