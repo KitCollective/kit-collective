@@ -34,6 +34,10 @@ export function SearchFieldDiscover({
   const inputRef = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
 
+  // The lock shows Back in focus and from the first character, so a blurred field that
+  // still holds a query keeps it.
+  const showBack = focused || Boolean(value);
+
   const handleBack = () => {
     inputRef.current?.blur();
     onClear?.();
@@ -46,15 +50,14 @@ export function SearchFieldDiscover({
       style={[
         styles.field,
         { backgroundColor: theme.fillSecondary },
-        focused && styles.fieldFocused,
+        showBack && styles.fieldFocused,
       ]}
     >
-      {focused ? (
+      {showBack ? (
         <IconButton
           testID="search-back"
           name="Tilbage"
           icon="arrow-back"
-          iconSize={20}
           iconColor={theme.contentMuted}
           onPress={handleBack}
         />
@@ -105,7 +108,7 @@ const styles = StyleSheet.create({
     paddingLeft: space.insetMd,
     paddingRight: space.insetSm,
   },
-  // The 44 Back button carries its own inset, so the glyph lines up with the search icon.
+  // The 44 Back button carries its own inset; the glyph sits a few points right of the search icon.
   fieldFocused: {
     paddingLeft: space.insetSm,
   },

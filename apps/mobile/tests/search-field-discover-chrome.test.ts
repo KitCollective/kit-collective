@@ -22,8 +22,9 @@ describe("SearchFieldDiscover chrome", () => {
     expect(field).toContain("onBlur?.(event)");
     // In focus the leading slot is Back with an accessible name; at rest it is the search icon.
     expect(field).toMatch(
-      /focused \? \(\s*<IconButton\s+testID="search-back"\s+name="Tilbage"\s+icon="arrow-back"/,
+      /showBack \? \(\s*<IconButton\s+testID="search-back"\s+name="Tilbage"\s+icon="arrow-back"/,
     );
+    expect(field).toContain("const showBack = focused || Boolean(value)");
     expect(field).toContain('<Ionicons name="search"');
     expect(field.indexOf('name="Tilbage"')).toBeLessThan(field.indexOf('<Ionicons name="search"'));
   });
