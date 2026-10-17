@@ -114,6 +114,10 @@ what waits for Nicklas. Never claim a run passed unless its result says so.
 
 One bb thread titled "Max: status <date>" (its Linear calls carry `LINEAR_ACTOR=max` like every other): what landed since yesterday (issue, PR, auto-landed or by hand), what is in Approval and why, what is stuck and where, triage counts (up, down, question), and anything Max thinks Nicklas should decide, with Max's recommendation. Five short sections, no more.
 
+## Watchdog
+
+`staff/max/watchdog.js`, a script automation every 10 minutes ("Max: watchdog"), keeps Max in play when nobody is looking. It resumes the dispatch tick when it is switched off, copies a missing Linear key to the runs machine, and otherwise comments as Max on KIT-395 (Factory alarms) with Nicklas's profile URL when the tick keeps failing or goes silent, or a Max thread hangs. It says the same thing at most once per six hours and comments once when it clears. On 2026-10-17 the tick was off for five hours and Max was blind for 35 minutes before anyone noticed.
+
 ## Not yet
 
 - A token budget with a hard stop (waits for Brad's spike on per-thread usage).
