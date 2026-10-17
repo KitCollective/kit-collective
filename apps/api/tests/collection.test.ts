@@ -364,6 +364,13 @@ async function findOwnJersey(
   return body.jerseys.find((item) => item.id === jerseyId);
 }
 
+/** Every leaf value of a parsed JSON body, so a test can look for an amount without matching ids. */
+function jsonValues(node: unknown): unknown[] {
+  if (Array.isArray(node)) return node.flatMap(jsonValues);
+  if (node !== null && typeof node === "object") return Object.values(node).flatMap(jsonValues);
+  return [node];
+}
+
 async function getPeerJerseyRaw(app: NestFastifyApplication, session: Session, jerseyId: string) {
   return app.inject({
     method: "GET",
@@ -902,8 +909,11 @@ describe("Collection /v1", () => {
         const raw = JSON.parse(response.body) as Record<string, unknown>;
         expect(raw).not.toHaveProperty("latestBidAmountDkk");
         expect(Object.keys(raw).filter((key) => /[Aa]mount|[Bb]id(?!ding)/.test(key))).toEqual([]);
-        expect(response.body).not.toContain("350");
-        expect(response.body).not.toContain("500");
+        // Compare parsed values, not body substrings: the body holds random hex ids that can contain "350".
+        expect(jsonValues(raw)).not.toContain(350);
+        expect(jsonValues(raw)).not.toContain(500);
+        expect(jsonValues(raw)).not.toContain("350");
+        expect(jsonValues(raw)).not.toContain("500");
         collectionPeerJerseySchema.parse(raw);
       }
     }
@@ -1429,6 +1439,24 @@ describe("Collection /v1", () => {
     expect(privateBody.statusCode).toBe(nonexistentBody.statusCode);
     expect(privateBody.message).toBe(nonexistentBody.message);
     expect(privateBody.error).toBe(nonexistentBody.error);
+  });
+
+  it("the owner's own jersey reads as not found on the peer route, like an unknown id", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "own-peer-owner@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+    await patchJerseyBidding(app, owner, ownerJersey.id, true);
+
+    const ownResponse = await getPeerJerseyRaw(app, owner, ownerJersey.id);
+    expect(ownResponse.statusCode).toBe(404);
+
+    const nonexistentResponse = await getPeerJerseyRaw(
+      app,
+      owner,
+      "00000000-0000-0000-0000-0000000000aa",
+    );
+    expect(nonexistentResponse.statusCode).toBe(404);
+    expect(JSON.parse(ownResponse.body)).toEqual(JSON.parse(nonexistentResponse.body));
   });
 
   it("excludes private jerseys from discover results (peer)", async () => {
