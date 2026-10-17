@@ -26,6 +26,9 @@ import {
   LOOP_MIGRATIONS,
   RUN_MIGRATIONS,
 } from "./src/dispatch-store.js";
+import { createGateStore, GATE_MIGRATIONS } from "./src/gate-store.js";
+import type { GateDeps } from "./src/gate-tool.js";
+import { runGate } from "./src/gate-tool.js";
 import { hostContract } from "./src/host-contract.js";
 import { type ProbeDeps, probeThread, renderProbe } from "./src/host-probe.js";
 import { verifyLinearWebhook } from "./src/linear.js";
@@ -186,10 +189,12 @@ export default async function plugin(bb: BbPluginApi) {
     ...AGENT_MIGRATIONS,
     ...LOOP_MIGRATIONS,
     ...RUN_MIGRATIONS,
+    ...GATE_MIGRATIONS,
   ]);
   const runs = createRunStore(db);
   const dispatches = createDispatchStore(db);
   const agents = createAgentStore(db);
+  const gateRuns = createGateStore(db);
   runs.failInterrupted(Date.now());
 
   const changed = () => bb.realtime.publish(CHANGED, {});
@@ -249,6 +254,36 @@ export default async function plugin(bb: BbPluginApi) {
         const message = error instanceof Error ? error.message : String(error);
         return { content: [{ type: "text", text: message }], isError: true };
       }
+    },
+  });
+
+  // The gate tool: the agent names a gate, Optio runs the repo's gate script on the thread's
+  // machine and records the verdict itself, so a gate result is not a model's relay of one.
+  const gateDeps: GateDeps = {
+    ...probeDeps,
+    runGate: (hostId, cwd, call) =>
+      hostClient.call("run_gate", { cwd, ...call }, { hostId, timeoutMs: 28 * 60_000 }),
+    record: gateRuns.record,
+    now: Date.now,
+  };
+
+  bb.agents.registerTool({
+    name: "optio_gate",
+    description:
+      "Run one of the repo's flow gates (pre-review, review, land) for a pull request and an issue, on this thread's machine in its worktree. Optio records the exit code, verdict line, commit SHA, gate and thread, and returns the same. Exit 0 means open, 1 closed, 3 waiting (call again), 4 unknown. An unknown gate or a malformed argument is refused and recorded, not run.",
+    // The parameters are loose on purpose: the fake and the real host parse them before
+    // execute, and a strict schema would refuse a bad call before Optio could record it.
+    parameters: z.object({
+      gate: z.string().optional().describe("pre-review, review or land"),
+      pr: z.union([z.number(), z.string()]).optional().describe("The pull request number"),
+      issue: z.string().optional().describe("The issue key, for example ABC-12"),
+    }),
+    async execute(params, ctx) {
+      const record = await runGate(gateDeps, params, ctx.threadId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(record) }],
+        ...(record.outcome === "ran" ? {} : { isError: true }),
+      };
     },
   });
 
@@ -1279,6 +1314,44 @@ export default async function plugin(bb: BbPluginApi) {
                         ]
                           .join("  ")
                           .trimEnd(),
+                      )
+                      .join("\n"),
+            };
+          },
+        }),
+        gates: cliCommand({
+          summary: "Show the gate runs the gate tool recorded, newest first",
+          options: {
+            limit: {
+              type: "integer",
+              min: 1,
+              max: 200,
+              default: 20,
+              description: "How many to show (1-200, default 20)",
+            },
+            json,
+          },
+          run(input) {
+            const rows = gateRuns.list(input.options.limit);
+            if (input.options.json) return { exitCode: 0, stdout: JSON.stringify(rows) };
+            return {
+              exitCode: 0,
+              stdout:
+                rows.length === 0
+                  ? "No gate runs."
+                  : rows
+                      .map((row) =>
+                        [
+                          new Date(row.at).toISOString(),
+                          row.threadId,
+                          row.gate,
+                          row.pr ?? "-",
+                          row.issue ?? "-",
+                          row.outcome,
+                          row.exitCode ?? "-",
+                          row.sha?.slice(0, 8) ?? "-",
+                          row.verdictLine ?? row.reason ?? "",
+                        ].join("  "),
                       )
                       .join("\n"),
             };
