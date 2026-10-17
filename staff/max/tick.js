@@ -102,7 +102,10 @@
       labels: node.labels.nodes.map((label) => label.name).sort(),
       agent: node.delegate?.name ?? null,
       writeScope:
-        /^\s*write-scope:\s*(.+)$/m.exec(node.description ?? "")?.[1].replace(/`/g, "").trim() ?? null,
+        /^\s*write-scope:\s*(.+)$/m
+          .exec(node.description ?? "")?.[1]
+          .replace(/`/g, "")
+          .trim() ?? null,
       blockedBy: blockers
         .filter((relation) => !["Done", "Canceled"].includes(relation.issue.state.name))
         .map((relation) => relation.issue.identifier)
@@ -220,7 +223,8 @@
       // after logging it), so there is nothing to wait for. 2026-10-17: KIT-384 and KIT-319 ended so
       // at 00:53 and 01:00, and the ticks inside the threshold printed nothing until a person landed them.
       const ended = last?.event === "reason" && last.code === "runner-no-result";
-      if (!last || (!ended && Date.now() - Date.parse(last.at) < landingStuckMinutes * 60000)) continue;
+      if (!last || (!ended && Date.now() - Date.parse(last.at) < landingStuckMinutes * 60000))
+        continue;
       const after = (e) => own.slice(own.lastIndexOf(e) + 1);
       let sha;
       if (step === "start") {

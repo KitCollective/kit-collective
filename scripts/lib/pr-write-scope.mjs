@@ -136,7 +136,12 @@ export function parseWriteScopeGlobs(text) {
   }
   return unescapeMarkdown(match[1])
     .split(",")
-    .map((glob) => glob.trim().replace(/^`+|`+$/g, "").trim())
+    .map((glob) =>
+      glob
+        .trim()
+        .replace(/^`+|`+$/g, "")
+        .trim(),
+    )
     .filter(Boolean);
 }
 

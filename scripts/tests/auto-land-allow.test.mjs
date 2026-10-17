@@ -13,13 +13,20 @@ const HOOK = join(ROOT, ".claude", "hooks", "auto-land-allow.mjs");
 function hook(command, toolName = "Bash") {
   const result = spawnSync(process.execPath, [HOOK], {
     encoding: "utf8",
-    input: JSON.stringify({ hook_event_name: "PreToolUse", cwd: ROOT, tool_name: toolName, tool_input: { command } }),
+    input: JSON.stringify({
+      hook_event_name: "PreToolUse",
+      cwd: ROOT,
+      tool_name: toolName,
+      tool_input: { command },
+    }),
   });
   return { status: result.status, stdout: result.stdout };
 }
 
 test("the runner's wrapped auto-land start is approved (KIT-384, 2026-10-17)", () => {
-  const out = hook('( node scripts/auto-land.mjs start 382 --issue KIT-384 --handoff --force-enabled ); echo "KIT-EXIT:$?"');
+  const out = hook(
+    '( node scripts/auto-land.mjs start 382 --issue KIT-384 --handoff --force-enabled ); echo "KIT-EXIT:$?"',
+  );
   assert.equal(out.status, 0);
   assert.equal(JSON.parse(out.stdout).hookSpecificOutput.permissionDecision, "allow");
 });
@@ -55,5 +62,8 @@ test("anything else gets no opinion", () => {
     assert.equal(isAutoLandCommand(command), false, command);
   }
   assert.deepEqual(hook("gh pr merge 382"), { status: 0, stdout: "" });
-  assert.deepEqual(hook("node scripts/auto-land.mjs start 382 --issue KIT-384", "Read"), { status: 0, stdout: "" });
+  assert.deepEqual(hook("node scripts/auto-land.mjs start 382 --issue KIT-384", "Read"), {
+    status: 0,
+    stdout: "",
+  });
 });

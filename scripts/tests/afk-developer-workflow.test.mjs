@@ -983,13 +983,19 @@ test("a runner whose shell refused auto-land start reports DENIED, and the stop 
     args: { issue: "KIT-9", autoLand: true },
     shell: (c) =>
       c.includes("auto-land.mjs start")
-        ? { exit: "DENIED", line: "Permission for this action was denied by the Claude Code auto mode classifier." }
+        ? {
+            exit: "DENIED",
+            line: "Permission for this action was denied by the Claude Code auto mode classifier.",
+          }
         : undefined,
   });
   assert.equal(commands.filter((c) => c.includes("auto-land.mjs start")).length, 1);
   assert.ok(commands.some((c) => c.includes("--code runner-no-result")));
   assert.equal(result.status, "unknown");
-  assert.match(result.note, /runner-no-result: .*its shell refused the command: Permission for this action was denied/);
+  assert.match(
+    result.note,
+    /runner-no-result: .*its shell refused the command: Permission for this action was denied/,
+  );
 });
 
 test("autoLand must be a boolean in the input schema, and never changes how the Reviewer or the receipt dry run work", async () => {

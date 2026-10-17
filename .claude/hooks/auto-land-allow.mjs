@@ -15,9 +15,11 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const SCRIPT = `(?:scripts/auto-land\\.mjs|${escape(join(root, "scripts", "auto-land.mjs"))})`;
-const COMMAND = new RegExp(`^node +${SCRIPT} +(start|finish) +[1-9]\\d{0,6} +--issue +KIT-[1-9]\\d{0,5}((?: +--[a-z-]+(?: +\\d{1,5})?)*)$`);
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const SCRIPT = `(?:scripts/auto-land\\.mjs|${escapeRegExp(join(root, "scripts", "auto-land.mjs"))})`;
+const COMMAND = new RegExp(
+  `^node +${SCRIPT} +(start|finish) +[1-9]\\d{0,6} +--issue +KIT-[1-9]\\d{0,5}((?: +--[a-z-]+(?: +\\d{1,5})?)*)$`,
+);
 const WRAPPED = /^\( *(.+?) *\); *echo +"KIT-EXIT:\$\?"$/;
 const FLAGS = { start: ["--handoff", "--force-enabled", "--dry-run"], finish: ["--timeout"] };
 
