@@ -1,10 +1,10 @@
-// bb-plugin-optio — the Inbox and the Agents page.
+// bb-plugin-optio — the Agents page.
 //
 // Compiled by `bb plugin build` into dist/app.js + dist/app.css. React and
 // @get-bb/plugin-sdk/app are provided by the BB app at load time (never bundled),
 // so this file must be loaded by BB, not imported directly.
 //
-// Two nav panels. The Inbox lists what waits for a person. The Agents panel has four views chosen by `subPath`: the agent list (""), one
+// One nav panel, four views chosen by `subPath`: the agent list (""), one
 // agent ("<id>", or "new"), the orchestrator's board ("board") and the runs
 // of every Loop ("runs").
 
@@ -22,12 +22,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { Inbox } from "./pages/inbox";
 import type {
   AgentDto,
   AutomationDto,
   BoardDto,
   FollowUpDto,
-  InboxCardDto,
   LinearTriggerDto,
   LoopRunDto,
   MachineDto,
@@ -1891,89 +1891,6 @@ function Runs() {
               </p>
             ) : null}
           </>
-        )}
-      </div>
-    </Page>
-  );
-}
-
-function InboxCard({ card }: { card: InboxCardDto }) {
-  const question = card.kind === "question";
-  return (
-    <li
-      className={cn(
-        "rounded-lg border px-4 py-3 text-sm",
-        question ? "border-dashed border-border" : "border-border bg-muted/30",
-      )}
-    >
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-          {question ? (card.label ?? "question") : "green review"}
-        </span>
-        <a href={card.url} target="_blank" rel="noreferrer" className="font-medium hover:underline">
-          {card.identifier}
-        </a>
-        <span className="min-w-0 flex-1 truncate">{card.title}</span>
-        {card.pullRequest === null ? null : (
-          <a
-            href={card.pullRequest.url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground hover:underline"
-          >
-            PR #{card.pullRequest.number}
-          </a>
-        )}
-      </div>
-      {question ? (
-        card.waiting === null ? (
-          <p className="mt-2 text-muted-foreground">The workpad holds no question.</p>
-        ) : (
-          <>
-            <p className="mt-2">{card.waiting.ask}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {card.waiting.stage === "" ? "Stage unknown" : `Stage: ${card.waiting.stage}`}
-              {card.waiting.asked === null ? "" : ` · asked ${card.waiting.asked}`}
-            </p>
-          </>
-        )
-      ) : (
-        <>
-          <p className="mt-2">{card.review?.verdict ?? "No review verdict recorded."}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {card.review?.change ?? "The pull request has no title."}
-          </p>
-        </>
-      )}
-    </li>
-  );
-}
-
-function Inbox() {
-  const { value: inbox, error, act } = useLoaded((rpc) => rpc.call("inbox_list"), "inbox");
-  return (
-    <Page>
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-base font-medium">Inbox</h1>
-        <Button variant="outline" onClick={() => void act(async () => undefined)}>
-          <Icon name="RefreshCw" className="size-4" />
-          Refresh
-        </Button>
-      </div>
-      <Problem message={error ?? inbox?.error ?? null} />
-      <div className="mt-4">
-        {inbox === null ? (
-          error === null ? (
-            <Empty>Reading Linear…</Empty>
-          ) : null
-        ) : inbox.error !== null ? null : inbox.cards.length === 0 ? (
-          <Empty>Nothing waits for you.</Empty>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {inbox.cards.map((card) => (
-              <InboxCard key={card.identifier} card={card} />
-            ))}
-          </ul>
         )}
       </div>
     </Page>

@@ -58,7 +58,14 @@ It needs `github.ownerRepo` and `agent.workpadHeading` in `factory.config.json` 
 
 Optio's first menu item in bb. It shows one card for every issue in the Inbox state (`Approval`), read from Linear on each open and on Refresh, with nothing cached: an issue that left `Approval` is gone on the next read. A card with `needs-info` or `ready-for-human` is a question: it shows the run's `### Waiting` ask and stage from the issue's workpad. Any other card is a green review: it shows the newest recorded `review` gate verdict line and the pull request's title. Green reviews come first, then questions, oldest in the state first inside each kind.
 
-The state and the question labels are board configuration, not plugin code. `plugins/factory/examples/kit-collective.seed.mjs` sets them (`inbox` in `boardRouting`); on an install that was set up before, run the seed again or call `board_update` with `{ "inbox": { "state": "Approval", "questionLabels": ["needs-info", "ready-for-human"] } }`. Until then `bb optio inbox` exits 1 and says so. `bb optio inbox [--json]` prints the same cards as the page.
+The state and the question labels are Inbox configuration, not plugin code, so the plugin names no product value. Set them once on the install:
+
+```bash
+bb optio inbox --state Approval --labels needs-info,ready-for-human
+bb optio inbox --off    # switch the Inbox off
+```
+
+Until then `bb optio inbox` exits 1 and names this command, and the page says the same. `bb optio inbox [--json]` prints the same cards as the page. The code lives in `plugins/factory/src/inbox/` (RPC, Linear read, cards) and `plugins/factory/pages/inbox/` (the page); `app.tsx`, `server.ts` and `src/contract.ts` only register it.
 
 ## After a merge that touches `plugins/factory/`
 

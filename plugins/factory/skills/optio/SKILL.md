@@ -131,7 +131,6 @@ are edited on the Agents page under Board.
 | Command | Effect |
 | --- | --- |
 | `bb optio board [--json]` | The Loops, open issues per state and milestone, what runs, what starts next, why each other ready issue waits, and the newest entries of the record of runs. Says why and exits 1 when the registry is refused. Reads Linear; writes nothing. |
-| `bb optio inbox [--json]` | The Inbox: one card for every issue waiting for a person, green reviews first, then questions with the run's `### Waiting` ask and stage, oldest first inside each kind. Reads Linear; writes nothing. Exits 1 and says so when the Inbox is not set up. |
 | `bb optio focus set "<milestone>"` | That milestone's issues go first; others fill the capacity left. |
 | `bb optio focus clear` | Back to priority order. |
 | `bb optio promote <issue> --reason "<why now>"` | Move a backlog issue to the first enabled issue Loop's state with its ready label and the reason as a comment. Refused when the registry is refused, the issue is not in the backlog, is blocked, carries a skip label, or the queue (running plus ready) already equals the machines' capacity. Live mode only. |

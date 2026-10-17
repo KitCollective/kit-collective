@@ -123,8 +123,7 @@ own tunnel to that one path.
 | Path | What it holds |
 | --- | --- |
 | `server.ts` | Registrations only: settings, schedules, routes, RPC, the CLI. |
-| `app.tsx` | The Inbox page, registered first, and the Agents page: agent list, one agent, the board. |
-| `src/inbox.ts` | Turns the issues waiting in the Inbox state into cards: kind, `### Waiting` ask and stage, review verdict, order. |
+| `app.tsx` | The Agents page: agent list, one agent, the board. |
 | `src/contract.ts` | The RPC contract shared by server and page. |
 | `src/agent-store.ts` | Agents, memory and automations in the plugin's SQLite database. |
 | `src/sessions.ts` | Starting an agent thread; the brief; due automations; workflow launchers. |

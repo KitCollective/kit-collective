@@ -19,7 +19,7 @@ import { type BbPluginApi, cliCommand, defineCli, PluginCliError } from "@get-bb
 import { z } from "zod";
 import { AGENT_MIGRATIONS, type Agent, createAgentStore } from "./src/agent-store.js";
 import type { BoardSummary, Plan } from "./src/board.js";
-import { type BoardDto, CHANGED, type InboxCardDto, rpcContract } from "./src/contract.js";
+import { type BoardDto, CHANGED, rpcContract } from "./src/contract.js";
 import {
   createDispatchStore,
   DISPATCH_MIGRATIONS,
@@ -31,13 +31,12 @@ import type { GateDeps } from "./src/gate-tool.js";
 import { runGate } from "./src/gate-tool.js";
 import { GATE_CALL_TIMEOUT_MS, hostContract } from "./src/host-contract.js";
 import { type ProbeDeps, probeThread, renderProbe } from "./src/host-probe.js";
-import { buildCards } from "./src/inbox.js";
+import { createInbox } from "./src/inbox/index.js";
 import { verifyLinearWebhook } from "./src/linear.js";
 import {
   fetchBoard,
   fetchLinearOptions,
   fetchUpdatedIssues,
-  fetchWaiting,
   moveIssue,
   promoteIssue,
   writeWorkpadNote,
@@ -104,21 +103,6 @@ function describeRun(run: Run): string {
   ]
     .join("  ")
     .trimEnd();
-}
-
-function describeInbox(cards: InboxCardDto[]): string {
-  if (cards.length === 0) return "The Inbox is empty";
-  return [
-    `${cards.length} waiting in the Inbox`,
-    ...cards.map((card) => {
-      const pull = card.pullRequest === null ? "" : ` PR #${card.pullRequest.number}`;
-      const detail =
-        card.kind === "question"
-          ? `${card.label ?? "question"}: ${card.waiting?.ask ?? "no question in the workpad"}`
-          : `review: ${card.review?.verdict ?? "no verdict recorded"}`;
-      return `${card.identifier}${pull} ${card.title} (${detail})`;
-    }),
-  ].join("\n");
 }
 
 function describePlan(
@@ -683,30 +667,16 @@ export default async function plugin(bb: BbPluginApi) {
     };
   }
 
-  /** The Inbox's cards, read from Linear now; nothing is kept between calls. */
-  async function inboxDto() {
-    try {
+  const inbox = createInbox({
+    kv: bb.storage.kv,
+    changed,
+    linearApiKey,
+    board: async () => {
       const config = await requireScheduler();
-      const inbox = config.inbox;
-      if (inbox === undefined) {
-        throw new Error(
-          "the Inbox is not set up: give it the state and question labels with board_update (docs/agents/optio.md)",
-        );
-      }
-      const parsed = parseRegistry(await registryText(config).catch(() => ""));
-      const issues = await fetchWaiting(await linearApiKey(), config.teamKey, inbox.state);
-      return {
-        error: null,
-        cards: buildCards(issues, {
-          config: inbox,
-          workpadHeading: parsed.ok ? parsed.registry.workpadHeading : null,
-          verdictOf: (identifier) => gateRuns.latestReview(identifier, 0)?.verdictLine ?? null,
-        }),
-      };
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error), cards: [] };
-    }
-  }
+      return { teamKey: config.teamKey, registryText: await registryText(config).catch(() => "") };
+    },
+    verdictOf: (identifier) => gateRuns.latestReview(identifier, 0)?.verdictLine ?? null,
+  });
 
   async function boardDto(): Promise<BoardDto> {
     const paused = (await settings.get()).paused;
@@ -724,7 +694,6 @@ export default async function plugin(bb: BbPluginApi) {
       maxAttempts: 2,
       autoPromote: false,
       handOver: null,
-      inbox: null,
       room: 0,
       promotable: 0,
       machines: [],
@@ -753,7 +722,6 @@ export default async function plugin(bb: BbPluginApi) {
       maxAttempts: config.maxAttempts,
       autoPromote: config.autoPromote,
       handOver: config.handOver ?? null,
-      inbox: config.inbox ?? null,
       machines: config.machines,
       requirements: config.requirements,
       stalled: dispatches
@@ -921,31 +889,25 @@ export default async function plugin(bb: BbPluginApi) {
       return { hosts: hosts.map((host) => ({ id: host.id, name: host.name ?? host.id })) };
     },
     board_get: boardDto,
-    inbox_list: inboxDto,
+    inbox_list: inbox.list,
     runs_list: runsDto,
     async board_setup(input) {
       if ((await storedScheduler()) !== null) throw new Error("the board is already set up");
       await saveScheduler({ ...input, mode: "dry-run" });
       return { ok: true as const };
     },
-    async board_update({ focus, handOver, inbox, ...patch }) {
+    async board_update({ focus, handOver, ...patch }) {
       if (focus !== undefined) {
         if (focus === null) await bb.storage.kv.delete("focus");
         else await bb.storage.kv.set("focus", focus);
       }
-      if (handOver !== undefined || inbox !== undefined || Object.keys(patch).length > 0) {
-        const {
-          handOver: storedHandOver,
-          inbox: storedInbox,
-          ...current
-        } = await requireScheduler();
-        // Undefined keeps what is stored; null switches the setting off.
-        const nextHandOver = handOver === undefined ? storedHandOver : (handOver ?? undefined);
-        const nextInbox = inbox === undefined ? storedInbox : (inbox ?? undefined);
+      if (handOver !== undefined || Object.keys(patch).length > 0) {
+        const { handOver: stored, ...current } = await requireScheduler();
+        // Undefined keeps what is stored; null switches the hand-over off.
+        const next = handOver === undefined ? stored : (handOver ?? undefined);
         await saveScheduler({
           ...current,
-          ...(nextHandOver === undefined ? {} : { handOver: nextHandOver }),
-          ...(nextInbox === undefined ? {} : { inbox: nextInbox }),
+          ...(next === undefined ? {} : { handOver: next }),
           ...patch,
         });
       }
@@ -1248,23 +1210,7 @@ export default async function plugin(bb: BbPluginApi) {
             };
           },
         }),
-        inbox: cliCommand({
-          summary: "List what waits for a person in the Inbox: reviews first, then questions",
-          options: { json },
-          async run(input) {
-            const { error, cards } = await inboxDto();
-            if (error !== null) {
-              return {
-                exitCode: 1,
-                stdout: input.options.json ? JSON.stringify({ error, cards }) : `Inbox: ${error}`,
-              };
-            }
-            return {
-              exitCode: 0,
-              stdout: input.options.json ? JSON.stringify({ error, cards }) : describeInbox(cards),
-            };
-          },
-        }),
+        inbox: inbox.command,
         "focus set": cliCommand({
           summary: "Take a milestone's issues first; other issues fill the capacity that is left",
           positionals: [

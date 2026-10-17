@@ -72,7 +72,6 @@ export const boardSetup = {
 };
 
 export const boardRouting = {
-  inbox: { state: "Approval", questionLabels: ["needs-info", "ready-for-human"] },
   machines: [
     {
       id: "harness",

@@ -1,14 +1,9 @@
-// The Inbox: one card for every issue waiting for a person, built from what Linear says now.
-import type { InboxCardDto } from "./contract.js";
-import type { WaitingIssue } from "./linear-api.js";
-
-export interface InboxConfig {
-  state: string;
-  questionLabels: string[];
-}
+// One card for every issue waiting for a person, built from what Linear says now.
+import type { InboxCardDto, InboxConfig } from "./contract.js";
+import type { WaitingIssue } from "./linear.js";
 
 /** What the Inbox needs besides the issues: the config, the workpad heading and the recorded verdict. */
-export interface InboxContext {
+interface InboxContext {
   config: InboxConfig;
   /** `agent.workpadHeading`: what the single workpad comment starts with; null when the registry sets none. */
   workpadHeading: string | null;
@@ -17,7 +12,7 @@ export interface InboxContext {
 }
 
 /** The ask and stage under `### Waiting` of a workpad body; null when the section holds neither. */
-export function parseWaiting(body: string): InboxCardDto["waiting"] {
+function parseWaiting(body: string): InboxCardDto["waiting"] {
   const lines = body.split("\n");
   const start = lines.findIndex((line) => line.trimEnd() === "### Waiting");
   if (start === -1) return null;

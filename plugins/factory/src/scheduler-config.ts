@@ -72,14 +72,6 @@ const schedulerSchema = z
       .object({ reviewState: z.string().min(1), approvalState: z.string().min(1) })
       .strict()
       .optional(),
-    /**
-     * The Inbox: `state` is where issues wait for a person; an issue carrying one of
-     * `questionLabels` is a question, any other is a review waiting to be merged.
-     */
-    inbox: z
-      .object({ state: z.string().min(1), questionLabels: z.array(z.string().min(1)) })
-      .strict()
-      .optional(),
     /** Consecutive runs that may end without a hand-over before only a person can restart the issue. */
     maxAttempts: z.number().int().min(1).max(5).default(2),
     /** How long a started run may take to show its workflow before it counts as ended. */
