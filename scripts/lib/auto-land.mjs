@@ -252,6 +252,25 @@ export function riskClass({ description, labels, files, lines, issue, maxLines =
   return null;
 }
 
+/**
+ * The newest run of each check, by start time. GitHub keeps every run of a check on a commit: a
+ * push that starts two CI runs gets the first cancelled, and its `test` job ends as a failure next
+ * to the green one (KIT-365, 2026-10-17: refused as pr-not-ready with the newest run green).
+ * @param {Array<{ name: string, conclusion: string | null, started_at?: string, id?: number }>} runs
+ */
+export function latestCheckRuns(runs) {
+  const newest = new Map();
+  for (const run of Array.isArray(runs) ? runs : []) {
+    const seen = newest.get(run.name);
+    const key = (r) => [String(r.started_at ?? ""), Number(r.id ?? 0)];
+    const [at, id] = key(run);
+    if (!seen || at > key(seen)[0] || (at === key(seen)[0] && id > key(seen)[1])) {
+      newest.set(run.name, run);
+    }
+  }
+  return [...newest.values()].map(({ name, conclusion }) => ({ name, conclusion }));
+}
+
 /** Added plus deleted lines of `git diff --numstat` output; a binary file counts as `binaryLines`. */
 export function diffLines(numstat, binaryLines = BINARY_LINES) {
   let total = 0;

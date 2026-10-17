@@ -53,6 +53,7 @@ import {
   issueReadiness,
   KILL_FILE,
   killSwitch,
+  latestCheckRuns,
   maxPerDay,
   prReadiness,
   queueState,
@@ -407,14 +408,22 @@ async function start() {
   const capped = dailyCap(events(), cap);
   if (capped) await refused(capped, head);
 
-  const checks = JSON.parse(
-    await gh([
-      "api",
-      `repos/${repo}/commits/${head}/check-runs`,
-      "--jq",
-      "[.check_runs[] | {name, conclusion}]",
-    ]),
+  const checks = latestCheckRuns(
+    JSON.parse(
+      await gh([
+        "api",
+        "--paginate",
+        "--slurp",
+        `repos/${repo}/commits/${head}/check-runs?per_page=100`,
+        "--jq",
+        "[.[].check_runs[] | {name, conclusion, started_at, id}]",
+      ]),
+    ),
   );
+  // A check still running is not a refusal: run start again, as for the gate (exit 3).
+  if (checks.some((check) => check.conclusion === null)) {
+    out(3, "WAITING (auto-land): checks are still running on the head");
+  }
   const pre = landAtMergeGate({
     issueStatus: "Merging",
     pr: {

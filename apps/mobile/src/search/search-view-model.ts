@@ -1,4 +1,8 @@
-import type { CollectionDiscoverHome, CollectionDiscoverJersey } from "@kit/api-contract";
+import type {
+  CollectionDiscoverHome,
+  CollectionDiscoverJersey,
+  CollectionDiscoverTypeahead,
+} from "@kit/api-contract";
 import { JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { type JerseyTileCaption, jerseyTileMetaLine } from "@/components/jersey-tile-meta";
 
@@ -72,6 +76,14 @@ export function nationalTeamDrillHref(nationalTeamId: string, nationalTeamLabel:
   return `/(tabs)/search/national-team/${nationalTeamId}?label=${encodeURIComponent(nationalTeamLabel)}`;
 }
 
+export function playerDrillHref(playerId: string, playerLabel: string): string {
+  return `/(tabs)/search/player/${playerId}?label=${encodeURIComponent(playerLabel)}`;
+}
+
+export function kitDrillHref(kitId: string, label: string): string {
+  return `/(tabs)/search/kit/${kitId}?label=${encodeURIComponent(label)}`;
+}
+
 export function peerProfileHref(handle: string): string {
   return `/(tabs)/search/peer/${handle}`;
 }
@@ -130,4 +142,148 @@ export function buildSearchHome(home: CollectionDiscoverHome): { shelves: Search
   }
 
   return { shelves };
+}
+
+export type SearchHitLeading =
+  | { kind: "initials"; label: string }
+  | { kind: "number"; number: number }
+  | { kind: "thumb"; photo: CollectionDiscoverJersey["photos"][number] }
+  | { kind: "avatar"; handle: string; avatarUrl: string | null };
+
+export type SearchHit = {
+  key: string;
+  name: string;
+  /** Kind, then ` · n trøjer`. The kind is a caption, never a section heading. */
+  caption: string;
+  leading: SearchHitLeading;
+  href: string;
+  accessibilityLabel: string;
+};
+
+export type SearchTypeahead = {
+  hits: SearchHit[];
+  tiles: SearchTile[];
+  jerseyCount: number;
+};
+
+/** One or two letters for the leading slot, as the Mark fallback does: first letters of two words. */
+function hitInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return `${words[0]?.[0] ?? ""}${words[1]?.[0] ?? ""}`.toUpperCase();
+  }
+  return name.trim().slice(0, 2).toUpperCase();
+}
+
+function jerseyCountLabel(count: number): string {
+  return count === 1 ? "1 trøje" : `${count} trøjer`;
+}
+
+type RankedHit = SearchHit & { rank: number; jerseyCount: number };
+
+function rankedHit(
+  hit: Omit<SearchHit, "accessibilityLabel" | "caption"> & { kind: string; jerseyCount: number },
+  rank: number,
+): RankedHit {
+  const { kind, ...rest } = hit;
+  return {
+    ...rest,
+    caption: `${kind} · ${jerseyCountLabel(hit.jerseyCount)}`,
+    accessibilityLabel: `${hit.name}, ${kind}`,
+    rank,
+  };
+}
+
+/**
+ * Typeahead as one flat list (docs/design-system.md → Søg home and typeahead, Revision
+ * 2026-10-10): clubs and national teams together, then players, kits, collectors; most
+ * collected first inside a kind, ties on label in Danish order. Under the list sit the
+ * jerseys the query matches, as the same tiles the home uses. The server sends no order.
+ */
+export function buildSearchTypeahead(typeahead: CollectionDiscoverTypeahead): SearchTypeahead {
+  const ranked: RankedHit[] = [
+    ...(typeahead.clubs ?? []).map((club) =>
+      rankedHit(
+        {
+          key: `club-${club.clubId}`,
+          name: club.clubLabel,
+          kind: "Klub",
+          jerseyCount: club.jerseyCount,
+          leading: { kind: "initials", label: hitInitials(club.clubLabel) },
+          href: clubDrillHref(club.clubId, club.clubLabel),
+        },
+        0,
+      ),
+    ),
+    ...(typeahead.nationalTeams ?? []).map((team) =>
+      rankedHit(
+        {
+          key: `national-team-${team.nationalTeamId}`,
+          name: team.nationalTeamLabel,
+          kind: "Landshold",
+          jerseyCount: team.jerseyCount,
+          leading: { kind: "initials", label: hitInitials(team.nationalTeamLabel) },
+          href: nationalTeamDrillHref(team.nationalTeamId, team.nationalTeamLabel),
+        },
+        0,
+      ),
+    ),
+    ...(typeahead.players ?? []).map((player) =>
+      rankedHit(
+        {
+          key: `player-${player.playerId}`,
+          name: player.playerLabel,
+          kind: "Spiller",
+          jerseyCount: player.jerseyCount,
+          leading:
+            player.number === null
+              ? { kind: "initials", label: hitInitials(player.playerLabel) }
+              : { kind: "number", number: player.number },
+          href: playerDrillHref(player.playerId, player.playerLabel),
+        },
+        1,
+      ),
+    ),
+    ...(typeahead.kits ?? []).map((kit) =>
+      rankedHit(
+        {
+          key: `kit-${kit.kitId}`,
+          name: kit.label,
+          kind: "Kit",
+          jerseyCount: kit.jerseyCount,
+          leading: kit.photo
+            ? { kind: "thumb", photo: kit.photo }
+            : { kind: "initials", label: hitInitials(kit.label) },
+          href: kitDrillHref(kit.kitId, kit.label),
+        },
+        2,
+      ),
+    ),
+    ...(typeahead.collectors ?? []).map((collector) =>
+      rankedHit(
+        {
+          key: `collector-${collector.handle}`,
+          name: collector.handle,
+          kind: "Samler",
+          jerseyCount: collector.jerseyCount,
+          leading: { kind: "avatar", handle: collector.handle, avatarUrl: collector.avatarUrl },
+          href: peerProfileHref(collector.handle),
+        },
+        3,
+      ),
+    ),
+  ];
+  ranked.sort(
+    (left, right) =>
+      left.rank - right.rank ||
+      right.jerseyCount - left.jerseyCount ||
+      left.name.localeCompare(right.name, "da"),
+  );
+
+  const tiles = (typeahead.jerseys ?? []).map(buildSearchTile);
+  return {
+    hits: ranked.map(({ rank: _rank, jerseyCount: _jerseyCount, ...hit }) => hit),
+    tiles,
+    jerseyCount: tiles.length,
+  };
 }

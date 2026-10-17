@@ -20,6 +20,7 @@ import {
   diffLines,
   independentReviewer,
   killSwitch,
+  latestCheckRuns,
   maxPerDay,
   queueState,
   riskClass,
@@ -1086,4 +1087,37 @@ test("killSwitch, maxPerDay, diffLines, queueState, independentReviewer and dail
     riskClass({ description: "write-scope: a/**", labels: [], files: ["a/x"], lines: 1 }),
     null,
   );
+});
+
+test("only the newest run of each check counts: a cancelled duplicate CI run is not a red check", () => {
+  assert.deepEqual(
+    latestCheckRuns([
+      { name: "test", conclusion: "failure", started_at: "2026-10-17T14:47:00Z", id: 1 },
+      { name: "test", conclusion: "success", started_at: "2026-10-17T14:48:00Z", id: 2 },
+      { name: "static", conclusion: "cancelled", started_at: "2026-10-17T14:47:00Z", id: 3 },
+      { name: "static", conclusion: "success", started_at: "2026-10-17T14:48:00Z", id: 4 },
+    ]),
+    [
+      { name: "test", conclusion: "success" },
+      { name: "static", conclusion: "success" },
+    ],
+  );
+  const w = world();
+  w.setGh((s) => {
+    s.checks = [
+      { name: "test", conclusion: "failure", started_at: "2026-10-17T14:47:00Z", id: 1 },
+      { name: "test", conclusion: "success", started_at: "2026-10-17T14:48:00Z", id: 2 },
+    ];
+  });
+  assert.equal(w.start(["--dry-run"]).status, 0);
+});
+
+test("a check still running on the head is waiting (exit 3), not a refusal", () => {
+  const w = world();
+  w.setGh((s) => {
+    s.checks = [{ name: "test", conclusion: null, started_at: "2026-10-17T14:48:00Z", id: 2 }];
+  });
+  const result = w.start(["--dry-run"]);
+  assert.equal(result.status, 3, result.stdout);
+  assert.match(result.stdout, /^WAITING \(auto-land\): checks are still running/);
 });
