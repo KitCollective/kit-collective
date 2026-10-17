@@ -106,7 +106,31 @@ const board = z.object({
   focus: z.string().nullable(),
   projectId: z.string(),
   teamKey: z.string(),
-  workflow: z.string(),
+  /** Why the registry in the project checkout was refused: nothing is planned or started. */
+  registryError: z.string().nullable(),
+  /** The Loops of the registry, in its order. */
+  loops: z.array(
+    z.object({
+      name: z.string(),
+      workflow: z.string(),
+      kind: z.enum(["issue", "milestone-done"]),
+      enabled: z.boolean(),
+      machines: z.array(z.string()),
+      maxLive: z.number(),
+      running: z.number(),
+    }),
+  ),
+  /** The newest entries of the record of runs: every start, skip and refusal, with its reason. */
+  decisions: z.array(
+    z.object({
+      at: z.number(),
+      mode: z.string(),
+      loop: z.string().nullable(),
+      issue: z.string().nullable(),
+      kind: z.enum(["start", "skip", "refusal"]),
+      reason: z.string(),
+    }),
+  ),
   maxAttempts: z.number(),
   autoPromote: z.boolean(),
   /** How many more issues the ready queue may hold. */
@@ -117,10 +141,13 @@ const board = z.object({
   requirements: z.array(requirement),
   states: z.array(z.object({ name: z.string(), count: z.number() })),
   milestones: z.array(z.object({ name: z.string(), open: z.number(), ready: z.number() })),
-  running: z.array(z.object({ identifier: z.string(), machineId: z.string() })),
+  running: z.array(
+    z.object({ identifier: z.string(), machineId: z.string(), loop: z.string().nullable() }),
+  ),
   start: z.array(
     z.object({
       identifier: z.string(),
+      loop: z.string(),
       title: z.string(),
       machineId: z.string(),
       resume: z.boolean(),
@@ -128,7 +155,7 @@ const board = z.object({
       milestone: z.string().nullable(),
     }),
   ),
-  waiting: z.array(z.object({ identifier: z.string(), reason: z.string() })),
+  waiting: z.array(z.object({ identifier: z.string(), loop: z.string(), reason: z.string() })),
   stalled: z.array(
     z.object({ issue: z.string(), machineId: z.string(), outcome: z.string().nullable() }),
   ),
@@ -236,12 +263,6 @@ export const rpcContract = defineRpcContract({
       .object({
         projectId: z.string().min(1),
         teamKey: z.string().regex(/^[A-Z][A-Z0-9]*$/),
-        workflow: z
-          .string()
-          .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
-          .max(64),
-        dispatchState: z.string().trim().min(1),
-        readyLabel: z.string().trim().min(1),
         backlogState: z.string().trim().min(1),
         activeStates: z.array(z.string().trim().min(1)).min(1),
         /** Null when the team has no blocked state. */

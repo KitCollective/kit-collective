@@ -10,9 +10,11 @@ frontend agent, each with its own instructions, memory and recurring tasks.
   list.
 - Automations per agent: a schedule that gives the agent a task or starts a bb
   workflow.
-- A board for the orchestrator: it reads a Linear team's issues every minute,
-  starts the ones that are unblocked within each machine's capacity, takes a
-  focus milestone first, and reports a run that stopped at a gate.
+- A board for the orchestrator: it reads the project's Loop registry and a
+  Linear team's issues every minute, starts each Loop's workflow for the issues
+  its trigger matches within each machine's capacity, takes a focus milestone
+  first, records every start, skip and refusal, and reports a run that stopped
+  at a gate.
 - A `bb optio` command for the same data from a terminal, and a
   token-guarded route so another system can start an agent.
 
@@ -23,8 +25,8 @@ server. Starting an agent opens an ordinary bb thread that is told to load the
 agent's brief first.
 
 The only external service the plugin calls is Linear's API, and only for the
-board: to read issues and to move an unblocked issue back to the dispatch
-state. The Linear key is a secret setting and stays on the server.
+board: to read issues and to move an unblocked issue back to the first
+issue Loop's state. The Linear key is a secret setting and stays on the server.
 
 ## For agents
 
