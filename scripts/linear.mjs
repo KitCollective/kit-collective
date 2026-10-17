@@ -34,6 +34,8 @@
 //       --milestone puts it in that milestone of --project (an unknown name is an error)
 //   node scripts/linear.mjs project-comment "<project>" --body-file <path>
 //       one comment on the project, prints `<commentId> <url>`
+//   node scripts/linear.mjs waiting KIT-272 --stage <text> --ask <text>
+//       replaces the `### Waiting` section of the single workpad comment, nothing else
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -48,10 +50,12 @@ import {
 import {
   createIssue,
   createProjectComment,
+  fillWaiting,
   LinearUsageError,
   listIssues,
   parseCreateArgs,
   parseProjectCommentArgs,
+  parseWaitingArgs,
 } from "./lib/linear-issues.mjs";
 
 const API = process.env.LINEAR_GRAPHQL_URL || "https://api.linear.app/graphql";
@@ -479,8 +483,19 @@ switch (command) {
       throw error;
     }
     break;
+  case "waiting":
+    try {
+      const parsed = parseWaitingArgs(args);
+      const date = new Date().toISOString().slice(0, 10);
+      const id = await fillWaiting(gql, { ...parsed, date });
+      process.stdout.write(`${id}: waiting updated\n`);
+    } catch (error) {
+      if (error instanceof LinearUsageError) fail(error.message);
+      throw error;
+    }
+    break;
   default:
     fail(
-      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up, relate, block, project, list, create, project-comment",
+      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up, relate, block, project, list, create, project-comment, waiting",
     );
 }

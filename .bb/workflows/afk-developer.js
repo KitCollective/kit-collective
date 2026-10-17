@@ -287,12 +287,30 @@ function stateCmd(state) {
   return `node scripts/linear.mjs state ${issue} "${state}"`;
 }
 
+/**
+ * The command that fills `### Waiting` in the workpad for a stop the workflow itself found (the Engineer writes
+ * its own, but a gate-detected stop has no Engineer turn left). Only text this workflow wrote or validated
+ * enters it, never an agent's or a runner's sentence, and it must be one plain line (the runner wraps each
+ * command in a shell, ADR-0058).
+ */
+function waitingCmd(stage, ask) {
+  const plain = /^[A-Za-z0-9 .,:#()'\/_-]+$/;
+  if (!plain.test(stage) || !plain.test(ask)) {
+    throw new Error("waiting text must be one plain line");
+  }
+  return `node scripts/linear.mjs waiting ${issue} --stage "${stage}" --ask "${ask}"`;
+}
+
 async function move(phaseTitle, state) {
   return sh(`linear:${state}`, phaseTitle, [stateCmd(state)]);
 }
 
-/** A human is needed or another issue must finish first (the `blocked` sentence of the Engineer or Lead). */
-async function stopForHuman(phaseTitle, sentence) {
+/**
+ * A human is needed or another issue must finish first (the `blocked` sentence of the Engineer or Lead).
+ * `waiting` ({ stage, ask }) is a stop the workflow found itself: its `### Waiting` is filled after the move,
+ * so a failed write leaves the stop standing.
+ */
+async function stopForHuman(phaseTitle, sentence, waiting = null) {
   const text = String(sentence ?? "");
   const blockedBy = /^blocked-by (KIT-\d+)\b/.exec(text);
   if (blockedBy) {
@@ -307,50 +325,9 @@ async function stopForHuman(phaseTitle, sentence) {
   await sh("linear:approval", phaseTitle, [
     `node scripts/linear.mjs label ${issue} swap ready-for-agent ${label}`,
     `node scripts/linear.mjs state ${issue} "Approval"`,
+    ...(waiting ? [waitingCmd(waiting.stage, waiting.ask)] : []),
   ]);
   return "Approval";
-}
-
-/**
- * Fills `### Waiting` in the workpad for a stop the workflow itself found (the Engineer writes its own, but a
- * gate-detected stop has no Engineer turn left). The workflow has no shell, so a short Haiku worker does the
- * edit through scripts/linear.mjs; it is best effort, the stop above it already stands. Only the validated
- * Device flows sentence enters the prompt.
- */
-async function writeWaiting(phaseTitle, stage, sentence) {
-  if (!/^needs-human: run device-run\.sh on the Mac on [0-9a-f]{4,40}$/.test(sentence)) {
-    return false;
-  }
-  let out = null;
-  try {
-    out = await agent(
-      [
-        `You edit one section of the workpad of ${issue}. Change nothing else, in the repository or in Linear.`,
-        `1. Run \`node scripts/linear.mjs issue ${issue}\` and find the comment whose body starts with \`## Agent Workpad\` (there is one).`,
-        `2. Write its body to a new file under /tmp with the section \`### Waiting\` replaced, up to the next \`### \` heading, by exactly these lines (use \`date +%F\` for the date):`,
-        `- ${sentence} (the hosted Device flows run of the PR head cannot give a verdict and this machine has no simulator; the Device flow of the slice is run on the Mac, ADR-0059).`,
-        `- Stage: ${stage}. Asked: <today's date>`,
-        `3. Run \`node scripts/linear.mjs comment-update <that comment's id> --body-file <that file>\`. Never create a second workpad comment.`,
-        "Return written true when comment-update succeeded, else false.",
-      ].join("\n"),
-      {
-        label: `waiting:${issue}`,
-        phase: phaseTitle,
-        provider: "claude-code",
-        model: "claude-haiku-5-5",
-        reasoningLevel: "low",
-        schema: {
-          type: "object",
-          required: ["written"],
-          additionalProperties: false,
-          properties: { written: { type: "boolean" } },
-        },
-      },
-    );
-  } catch (error) {
-    out = null;
-  }
-  return out?.written === true;
 }
 
 function stopped(stoppedAt, status, extra) {
@@ -592,8 +569,7 @@ if (resume && resumePr !== null) {
     const noVerdictAtResume = deviceFlowsNoVerdict(pre);
     if (noVerdictAtResume) {
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code device-flows-no-verdict`)], true);
-      const state = await stopForHuman("Pre-review gate", noVerdictAtResume);
-      await writeWaiting("Pre-review gate", "pre-review gate", noVerdictAtResume);
+      const state = await stopForHuman("Pre-review gate", noVerdictAtResume, { stage: "pre-review gate", ask: noVerdictAtResume });
       return stopped("pre-review gate", state, { prNumber: resumePr, note: noVerdictAtResume });
     }
     if (pre.exhausted) {
@@ -679,8 +655,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
       // The hosted Device flows run cannot reach a verdict and no simulator is here: a person runs
       // device-run.sh on the Mac. Not a red gate and not a pending one, so no fix round and no Reviewer.
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code device-flows-no-verdict`)], true);
-      const state = await stopForHuman("Pre-review gate", noVerdict);
-      await writeWaiting("Pre-review gate", "pre-review gate", noVerdict);
+      const state = await stopForHuman("Pre-review gate", noVerdict, { stage: "pre-review gate", ask: noVerdict });
       return stopped("pre-review gate", state, { prNumber, rounds, note: noVerdict });
     }
     if (pre.exhausted) {
@@ -788,7 +763,10 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     }
     // Out of rounds: a person has to act, and Linear still says In Review, so say Approval.
     const why = gate.code !== 0 ? gate.line : review.sentence;
-    const state = await stopForHuman("Review gate", `needs-human: round cap reached after a ${review.verdict} review: ${why}`);
+    const state = await stopForHuman("Review gate", `needs-human: round cap reached after a ${review.verdict} review: ${why}`, {
+      stage: "review gate",
+      ask: `needs-human: round cap reached after a ${review.verdict === "red" ? "red" : "gate-closed"} review, the findings are under ### Review feedback`,
+    });
     return stopped("review gate", state, { prNumber, rounds, verdict: review.verdict, note: why });
   }
   // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.
