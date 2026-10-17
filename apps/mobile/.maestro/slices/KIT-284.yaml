@@ -98,10 +98,12 @@ name: kit-284
     visible:
       id: overview-title
     timeout: 30000
+# A hosted simulator prepares sixteen photos slowly: the first hosted run was still sorting after
+# 120 s with no request sent yet, so the wait is long. A device does it in seconds.
 - extendedWaitUntil:
     notVisible:
       id: overview-progress
-    timeout: 120000
+    timeout: 360000
 - extendedWaitUntil:
     visible:
       id: overview-row-0
