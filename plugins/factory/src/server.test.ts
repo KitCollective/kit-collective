@@ -966,29 +966,28 @@ describe("the Inbox", () => {
     comments: string[];
     attachments: { url: string; title: string }[];
   };
-  const entries: Entry[] = [
-    {
-      identifier: "ENG-3",
-      labels: ["asks"],
-      since: "2026-10-03T00:00:00Z",
-      comments: ["chatter", workpad("Newer question?", "pre-review gate")],
-      attachments: [],
-    },
-    {
-      identifier: "ENG-2",
-      labels: ["decide"],
-      since: "2026-10-02T00:00:00Z",
-      comments: [workpad("Older question?", "plan")],
-      attachments: [],
-    },
-    {
-      identifier: "ENG-1",
-      labels: [],
-      since: "2026-10-05T00:00:00Z",
-      comments: [],
-      attachments: [{ url: "https://github.com/acme/app/pull/7", title: "ENG-1: Add the thing" }],
-    },
-  ];
+  const newer: Entry = {
+    identifier: "ENG-3",
+    labels: ["asks"],
+    since: "2026-10-03T00:00:00Z",
+    comments: ["chatter", workpad("Newer question?", "pre-review gate")],
+    attachments: [],
+  };
+  const older: Entry = {
+    identifier: "ENG-2",
+    labels: ["decide"],
+    since: "2026-10-02T00:00:00Z",
+    comments: [workpad("Older question?", "plan")],
+    attachments: [],
+  };
+  const reviewed: Entry = {
+    identifier: "ENG-1",
+    labels: [],
+    since: "2026-10-05T00:00:00Z",
+    comments: [],
+    attachments: [{ url: "https://github.com/acme/app/pull/7", title: "ENG-1: Add the thing" }],
+  };
+  const entries: Entry[] = [newer, older, reviewed];
   const linear = (rows: () => Entry[]) =>
     vi.fn(async () => {
       const nodes = rows().map((entry) => ({
@@ -1102,9 +1101,9 @@ describe("the Inbox", () => {
     vi.stubGlobal(
       "fetch",
       linear(() => [
-        { ...entries[0], comments: ["no workpad here"] } as Entry,
+        { ...newer, comments: ["no workpad here"] },
         {
-          ...entries[2],
+          ...reviewed,
           identifier: "ENG-9",
           attachments: [
             {
@@ -1112,7 +1111,7 @@ describe("the Inbox", () => {
               title: "https://github.com/acme/app/pull/9",
             },
           ],
-        } as Entry,
+        },
       ]),
     );
     try {
