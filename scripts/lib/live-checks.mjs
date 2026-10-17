@@ -30,6 +30,10 @@ export const LIVE_CHECKS = {
     what: "Optio's Board answers with its plan",
     steps: [["bb", "optio", "board", "--json"]],
   },
+  "optio-inbox": {
+    what: "Optio's Inbox answers with its cards",
+    steps: [["bb", "optio", "inbox", "--json"]],
+  },
 };
 
 const THREAD = /^thr_[a-z0-9]+$/;

@@ -101,6 +101,32 @@ const handOver = z
   .object({ reviewState: z.string().trim().min(1), approvalState: z.string().trim().min(1) })
   .strict();
 
+const inboxConfig = z
+  .object({
+    state: z.string().trim().min(1),
+    questionLabels: z.array(z.string().trim().min(1)),
+  })
+  .strict();
+
+const inboxCard = z.object({
+  identifier: z.string(),
+  title: z.string(),
+  url: z.string(),
+  pullRequest: z.object({ number: z.number(), url: z.string() }).nullable(),
+  /** A review waits for the merge; a question waits for an answer. */
+  kind: z.enum(["review", "question"]),
+  /** The question label the issue carries; null on a review. */
+  label: z.string().nullable(),
+  /** What the run asked and the stage it came from; null on a review or when the workpad has none. */
+  waiting: z
+    .object({ ask: z.string(), stage: z.string(), asked: z.string().nullable() })
+    .nullable(),
+  /** The recorded review verdict and the pull request's title; null on a question. */
+  review: z.object({ verdict: z.string().nullable(), change: z.string().nullable() }).nullable(),
+  /** When the issue entered the state (ISO). */
+  since: z.string(),
+});
+
 const board = z.object({
   configured: z.boolean(),
   /** Why the plan could not be computed, when it could not. */
@@ -139,6 +165,8 @@ const board = z.object({
   autoPromote: z.boolean(),
   /** The states of the hand-over on the recorded review gate, or null when it is off. */
   handOver: handOver.nullable(),
+  /** Where the Inbox looks, or null when it is not set up. */
+  inbox: inboxConfig.nullable(),
   /** How many more issues the ready queue may hold. */
   room: z.number(),
   /** Backlog issues that may be promoted. */
@@ -300,6 +328,14 @@ export const rpcContract = defineRpcContract({
     output: z.object({ hosts: z.array(z.object({ id: z.string(), name: z.string() })) }),
   },
   board_get: { input: z.null(), output: board },
+  inbox_list: {
+    input: z.null(),
+    output: z.object({
+      /** Why the cards could not be read, when they could not. */
+      error: z.string().nullable(),
+      cards: z.array(inboxCard),
+    }),
+  },
   runs_list: {
     input: z
       .object({
@@ -339,6 +375,8 @@ export const rpcContract = defineRpcContract({
         autoPromote: z.boolean().optional(),
         /** Where a ready run's issue goes on the recorded review gate; null switches the hand-over off. */
         handOver: handOver.nullable().optional(),
+        /** Where the Inbox looks; null switches it off. */
+        inbox: inboxConfig.nullable().optional(),
         machines: z.array(machine).optional(),
         requirements: z.array(requirement).optional(),
       })
@@ -354,6 +392,7 @@ export type SessionDto = z.infer<typeof session>;
 export type FollowUpDto = z.infer<typeof followUp>;
 export type LinearTriggerDto = z.infer<typeof linearTrigger>;
 export type BoardDto = z.infer<typeof board>;
+export type InboxCardDto = z.infer<typeof inboxCard>;
 export type LoopRunDto = z.infer<typeof loopRun>;
 export type RunStateDto = z.infer<typeof runState>;
 export type MachineDto = z.infer<typeof machine>;

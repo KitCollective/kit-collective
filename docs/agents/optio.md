@@ -54,6 +54,12 @@ bb optio hand-over --off      # back to: an ended run in a working state is a st
 
 It needs `github.ownerRepo` and `agent.workpadHeading` in `factory.config.json` (both are there) and `gh` on the machines the gates run on. Evidence for a run: the dispatch row (`bb optio dispatches`) ends `handed-over` with outcome `Approval`, `bb optio gates` shows the `review` record, and the Linear history shows the move by the Linear API key's user. With `flow.autoLand.enabled` on, a run takes the auto-land path and never reaches this hand-over.
 
+## The Inbox (KIT-398)
+
+Optio's first menu item in bb. It shows one card for every issue in the Inbox state (`Approval`), read from Linear on each open and on Refresh, with nothing cached: an issue that left `Approval` is gone on the next read. A card with `needs-info` or `ready-for-human` is a question: it shows the run's `### Waiting` ask and stage from the issue's workpad. Any other card is a green review: it shows the newest recorded `review` gate verdict line and the pull request's title. Green reviews come first, then questions, oldest in the state first inside each kind.
+
+The state and the question labels are board configuration, not plugin code. `plugins/factory/examples/kit-collective.seed.mjs` sets them (`inbox` in `boardRouting`); on an install that was set up before, run the seed again or call `board_update` with `{ "inbox": { "state": "Approval", "questionLabels": ["needs-info", "ready-for-human"] } }`. Until then `bb optio inbox` exits 1 and says so. `bb optio inbox [--json]` prints the same cards as the page.
+
 ## After a merge that touches `plugins/factory/`
 
 ```bash
@@ -71,4 +77,4 @@ The Meta Agents plugin (`bb meta-agents`, folder `~/Projects/bb-plugin-meta-agen
 
 ## Live checks
 
-What only the running plugin can prove (it builds and reloads, the host bundle probes a thread, the Board answers) is a named live check in `scripts/lib/live-checks.mjs`: `optio-reload`, `optio-host-probe` and `optio-board`. `node scripts/live-check.mjs list` shows them and `node scripts/live-check.mjs run <name> [--thread thr_x]` runs one from the main checkout, with one `LIVE-CHECK <name> pass|fail <line>` verdict. An issue names its checks on a `live-check:` line, and Max's live-check automation runs them after the merge (`staff/max.md`, Live checks). A new check is a reviewed change to that file, never text from an issue.
+What only the running plugin can prove (it builds and reloads, the host bundle probes a thread, the Board answers) is a named live check in `scripts/lib/live-checks.mjs`: `optio-reload`, `optio-host-probe`, `optio-board` and `optio-inbox`. `node scripts/live-check.mjs list` shows them and `node scripts/live-check.mjs run <name> [--thread thr_x]` runs one from the main checkout, with one `LIVE-CHECK <name> pass|fail <line>` verdict. An issue names its checks on a `live-check:` line, and Max's live-check automation runs them after the merge (`staff/max.md`, Live checks). A new check is a reviewed change to that file, never text from an issue.
