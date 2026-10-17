@@ -9,6 +9,7 @@ const jersey = {
   clubLabel: "F.C. København",
   seasonLabel: "2023/24",
   ownerHandle: "samler",
+  size: "m" as const,
   photos: [
     {
       id: "44444444-4444-4444-8444-444444444444",
@@ -26,13 +27,29 @@ describe("collectionDiscoverHomeSchema", () => {
     expect(collectionDiscoverHomeSchema.parse({})).toEqual({});
     expect(
       collectionDiscoverHomeSchema.parse({
-        clubs: [{ clubId: jersey.clubId, clubLabel: jersey.clubLabel }],
+        clubs: [{ clubId: jersey.clubId, clubLabel: jersey.clubLabel, jerseyCount: 2 }],
         moreJerseys: [jersey],
       }),
     ).toEqual({
-      clubs: [{ clubId: jersey.clubId, clubLabel: jersey.clubLabel }],
+      clubs: [{ clubId: jersey.clubId, clubLabel: jersey.clubLabel, jerseyCount: 2 }],
       moreJerseys: [jersey],
     });
+  });
+
+  it("carries copy counts per side and per collector", () => {
+    const parsed = collectionDiscoverHomeSchema.parse({
+      collectors: [
+        { handle: "samler", initial: "S", avatarUrl: null, jerseyCount: 3, openForBidCount: 1 },
+      ],
+      openForBid: [jersey],
+    });
+    expect(parsed.collectors?.[0]).toMatchObject({ jerseyCount: 3, openForBidCount: 1 });
+    expect(parsed.openForBid?.[0]?.size).toBe("m");
+    expect(() =>
+      collectionDiscoverHomeSchema.parse({
+        collectors: [{ handle: "samler", initial: "S", avatarUrl: null }],
+      }),
+    ).toThrow();
   });
 
   it("rejects unknown shelf keys", () => {
