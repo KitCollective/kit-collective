@@ -1,4 +1,4 @@
-import { KIT_TYPES } from "@kit/domain";
+import { JERSEY_SIZES, KIT_TYPES } from "@kit/domain";
 import { z } from "zod";
 import { collectionJerseyPhotoSchema } from "./save.js";
 
@@ -28,6 +28,7 @@ export const collectionDiscoverJerseySchema = z
     clubLabel: z.string().min(1),
     seasonLabel: z.string().min(1),
     ownerHandle: z.string().min(1),
+    size: z.enum(JERSEY_SIZES),
     photos: z.array(collectionJerseyPhotoSchema).min(1),
   })
   .strict()
@@ -83,12 +84,27 @@ export const collectionDiscoverHomeCollectorSchema = z
 
 export type CollectionDiscoverHomeCollector = z.infer<typeof collectionDiscoverHomeCollectorSchema>;
 
+const discoverCopyCountSchema = z.number().int().nonnegative();
+
 export const collectionDiscoverHomeSchema = z
   .object({
-    clubs: z.array(collectionDiscoverHomeClubSchema).optional(),
-    nationalTeams: z.array(collectionDiscoverHomeNationalTeamSchema).optional(),
+    clubs: z
+      .array(collectionDiscoverHomeClubSchema.extend({ jerseyCount: discoverCopyCountSchema }))
+      .optional(),
+    nationalTeams: z
+      .array(
+        collectionDiscoverHomeNationalTeamSchema.extend({ jerseyCount: discoverCopyCountSchema }),
+      )
+      .optional(),
     openForBid: z.array(collectionDiscoverJerseySchema).optional(),
-    collectors: z.array(collectionDiscoverHomeCollectorSchema).optional(),
+    collectors: z
+      .array(
+        collectionDiscoverHomeCollectorSchema.extend({
+          jerseyCount: discoverCopyCountSchema,
+          openForBidCount: discoverCopyCountSchema,
+        }),
+      )
+      .optional(),
     moreJerseys: z.array(collectionDiscoverJerseySchema).optional(),
   })
   .strict();

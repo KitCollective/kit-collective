@@ -1,6 +1,6 @@
 # Optio: install, reload, update
 
-Optio is the bb plugin in `plugins/factory/` (plugin id `optio`, CLI `bb optio`; CONTEXT.md: **Optio**, ADR-0062). It runs inside the bb server on the owner's Mac and holds the Staff agents (Max, the Orchestrator), their memory and, once KIT-359/KIT-360 land, the Board. This page is how to get a merged change into the running plugin.
+Optio is the bb plugin in `plugins/factory/` (plugin id `optio`, CLI `bb optio`; CONTEXT.md: **Optio**, ADR-0062). It runs inside the bb server on the owner's Mac and holds the Staff agents (Max, the Orchestrator), their memory and the Board. This page is how to get a merged change into the running plugin.
 
 ## The `bb` that builds it must match the app
 
@@ -23,7 +23,24 @@ bb plugin build plugins/factory
 bb plugin install path:$PWD/plugins/factory --yes
 ```
 
-Then the agents are created through the plugin's RPC (`agent_create`); Max's instructions are the system prompt in `staff/max.md`. The Board is not set up until KIT-359.
+Then the agents are created through the plugin's RPC (`agent_create`); Max's instructions are the system prompt in `staff/max.md`. The Board is set up on the plugin's page (Agents, Board) and starts in `dry-run`; see the next section.
+
+## The Board reads the `loops` registry
+
+What the Board starts is the `loops` block of `factory.config.json` in the project checkout, read on every tick through `bb.sdk.projects.fileContent` (the bb project's root, which on the owner's Mac is the main checkout). Editing the file on `development` changes the next tick; nothing is reloaded.
+
+Each Loop has a `name`, a `trigger`, the `workflow` it runs (a file in `.bb/workflows/`), the `machines` it may use (ids as the page names them) and `maxLive`, how many of its runs may be live at once.
+
+- `issue` trigger: `state`, `label`, `unblocked`, `skipLabels`, `priorityOrder`. It repeats the `dispatch` block of `factory.config.json` (the eligibility rules `WORKFLOW.md` defines), and a plugin test fails when the two differ. AFK developer is registered with it.
+- `milestone-done` trigger: `states`. Defined, and it must stay `enabled: false`: a registry that switches it on is refused until the Board can match it.
+
+Rules the Board keeps across Loops: a machine's `cap`, write-scope overlap with work in progress or an earlier start, the focus milestone first, and `flow.maxRunsPerDay` (starts of one issue in 24 hours, resumes included). A Loop that names a machine the page does not have makes its issues wait with `no machine "x"`.
+
+A registry that does not parse (bad JSON, an unknown trigger, a duplicate Loop name, a negative `maxLive`) is refused: the Board plans, starts and moves nothing, `bb optio board` exits 1 and says why, the page shows the reason, and a `refusal` row is written. Every start, skip and refusal is a row in the plugin's record of runs (the `decisions` table), shown on the page under "Record of runs". A wait is written again only when its reason changes.
+
+The setup form keeps the operating settings only (backlog, active and blocked states). A board stored before this change keeps its `workflow`, `dispatchState`, `readyLabel`, `skipLabels` and `priorityOrder`; the Board ignores them.
+
+In `dry-run` the scheduled tick still reads the registry and records what it would start (`mode` is `dry-run` on the row) and applies nothing. That is the evidence for a registry change: `bb optio board --json` and the page show the Loops and the plan.
 
 ## After a merge that touches `plugins/factory/`
 

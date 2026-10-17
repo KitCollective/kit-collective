@@ -68,6 +68,7 @@ export const REASON_CODES = [
   "engineer-skipped",
   "ci-red",
   "ci-pending",
+  "device-flows-no-verdict",
   "replan",
   "conflict",
   "scope-miss",

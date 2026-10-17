@@ -145,7 +145,31 @@ export function parseWriteScopeGlobs(text) {
     .filter(Boolean);
 }
 
-export function findWriteScopeViolations(changedFiles, globs) {
+/**
+ * Test files under apps/ and packages/, and the issue's own slice flow: a slice's tests may live
+ * next to code outside its globs, and its flow (apps/mobile/.maestro/slices/<KEY>.yaml) is named
+ * after the issue, so no other run writes it. A clash between two runs on a test file is a merge
+ * conflict, which the trial merge and the queue catch. scripts/** is not a companion: the factory's
+ * own tests stay inside the declared scope (ADR-0064).
+ * @param {string} filePath
+ * @param {string} [issue] the issue key, e.g. KIT-292
+ */
+export function isCompanionPath(filePath, issue) {
+  if (issue && filePath === `apps/mobile/.maestro/slices/${issue}.yaml`) {
+    return true;
+  }
+  if (!/^(apps|packages)\//.test(filePath)) {
+    return false;
+  }
+  return /\/tests\//.test(filePath) || /\.test\.[cm]?[jt]sx?$/.test(filePath);
+}
+
+/** The first issue key in a PR's title, body or branch name, for the companion slice flow. */
+export function issueKeyIn(text) {
+  return /\b([A-Z][A-Z0-9]+-\d+)\b/i.exec(String(text ?? ""))?.[1]?.toUpperCase();
+}
+
+export function findWriteScopeViolations(changedFiles, globs, { issue } = {}) {
   const files = Array.isArray(changedFiles) ? changedFiles : [];
   const packageJsonInScope = files.some(
     (file) =>
@@ -158,6 +182,9 @@ export function findWriteScopeViolations(changedFiles, globs) {
       continue;
     }
     if (packageJsonInScope && file === "pnpm-lock.yaml") {
+      continue;
+    }
+    if (isCompanionPath(file, issue)) {
       continue;
     }
     const inScope = globs.some((glob) => matchesGlob(file, glob));

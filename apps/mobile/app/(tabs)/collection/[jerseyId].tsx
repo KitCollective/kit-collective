@@ -26,7 +26,7 @@ import { captureQualityForRole, readPreparedPhotoBase64 } from "@/capture/photoB
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { Banner } from "@/components/catalog-ui";
 import { formatThreadTime } from "@/components/thread-row";
-import { IconButton } from "@/components/ui";
+import { Button, IconButton } from "@/components/ui";
 import {
   JerseyBidRow,
   JerseyFactRow,
@@ -44,6 +44,7 @@ import {
   replaceJerseyInList,
 } from "@/jersey-detail/jersey-detail-view-model";
 import { JerseyPhotoPager, JerseyThumbStrip } from "@/jersey-detail/jersey-photos";
+import { loadOwnJersey } from "@/jersey-detail/own-jersey-load";
 import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
@@ -65,6 +66,7 @@ export default function JerseyDetailScreen() {
   const pendingMoreAction = useRef<PendingMoreAction | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [jersey, setJersey] = useState<CollectionJersey | null>(null);
   // The owner's full list, createdAt desc (no shortcut filter): the ordinal n comes from it.
   const [list, setList] = useState<CollectionJersey[]>([]);
@@ -81,39 +83,43 @@ export default function JerseyDetailScreen() {
   // Set when a photo was just added: the pager jumps to the new (last) photo once it is rendered.
   const jumpToNewPhoto = useRef(false);
 
-  const loadJersey = useCallback(async () => {
-    if (!accessToken || !jerseyId) {
-      return;
-    }
+  const loadSeq = useRef(0);
 
-    const response = await fetchCollectionJerseys(accessToken);
-    const found = response.jerseys.find((item) => item.id === jerseyId) ?? null;
-    setList(response.jerseys);
-    setJersey(found);
-    setBiddingEnabled(found?.biddingEnabled ?? false);
-    setIsPrivate(found?.private ?? false);
-    setPhotoIndex(0);
+  const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
+    if (accessToken && jerseyId) {
+      let fetched: CollectionJersey[] = [];
+      const outcome = await loadOwnJersey(async () => {
+        const response = await fetchCollectionJerseys(accessToken);
+        fetched = response.jerseys;
+        return response;
+      }, jerseyId);
+      if (seq !== loadSeq.current) {
+        return;
+      }
+      const found = outcome.kind === "found" ? outcome.jersey : null;
+      setLoadFailed(outcome.kind === "error");
+      setList(fetched);
+      setJersey(found);
+      setBiddingEnabled(found?.biddingEnabled ?? false);
+      setIsPrivate(found?.private ?? false);
+      setPhotoIndex(0);
+    }
+    setLoading(false);
   }, [accessToken, jerseyId]);
 
   useEffect(() => {
-    let active = true;
-
-    async function run() {
-      try {
-        await loadJersey();
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void run();
+    void load();
 
     return () => {
-      active = false;
+      loadSeq.current += 1;
     };
-  }, [loadJersey]);
+  }, [load]);
+
+  const retryLoad = () => {
+    setLoading(true);
+    void load();
+  };
 
   const toggleBidding = async (nextValue: boolean) => {
     if (!accessToken || !jerseyId) {
@@ -312,11 +318,52 @@ export default function JerseyDetailScreen() {
     );
   }
 
+  if (loadFailed) {
+    return (
+      <View
+        testID="jersey-detail-load-error"
+        style={[
+          styles.errorScreen,
+          { backgroundColor: theme.canvas, paddingTop: insets.top + space.insetSm },
+        ]}
+      >
+        <IconButton
+          testID="jersey-detail-back"
+          name="Tilbage"
+          icon="arrow-back"
+          onPress={() => router.back()}
+        />
+        <View style={styles.loadError}>
+          <Banner
+            tone="danger"
+            message="Kunne ikke hente trøjen. Prøv igen."
+            action={
+              <Button
+                testID="jersey-detail-load-retry"
+                label="Prøv igen"
+                variant="tertiary"
+                onPress={retryLoad}
+              />
+            }
+          />
+        </View>
+      </View>
+    );
+  }
+
   if (!jersey || !view) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
+      <View
+        testID="jersey-detail-not-found"
+        style={[styles.centered, { backgroundColor: theme.canvas }]}
+      >
         <Text style={[typography.body, { color: theme.contentSecondary }]}>Trøjen findes ikke</Text>
-        <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
+        <IconButton
+          testID="jersey-detail-back"
+          name="Tilbage"
+          icon="arrow-back"
+          onPress={() => router.back()}
+        />
       </View>
     );
   }
@@ -413,6 +460,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: space.gapMd,
+  },
+  errorScreen: {
+    flex: 1,
+    alignItems: "flex-start",
+    gap: space.gapMd,
+    paddingHorizontal: space.insetMd,
+  },
+  loadError: {
+    alignSelf: "stretch",
   },
   column: {
     paddingHorizontal: space.insetMd,

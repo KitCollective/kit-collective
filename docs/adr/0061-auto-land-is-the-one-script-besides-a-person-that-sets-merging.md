@@ -44,8 +44,8 @@ Verified by tests (`scripts/tests/auto-land.test.mjs`, `scripts/tests/kit-issue-
 
 ## Decision needed
 
-1. **`surface:mobile` default**: refused unless `no-device-needed` (the container has no simulator). Relax it per issue with the label, or globally in `riskClass`.
-2. **The 400-line cap** (`MAX_DIFF_LINES`); a binary file counts as 400.
+1. **`surface:mobile` default**: refused unless `no-device-needed` (the container has no simulator). Relax it per issue with the label, or globally in `riskClass`. *Settled by ADR-0064: a slice flow in the diff is enough.*
+2. **The 400-line cap** (`MAX_DIFF_LINES`); a binary file counts as 400. *Settled by ADR-0064: 4,000 lines.*
 3. **The ceiling of 100 starts per day** (`flow.autoLand.maxPerDay`) and **the breaker after 3 consecutive failures** (`flow.autoLand.breakerAfter`). Both are the owner's to tune.
 4. **Strictness beyond the brief**: `needs-info` and `ready-for-human` also stop auto-land; a diff touching `.bb/**`, `.github/**`, `factory.config.json` or the enforcement scripts is `needs-human`; an issue with no `write-scope:` is refused.
 5. **The first live trial**: one small, single-area, non-mobile issue (docs or a script test), started with `autoLand: true` after `--dry-run` on its PR, with a person watching the Linear board and ready to `touch .factory/auto-land.off`.

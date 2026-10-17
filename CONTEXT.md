@@ -65,7 +65,7 @@ _Avoid_: using a GitHub review approval as merge permission; setting `Merging` f
 
 **Auto-land**:
 `scripts/auto-land.mjs` (ADR-0061): the only thing besides a person that sets `Merging`. `start` re-reads the PR, the issue, the risk class, the independent reviewer, the audit receipt, the review gate, the runaway ceiling and the circuit breaker itself and refuses with one verdict line if any fails; `finish` waits for the merge and the integration check, sets `Done`, or raises the alarm (`Approval` + `ready-for-human`). Off by default (`flow.autoLand.enabled`, the `autoLand` workflow input, the `hold` label, the file `auto-land.off` in the gitignored `.factory` folder of the main checkout). `Approval` stays the exception exit.
-_Avoid_: reading a green relayed gate result as enough; auto-land for a high-risk, `surface:mobile` or oversize change; calling it Auto-merge (the archived worker rule below)
+_Avoid_: reading a green relayed gate result as enough; auto-land for a high-risk or oversize change, or a `surface:mobile` change with no slice flow (ADR-0064); calling it Auto-merge (the archived worker rule below)
 
 **Post-Merge**:
 The PR is merged. Set by Linear's GitHub automation on merge, or by the orchestrator when it sees `MERGED`. The integration lane is verified green here, then the worktree is reaped. `Done` is set only after `node scripts/gate.mjs land <pr> --issue KIT-n` exits 0; a gate that is not open leaves the issue in `Post-Merge`. `blockedBy` does not resolve here.

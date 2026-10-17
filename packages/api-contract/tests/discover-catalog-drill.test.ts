@@ -9,6 +9,7 @@ const jersey = {
   clubLabel: "F.C. København",
   seasonLabel: "2023/24",
   ownerHandle: "samler",
+  size: "m" as const,
   photos: [
     {
       id: "44444444-4444-4444-8444-444444444444",
