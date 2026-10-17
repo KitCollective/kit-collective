@@ -294,13 +294,11 @@ export async function settleWithConcurrency<T, R>(
   task: (item: T) => Promise<R>,
 ): Promise<PromiseSettledResult<R>[]> {
   const results: PromiseSettledResult<R>[] = new Array(items.length);
-  let next = 0;
+  const queue = items.entries();
   const worker = async () => {
-    while (next < items.length) {
-      const index = next;
-      next += 1;
+    for (const [index, item] of queue) {
       try {
-        results[index] = { status: "fulfilled", value: await task(items[index] as T) };
+        results[index] = { status: "fulfilled", value: await task(item) };
       } catch (reason) {
         results[index] = { status: "rejected", reason };
       }
