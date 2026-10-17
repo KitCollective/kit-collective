@@ -42,6 +42,7 @@ import {
   visionLog,
 } from "@kit/db";
 import {
+  type JerseySize,
   lightboxObjectKey,
   MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL,
   originalObjectKey,
@@ -219,7 +220,7 @@ async function saveJerseyForUser(
   app: NestFastifyApplication,
   session: Awaited<ReturnType<typeof registerSession>>,
   fixture: Awaited<ReturnType<typeof insertClubSeasonFixture>>,
-  options: { catalogKitId?: string | null } = {},
+  options: { catalogKitId?: string | null; size?: JerseySize } = {},
 ) {
   const response = await app.inject({
     method: "POST",
@@ -232,9 +233,35 @@ async function saveJerseyForUser(
       clubId: fixture.clubId,
       seasonId: fixture.seasonId,
       type: "home",
-      size: "m",
+      size: options.size ?? "m",
       condition: "used",
       ...(options.catalogKitId !== undefined ? { catalogKitId: options.catalogKitId } : {}),
+      photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+    },
+  });
+
+  expect(response.statusCode).toBe(201);
+  return collectionSaveResponseSchema.parse(JSON.parse(response.body)).jersey;
+}
+
+async function saveNationalTeamJerseyForUser(
+  app: NestFastifyApplication,
+  session: Awaited<ReturnType<typeof registerSession>>,
+  fixture: Awaited<ReturnType<typeof insertNationalTeamSeasonFixture>>,
+) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/collection/jerseys/save",
+    headers: {
+      authorization: `Bearer ${session.accessToken}`,
+      "accept-language": "da",
+    },
+    payload: {
+      nationalTeamId: fixture.nationalTeamId,
+      seasonId: fixture.seasonId,
+      type: "home",
+      size: "m",
+      condition: "used",
       photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
     },
   });
@@ -1615,6 +1642,102 @@ describe("Collection /v1", () => {
     expect(home.moreJerseys?.some((jersey) => jersey.id === privateJersey.id)).toBe(false);
     expect(home.moreJerseys?.some((jersey) => jersey.id === blockedJersey.id)).toBe(false);
     expect(JSON.parse(homeResponse.body)).not.toHaveProperty("entitlement");
+  });
+
+  it("counts copies per side and collector, orders shelves by copies, and carries size", async () => {
+    const clubX = await insertClubSeasonFixture();
+    const clubY = await insertClubSeasonFixture();
+    const ownerA = await registerSession(app, "magazine-count-a@example.com");
+    const ownerB = await registerSession(app, "magazine-count-b@example.com");
+    const blockedOwner = await registerSession(app, "magazine-count-blocked@example.com");
+    const viewer = await registerSession(app, "magazine-count-viewer@example.com");
+
+    const openJersey = await saveJerseyForUser(app, ownerA, clubX, { size: "xl" });
+    await patchJerseyBidding(app, ownerA, openJersey.id, true);
+    const closedJersey = await saveJerseyForUser(app, ownerA, clubX, { size: "s" });
+    const privateJersey = await saveJerseyForUser(app, ownerA, clubX);
+    await patchJerseyPrivate(app, ownerA, privateJersey.id, true);
+    const otherClubJersey = await saveJerseyForUser(app, ownerB, clubY);
+    const blockedJersey = await saveJerseyForUser(app, blockedOwner, clubY);
+    await patchJerseyBidding(app, blockedOwner, blockedJersey.id, true);
+    const ownJerseyX = await saveJerseyForUser(app, viewer, clubX);
+    const ownJerseyY = await saveJerseyForUser(app, viewer, clubY);
+    await patchJerseyBidding(app, viewer, ownJerseyY.id, true);
+
+    const blockResponse = await app.inject({
+      method: "POST",
+      url: `/v1/moderation/peers/${blockedOwner.user.id}/block`,
+      headers: { authorization: `Bearer ${viewer.accessToken}` },
+    });
+    expect(blockResponse.statusCode).toBe(201);
+
+    const homeResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/home",
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(homeResponse.statusCode).toBe(200);
+    const home = collectionDiscoverHomeSchema.parse(JSON.parse(homeResponse.body));
+
+    const clubCounts = home.clubs?.map((item) => item.jerseyCount) ?? [];
+    expect(clubCounts).toEqual([...clubCounts].sort((left, right) => right - left));
+    expect(
+      home.clubs
+        ?.filter((item) => [clubX.clubId, clubY.clubId].includes(item.clubId))
+        .map((item) => [item.clubId, item.jerseyCount]),
+    ).toEqual([
+      [clubX.clubId, 2],
+      [clubY.clubId, 1],
+    ]);
+    const collectorA = home.collectors?.find((item) => item.handle === ownerA.user.handle);
+    expect(collectorA).toMatchObject({ jerseyCount: 2, openForBidCount: 1 });
+    const collectorB = home.collectors?.find((item) => item.handle === ownerB.user.handle);
+    expect(collectorB).toMatchObject({ jerseyCount: 1, openForBidCount: 0 });
+    expect(home.collectors?.some((item) => item.handle === blockedOwner.user.handle)).toBe(false);
+    expect(home.collectors?.some((item) => item.handle === viewer.user.handle)).toBe(false);
+
+    const ownerAOpen = home.openForBid?.filter(
+      (jersey) => jersey.ownerHandle === ownerA.user.handle,
+    );
+    expect(ownerAOpen?.map((jersey) => [jersey.id, jersey.size])).toEqual([[openJersey.id, "xl"]]);
+    const moreById = new Map(home.moreJerseys?.map((jersey) => [jersey.id, jersey]));
+    expect(moreById.get(closedJersey.id)?.size).toBe("s");
+    expect(moreById.get(otherClubJersey.id)?.size).toBe("m");
+    for (const absentId of [privateJersey.id, blockedJersey.id, ownJerseyX.id, ownJerseyY.id]) {
+      expect(moreById.has(absentId)).toBe(false);
+      expect(home.openForBid?.some((jersey) => jersey.id === absentId)).toBeFalsy();
+    }
+  });
+
+  it("orders national team shelf by copies", async () => {
+    const fewer = await insertNationalTeamSeasonFixture();
+    const more = await insertNationalTeamSeasonFixture();
+    const owner = await registerSession(app, "magazine-nt-owner@example.com");
+    const viewer = await registerSession(app, "magazine-nt-viewer@example.com");
+
+    await saveNationalTeamJerseyForUser(app, owner, fewer);
+    await saveNationalTeamJerseyForUser(app, owner, more);
+    await saveNationalTeamJerseyForUser(app, owner, more);
+
+    const homeResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/home",
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(homeResponse.statusCode).toBe(200);
+    const home = collectionDiscoverHomeSchema.parse(JSON.parse(homeResponse.body));
+    const teamCounts = home.nationalTeams?.map((item) => item.jerseyCount) ?? [];
+    expect(teamCounts).toEqual([...teamCounts].sort((left, right) => right - left));
+    expect(
+      home.nationalTeams
+        ?.filter((item) =>
+          [more.nationalTeamId, fewer.nationalTeamId].includes(item.nationalTeamId),
+        )
+        .map((item) => [item.nationalTeamId, item.jerseyCount]),
+    ).toEqual([
+      [more.nationalTeamId, 2],
+      [fewer.nationalTeamId, 1],
+    ]);
   });
 
   it("rejects unauthenticated Søg catalog drills with 401", async () => {
