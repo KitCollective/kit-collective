@@ -13,19 +13,22 @@ export function lastLine(text: string): string {
   return (lines[lines.length - 1] ?? "").trim();
 }
 
-export function runNodeScript(args: {
+export function runNodeScript(options: {
   cwd: string;
   script: string;
+  /** Arguments after the script. The caller validates them; there is no shell. */
+  args?: string[];
   timeoutMs: number;
   signal?: AbortSignal;
 }): Promise<ScriptResult> {
-  const { cwd, script, timeoutMs, signal } = args;
+  const { cwd, script, timeoutMs, signal } = options;
+  const scriptArgs = options.args ?? [];
   if (!isAbsolute(cwd)) throw new Error(`cwd must be an absolute path, got "${cwd}"`);
   if (!existsSync(cwd) || !statSync(cwd).isDirectory()) throw new Error(`no directory at ${cwd}`);
   if (!existsSync(join(cwd, script))) throw new Error(`${script} does not exist in ${cwd}`);
   const started = Date.now();
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [script], {
+    const child = spawn(process.execPath, [script, ...scriptArgs], {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, CI: "1" },

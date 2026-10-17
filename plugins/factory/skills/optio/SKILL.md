@@ -52,10 +52,20 @@ standing agent", act as that agent for the message.
 | `bb optio follow-up list [--agent <id>]` | Follow-ups that are waiting or running. |
 | `bb optio follow-up cancel <id>` | Cancel a follow-up that has not started. |
 | `bb optio runs [--agent <id>] [--limit <n>]` | Recent sessions: chats, automations, triggers. |
+| `bb optio gates [--limit <n>] [--json]` | The gate runs `optio_gate` recorded, newest first. |
 | `bb optio urls` | The routes other systems call. |
 
 Agents, instructions and automations are created and changed on the Agents
 page, not from a shell.
+
+## Gates
+
+The agent tool `optio_gate` runs one of the repo's flow gates (`pre-review`,
+`review`, `land`) with a PR number and an issue key, on this thread's machine in
+its worktree. Optio records the exit code, the verdict line, the commit SHA, the
+gate and your thread id, and returns the same record: go by its `exitCode`
+(0 open, 1 closed, 3 waiting, 4 unknown). An unknown gate or a malformed
+argument is refused and recorded, never run.
 
 ## Automations
 
