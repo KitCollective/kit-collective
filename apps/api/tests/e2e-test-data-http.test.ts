@@ -1,6 +1,11 @@
 import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  identitySessionSchema,
+  visionJobResponseSchema,
+  visionSuggestResponseSchema,
+} from "@kit/api-contract";
 import { createDb, type Db, resetDatabase, user, userJersey } from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
@@ -19,6 +24,9 @@ const DATABASE_URL =
   process.env.API_TEST_DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_api_test";
 
 const TOKEN = "test-data-token-0123456789abcdef";
+
+const JPEG_BASE64 =
+  "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAUGB//EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwAA//2Q==";
 
 const TARGET_ENV = {
   E2E_TEST_DATA_TOKEN: TOKEN,
@@ -113,6 +121,104 @@ describe("POST /v1/e2e/test-data", () => {
     expect(await collectorJerseys()).toHaveLength(4);
     expect((await post(TOKEN)).statusCode).toBe(204);
     expect(await collectorJerseys()).toHaveLength(4);
+  });
+});
+
+describe("POST /v1/e2e/test-data with a Vision case", () => {
+  let app: NestFastifyApplication;
+  let closePool: () => Promise<void>;
+  const original = { ...process.env };
+
+  const reset = (payload?: { vision?: string | number }) =>
+    app.inject({
+      method: "POST",
+      url: "/v1/e2e/test-data",
+      headers: { authorization: `Bearer ${TOKEN}` },
+      payload,
+    });
+
+  /** The status the test Collector's grouping job ends in, polled until it leaves pending. */
+  async function groupingStatus(): Promise<string> {
+    const login = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: {
+        email: TARGET_ENV.E2E_COLLECTOR_EMAIL,
+        password: TARGET_ENV.E2E_COLLECTOR_PASSWORD,
+      },
+    });
+    const { accessToken } = identitySessionSchema.parse(JSON.parse(login.body));
+    const headers = { authorization: `Bearer ${accessToken}` };
+    const suggest = await app.inject({
+      method: "POST",
+      url: "/v1/collection/vision/grouping/suggest",
+      headers,
+      payload: {
+        photos: [
+          "11111111-1111-4111-8111-111111111111",
+          "22222222-2222-4222-8222-222222222222",
+        ].map((photoId) => ({ photoId, contentBase64: JPEG_BASE64 })),
+      },
+    });
+    const { jobId } = visionSuggestResponseSchema.parse(JSON.parse(suggest.body));
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const response = await app.inject({
+        method: "GET",
+        url: `/v1/collection/vision/jobs/${jobId}`,
+        headers,
+      });
+      const job = visionJobResponseSchema.parse(JSON.parse(response.body));
+      if (job.status !== "pending") {
+        return job.status;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error("Vision grouping job did not finish");
+  }
+
+  beforeAll(async () => {
+    Object.assign(process.env, TARGET_ENV);
+    delete process.env.PRODUCTION_DATABASE_URL;
+    process.env.DATABASE_URL = DATABASE_URL;
+    process.env.VISION_FIXED_FOR_TEST_COLLECTOR = "on";
+    delete process.env.R2_ENDPOINT;
+    await resetDatabase(DATABASE_URL, migrationsFolder);
+    const created = createDb(DATABASE_URL);
+    closePool = () => created.pool.end();
+    await insertLocalFixtureCatalog(created.db);
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    app.setGlobalPrefix("v1");
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+  });
+
+  afterAll(async () => {
+    await reset({});
+    await app.close();
+    await closePool();
+    process.env = original;
+  });
+
+  it("fails the test Collector's grouping after vision=failure, and restores it on a reset with {}", async () => {
+    expect((await reset({ vision: "failure" })).statusCode).toBe(204);
+    expect(await groupingStatus()).toBe("failed");
+
+    expect((await reset({})).statusCode).toBe(204);
+    expect(await groupingStatus()).toBe("ready");
+  });
+
+  it("restores the default case on a reset with no body", async () => {
+    expect((await reset({ vision: "failure" })).statusCode).toBe(204);
+    expect((await reset()).statusCode).toBe(204);
+    expect(await groupingStatus()).toBe("ready");
+  });
+
+  it("rejects an unknown Vision case and leaves the case as it was", async () => {
+    expect((await reset({ vision: "failure" })).statusCode).toBe(204);
+    expect((await reset({ vision: "nonsense" })).statusCode).toBe(400);
+    expect((await reset({ vision: 3 })).statusCode).toBe(400);
+    expect(await groupingStatus()).toBe("failed");
   });
 });
 

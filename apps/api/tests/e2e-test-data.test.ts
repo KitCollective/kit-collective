@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectionJerseysSchema, identitySessionSchema } from "@kit/api-contract";
 import {
+  authThrottleHit,
   catalogLabel,
   collectionShortcut,
   conversation,
@@ -345,6 +346,26 @@ describe("device-flow test data", () => {
         .sort()
         .map((id) => ({ id })),
     );
+  });
+
+  it("forgets the sign-in code requests of the test Collectors, so a long run is never throttled", async () => {
+    const collectorEmail = CREDENTIALS.collector.email.toLowerCase();
+    await db.insert(authThrottleHit).values([
+      ...Array.from({ length: 5 }, () => ({
+        bucket: "email_request",
+        bucketKey: collectorEmail,
+      })),
+      { bucket: "email_failure", bucketKey: collectorEmail },
+      { bucket: "email_request", bucketKey: "someone.else@example.test" },
+    ]);
+
+    await applyTestData({ db, objectStore, credentials: CREDENTIALS });
+
+    expect(
+      await db
+        .select({ bucket: authThrottleHit.bucket, bucketKey: authThrottleHit.bucketKey })
+        .from(authThrottleHit),
+    ).toEqual([{ bucket: "email_request", bucketKey: "someone.else@example.test" }]);
   });
 
   it("changes only the test Collectors", async () => {

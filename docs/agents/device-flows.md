@@ -1,6 +1,6 @@
 # Device flows
 
-A slice that touches `apps/mobile/**` proves itself with **its own Device flow**, `apps/mobile/.maestro/slices/<KEY>.yaml`, written in the same PR and run against an iOS Simulator build: by the hosted run on a GitHub macOS runner (what an issue session asks for, ADR-0059), or on the approver's Mac. The five flows that used to be the gate are the **regression set** under `regression/`, run only on request. Decisions: `docs/adr/0048-device-flows-as-pr-evidence.md`, changed by `docs/adr/0049-slice-flows-queue-and-native-cache.md`. Terms (**Device flow**, **Test Collector**, **Evidence run**, **Design finding**): `CONTEXT.md`.
+A slice that touches `apps/mobile/**` proves itself with **its own Device flow**, `apps/mobile/.maestro/slices/<KEY>.yaml`, written in the same PR and run against an iOS Simulator build: by the hosted run on a GitHub macOS runner (what an issue session asks for, ADR-0059), or on the approver's Mac. The five flows that used to be the gate, and three more for the states of the identity block (KIT-284), are the **regression set** under `regression/`: eight flows, run only on request. Decisions: `docs/adr/0048-device-flows-as-pr-evidence.md`, changed by `docs/adr/0049-slice-flows-queue-and-native-cache.md`. Terms (**Device flow**, **Test Collector**, **Evidence run**, **Design finding**): `CONTEXT.md`.
 
 ## Write the slice flow
 
@@ -20,11 +20,29 @@ Regression flows (`E2E_FLOWS=regression`): run them at a milestone, before a pro
 | --- | --- | --- |
 | `first-session` | signed out | `01-welcome`, `02-demo-result`, `03-kom-i-gang`, `04-invalid-email`, `05-code` |
 | `add-jersey` | Test Collector | `01-source-sheet`, `02-confirm`, `03-size-and-condition`, `04-ready-to-save`, `05-saved`, `06-collection` (the system photo picker between the first two is tapped through, not screenshotted) |
+| `add-jersey-low-confidence` | Test Collector, Vision `low-confidence` | `01-block-asks` (Brug forslaget / Vælg selv), `02-suggestion-accepted`, `03-ready-to-save`, `04-saved` |
+| `add-jersey-vision-off` | Test Collector | `01-sheet-vision-off`, `02-empty-identity-block` (Vision er slået fra, Vælg), `03-data-drill` (stops there: see below) |
+| `add-jersey-vision-failure` | Test Collector, Vision `failure` | `01-empty-identity-block` (Vision fandt ikke trøjen, no reading state left), `02-data-drill`, `03-picked-by-hand` (AaB, 2023/24, Hjemme), `04-ready-to-save`, `05-saved` (Save works by hand) |
 | `collection` | Test Collector | `01-collection`, `02-shortcut-filter`, `03-own-detail` |
 | `search-bid` | Test Collector | `01-typeahead`, `02-catalog-drill`, `03-foreign-detail`, `04-send-bid`, `05-amount-entered`, `06-bid-sent` |
 | `wishlist-paywall` | second test Collector | `01-wishlist`, `02-paywall` |
 
+The three `add-jersey-*` flows beyond `add-jersey` pick the one photo of the one-photo simulator. The Data drill that Vælg opens has no `testID` on its club, season and type controls (and the club picker's rows), so `add-jersey-vision-failure` taps them by a pattern on their copy (`.*AaB.*`, `.*2023/24.*`, `.*Hjemme.*`, the drill's `Gem`) and goes on to Save by hand; `add-jersey-vision-off` stops at the opened drill and asserts it by the copy of its first row. Add the testIDs to the drill to replace the copy taps.
+
 Every flow first calls `POST /v1/e2e/test-data`, so flows are independent and a re-run starts from the same rows. A screenshot is `kc__<flow>__<step>.png`; a recording is `kc__<flow>.mp4`.
+
+### The fixed Vision answer
+
+The reset takes an optional JSON body, `{"vision": "<case>"}`, that picks what the fixed Vision of the Test Collector answers until the next reset (the case lives in the API process). `reset-test-data.js` sends it when a `VISION` is defined, and `subflows/sign-in.yaml` passes the `VISION` its caller gives it (none means an empty body and the API's default, `resolved`). It sets no `env:` default of its own: Maestro defines a header `env:` after the caller's value, so a default there overrides every caller.
+
+| `vision` | The Test Collector's Vision answers |
+| --- | --- |
+| `resolved` (default) | identity confidence 90, photo groups of two at 90 |
+| `low-confidence` | identity confidence 60: Confirm asks Brug forslaget / Vælg selv |
+| `mixed-grouping` | groups of two photos with confidence 90, 60, 30 in turn: a bound row, a Tjek row, and photos left in the inbox |
+| `failure` | every Vision job fails at once |
+
+The reset also deletes the Test Collector's auth sessions, so a case cannot be switched mid-flow: run `../subflows/sign-in.yaml` again with the other `VISION`. `slices/KIT-284.yaml` is the bulk and failure case: 16 photos through the overview with `mixed-grouping` (bound, Tjek and inbox rows, Gem og næste), then four photos with `failure` (Vision svarede ikke, Prøv Vision igen, Sortér selv, the photos kept). A partial upload failure (`overview-upload-failed`) cannot be forced on a simulator; the unit tests cover it.
 
 Not covered: Android, physical devices, the camera branch of Tilføj trøje, showcase and first photos (unreachable from a cold start today).
 
@@ -33,14 +51,14 @@ Not covered: Android, physical devices, the camera branch of Tilføj trøje, sho
 | Path | What |
 | --- | --- |
 | `apps/mobile/.maestro/slices/` | one flow per issue, plus `TEMPLATE.yaml.example` |
-| `apps/mobile/.maestro/regression/` | the five regression flows |
+| `apps/mobile/.maestro/regression/` | the eight regression flows |
 | `apps/mobile/.maestro/subflows/` | `sign-in.yaml` (reset, cold start, sign in), `settle.yaml` (a fixed pause for motion Maestro cannot see) |
-| `apps/mobile/.maestro/scripts/` | `reset-test-data.js`, the reset call the flows run first |
+| `apps/mobile/.maestro/scripts/` | `reset-test-data.js`, the reset call the flows run first (sends `VISION`, the fixed Vision case, when a flow defines it) |
 | `apps/mobile/.maestro/fixtures/` | one drawn shirt photo for the simulator gallery; `photos/` holds the real shirt photos a slice flow can ask for |
 | `apps/mobile/.maestro/design-sections.json` | which `docs/design-system.md` sections the review reads per flow |
 | `apps/mobile/.maestro/*.sh` | local API, build, run, publish evidence |
 | `apps/api/src/e2e/` | test data, its guard, the reset route |
-| `apps/api/src/vision/fixed-vision.adapter.ts` | fixed Vision for the Test Collector |
+| `apps/api/src/vision/fixed-vision.adapter.ts` | fixed Vision for the Test Collector; the answer is the case the last reset set |
 | `scripts/e2e/` | upload, "before" selection, comparison, review, PR comment, workpad evidence |
 
 ## A flow needs a `testID`
@@ -49,8 +67,9 @@ Flows tap by `testID`, so a copy change does not break a flow. The exceptions, e
 
 - the native tab bar: `Søg` and `Ønsker` are tapped by label;
 - the app's own upload source sheet option `Fotos` (a system action sheet), by label;
-- the system photo picker: the first cell and its confirm button, by screen point, on a simulator whose library holds exactly one photo;
+- the system photo picker: the first cell and its confirm button, by screen point, on a simulator whose library holds exactly one photo; a flow with several photos taps the cells by screen point too, three to a row, newest first;
 - iOS's "save password" prompt: `Ikke nu` / `Not Now`, by text, when it shows;
+- two waits for text: the Saved sheet's count line (`Trøje nr. n i din samling`, which fills in after the sheet opens) and the first row of the Data drill; they assert, they never tap.
 
 When a slice adds a control a flow must tap, add the `testID` in the same PR. Adding a `testID` is not a UI change; do not restyle a screen to make a flow pass.
 
@@ -99,7 +118,7 @@ The rest of this section runs on the approver's Mac, for the full evidence or wh
 # What an issue session runs: queue, API, app, flow, evidence. One command.
 apps/mobile/.maestro/device-run.sh
 
-# The five regression flows instead.
+# The eight regression flows instead.
 E2E_FLOWS=regression apps/mobile/.maestro/device-run.sh
 ```
 

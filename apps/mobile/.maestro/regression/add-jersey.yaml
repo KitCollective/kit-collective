@@ -1,4 +1,7 @@
-# Tilføj trøje from the gallery, with the fixed Vision suggestion, through Save.
+# Tilføj trøje from the gallery, with the fixed Vision suggestion (identity block resolved,
+# "Fundet af Vision"), size and condition on the hub, Gem, the Saved sheet, and Samling.
+# The sibling flows add-jersey-low-confidence, add-jersey-vision-off and add-jersey-vision-failure
+# cover the other states of the identity block.
 appId: app.kitcollective.mobile
 name: add-jersey
 ---
@@ -80,6 +83,16 @@ name: add-jersey
     visible:
       id: post-save-to-collection
     timeout: 30000
+# The Saved sheet's two exits: Tilføj næste trøje and Se samlingen.
+- assertVisible:
+    id: post-save-next
+- assertVisible: "Tilføj næste trøje"
+- assertVisible: "Se samlingen"
+# The count line of the Saved sheet fills in after the sheet opens (a read that Save does not wait
+# for): wait for it, or the screenshot differs from run to run. The number is not fixed by copy.
+- extendedWaitUntil:
+    visible: "Trøje nr\\. [0-9]+ i din samling"
+    timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: kc__add-jersey__05-saved
