@@ -682,8 +682,11 @@ describe("Collection conversations /v1", () => {
     const jerseyOf = (messageId: string) =>
       detail.messages.find((message) => message.id === messageId)?.jersey;
 
+    const showcaseThumb = expect.stringMatching(/^\/v1\/collection\/showcase\/photos\//);
     const awayJerseyCard = {
       userJerseyId: awayJersey.id,
+      thumbUrl: showcaseThumb,
+      openForBid: true,
       clubLabel: "F.C. København",
       seasonLabel: "2023/24",
       type: "away",
@@ -691,6 +694,8 @@ describe("Collection conversations /v1", () => {
     };
     expect(jerseyOf(homeBid.messageId)).toEqual({
       userJerseyId: homeJersey.id,
+      thumbUrl: showcaseThumb,
+      openForBid: true,
       clubLabel: "F.C. København",
       seasonLabel: "2023/24",
       type: "home",
@@ -745,6 +750,8 @@ describe("Collection conversations /v1", () => {
     expect(deletedJerseyBid?.bidStatus).toBe("declined");
     expect(deletedJerseyBid?.jersey).toEqual({
       userJerseyId: null,
+      thumbUrl: null,
+      openForBid: false,
       clubLabel: "F.C. København",
       seasonLabel: "2023/24",
       type: "home",

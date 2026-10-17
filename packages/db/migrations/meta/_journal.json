@@ -274,6 +274,13 @@
       "when": 1788960000000,
       "tag": "0038_conversation_per_pair",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1789040000000,
+      "tag": "0039_conversation_system_message",
+      "breakpoints": true
     }
   ]
 }
