@@ -17,7 +17,8 @@ type SearchFieldDiscoverProps = TextInputProps & {
 /**
  * Search field, `discover` variant (docs/design-system.md → Search field, Revision
  * 2026-10-10): the Søg tab's field. `fill.secondary`, `radius.pill`, 48 high, no border.
- * In focus, Back (Tilbage) replaces the search icon: it blurs and clears the field.
+ * Back (Tilbage) replaces the search icon in focus and while the field holds a query; it
+ * blurs and clears the field.
  */
 export function SearchFieldDiscover({
   value,

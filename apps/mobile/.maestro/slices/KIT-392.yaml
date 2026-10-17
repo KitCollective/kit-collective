@@ -1,8 +1,8 @@
-# Device flow for KIT-392: the Søg field takes Back in focus (ADR-0049).
+# Device flow for KIT-392: the Søg field takes Back in focus and while it holds a query (ADR-0049).
 #
 # design-sections: Search field, Søg home and typeahead, Icon button
 #
-# AC 1: in focus Back (Tilbage) replaces the search icon, clear stays on the right.
+# AC 1: in focus (or holding a query) Back (Tilbage) replaces the search icon, clear stays on the right.
 # AC 2: Back returns to Søg home (the title and the magazine come back).
 # AC 3: clear empties the field.
 # AC 4 (accessible name, test) is covered by tests/search-field-discover-chrome.test.ts.
@@ -32,6 +32,7 @@ name: kit-392
     id: search-clear
 - waitForAnimationToEnd:
     timeout: 5000
+# AC 1: with a query typed and the field in focus, Back sits left and clear stays right.
 - takeScreenshot: kc__kit-392__00-back-and-clear-in-focus
 # AC 3: clear empties the field; the field stays in focus, so Back stays.
 - tapOn:
