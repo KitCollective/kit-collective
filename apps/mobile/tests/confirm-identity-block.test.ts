@@ -198,6 +198,47 @@ describe("resolveIdentityBlock: empty", () => {
   });
 });
 
+describe("after a failed Vision read on a single jersey", () => {
+  // The read finished without a result (timeout, offline, error): not in flight, nothing found.
+  const failedRead = () => baseInput({ visionOn: true, inFlight: false, suggestion: null });
+
+  it("ends in the empty block with Vision fandt ikke trøjen and the Vælg pill, never reading", () => {
+    const block = resolveIdentityBlock(failedRead());
+    expect(block.kind).toBe("empty");
+    expect(block.kind).not.toBe("in-flight");
+    expect(block.label).toBe(CONFIRM_IDENTITY_COPY.notFound);
+    expect(block.headline).toBe("Vælg klub og sæson");
+    expect(block.pill).toEqual({ label: "Vælg", tone: "primary", action: "open-data" });
+    expect(block.facts).toEqual([]);
+  });
+
+  it("offers no retry control: Vælg is the only action", () => {
+    const block = resolveIdentityBlock(failedRead());
+    expect(block.actions).toEqual([]);
+    expect(block.accessibilityLabel).not.toMatch(/igen/i);
+  });
+
+  it("keeps Gem off until the collector fills the identity by hand, then turns it on", () => {
+    const base = createCaptureSession([URI_FRONT]);
+    const id = getActiveDraft(base).id;
+    expect(confirmSaveEnabled({ draft: getActiveDraft(base), lowConfidencePending: false })).toBe(
+      false,
+    );
+
+    let session = setDraftClub(base, id, CLUB_ID, "FC Barcelona");
+    session = setDraftSeason(session, id, SEASON_ID, "2023/24");
+    session = selectDraftKitType(session, id, "home");
+    session = selectDraftSize(session, id, "m");
+    session = selectDraftCondition(session, id, "used");
+    const draft = getActiveDraft(session);
+
+    const block = resolveIdentityBlock(baseInput({ draft }));
+    expect(block.kind).toBe("resolved");
+    expect(block.label).toBeNull();
+    expect(confirmSaveEnabled({ draft, lowConfidencePending: false })).toBe(true);
+  });
+});
+
 describe("confirmSaveEnabled", () => {
   it("is on exactly when photo, club or national team, season, type, size and condition are set", () => {
     const base = createCaptureSession([URI_FRONT]);

@@ -1,12 +1,18 @@
 # Cold start, known test data, signed in through the Kom i gang sheet with the e-mail code.
 # Callers pass EMAIL (the collector's address). There is no password on this path.
+# Callers may pass VISION, the fixed Vision answer for this run: resolved, low-confidence,
+# mixed-grouping or failure (KIT-284). The header value below is the default when a caller passes
+# none; a value the caller passes takes precedence over it.
 appId: app.kitcollective.mobile
+env:
+  VISION: resolved
 ---
 - runScript:
     file: ../scripts/reset-test-data.js
     env:
       API_URL: ${MAESTRO_API_URL}
       TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+      VISION: ${VISION}
 - launchApp:
     clearState: true
     clearKeychain: true

@@ -12,8 +12,11 @@ import {
   overviewTitle,
   parkedRow,
   pendingSkeletonRows,
+  pendingUploadFailures,
   shouldOpenBulkOverview,
   shouldOpenUnassigned,
+  splitPreparedPhotos,
+  uploadFailureRow,
   visionOnForCapture,
 } from "../src/capture/captureOverview";
 import {
@@ -24,6 +27,7 @@ import {
   createCaptureSession,
   createMemoryCaptureSessionStore,
   discardUnboundPhoto,
+  groupingPriorGroups,
   markGroupingSettled,
   markOverviewSession,
   parkSession,
@@ -38,6 +42,7 @@ import {
   unparkSession,
 } from "../src/capture/captureSession";
 import type { CaptureSessionState } from "../src/capture/captureSessionTypes";
+import { buildGroupingSuggestRequest } from "../src/capture/groupingSuggestRequest";
 
 const URIS = Array.from({ length: 12 }, (_, index) => `file:///photos/p-${index}.jpg`);
 
@@ -396,5 +401,98 @@ describe("leaving the overview", () => {
   it("parks when only loose photos are left", () => {
     const state = markOverviewSession(createCaptureSession(URIS.slice(0, 4)));
     expect(overviewLeaveAction(state)).toBe("park");
+  });
+});
+
+describe("upload failure row", () => {
+  it("names the failed photos in the inbox slot, with the lock's caption and pill", () => {
+    expect(uploadFailureRow(2)).toEqual({
+      count: 2,
+      title: "2 fotos blev ikke uploadet",
+      caption: "De ligger stadig på telefonen",
+      pill: "Prøv igen",
+      thumbUris: [],
+    });
+  });
+
+  it("words one failed photo in the singular", () => {
+    expect(uploadFailureRow(1)?.title).toBe("1 foto blev ikke uploadet");
+  });
+
+  it("is gone at zero, and shows at most three thumbs", () => {
+    expect(uploadFailureRow(0)).toBeNull();
+    expect(uploadFailureRow(5, URIS.slice(0, 5))?.thumbUris).toEqual(URIS.slice(0, 3));
+  });
+
+  it("splits a prepare run into the photos to send and the URIs that failed", () => {
+    const uris = URIS.slice(0, 3);
+    const results: PromiseSettledResult<string>[] = [
+      { status: "fulfilled", value: "a" },
+      { status: "rejected", reason: new Error("heic") },
+      { status: "fulfilled", value: "c" },
+    ];
+    expect(splitPreparedPhotos(uris, results)).toEqual({
+      photos: ["a", "c"],
+      failedUris: [uris[1]],
+    });
+  });
+
+  it("only counts failed photos that are still loose in the session", () => {
+    const session = createCaptureSession(URIS.slice(0, 4));
+    const bound = bindUnboundPhotoToDraft(session, URIS[1]!, session.activeDraftId);
+    expect(pendingUploadFailures([URIS[0]!, URIS[1]!, "file:///gone.jpg"], bound)).toEqual([
+      URIS[0],
+    ]);
+    expect(pendingUploadFailures([], bound)).toEqual([]);
+  });
+
+  it("sends the retried photos as a follow-up run with the jerseys already found as priorGroups", () => {
+    const session = groupedSession();
+    const failed = session.unboundUris.slice(0, 1);
+    const photoId = session.photoIdByUri![failed[0]!]!;
+    const request = buildGroupingSuggestRequest({
+      sessionId: session.sessionId,
+      photos: [{ photoId, contentBase64: "AAAA" }],
+      priorGroups: groupingPriorGroups(session),
+    });
+    expect(request?.photos.map((photo) => photo.photoId)).toEqual([photoId]);
+    expect(request?.priorGroups?.length).toBeGreaterThan(0);
+  });
+
+  it("has nothing to send for a lone retried photo when no jersey exists yet", () => {
+    const session = createCaptureSession(URIS.slice(0, 4));
+    const photoId = session.photoIdByUri![URIS[0]!]!;
+    expect(
+      buildGroupingSuggestRequest({
+        sessionId: session.sessionId,
+        photos: [{ photoId, contentBase64: "AAAA" }],
+        priorGroups: groupingPriorGroups(session),
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps a failed photo in the pile, so the inbox still holds it", () => {
+    const session = groupedSession();
+    expect(inboxRow(session)?.count).toBe(4);
+  });
+});
+
+describe("Vision failed overview state", () => {
+  it("reads 16 fotos er gemt, Vision svarede ikke, then Prøv Vision igen and Sortér selv", () => {
+    const state = { analyzing: false, totalPhotos: 16, jerseyCount: 0 };
+    expect(overviewTitle(state)).toBe("16 fotos er gemt");
+    expect(overviewCaption({ ...state, failed: true })).toBe("Vision svarede ikke");
+    expect(
+      overviewDock({ analyzing: false, failed: true, unsavedCount: 0, firstTitle: null }),
+    ).toEqual({
+      primary: { label: "Prøv Vision igen", disabled: false },
+      tertiary: "Sortér selv",
+    });
+  });
+
+  it("words one saved photo in the singular", () => {
+    expect(overviewTitle({ analyzing: false, totalPhotos: 1, jerseyCount: 0 })).toBe(
+      "1 foto er gemt",
+    );
   });
 });

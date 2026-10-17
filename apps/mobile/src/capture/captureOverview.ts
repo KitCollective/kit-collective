@@ -255,6 +255,58 @@ export function inboxRow(state: CaptureSessionState): InboxRowModel | null {
   };
 }
 
+export type UploadFailureRowModel = {
+  count: number;
+  title: string;
+  caption: "De ligger stadig på telefonen";
+  pill: "Prøv igen";
+  thumbUris: string[];
+};
+
+/**
+ * Partial upload failure (Capture session, item 6): photos that could not be prepared for the
+ * grouping request. The row takes the inbox slot while any remain, and the rest carries on.
+ */
+export function uploadFailureRow(
+  count: number,
+  thumbUris: string[] = [],
+): UploadFailureRowModel | null {
+  if (count <= 0) {
+    return null;
+  }
+  return {
+    count,
+    title: `${plural(count, "foto", "fotos")} blev ikke uploadet`,
+    caption: "De ligger stadig på telefonen",
+    pill: "Prøv igen",
+    thumbUris: thumbUris.slice(0, THUMBS_MAX),
+  };
+}
+
+/** Splits a prepare run into what can be sent and the URIs whose prepare was rejected. */
+export function splitPreparedPhotos<T>(
+  uris: string[],
+  results: PromiseSettledResult<T>[],
+): { photos: T[]; failedUris: string[] } {
+  const photos: T[] = [];
+  const failedUris: string[] = [];
+  for (const [index, uri] of uris.entries()) {
+    const result = results[index];
+    if (result?.status === "fulfilled") {
+      photos.push(result.value);
+    } else {
+      failedUris.push(uri);
+    }
+  }
+  return { photos, failedUris };
+}
+
+/** A failed photo the collector has since bound or removed is no longer part of the failure. */
+export function pendingUploadFailures(failedUris: string[], state: CaptureSessionState): string[] {
+  const loose = new Set(state.unboundUris);
+  return failedUris.filter((uri) => loose.has(uri));
+}
+
 export type OverviewDockModel = {
   primary: { label: string; disabled: boolean };
   tertiary: string | null;

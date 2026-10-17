@@ -23,9 +23,11 @@ import bcrypt from "bcryptjs";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { writeStripAndLightboxVariants } from "../collection/photo-derivatives.js";
+import { setFixedVisionCase } from "../vision/fixed-vision.adapter.js";
 import { type ResolvedSide, resolveCatalogSide } from "./catalog-side.js";
 import { renderFixturePhoto } from "./fixture-photo.js";
 import {
+  DEFAULT_VISION_CASE,
   type FixtureSide,
   TEST_COLLECTOR_HANDLE,
   TEST_COLLECTOR_ID,
@@ -37,6 +39,7 @@ import {
   TEST_SHORTCUT,
   TEST_UNANSWERED_BID,
   TEST_WISHLIST_ENTRY,
+  type VisionCase,
 } from "./test-data.fixture.js";
 
 export type TestDataCredentials = {
@@ -106,14 +109,16 @@ function variantKeys(objectKey: string): string[] {
 /**
  * Puts the two test Collectors into the known state the device flows start
  * from. Idempotent. Reads the catalog; writes only rows owned by, or pointing
- * at, the two test Collectors.
+ * at, the two test Collectors. `vision` picks the fixed Vision answer the test
+ * Collector gets from here on; omitted, it is the default (KIT-284).
  */
 export async function applyTestData(input: {
   db: Db;
   objectStore: ObjectStoreAdapter;
   credentials: TestDataCredentials;
+  vision?: VisionCase;
 }): Promise<void> {
-  const { db, objectStore, credentials } = input;
+  const { db, objectStore, credentials, vision = DEFAULT_VISION_CASE } = input;
   const catalog = await resolveFixtureCatalog(db);
   await assertIdentityFree(db, credentials);
   // SAFETY: fixture sides are typed from TEST_DATA_CATALOG, and resolveFixtureCatalog
@@ -329,4 +334,5 @@ export async function applyTestData(input: {
       );
     }
   }
+  setFixedVisionCase(vision);
 }

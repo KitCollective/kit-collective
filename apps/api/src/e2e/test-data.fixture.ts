@@ -144,5 +144,27 @@ export const FIXED_VISION_SUGGESTION: { side: FixtureSide; type: KitType } = {
   type: "home",
 };
 
+/** The fixed Vision answers the device flows can pick between, by the reset call (KIT-284). */
+export const VISION_CASES = ["resolved", "low-confidence", "mixed-grouping", "failure"] as const;
+export type VisionCase = (typeof VISION_CASES)[number];
+
+export const DEFAULT_VISION_CASE: VisionCase = "resolved";
+
+/**
+ * What each case answers. `identityConfidence` is every identity confidence; `groupConfidences`
+ * are handed to the photo groups in order, and wrap round when there are more groups than entries.
+ * 60 sits in the suggest band (50-69) and 30 below it; 90 preselects. `failure` has no answer: the
+ * adapter rejects, so the job fails at once.
+ */
+export const FIXED_VISION_CASES: Record<
+  VisionCase,
+  { identityConfidence: number; groupConfidences: number[] } | "fails"
+> = {
+  resolved: { identityConfidence: 90, groupConfidences: [90] },
+  "low-confidence": { identityConfidence: 60, groupConfidences: [90] },
+  "mixed-grouping": { identityConfidence: 90, groupConfidences: [90, 60, 30] },
+  failure: "fails",
+};
+
 /** The Comp Entitlement never lapses during a run. */
 export const TEST_COMP_EXPIRES = new Date("2099-01-01T00:00:00.000Z");
