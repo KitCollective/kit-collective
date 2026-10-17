@@ -101,7 +101,8 @@
       touchedMinutesAgo: Math.round((Date.now() - Date.parse(node.updatedAt)) / 60000),
       labels: node.labels.nodes.map((label) => label.name).sort(),
       agent: node.delegate?.name ?? null,
-      writeScope: /^\s*write-scope:\s*(.+)$/m.exec(node.description ?? "")?.[1].trim() ?? null,
+      writeScope:
+        /^\s*write-scope:\s*(.+)$/m.exec(node.description ?? "")?.[1].replace(/`/g, "").trim() ?? null,
       blockedBy: blockers
         .filter((relation) => !["Done", "Canceled"].includes(relation.issue.state.name))
         .map((relation) => relation.issue.identifier)
@@ -215,7 +216,11 @@
       if (!step) continue;
       const own = events.filter((e) => e.issue === issue.key);
       const last = own.at(-1);
-      if (!last || Date.now() - Date.parse(last.at) < landingStuckMinutes * 60000) continue;
+      // A run whose last event is runner-no-result has already stopped (the workflow returns right
+      // after logging it), so there is nothing to wait for. 2026-10-17: KIT-384 and KIT-319 ended so
+      // at 00:53 and 01:00, and the ticks inside the threshold printed nothing until a person landed them.
+      const ended = last?.event === "reason" && last.code === "runner-no-result";
+      if (!last || (!ended && Date.now() - Date.parse(last.at) < landingStuckMinutes * 60000)) continue;
       const after = (e) => own.slice(own.lastIndexOf(e) + 1);
       let sha;
       if (step === "start") {
@@ -324,7 +329,7 @@ ${JSON.stringify({ counts, eligibleInClaimOrder: eligible, triage: actionable.tr
    \`bb thread spawn --project ${project} --machine ${machine} --new-environment worktree --base-branch origin/development --provider claude-code --model ${runModel} --title "<KIT-n>" --json --prompt-file -\`
    with this prompt on stdin (quoted heredoc, the key filled in): "Run \`bb workflows validate --file .bb/workflows/afk-developer.js\`. If it passes, run \`bb workflows run --file .bb/workflows/afk-developer.js --args '{"issue":"<KIT-n>","autoLand":true}'\` exactly once and state the run id. When the run's result arrives, report issue, status, stoppedAt, PR number and note in one short message. Do nothing else: no code edits, no Linear changes, no second run, never Merging, never a merge."
    Do not move the issue yourself: the run does its session check and moves it to In Progress, so a refused run leaves no orphan. Wait for the thread to go idle (\`bb thread wait <id>\`, then \`bb thread output <id>\`), and once it reports a run id write one comment on the issue: claimed, why it was eligible, the run id. If the thread reports a refusal or no run id, write no comment and report it.
-5. Triage, for each issue in triage (oldest first), after reading it in full with \`node scripts/linear.mjs issue <KIT-n>\` and its comments: give one verdict as your charter says (shape and promote a clear signal-up, at most 10 per day counted from your own "Max: promoted" comments of the last 24 hours; move a proposal to Backlog with your recommendation; cancel a duplicate or non-issue with wontfix and the reason; move anything unclear to Backlog with needs-info and one question). Check for duplicates among the other triage issues and the open board before you shape anything. A promoted ticket gets the issue template (What to build, Acceptance criteria with one checkbox per clause, Blocked by, a write-scope line) and the project of the issue it came from (\`node scripts/linear.mjs project <KIT-n> <source KIT-m>\`).
+5. Triage, for each issue in triage (oldest first), after reading it in full with \`node scripts/linear.mjs issue <KIT-n>\` and its comments: give one verdict as your charter says (shape and promote a clear signal-up, at most 10 per day counted from your own "Max: promoted" comments of the last 24 hours; move a proposal to Backlog with your recommendation; cancel a duplicate or non-issue with wontfix and the reason; move anything unclear to Backlog with needs-info and one question). Check for duplicates among the other triage issues and the open board before you shape anything. A promoted ticket gets the issue template (What to build, Acceptance criteria with one checkbox per clause, Blocked by, a write-scope line of plain comma-separated globs with no backticks) and the project of the issue it came from (\`node scripts/linear.mjs project <KIT-n> <source KIT-m>\`).
 6. Board hygiene. An issue in Blocked whose blockedBy list is empty while hasBlockerRelation is true: move it to To-do with one comment naming the resolved blockers. An issue that is To-do + ready-for-agent with the Agent field set: comment that the factory will not claim it until Agent is "No agent". Report, without changing anything: To-do issues carrying needs-info or ready-for-human; issues in Approval or Merging; issues in In Progress, In Review or Post-Merge not updated for 3 days or more.
 7. Resume landing, for each entry in landing (read from the run log and GitHub by this tick). Skip it if \`bb workflows list\` shows an afk-developer run still running for the issue, or if \`node scripts/linear.mjs issue <KIT-n>\` no longer shows the state the entry's step expects (start: In Review; finish: Merging or Post-Merge). Find the run's worktree: \`bb environment show <environmentId>\` prints its Path (no environmentId: report it and skip). In that worktree, on this machine:
    - step start: \`node ${runCheckout}/scripts/auto-land.mjs start <pr> --issue <KIT-n> --force-enabled --handoff\`. Exit 0 (enqueued) goes on to finish; exit 3 (waiting) run it again, at most 5 times; exit 1 (refused: --handoff has already moved the issue to Approval with the reason) and exit 4 (UNKNOWN) stop here and go in the report with the verdict line.

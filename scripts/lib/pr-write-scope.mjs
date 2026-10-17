@@ -125,6 +125,10 @@ export function unescapeMarkdown(text) {
   return text.replace(/\\([\\`*_{}[\]()<>#+\-.!~|])/g, "$1");
 }
 
+/**
+ * Globs of the `write-scope:` line. Each glob may be wrapped in code backticks
+ * (`` `apps/api/**` ``), which are stripped so the glob matches a file path.
+ */
 export function parseWriteScopeGlobs(text) {
   const match = text.match(/^write-scope:[ \t]*(.+)$/m);
   if (!match) {
@@ -132,7 +136,7 @@ export function parseWriteScopeGlobs(text) {
   }
   return unescapeMarkdown(match[1])
     .split(",")
-    .map((glob) => glob.trim())
+    .map((glob) => glob.trim().replace(/^`+|`+$/g, "").trim())
     .filter(Boolean);
 }
 
