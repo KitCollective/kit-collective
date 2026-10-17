@@ -28,11 +28,10 @@ name: kit-270
 - inputText: OB
 - extendedWaitUntil:
     visible:
-      id: typeahead-clubs
+      id: typeahead-list
     timeout: 15000
 - hideKeyboard
-- tapOn:
-    id: typeahead-club-row
+- tapOn: "OB, Klub"
 - extendedWaitUntil:
     visible:
       id: jersey-tile-e2e00000-0000-4000-8000-000000000105
