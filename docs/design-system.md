@@ -1464,7 +1464,7 @@ Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *04 Samli
 
 **Purpose**: Show one owned jersey and let the owner correct any single fact in one step.
 
-**Composition** (one scrolling column, Tab bar hidden):
+**Composition** (one scrolling column; the native Tab bar stays, as Tab bar → Hide behavior says for every ordinary drill-down. *Superseded 2026-10-17 by Nicklas (KIT-287): this line said "Tab bar hidden", which contradicted Hide behavior.*):
 1. **Photo**: 4:5, full width, swipe between photos. Round `surface` Back and More buttons over it, and a small count pill (`1/2`) bottom-right. No dots.
 2. **Thumb strip**: 48 × 60 thumbs, the current one outlined in `fill.primary`; a trailing `fill.secondary` tile adds a photo. Tapping a thumb jumps; long content scrolls horizontally.
 3. **Title block**: a `caption` line (**Trøje nr. n · type**), the club or national team in `display` 32, and the season in `numeral` 44 trailing on the same baseline.
@@ -1477,7 +1477,7 @@ Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *04 Samli
 
 **More** opens a Sheet of List rows: Tilføj eller skift fotos, and **Slet trøjen** in `danger`. Delete asks in a Sheet `confirm` that shows the jersey and says what happens to its photos and bids; the `destructive` Button lives only there.
 
-**Unsupported**: A `destructive` Button on the detail itself. The two settings in separate cards. A six-cell spec grid in Archivo. A bid amount on this screen. A share action before the public web layer exists. Tab bar on this screen.
+**Unsupported**: A `destructive` Button on the detail itself. The two settings in separate cards. A six-cell spec grid in Archivo. A bid amount on this screen. A share action before the public web layer exists. *("Tab bar on this screen" was listed here until 2026-10-17; superseded by Nicklas, KIT-287: the bar stays, per Hide behavior.)*
 
 **Gaps** (flag, do not invent): what happens to open bids on delete is not defined in `CONTEXT.md`; free name and number on the back; dark mode.
 
