@@ -1,13 +1,15 @@
 # The bb-harness machine and the AFK developer run
 
-How the isolated machine that runs the AFK developer (`afk-developer`) is set up, and how a run is started. This page is a summary of facts that live elsewhere (`.cursor/skills/bb-orchestrate/SKILL.md`, `docs/adr/0058-kit-issue-workflow-and-the-first-run-fixes.md`); when they disagree with this page, they win and this page is stale. Values below were read from inside the container on 2026-10-12; re-read them with the command beside each before relying on them.
+How the isolated machine that runs the AFK developer (`afk-developer`) is set up, and how a run is started. This page is a summary of facts that live elsewhere (`.cursor/skills/bb-orchestrate/SKILL.md`, `docs/adr/0058-kit-issue-workflow-and-the-first-run-fixes.md`); when they disagree with this page, they win and this page is stale. Values below were read from inside the container on 2026-10-12 and, for the image and the limits, on 2026-10-17; re-read them with the command beside each before relying on them.
 
 ## What the machine is
 
 - A Docker container named `bb-harness` on the Hetzner host, enrolled in bb as machine `host_new78xp362` (`bb machine list`). Identify it by that host id, not by hostname: the container's hostname changes when it is rebuilt.
-- The image is built from a Dockerfile with Node 22, pnpm 9.15.4 and a gh that meets the requirement below, plus git, python3 and jq. That Dockerfile is not in this repo (the root `Dockerfile` is the API image, `seed/coolify/` holds the seed images); keep it next to wherever the container is run.
+- The image (`bb-harness:node22`) is built from `node:22-trixie` (Debian 13) with pnpm 9.15.4, a gh that meets the requirement below, git (requirement below), python3 and jq. Its Dockerfile and the script that recreates the container, `run.sh`, live on the Hetzner host in `/opt/bb-harness/`, not in this repo (the root `Dockerfile` is the API image, `seed/coolify/` holds the seed images). `run.sh` recreates both containers; earlier versions sit beside them as `*.prev-<timestamp>`.
+- A test Postgres runs beside it as the container `bb-harness-postgres` (`postgres:16`, volume `bb-harness-pg`). It shares the harness's network namespace, so it answers on `localhost:5432` inside the harness and nowhere else; `run.sh` sets the test `*_DATABASE_URL` variables to it.
+- The home directory is the volume `bb-harness-home`, so the main clone, the worktrees and the bb enrollment survive a rebuild; the host id stayed `host_new78xp362` through the 2026-10-17 rebuild.
 - The main clone is at `/home/node/work/kit-collective`.
-- The owner's Mac is the other machine (`host_kttknna49n`). Work that needs a simulator or Postgres stays there.
+- The owner's Mac is the other machine (`host_kttknna49n`). Work that needs a simulator stays there.
 
 ### The gh requirement
 
@@ -18,20 +20,28 @@ The harness needs a gh whose `pr checks` subcommand supports `--json`. This is a
 
 `scripts/wait-for-checks.mjs` probes this at startup and ends with exit 5 and a verdict line naming the cause when the gh is too old (`scripts/lib/pr-checks.mjs` holds the wording). Do not retry exit 5; replace the gh.
 
+### The git requirement
+
+The harness needs git **2.40 or newer** (`git --version`). The factory scripts are written and tested on the Mac's current git; on 2.39 `scripts/auto-land.mjs` stalled every branch behind the lane (PR #360). Debian bookworm and its backports stop at 2.39, which is why the image is on trixie.
+
+- Known good: 2.47.3 (the container since 2026-10-17).
+- Known bad: 2.39.5.
+
 ## Limits
 
 | Limit | Observed | Read it with |
 | --- | --- | --- |
 | Not root | uid 1000, user `node` | `id` |
 | Capabilities dropped | `CapPrm`, `CapEff` and `CapBnd` all zero, `NoNewPrivs: 1` | `grep -E "^Cap\|NoNewPrivs" /proc/self/status` |
-| Memory cap | 2147483648 bytes (2 GiB) | `cat /sys/fs/cgroup/memory.max` |
-| Process cap | 512 | `cat /sys/fs/cgroup/pids.max` |
-| No Postgres | no `psql` or `postgres` binary | `which psql postgres` |
+| Memory cap | 4294967296 bytes (4 GiB) | `cat /sys/fs/cgroup/memory.max` |
+| Process cap | 2048 | `cat /sys/fs/cgroup/pids.max` |
+| An init as PID 1 | `docker-init` (tini, from `docker run --init`), so orphaned processes are reaped | `cat /proc/1/comm` |
+| No `psql` client | the test Postgres is a separate container; there is no `psql` binary in the harness | `which psql` |
 | No simulator | Linux, so no iOS Simulator, no Maestro device run | `uname -s` |
 
 What the missing pieces mean in practice:
 
-- **No Postgres.** The `api` and `db` suites cannot run. `node scripts/verify.mjs --changed --capability <what this machine has>` skips them and ends `INCOMPLETE` (exit 3), which is never green. Route a slice whose tests need a database to the Mac.
+- **Why the init and the caps.** Until 2026-10-17 the container ran with 512 pids, 2 GiB and bb's `host-daemon` as PID 1, which does not reap orphans. Test runs left `esbuild` and `vitest` zombies behind (275 after two days); they count against the pids cap, and once it was full every new Claude Code process died at start with `Failed to start HTTP Client thread: Resource temporarily unavailable` (KIT-385). If that error comes back, read `pids.current`, `pids.events` and `ps -eo stat | grep -c ^Z` first.
 - **No simulator.** A slice's Device flow runs on a GitHub macOS runner instead (`node scripts/request-device-flows.mjs`, ADR-0059), so a mobile slice no longer needs the Mac. The local `device-run.sh`, with its before/after comparison, stays on the Mac (`docs/agents/device-flows.md`).
 
 ## Secrets
