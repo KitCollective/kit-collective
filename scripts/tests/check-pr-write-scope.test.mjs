@@ -85,6 +85,27 @@ test("parseWriteScopeGlobs returns null when line is absent", () => {
   assert.equal(parseWriteScopeGlobs("no scope here"), null);
 });
 
+test("parseWriteScopeGlobs strips code backticks around each glob (KIT-384)", () => {
+  const globs = parseWriteScopeGlobs(
+    "write-scope: `apps/api/src/collection/collection.service.ts`, `apps/api/tests/collection.test.ts`",
+  );
+  assert.deepEqual(globs, [
+    "apps/api/src/collection/collection.service.ts",
+    "apps/api/tests/collection.test.ts",
+  ]);
+  assert.deepEqual(
+    findWriteScopeViolations(
+      ["apps/api/src/collection/collection.service.ts", "apps/api/tests/collection.test.ts"],
+      globs,
+    ),
+    [],
+  );
+  assert.deepEqual(parseWriteScopeGlobs("write-scope: `scripts/tests/\\*\\*`, docs/adr/**"), [
+    "scripts/tests/**",
+    "docs/adr/**",
+  ]);
+});
+
 test("matchesGlob supports single-segment and recursive globs", () => {
   assert.equal(matchesGlob("apps/admin/src/App.tsx", "apps/admin/**"), true);
   assert.equal(matchesGlob("apps/api/src/main.ts", "apps/admin/**"), false);

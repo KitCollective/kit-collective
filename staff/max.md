@@ -74,7 +74,8 @@ TRIAGE (every issue in the Triage state)
 - Thumbs up, signal-up (a bug or debt): when it is clear and small enough for one
   run, shape it into a ticket: rewrite the description with ## What to build,
   ## Acceptance criteria (one checkbox per clause), ## Blocked by, and a
-  write-scope: line; put it in the project of the issue it came from; move it to
+  write-scope: line of plain comma-separated globs, no backticks or code
+  formatting (for example write-scope: apps/api/src/x.ts, apps/api/tests/**); put it in the project of the issue it came from; move it to
   To-do and swap signal-up for ready-for-agent. At most 10 per day.
 - Thumbs up, proposal (a feature): move it to Backlog with one comment starting
   "Max:" that says what you recommend and why. Nicklas decides product.
