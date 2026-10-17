@@ -531,6 +531,7 @@ async function engineerPass(round, feedback, engineerModelAlias) {
     scenarioLine,
     "Read `### Plan` in the workpad when there is one. Copy the issue's write-scope: line into the PR body (plain globs, no backslashes).",
     `Wait for CI only in the foreground, in slices (a foreground command is capped at 10 minutes, and your shell tool backgrounds it after 2 unless you set the tool's timeout to 600000 ms, so set it): \`node scripts/wait-for-checks.mjs <pr> --timeout ${GATE_SLICE_SECONDS}\`. On exit 2 (still pending) run the same command again in the same turn, up to ${GATE_SLICES} times in all; only after that end with \`blocked ci-pending\`. Exit 5 means gh is unusable: report \`blocked\` with the verdict line and do not retry. Never start it in the background and end your turn.`,
+    "An acceptance criterion that needs the owner's machine (reload Optio, probe a thread, the Board) is proven after the merge by the checks the issue names on its `live-check:` line (scripts/lib/live-checks.mjs). Build what they check, but never stop or return blocked to ask a person for that evidence; say in the workpad which criterion the live check covers. If no listed check fits, say so under `### Waiting` instead of inventing one.",
     `A slice with a slice flow (apps/mobile/.maestro/slices/${issue}.yaml) needs a green \`Device flows\` status on the PR head (the pre-review gate row in implement/SKILL.md). This machine has no simulator: ask for the hosted run with \`node scripts/request-device-flows.mjs <pr> --issue ${issue}\` and wait with \`node scripts/gate.mjs pre-review <pr> --issue ${issue} --timeout ${GATE_SLICE_SECONDS}\` in the same slices. A red flow is yours to fix. If the status stays missing or pending after ${GATE_SLICES} slices, or ends \`error\` again after a re-request, never return ready: write the ask and the stage under workpad \`### Waiting\` and return blocked with the sentence \`needs-human: run device-run.sh on the Mac on <sha>\`.`,
     "Never move the issue to Merging, Post-Merge or Done, never merge, never enable auto-merge, never post a kc/audit status. Move nothing in Linear except the workpad and your evidence comments.",
     feedback ? `Change request from the last round (fix the class, not the instance):\n${feedback}` : "",
@@ -589,7 +590,12 @@ if (carried.length > 0) {
 
 // Set when a closing step of the previous round already moved the issue back to In Progress.
 let backInProgress = false;
-for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
+// A red review whose findings are all light (text, comments, names, doc wording) at the cap gets one
+// round more instead of a person (KIT-365, 2026-10-17: the cap was spent on one wrong SAFETY comment).
+// The extra round is reviewed like any other, so it still lands only on a green review.
+let roundCap = maxRounds;
+let extraRound = false;
+for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   rounds = round;
   // Two red audits earn the strong model, as the start decision says.
   const modelAlias = round >= 3 ? "opus" : engineerAlias;
@@ -665,7 +671,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     }
     if (pre.code !== 0) {
       const reason = /scope-missing-in-pr/.test(pre.line) ? "scope-missing-in-pr" : "gate-closed";
-      const again = pre.code === 1 && round < maxRounds;
+      const again = pre.code === 1 && round < roundCap;
       // The issue never left In Progress here, so the next round needs no move.
       backInProgress = again;
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ${reason}`)], true);
@@ -695,8 +701,10 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
       rAlias,
       [
         `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run it on the PR's merge-base diff (this checkout is the PR head; confirm with git rev-parse HEAD).`,
+        "An acceptance criterion covered by a check on the issue's `live-check:` line runs after the merge on the owner's machine: in the spec-ac row its evidence is `deferred to live check <name>`, which is not a finding, as long as the code it checks is in the diff.",
         "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
         `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
+        "On red, also return light: true only when every finding is light: the wording of a comment, a doc line, a name or a message, with no gap in behaviour, tests, an acceptance criterion, the design lock or the write-scope. Otherwise light: false.",
       ].join("\n"),
       `reviewer:${issue}:r${round}`,
       "Reviewer",
@@ -710,6 +718,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
           rows: { type: "array", items: { type: "string" } },
           sentence: { type: "string" },
           threadId: { type: "string" },
+          light: { type: "boolean" },
         },
       },
     );
@@ -748,15 +757,21 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
   }
   if (review.verdict === "red" || gate.code !== 0) {
+    const lightOnly = review.verdict === "red" && gate.code === 0 && review.light === true;
+    if (round >= roundCap && lightOnly && !extraRound) {
+      extraRound = true;
+      roundCap += 1;
+    }
     const sha = /^[0-9a-f]{7,40}$/i.test(review.sha) ? review.sha.toLowerCase() : "";
     const rows = (Array.isArray(review.rows) ? review.rows : []).filter((row) => typeof row === "string" && ROW.test(row)).slice(0, 20).join(",");
     await sh("log:red", "Review gate", [
       ...(review.verdict === "red" && sha ? [logCmd("audit", `--issue ${issue} --verdict red --round ${round} --sha ${sha}${rows ? ` --rows ${rows}` : ""}`)] : []),
       ...(gate.code !== 0 ? [logCmd("reason", `--issue ${issue} --code ${/scope-missing-in-pr/.test(gate.line) ? "scope-missing-in-pr" : "gate-closed"}`)] : []),
       // A fix round follows: the move back to In Progress rides along instead of opening the next round with its own runner.
-      ...(round < maxRounds ? [stateCmd("In Progress")] : []),
+      ...(round < roundCap ? [stateCmd("In Progress")] : []),
+      ...(extraRound && round === roundCap - 1 ? [logCmd("reason", `--issue ${issue} --code light-extra-round`)] : []),
     ], true);
-    if (round < maxRounds) {
+    if (round < roundCap) {
       backInProgress = true;
       feedback = `${review.verdict === "red" ? `The Reviewer returned red: ${review.sentence}. The findings are under \`### Review feedback\` in the workpad.` : ""}${gate.code !== 0 ? `\nThe review gate says: ${gate.line}` : ""}`.trim();
       continue;

@@ -46,7 +46,7 @@ What the missing pieces mean in practice:
 
 ## Secrets
 
-- The names are listed in `bb.env` (names only, safe to commit): `GH_TOKEN`, `LINEAR_API_KEY`, `OPERATOR_EMAIL`, `SCENARIOS_GH_TOKEN`. Add a name there only when something reads it.
+- The names are listed in `bb.env` (names only, safe to commit): `GH_TOKEN`, `LINEAR_API_KEY`, `LINEAR_MAX_CLIENT_ID`, `LINEAR_MAX_CLIENT_SECRET`, `OPERATOR_EMAIL`, `SCENARIOS_GH_TOKEN`. Add a name there only when something reads it.
 - The values live in the main checkout's gitignored `.env`, mode 0600. They get there through one command, run from a bb thread on that machine:
 
   ```bash
@@ -56,6 +56,7 @@ What the missing pieces mean in practice:
   It opens a secure form for the person; the values are typed into that form and never pass through the chat, a prompt or a command line. Existing assignments in the file are preserved.
 - Posting the `kc/audit` status needs "Commit statuses: Read and write"; the AFK developer run never posts it (the receipt runs only as a dry run), so the person who merges asks for that permission when they need it.
 - `GH_TOKEN` is, from stage 4 of `scripts/holdout-flows-wizard.sh` on (KIT-366), a fine-grained token that selects `kit-collective` only: Actions, Commit statuses, Contents, Issues, Pull requests and Workflows read and write, Checks read. It does not reach the Holdout repo, its files or its run artifacts. The scenarios CLI reads and writes the Holdout with its own `SCENARIOS_GH_TOKEN` (Contents and Actions read and write on the Holdout only), which nothing else reads. `.bb-env-setup.sh` logs a logged-out `gh` in from `.env`'s `GH_TOKEN` (else the process env) and otherwise keeps the stored login. On this machine the main checkout's `.env` also holds `GH_LOGIN_FROM_ENV=1`, a setting rather than a secret, so it is not listed in `bb.env`; add the line by hand. With it, when the token `gh` uses differs from `.env`'s `GH_TOKEN`, the hook runs `gh auth login --with-token` from `.env`, which overwrites the stored token without a logout, including one stored with no account name that `gh auth logout` cannot match. The comparison runs inside Python: no value reaches a bash variable, argv or output. A `GH_TOKEN` in the shell's env never replaces a stored login. So after replacing `GH_TOKEN` here, open a new worktree or run `bash .bb-env-setup.sh` from the main checkout; it prints `gh re-logged in from .env`. Set the flag on bb-harness only: the owner's Mac `.env` holds a different `GH_TOKEN` from the owner's own `gh` login, and with the flag every bb worktree hook there would replace that login. `node scripts/scenarios.mjs access` proves the split on this machine (`ambient denied, cli reads`); `bash scripts/holdout-flows-wizard.sh --from 3` walks the setup. Details: "The Holdout token" in `docs/agents/scenarios.md`.
+- Max's two Linear app keys reach this machine from the owner's Mac: `bash scripts/sync-harness-env.sh` (from the Mac main checkout) appends the keys that are missing here and prints names only. Max's watchdog (`staff/max/watchdog.js`) checks the three Linear keys every 10 minutes and copies a missing one the same way. On 2026-10-17 this `.env`, written on 16 Oct, lacked them, and Max could not read Linear for 35 minutes. The `.env` lives in the `bb-harness-home` volume, so a rebuild of the container keeps it.
 - Nothing on this page, in a prompt or in a thread message carries a value. If a run needs a new secret, add its name to `bb.env` and request it with the command above.
 
 ## Updating the clone
@@ -82,7 +83,7 @@ The args are the `meta.inputSchema` of `.bb/workflows/afk-developer.js`:
 | `issue` | Required. The issue key, `KIT-n`. |
 | `resume` | `true` to continue an issue that already has a branch and a PR. When the last Engineer result was `ready`, no findings are open on the head and the pre-review gate is open, the run goes straight to the Reviewer (round 0) and spends no Engineer round. |
 | `skipLead` | `true` to skip the Lead, for a small issue. |
-| `maxRounds` | Total Engineer rounds, 1 to 3, default 2: the first build plus one fix round after a red review. |
+| `maxRounds` | Total Engineer rounds, 1 to 3, default 2: the first build plus one fix round after a red review. A red review at the cap whose findings the Reviewer marks all `light` (wording of a comment, doc line, name or message; nothing in behaviour, tests, acceptance criteria, the design lock or the write-scope) gets one round more, once per run, logged as `light-extra-round`. That round is reviewed like any other. |
 | `machine` | Only written to the run log; it routes nothing. |
 
 | `autoLand` | `true` to hand a green issue to `scripts/auto-land.mjs` (ADR-0061) instead of stopping at `Approval`. Default false; without it the workflow only asks whether `flow.autoLand.enabled` is on. |
