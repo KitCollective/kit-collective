@@ -11,11 +11,19 @@ import {
   selectDraftKitType,
   selectDraftSize,
   setActiveDraft,
+  setDraftCatalogSide,
   setDraftClub,
   setDraftSeason,
 } from "../src/capture/captureSession";
 import { confirmSaveEnabled, hasPendingLowConfidence } from "../src/capture/confirmIdentityBlock";
-import { resetConfirmManualEdits } from "../src/capture/confirmManualEdits";
+import {
+  clearConfirmSeasonEdited,
+  confirmManualEditMask,
+  markConfirmClubEdited,
+  markConfirmSeasonEdited,
+  resetConfirmManualEdits,
+  setConfirmManualEditsDraft,
+} from "../src/capture/confirmManualEdits";
 import {
   type IdentityDraftState,
   type IdentityDraftStates,
@@ -66,6 +74,25 @@ const fullPreselectJob: VisionJobResponse = {
   suggestions: SUGGESTIONS,
 };
 
+const PLAYER_A = "550e8400-e29b-41d4-a716-446655440020";
+const PATCH_A = "550e8400-e29b-41d4-a716-446655440030";
+const CLUB_HAND = "550e8400-e29b-41d4-a716-446655440040";
+
+const everyFieldPreselectJob: VisionJobResponse = {
+  jobId: JOB_A,
+  status: "ready",
+  preselect: true,
+  fieldPreselect: { club: true, season: true, type: true, player: true, badge: true },
+  suggestions: {
+    ...SUGGESTIONS,
+    playerId: PLAYER_A,
+    playerLabel: "Lamine Yamal",
+    playerNumber: "19",
+    patchId: PATCH_A,
+    patchLabel: "Champions League",
+  },
+};
+
 const bState: IdentityDraftState = {
   suggestion: { jobId: JOB_B, status: "ready", suggestions: { clubId: CLUB_B } },
   applied: false,
@@ -82,6 +109,7 @@ function openTwoJerseys() {
   session = setDraftClub(session, draftB, CLUB_B, "Real Madrid");
   session = setDraftSeason(session, draftB, SEASON_B, "2022/23");
   let states: IdentityDraftStates = patchIdentityState({}, draftB, bState);
+  setConfirmManualEditsDraft(draftB);
 
   const setSelectedSeasonLabel = vi.fn();
   const fetchSeasons = vi.fn().mockResolvedValue(undefined);
@@ -98,6 +126,11 @@ function openTwoJerseys() {
     },
     open(draftId: string) {
       session = setActiveDraft(session, draftId);
+      // useConfirmVision does this on every render: marks follow the visible jersey.
+      setConfirmManualEditsDraft(draftId);
+    },
+    edit(change: (current: CaptureSessionState) => CaptureSessionState) {
+      session = change(session);
     },
     land(job: VisionJobResponse, manualEdits: () => IdentityManualEditMask = () => ({})) {
       return landIdentityResult({
@@ -276,5 +309,82 @@ describe("A's save while its low-confidence guess is pending", () => {
     // Vælg selv: dismissSuggestion patches the owner with suggestion null.
     const dismissed = patchIdentityState(states, draftA.id, { suggestion: null });
     expect(saveEnabled(dismissed, draftA)).toBe(true);
+  });
+});
+
+describe("manual edits when two jerseys are in the session", () => {
+  beforeEach(() => {
+    resetConfirmManualEdits();
+  });
+
+  it("fills every one of A's fields while B carries a hand-edited club", async () => {
+    const world = openTwoJerseys();
+    // The collector hand-picks B's club with B open: the screen sets it, then marks it.
+    world.open(world.draftB);
+    world.edit((session) =>
+      setDraftCatalogSide(session, world.draftB, {
+        id: CLUB_HAND,
+        label: "Hand FC",
+        kind: "club",
+      }),
+    );
+    markConfirmClubEdited();
+    const draftBBefore = getDraft(world.session, world.draftB);
+
+    await world.land(everyFieldPreselectJob, () => confirmManualEditMask(world.draftA));
+
+    const draftA = getDraft(world.session, world.draftA);
+    expect(draftA.clubId).toBe(CLUB_A);
+    expect(draftA.seasonId).toBe(SEASON_A);
+    expect(draftA.kitType).toBe("home");
+    expect(draftA.playerId).toBe(PLAYER_A);
+    expect(draftA.badgeId).toBe(PATCH_A);
+    expect(identityStateFor(world.states, world.draftA).applied).toBe(true);
+    expect(getDraft(world.session, world.draftB)).toEqual(draftBBefore);
+  });
+
+  it("still blocks Vision's club on A when A's club was hand-edited and B is open", async () => {
+    const world = openTwoJerseys();
+    world.open(world.draftA);
+    world.edit((session) =>
+      setDraftCatalogSide(session, world.draftA, {
+        id: CLUB_HAND,
+        label: "Hand FC",
+        kind: "club",
+      }),
+    );
+    markConfirmClubEdited();
+    world.open(world.draftB);
+
+    await world.land(everyFieldPreselectJob, () => confirmManualEditMask(world.draftA));
+
+    const draftA = getDraft(world.session, world.draftA);
+    expect(draftA.clubId).toBe(CLUB_HAND);
+    expect(draftA.seasonId).toBe(SEASON_A);
+    expect(draftA.kitType).toBe("home");
+    expect(draftA.playerId).toBe(PLAYER_A);
+    expect(draftA.badgeId).toBe(PATCH_A);
+  });
+});
+
+describe("the manual-edit store", () => {
+  beforeEach(() => {
+    resetConfirmManualEdits();
+  });
+
+  it("files a mark under the visible jersey and clears one jersey's edits on its own", () => {
+    setConfirmManualEditsDraft("a");
+    markConfirmClubEdited();
+    markConfirmSeasonEdited();
+    setConfirmManualEditsDraft("b");
+    markConfirmSeasonEdited();
+    clearConfirmSeasonEdited();
+
+    expect(confirmManualEditMask("a")).toEqual({ club: true, season: true });
+    expect(confirmManualEditMask("b")).toEqual({ season: false });
+
+    resetConfirmManualEdits("a");
+    expect(confirmManualEditMask("a")).toEqual({});
+    expect(confirmManualEditMask("b")).toEqual({ season: false });
   });
 });
