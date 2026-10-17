@@ -14,7 +14,7 @@ Facts this relies on (verify with `bb project list`, `bb machine list` when in d
 | bb project | `kit-collective` = `proj_ywcvj7w835` |
 | Mac (owner's machine) | `host_kttknna49n` |
 | Container `bb-harness` (Hetzner, isolated) | `host_new78xp362`: node 22, git, pnpm 9.15.4, gh 2.102.0 (`gh pr checks --json` is required; 2.23.0 lacks it, ADR-0058), python3, jq; repo at `/home/node/work/kit-collective` |
-| Secrets | `GH_TOKEN`, `LINEAR_API_KEY` in the main checkout's gitignored `.env` (`bb secret request` needs a bb thread) |
+| Secrets | The `bb.env` names `GH_TOKEN` (selects kit-collective only), `LINEAR_API_KEY`, `OPERATOR_EMAIL`, `SCENARIOS_GH_TOKEN` (Holdout only, read by `scripts/scenarios.mjs`) in the main checkout's gitignored `.env` (`bb secret request` needs a bb thread); the Actions secret `SCENARIO_FLOWS_TOKEN` is not in `.env`. Scopes: "Secrets" in `docs/agents/bb-harness.md` |
 
 ## Machine routing (hand-driven runs; the AFK developer workflow cannot route, ADR-0058)
 

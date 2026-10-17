@@ -240,6 +240,9 @@ jobs:
       - name: Test factory-script land-policy
         run: pnpm test:factory-scripts
 
+      - name: Test Optio plugin
+        run: pnpm test:optio
+
       - name: Test setup-coolify-mcp script
         run: node --test scripts/tests/setup-coolify-mcp.test.mjs
 
@@ -306,6 +309,7 @@ jobs:
           scripts/tests/auto-land.test.mjs
           scripts/tests/scenarios.test.mjs
           scripts/tests/holdout-guard.test.mjs
+          scripts/tests/auto-land-allow.test.mjs
           scripts/tests/milestone-scenarios-workflow.test.mjs
 
       - name: Check PR write scope
