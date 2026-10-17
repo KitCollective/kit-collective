@@ -1,6 +1,6 @@
 import type { CollectionJersey } from "@kit/api-contract";
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -49,13 +49,6 @@ import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-const TAB_BAR_STYLE_VISIBLE = {
-  position: "absolute" as const,
-  backgroundColor: "transparent",
-  borderTopWidth: 0,
-  elevation: 0,
-};
-
 type PendingMoreAction = "edit" | "delete";
 
 const PICKED_PHOTO_ROLE = "other";
@@ -63,7 +56,6 @@ const PICKED_PHOTO_ROLE = "other";
 export default function JerseyDetailScreen() {
   const { jerseyId } = useLocalSearchParams<{ jerseyId: string }>();
   const router = useRouter();
-  const navigation = useNavigation();
   const { width: screenWidth } = useWindowDimensions();
   const { accessToken } = useAuth();
   const theme = useTheme();
@@ -88,26 +80,6 @@ export default function JerseyDetailScreen() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   // Set when a photo was just added: the pager jumps to the new (last) photo once it is rendered.
   const jumpToNewPhoto = useRef(false);
-
-  useLayoutEffect(() => {
-    const tabNav = navigation.getParent();
-    tabNav?.setOptions({ tabBarStyle: { display: "none" } });
-    return () => {
-      tabNav?.setOptions({ tabBarStyle: TAB_BAR_STYLE_VISIBLE });
-    };
-  }, [navigation]);
-
-  // A bid row can open Indbakke (another tab) while this screen stays mounted: show the Tab bar
-  // again while this screen is not focused, and hide it when focus comes back.
-  useFocusEffect(
-    useCallback(() => {
-      const tabNav = navigation.getParent();
-      tabNav?.setOptions({ tabBarStyle: { display: "none" } });
-      return () => {
-        tabNav?.setOptions({ tabBarStyle: TAB_BAR_STYLE_VISIBLE });
-      };
-    }, [navigation]),
-  );
 
   const loadJersey = useCallback(async () => {
     if (!accessToken || !jerseyId) {
