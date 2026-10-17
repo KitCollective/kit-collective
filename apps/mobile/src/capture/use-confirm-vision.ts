@@ -12,12 +12,9 @@ import {
 } from "@/capture/captureSession";
 import type { CaptureJerseyDraft, CaptureSessionMutator } from "@/capture/captureSessionTypes";
 import {
-  confirmBadgeWasEdited,
-  confirmClubWasEdited,
-  confirmKitTypeWasEdited,
-  confirmPlayerWasEdited,
-  confirmSeasonWasEdited,
+  confirmManualEditMask,
   resetConfirmManualEdits,
+  setConfirmManualEditsDraft,
 } from "@/capture/confirmManualEdits";
 import {
   identityQueueFingerprint,
@@ -80,6 +77,7 @@ export function useConfirmVision({
   const [polling, setPolling] = useState(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  setConfirmManualEditsDraft(draft?.id ?? null);
   // Everything Vision left pending belongs to one jersey. Switching tabs, or another jersey's
   // read starting or landing, must not touch it.
   const [identityStates, setIdentityStates] = useState<IdentityDraftStates>({});
@@ -137,13 +135,7 @@ export function useConfirmVision({
         patchIdentity,
         setSelectedSeasonLabel,
         fetchSeasons: fetchClubSeasons,
-        manualEdits: () => ({
-          club: confirmClubWasEdited(),
-          season: confirmSeasonWasEdited(),
-          type: confirmKitTypeWasEdited(),
-          player: confirmPlayerWasEdited(),
-          badge: confirmBadgeWasEdited(),
-        }),
+        manualEdits: () => confirmManualEditMask(currentDraftId),
       });
     },
     [accessToken, mutate, sessionId, patchIdentity, setSelectedSeasonLabel],
@@ -212,10 +204,10 @@ export function useConfirmVision({
       setInFlightDraftId(next.id);
       const syncChrome = () => shouldSyncIdentityChrome(next.id, draftRef.current?.id ?? null);
       resetIdentity(next.id);
+      resetConfirmManualEdits(next.id);
       if (syncChrome()) {
         setJobId(null);
         appliedJobId.current = null;
-        resetConfirmManualEdits();
         setSelectedSeasonLabel(null);
         setPolling(true);
       }
