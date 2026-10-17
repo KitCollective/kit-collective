@@ -589,7 +589,12 @@ if (carried.length > 0) {
 
 // Set when a closing step of the previous round already moved the issue back to In Progress.
 let backInProgress = false;
-for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
+// A red review whose findings are all light (text, comments, names, doc wording) at the cap gets one
+// round more instead of a person (KIT-365, 2026-10-17: the cap was spent on one wrong SAFETY comment).
+// The extra round is reviewed like any other, so it still lands only on a green review.
+let roundCap = maxRounds;
+let extraRound = false;
+for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   rounds = round;
   // Two red audits earn the strong model, as the start decision says.
   const modelAlias = round >= 3 ? "opus" : engineerAlias;
@@ -665,7 +670,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     }
     if (pre.code !== 0) {
       const reason = /scope-missing-in-pr/.test(pre.line) ? "scope-missing-in-pr" : "gate-closed";
-      const again = pre.code === 1 && round < maxRounds;
+      const again = pre.code === 1 && round < roundCap;
       // The issue never left In Progress here, so the next round needs no move.
       backInProgress = again;
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ${reason}`)], true);
@@ -697,6 +702,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
         `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run it on the PR's merge-base diff (this checkout is the PR head; confirm with git rev-parse HEAD).`,
         "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
         `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
+        "On red, also return light: true only when every finding is light: the wording of a comment, a doc line, a name or a message, with no gap in behaviour, tests, an acceptance criterion, the design lock or the write-scope. Otherwise light: false.",
       ].join("\n"),
       `reviewer:${issue}:r${round}`,
       "Reviewer",
@@ -710,6 +716,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
           rows: { type: "array", items: { type: "string" } },
           sentence: { type: "string" },
           threadId: { type: "string" },
+          light: { type: "boolean" },
         },
       },
     );
@@ -748,15 +755,21 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
   }
   if (review.verdict === "red" || gate.code !== 0) {
+    const lightOnly = review.verdict === "red" && gate.code === 0 && review.light === true;
+    if (round >= roundCap && lightOnly && !extraRound) {
+      extraRound = true;
+      roundCap += 1;
+    }
     const sha = /^[0-9a-f]{7,40}$/i.test(review.sha) ? review.sha.toLowerCase() : "";
     const rows = (Array.isArray(review.rows) ? review.rows : []).filter((row) => typeof row === "string" && ROW.test(row)).slice(0, 20).join(",");
     await sh("log:red", "Review gate", [
       ...(review.verdict === "red" && sha ? [logCmd("audit", `--issue ${issue} --verdict red --round ${round} --sha ${sha}${rows ? ` --rows ${rows}` : ""}`)] : []),
       ...(gate.code !== 0 ? [logCmd("reason", `--issue ${issue} --code ${/scope-missing-in-pr/.test(gate.line) ? "scope-missing-in-pr" : "gate-closed"}`)] : []),
       // A fix round follows: the move back to In Progress rides along instead of opening the next round with its own runner.
-      ...(round < maxRounds ? [stateCmd("In Progress")] : []),
+      ...(round < roundCap ? [stateCmd("In Progress")] : []),
+      ...(extraRound && round === roundCap - 1 ? [logCmd("reason", `--issue ${issue} --code light-extra-round`)] : []),
     ], true);
-    if (round < maxRounds) {
+    if (round < roundCap) {
       backInProgress = true;
       feedback = `${review.verdict === "red" ? `The Reviewer returned red: ${review.sentence}. The findings are under \`### Review feedback\` in the workpad.` : ""}${gate.code !== 0 ? `\nThe review gate says: ${gate.line}` : ""}`.trim();
       continue;

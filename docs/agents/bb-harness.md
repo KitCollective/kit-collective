@@ -82,7 +82,7 @@ The args are the `meta.inputSchema` of `.bb/workflows/afk-developer.js`:
 | `issue` | Required. The issue key, `KIT-n`. |
 | `resume` | `true` to continue an issue that already has a branch and a PR. When the last Engineer result was `ready`, no findings are open on the head and the pre-review gate is open, the run goes straight to the Reviewer (round 0) and spends no Engineer round. |
 | `skipLead` | `true` to skip the Lead, for a small issue. |
-| `maxRounds` | Total Engineer rounds, 1 to 3, default 2: the first build plus one fix round after a red review. |
+| `maxRounds` | Total Engineer rounds, 1 to 3, default 2: the first build plus one fix round after a red review. A red review at the cap whose findings the Reviewer marks all `light` (wording of a comment, doc line, name or message; nothing in behaviour, tests, acceptance criteria, the design lock or the write-scope) gets one round more, once per run, logged as `light-extra-round`. That round is reviewed like any other. |
 | `machine` | Only written to the run log; it routes nothing. |
 
 | `autoLand` | `true` to hand a green issue to `scripts/auto-land.mjs` (ADR-0061) instead of stopping at `Approval`. Default false; without it the workflow only asks whether `flow.autoLand.enabled` is on. |
