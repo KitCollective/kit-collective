@@ -157,6 +157,7 @@ name: kit-297
 - scrollUntilVisible:
     element:
       id: bid-card-jersey-e2e00000-0000-4000-8000-000000000503
+    direction: UP
     centerElement: true
 - tapOn:
     id: bid-card-jersey-e2e00000-0000-4000-8000-000000000503
