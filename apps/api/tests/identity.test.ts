@@ -25,10 +25,13 @@ import {
   country,
   createDb,
   league,
+  patch,
   resetDatabase,
   season,
   teamSeason,
   user,
+  userJersey,
+  userJerseyPatch,
   verification,
 } from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
@@ -283,6 +286,7 @@ async function saveJerseyForUser(
   app: NestFastifyApplication,
   session: Awaited<ReturnType<typeof registerSession>>,
   fixture: Awaited<ReturnType<typeof insertClubSeasonFixture>>,
+  extraPayload: { patchIds?: string[] } = {},
 ) {
   const response = await app.inject({
     method: "POST",
@@ -298,6 +302,7 @@ async function saveJerseyForUser(
       size: "m",
       condition: "used",
       photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+      ...extraPayload,
     },
   });
 
@@ -1043,6 +1048,55 @@ describe("Identity /v1", () => {
     expect(collectionFavoritesSchema.parse(JSON.parse(emptyFavorites.body)).favorites).toHaveLength(
       0,
     );
+  });
+
+  it("deletes account of a collector whose jersey has a patch and leaves no user_jersey_patch row", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const [insertedPatch] = await helperDb.db
+      .insert(patch)
+      .values({ seasonId: fixture.seasonId })
+      .returning({ id: patch.id });
+    if (!insertedPatch) {
+      throw new Error("Expected patch insert to return a row");
+    }
+    await helperDb.db.insert(catalogLabel).values({
+      entityType: "patch",
+      entityId: insertedPatch.id,
+      locale: "da",
+      kind: "label",
+      text: "Superligaen",
+      source: "seed",
+    });
+
+    const owner = await registerSession(app, "delete-patch-owner@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture, {
+      patchIds: [insertedPatch.id],
+    });
+
+    const patchRowsBefore = await helperDb.db
+      .select()
+      .from(userJerseyPatch)
+      .where(eq(userJerseyPatch.userJerseyId, ownerJersey.id));
+    expect(patchRowsBefore).toHaveLength(1);
+
+    const del = await app.inject({
+      method: "DELETE",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(del.statusCode).toBe(204);
+
+    const patchRowsAfter = await helperDb.db
+      .select()
+      .from(userJerseyPatch)
+      .where(eq(userJerseyPatch.userJerseyId, ownerJersey.id));
+    expect(patchRowsAfter).toHaveLength(0);
+
+    const jerseyRowsAfter = await helperDb.db
+      .select()
+      .from(userJersey)
+      .where(eq(userJersey.userId, owner.user.id));
+    expect(jerseyRowsAfter).toHaveLength(0);
   });
 
   it("returns 401 for export without session", async () => {
