@@ -12,7 +12,7 @@ appId: app.kitcollective.mobile
     env:
       API_URL: ${MAESTRO_API_URL}
       TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
-      VISION: ${typeof VISION === 'undefined' ? '' : VISION}
+      VISION: "${typeof VISION === 'undefined' ? '' : VISION}"
 - launchApp:
     clearState: true
     clearKeychain: true
