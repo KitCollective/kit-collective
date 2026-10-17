@@ -3,11 +3,13 @@ import {
   type CollectionJerseys,
   type CollectionJerseyUpdate,
   type CollectionPhotoVariantQuery,
+  type CollectionSavePhoto,
   type CollectionSaveRequest,
   type CollectionSaveResponse,
   collectionJerseySchema,
   collectionJerseysSchema,
   collectionJerseyUpdateResponseSchema,
+  collectionSavePhotoSchema,
   collectionSaveRequestSchema,
   collectionSaveResponseSchema,
 } from "@kit/api-contract";
@@ -95,6 +97,30 @@ export async function updateUserJersey(
 
   const body = collectionJerseyUpdateResponseSchema.parse(await response.json());
   return collectionJerseySchema.parse(body.jersey);
+}
+
+/** Adds one photo to an owned jersey; resolves to the jersey with its full photo list. */
+export async function addUserJerseyPhoto(
+  accessToken: string,
+  jerseyId: string,
+  photo: CollectionSavePhoto,
+): Promise<CollectionJersey> {
+  const body = collectionSavePhotoSchema.parse(photo);
+  const response = await requestJson(`/v1/collection/jerseys/${jerseyId}/photos`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Accept-Language": "da",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new CollectionFetchError("Kunne ikke tilføje fotoet", response.status);
+  }
+
+  const parsed = collectionJerseyUpdateResponseSchema.parse(await response.json());
+  return collectionJerseySchema.parse(parsed.jersey);
 }
 
 export async function deleteUserJersey(accessToken: string, jerseyId: string): Promise<void> {

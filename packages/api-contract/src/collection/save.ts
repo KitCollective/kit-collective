@@ -125,6 +125,13 @@ export const collectionJerseySchema = z
     biddingEnabled: z.boolean(),
     private: z.boolean(),
     unansweredBidCount: z.number().int().nonnegative().optional(),
+    // Present on the owner's list whenever unansweredBidCount > 0 (KIT-287).
+    /** Time of the latest unanswered Bud. */
+    unansweredBidLatestAt: z.string().datetime({ offset: true }).optional(),
+    /** Initials of up to two distinct bidders, the one with the latest Bud first. */
+    unansweredBidderInitials: z.array(z.string().min(1)).min(1).max(2).optional(),
+    /** The Conversation id when every unanswered Bud comes from one collector, else null. */
+    unansweredBidConversationId: z.string().uuid().nullable().optional(),
   })
   .strict()
   .superRefine((jersey, ctx) => {

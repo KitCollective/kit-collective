@@ -330,6 +330,17 @@ export class CollectionController {
     return this.collectionService.updateJersey(user.sub, jerseyId, body);
   }
 
+  @Post("collection/jerseys/:jerseyId/photos")
+  @HttpCode(201)
+  @UseGuards(JwtAuthGuard)
+  addJerseyPhoto(
+    @CurrentUser() user: JwtPayload,
+    @Param("jerseyId") jerseyId: string,
+    @Body() body: unknown,
+  ) {
+    return this.collectionService.addJerseyPhoto(user.sub, jerseyId, body);
+  }
+
   @Delete("collection/jerseys/:jerseyId")
   @HttpCode(204)
   @UseGuards(JwtAuthGuard)
