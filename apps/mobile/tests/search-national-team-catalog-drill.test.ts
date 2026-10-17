@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { buildSearchTypeahead } from "../src/search/search-view-model";
 
 const nationalTeamRoutePath = join(
   __dirname,
@@ -32,11 +33,14 @@ describe("Søg NationalTeam catalog drill", () => {
   });
 
   it("opens typeahead Landshold hits on the national-team catalog drill", () => {
+    const nationalTeamId = "33333333-3333-4333-8333-333333333333";
+    const { hits } = buildSearchTypeahead({
+      nationalTeams: [{ nationalTeamId, nationalTeamLabel: "Danmark", jerseyCount: 5 }],
+    });
     const source = readFileSync(searchIndexPath, "utf8");
 
-    expect(source).toMatch(/const openNationalTeamDrill = /);
-    expect(source).toMatch(/\/\(tabs\)\/search\/national-team\//);
-    expect(source).toMatch(/testID="typeahead-national-teams"/);
+    expect(hits[0]?.href).toBe(`/(tabs)/search/national-team/${nationalTeamId}?label=Danmark`);
+    expect(source).toMatch(/onPress=\{\(\) => router\.push\(hit\.href\)\}/);
   });
 
   it("fetches national-team drills from the national-teams collection path", () => {
