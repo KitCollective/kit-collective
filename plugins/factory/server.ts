@@ -384,15 +384,13 @@ export default async function plugin(bb: BbPluginApi) {
   }
 
   /** The text of `factory.config.json` in the project checkout. */
-  async function registryText(config: SchedulerConfig): Promise<string> {
-    const file = await bb.sdk.projects.fileContent({
-      projectId: config.projectId,
-      path: "factory.config.json",
-    });
+  async function projectConfigText(projectId: string): Promise<string> {
+    const file = await bb.sdk.projects.fileContent({ projectId, path: "factory.config.json" });
     return file.contentEncoding === "base64"
       ? Buffer.from(file.content, "base64").toString("utf8")
       : file.content;
   }
+  const registryText = (config: SchedulerConfig) => projectConfigText(config.projectId);
 
   let schedulerConfig: SchedulerConfig | null = null;
   const scheduler = createScheduler({
@@ -667,7 +665,7 @@ export default async function plugin(bb: BbPluginApi) {
     };
   }
 
-  const inbox = createInbox({ bb, linearApiKey, requireScheduler, registryText, gateRuns });
+  const inbox = createInbox({ bb, linearApiKey, storedScheduler, projectConfigText, gateRuns });
 
   async function boardDto(): Promise<BoardDto> {
     const paused = (await settings.get()).paused;

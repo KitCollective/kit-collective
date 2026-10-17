@@ -1,11 +1,16 @@
 // The Inbox's part of the RPC contract.
 import { z } from "zod";
 
-/** Where the Inbox looks: `state` is where issues wait for a person, a label of `questionLabels` marks a question. */
+/**
+ * Where the Inbox looks: `state` is where issues wait for a person, a label of `questionLabels`
+ * marks a question. `projectId` is the bb project whose `factory.config.json` names the Linear team
+ * and the workpad heading; without it the Inbox uses the Board's project.
+ */
 export const inboxConfig = z
   .object({
     state: z.string().trim().min(1),
     questionLabels: z.array(z.string().trim().min(1)),
+    projectId: z.string().trim().min(1).optional(),
   })
   .strict();
 
