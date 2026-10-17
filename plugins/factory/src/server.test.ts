@@ -445,6 +445,7 @@ describe("the plugin's migrations", () => {
       ...GATE_MIGRATIONS,
     ];
     const { db } = await load();
+    // SAFETY: _bb_migrations is the SDK's own table; the row type mirrors the two columns selected.
     const recorded = db
       .prepare("SELECT id, statement_hash FROM _bb_migrations ORDER BY id")
       .all() as {
