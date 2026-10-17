@@ -69,6 +69,17 @@ describe("stamdata schema", () => {
     );
   });
 
+  it("message_kind includes system, with a fixed system_reason", async () => {
+    const kinds = await pool.query<{ value: string }>(
+      `SELECT unnest(enum_range(NULL::message_kind)) AS value`,
+    );
+    expect(kinds.rows.map((row) => row.value)).toEqual(["text", "image", "bid", "system"]);
+    const reasons = await pool.query<{ value: string }>(
+      `SELECT unnest(enum_range(NULL::system_reason)) AS value`,
+    );
+    expect(reasons.rows.map((row) => row.value)).toEqual(["bid_accepted", "jersey_gone"]);
+  });
+
   it("kit_type includes fourth", async () => {
     const { rows } = await pool.query<{ value: string }>(
       `SELECT unnest(enum_range(NULL::kit_type)) AS value`,
