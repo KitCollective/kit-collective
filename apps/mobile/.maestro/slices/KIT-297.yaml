@@ -174,7 +174,9 @@ name: kit-297
 - scrollUntilVisible:
     element:
       id: jersey-detail-private
-    centerElement: true
+    # With no pending Bud left the page has no bid row and barely scrolls; Maestro cannot centre
+    # an element there (KIT-287 hit the same).
+    centerElement: false
 - runFlow: ../subflows/settle.yaml
 - takeScreenshot: kc__kit-297__05-jersey-row-opens-own-jersey-bidding-off
 - stopRecording
