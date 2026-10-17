@@ -19,9 +19,17 @@ type Rpc = <M extends keyof Contract & string>(
 async function load(settings: Record<string, unknown> = {}) {
   let threads = 0;
   /** What the project checkout holds: the registry the board reads every tick. */
-  const checkout: { registry: string; encoding: "utf8" | "base64" } = {
+  const checkout: {
+    registry: string;
+    encoding: "utf8" | "base64";
+    /** The launcher thread's status, and its workflow run: active in its Engineer phase until a test ends it. */
+    threadStatus: string;
+    workflow: { active: boolean; phase: string; result: unknown };
+  } = {
     registry: "",
     encoding: "utf8",
+    threadStatus: "active",
+    workflow: { active: true, phase: "Engineer", result: undefined },
   };
   const host = createFakePluginHost({
     pluginId: "optio",
@@ -33,7 +41,7 @@ async function load(settings: Record<string, unknown> = {}) {
           threads += 1;
           return { id: `thr_${threads}` };
         },
-        get: async () => ({ status: "active", archivedAt: null }),
+        get: async () => ({ status: checkout.threadStatus, archivedAt: null }),
       },
       projects: {
         list: async () => [{ id: "proj_1", name: "acme" }],
@@ -48,6 +56,20 @@ async function load(settings: Record<string, unknown> = {}) {
         }),
       },
       hosts: { list: async () => [{ id: "host_1", name: "Mac" }] },
+      plugins: {
+        // The workflows plugin: one run of the launcher thread.
+        callRpc: async ({ method }: { method: string }) => {
+          const { active, phase, result } = checkout.workflow;
+          const run = {
+            id: "wfr_1",
+            status: active ? "running" : "succeeded",
+            currentPhase: phase,
+            error: null,
+            result,
+          };
+          return method === "workflowActiveRuns" ? { runs: active ? [run] : [] } : { run };
+        },
+      },
     },
   });
   await plugin(host.bb);
@@ -282,6 +304,9 @@ describe("the board reads the Loop registry", () => {
         labels: { nodes: labels.map((name) => ({ name })) },
         projectMilestone: null,
         project: null,
+        attachments: {
+          nodes: identifier === "ENG-1" ? [{ url: "https://github.com/acme/app/pull/7" }] : [],
+        },
         inverseRelations: { nodes: [] },
       });
       return new Response(
@@ -400,6 +425,204 @@ describe("the board reads the Loop registry", () => {
       expect(spawns(loaded)).toHaveLength(1);
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("the runs page", () => {
+  const loops = [
+    {
+      name: "Issue run",
+      enabled: true,
+      workflow: "issue-run",
+      trigger: { kind: "issue", state: "Ready", label: "agent-ready", unblocked: true },
+      machines: ["mac"],
+      maxLive: 2,
+    },
+  ];
+
+  it("lists the runs of a Loop with their step and their links, and filters them", async () => {
+    let issueState = "Ready";
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              teams: { nodes: [{ states: { nodes: [{ id: "s1", name: "Ready" }] } }] },
+              issues: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  {
+                    id: "id-ENG-1",
+                    identifier: "ENG-1",
+                    title: "One",
+                    priority: 2,
+                    createdAt: "2026-10-01T00:00:00Z",
+                    description: "",
+                    state: { name: issueState },
+                    labels: { nodes: [{ name: "agent-ready" }] },
+                    projectMilestone: null,
+                    project: null,
+                    attachments: { nodes: [{ url: "https://github.com/acme/app/pull/7" }] },
+                    inverseRelations: { nodes: [] },
+                  },
+                ],
+              },
+            },
+          }),
+        ),
+    );
+    try {
+      const loaded = await load({ linearApiKey: "lin_key" });
+      const { rpc, checkout, harness } = loaded;
+      await rpc("board_setup", {
+        projectId: "proj_1",
+        teamKey: "ENG",
+        backlogState: "Icebox",
+        activeStates: ["Doing"],
+        blockedState: null,
+      });
+      await rpc("board_update", {
+        mode: "live",
+        machines: [
+          { id: "mac", hostId: "host_1", branch: "origin/main", cap: 2, capabilities: [] },
+        ],
+      });
+      checkout.registry = JSON.stringify({ loops, github: { ownerRepo: "acme/app" } });
+      expect(await rpc("runs_list", { loop: null, state: null })).toEqual({
+        loops: ["Issue run"],
+        runs: [],
+        truncated: false,
+      });
+
+      await harness.behavior.runSchedule("orchestrator-tick"); // starts ENG-1
+      await harness.behavior.runSchedule("orchestrator-tick"); // sees its workflow run
+      const page = await rpc("runs_list", { loop: "Issue run", state: "running" });
+      expect(page.runs).toEqual([
+        expect.objectContaining({
+          loop: "Issue run",
+          issue: "ENG-1",
+          machineId: "mac",
+          state: "running",
+          step: "Engineer",
+          stopReason: null,
+          gates: [],
+          threadId: "thr_1",
+          workflowRunId: "wfr_1",
+          prNumber: 7,
+          prUrl: "https://github.com/acme/app/pull/7",
+        }),
+      ]);
+      expect((await rpc("runs_list", { loop: null, state: "stopped" })).runs).toEqual([]);
+
+      // The workflow reaches its hand-over: the page shows it without opening the thread.
+      vi.setSystemTime(Date.now() + 10 * 60_000);
+      checkout.threadStatus = "idle";
+      checkout.workflow = {
+        active: false,
+        phase: "Hand-over",
+        result: { issue: "ENG-1", status: "Approval", prNumber: 7 },
+      };
+      issueState = "Approval";
+      await harness.behavior.runSchedule("orchestrator-tick");
+      expect((await rpc("runs_list", { loop: null, state: "running" })).runs).toEqual([]);
+      expect((await rpc("runs_list", { loop: "Issue run", state: "handed-over" })).runs).toEqual([
+        expect.objectContaining({
+          issue: "ENG-1",
+          state: "handed-over",
+          step: "Hand-over",
+          handedOverTo: "Approval",
+          stopReason: null,
+          prNumber: 7,
+          endedAt: expect.any(Number),
+        }),
+      ]);
+      expect((await rpc("runs_list", { loop: "Other", state: null })).runs).toEqual([]);
+
+      // A registry that no longer parses still leaves the record readable, without PR links.
+      checkout.registry = "{ not json";
+      const refused = await rpc("runs_list", { loop: null, state: null });
+      expect(refused.loops).toEqual(["Issue run"]);
+      expect(refused.runs[0]).toMatchObject({ issue: "ENG-1", prNumber: 7, prUrl: null });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows why a run stopped, with the note its workflow left", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              teams: { nodes: [{ states: { nodes: [{ id: "s1", name: "Ready" }] } }] },
+              issues: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  {
+                    id: "id-ENG-1",
+                    identifier: "ENG-1",
+                    title: "One",
+                    priority: 2,
+                    createdAt: "2026-10-01T00:00:00Z",
+                    description: "",
+                    state: { name: "Ready" },
+                    labels: { nodes: [{ name: "agent-ready" }] },
+                    projectMilestone: null,
+                    project: null,
+                    attachments: { nodes: [] },
+                    inverseRelations: { nodes: [] },
+                  },
+                ],
+              },
+            },
+          }),
+        ),
+    );
+    try {
+      const { rpc, checkout, harness } = await load({ linearApiKey: "lin_key" });
+      await rpc("board_setup", {
+        projectId: "proj_1",
+        teamKey: "ENG",
+        backlogState: "Icebox",
+        activeStates: ["Doing"],
+        blockedState: null,
+      });
+      await rpc("board_update", {
+        mode: "live",
+        machines: [
+          { id: "mac", hostId: "host_1", branch: "origin/main", cap: 2, capabilities: [] },
+        ],
+      });
+      checkout.registry = JSON.stringify({ loops });
+      await harness.behavior.runSchedule("orchestrator-tick");
+      vi.setSystemTime(Date.now() + 10 * 60_000);
+      checkout.threadStatus = "idle";
+      checkout.workflow = {
+        active: false,
+        phase: "Pre-review gate",
+        result: { status: "stopped", note: "needs-human: run device-run.sh on the Mac" },
+      };
+      await harness.behavior.runSchedule("orchestrator-tick");
+      const { runs } = await rpc("runs_list", { loop: null, state: "stopped" });
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({
+        issue: "ENG-1",
+        step: "Pre-review gate",
+        handedOverTo: null,
+        prNumber: null,
+        prUrl: null,
+      });
+      expect(runs[0]?.stopReason).toContain("it said: needs-human: run device-run.sh on the Mac");
+      expect(runs[0]?.stopReason).toContain("the issue is in Ready");
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
     }
   });
 });

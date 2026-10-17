@@ -22,6 +22,12 @@ export interface Dispatch {
   outcome: string | null;
   startedAt: number;
   endedAt: number | null;
+  /** The workflow run the launcher started, once the board has seen it. */
+  workflowRunId: string | null;
+  /** The workflow's current phase, or the last one it reached. */
+  step: string | null;
+  /** The run's pull request, once the workflow or the issue names one. */
+  prNumber: number | null;
 }
 
 /** Appended to the run ledger's migrations; never reorder. */
@@ -58,6 +64,27 @@ export const LOOP_MIGRATIONS = [
   `CREATE INDEX decisions_subject ON decisions (loop, issue, id)`,
 ];
 
+/**
+ * Appended after the Loop migrations, for the runs page: what the board has
+ * seen of a run's workflow, and the gate verdicts the Factory ran for it.
+ */
+export const RUN_MIGRATIONS = [
+  `ALTER TABLE dispatches ADD COLUMN workflow_run_id TEXT`,
+  `ALTER TABLE dispatches ADD COLUMN step TEXT`,
+  `ALTER TABLE dispatches ADD COLUMN pr_number INTEGER`,
+  `CREATE TABLE gate_verdicts (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     dispatch_id TEXT NOT NULL,
+     at INTEGER NOT NULL,
+     gate TEXT NOT NULL,
+     exit_code INTEGER NOT NULL,
+     verdict TEXT NOT NULL,
+     commit_sha TEXT,
+     thread_id TEXT
+   )`,
+  `CREATE INDEX gate_verdicts_dispatch ON gate_verdicts (dispatch_id, id)`,
+];
+
 /** What the Board decided about an issue (or, for a refusal, about the whole registry). */
 export type DecisionKind = "start" | "skip" | "refusal";
 
@@ -70,6 +97,24 @@ export interface Decision {
   issue: string | null;
   kind: DecisionKind;
   reason: string;
+}
+
+/** A gate the Factory ran for a run: its exit code, its verdict line and the commit it judged. */
+export interface GateVerdict {
+  at: number;
+  gate: string;
+  exitCode: number;
+  verdict: string;
+  commit: string | null;
+  threadId: string | null;
+}
+
+/** The runs page's states: a stall that was released is still a run that stopped. */
+export type RunState = "running" | "stopped" | "handed-over";
+
+export interface Run extends Dispatch {
+  state: RunState;
+  gates: GateVerdict[];
 }
 
 interface DecisionRow {
@@ -93,7 +138,29 @@ interface Row {
   outcome: string | null;
   started_at: number;
   ended_at: number | null;
+  workflow_run_id: string | null;
+  step: string | null;
+  pr_number: number | null;
 }
+
+interface GateRow {
+  dispatch_id: string;
+  at: number;
+  gate: string;
+  exit_code: number;
+  verdict: string;
+  commit_sha: string | null;
+  thread_id: string | null;
+}
+
+const runState = (status: DispatchStatus): RunState =>
+  status === "active" ? "running" : status === "handed-over" ? "handed-over" : "stopped";
+
+const STATUSES: Record<RunState, DispatchStatus[]> = {
+  running: ["active"],
+  stopped: ["stalled", "released"],
+  "handed-over": ["handed-over"],
+};
 
 const toDispatch = (row: Row): Dispatch => ({
   id: row.id,
@@ -106,6 +173,9 @@ const toDispatch = (row: Row): Dispatch => ({
   outcome: row.outcome,
   startedAt: row.started_at,
   endedAt: row.ended_at,
+  workflowRunId: row.workflow_run_id,
+  step: row.step,
+  prNumber: row.pr_number,
 });
 
 export function createDispatchStore(db: Database) {
@@ -140,7 +210,62 @@ export function createDispatchStore(db: Database) {
         outcome: null,
         startedAt: input.now,
         endedAt: null,
+        workflowRunId: null,
+        step: null,
+        prNumber: null,
       };
+    },
+    /** Keeps what the board has seen of a run's workflow; a value it did not see leaves the last one. */
+    observe(
+      id: string,
+      seen: { workflowRunId: string | null; step: string | null; prNumber: number | null },
+    ): void {
+      db.prepare(
+        `UPDATE dispatches SET workflow_run_id = COALESCE(?, workflow_run_id), step = COALESCE(?, step), pr_number = COALESCE(?, pr_number) WHERE id = ?`,
+      ).run(seen.workflowRunId, seen.step, seen.prNumber, id);
+    },
+    /** Writes a gate the Factory ran to the record of the run it judged. */
+    recordGate(dispatchId: string, gate: Omit<GateVerdict, "at">, now: number): void {
+      db.prepare(
+        `INSERT INTO gate_verdicts (dispatch_id, at, gate, exit_code, verdict, commit_sha, thread_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).run(dispatchId, now, gate.gate, gate.exitCode, gate.verdict, gate.commit, gate.threadId);
+    },
+    /**
+     * The runs page's list, newest first: every run of every Loop, optionally
+     * of one Loop and one state, each with the gate verdicts recorded for it.
+     */
+    runs(filter: { loop: string | null; state: RunState | null; limit: number }): Run[] {
+      const where: string[] = [];
+      const params: (string | number)[] = [];
+      if (filter.loop !== null) {
+        where.push(`loop = ?`);
+        params.push(filter.loop);
+      }
+      if (filter.state !== null) {
+        const statuses = STATUSES[filter.state];
+        where.push(`status IN (${statuses.map(() => "?").join(", ")})`);
+        params.push(...statuses);
+      }
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+      const rows = db
+        .prepare(
+          `SELECT * FROM dispatches${where.length === 0 ? "" : ` WHERE ${where.join(" AND ")}`} ORDER BY started_at DESC, rowid DESC LIMIT ?`,
+        )
+        .all(...params, filter.limit) as Row[];
+      const gates = db.prepare(`SELECT * FROM gate_verdicts WHERE dispatch_id = ? ORDER BY id ASC`);
+      return rows.map((row) => ({
+        ...toDispatch(row),
+        state: runState(row.status),
+        // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+        gates: (gates.all(row.id) as GateRow[]).map((gate) => ({
+          at: gate.at,
+          gate: gate.gate,
+          exitCode: gate.exit_code,
+          verdict: gate.verdict,
+          commit: gate.commit_sha,
+          threadId: gate.thread_id,
+        })),
+      }));
     },
     attach(id: string, threadId: string): void {
       db.prepare(`UPDATE dispatches SET thread_id = ? WHERE id = ?`).run(threadId, id);

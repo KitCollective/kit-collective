@@ -18,8 +18,17 @@ export interface SchedulerDeps {
   spawn(request: SpawnRequest): Promise<{ id: string }>;
   /** The thread's status, or null when the thread is gone. */
   threadStatus(threadId: string): Promise<string | null>;
-  /** Whether a workflow run of the thread is active, and a line about its latest run. */
-  workflowRuns(threadId: string): Promise<{ active: boolean; last: string | null }>;
+  /**
+   * Whether a workflow run of the thread is active, a line about its latest
+   * run, and what the run shows: its id, its phase and the PR it reported.
+   */
+  workflowRuns(threadId: string): Promise<{
+    active: boolean;
+    last: string | null;
+    runId?: string | null;
+    step?: string | null;
+    prNumber?: number | null;
+  }>;
   /** Sends a message to the standing orchestrator thread. */
   notify(text: string): Promise<void>;
   getFocus(): Promise<string | null>;
@@ -136,6 +145,19 @@ export function createScheduler(deps: SchedulerDeps) {
     }
   }
 
+  /** Writes down what a run's workflow and its issue show now: the run, its phase and its PR. */
+  function observe(
+    dispatch: Dispatch,
+    runs: Awaited<ReturnType<SchedulerDeps["workflowRuns"]>>,
+    issue: BoardIssue | undefined,
+  ) {
+    store.observe(dispatch.id, {
+      workflowRunId: runs.runId ?? null,
+      step: runs.step ?? null,
+      prNumber: runs.prNumber ?? issue?.pullRequest ?? null,
+    });
+  }
+
   /** Ends every active run whose workflow and launcher thread have both stopped. */
   async function reconcile(
     config: SchedulerConfig,
@@ -147,16 +169,19 @@ export function createScheduler(deps: SchedulerDeps) {
       loop.trigger.kind === "issue" ? [loop.trigger.state] : [],
     );
     for (const dispatch of store.active()) {
-      if (deps.now() - dispatch.startedAt < config.startGraceSeconds * 1000) continue;
+      const issue = board.issues.find((candidate) => candidate.identifier === dispatch.issue);
       let last: string | null = "the launcher thread never started";
       if (dispatch.threadId !== null) {
         const runs = await deps.workflowRuns(dispatch.threadId);
+        observe(dispatch, runs, issue);
+        if (deps.now() - dispatch.startedAt < config.startGraceSeconds * 1000) continue;
         if (runs.active) continue;
         const status = await deps.threadStatus(dispatch.threadId);
         if (status !== null && status !== "idle" && status !== "error") continue;
         last = runs.last;
+      } else if (deps.now() - dispatch.startedAt < config.startGraceSeconds * 1000) {
+        continue;
       }
-      const issue = board.issues.find((candidate) => candidate.identifier === dispatch.issue);
       const working =
         issue !== undefined &&
         (dispatchStates.includes(issue.state) || config.activeStates.includes(issue.state));
