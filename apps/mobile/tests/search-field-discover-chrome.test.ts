@@ -11,7 +11,7 @@ function readField() {
 // Vitest has no React Native renderer, so the field's chrome is pinned from its source
 // (the pattern of sheet-chrome.test.ts).
 describe("SearchFieldDiscover chrome", () => {
-  it("renders Back (Tilbage) instead of the search icon while the field is in focus", () => {
+  it("renders Back (Tilbage) instead of the search icon while the field is in focus or holds a query", () => {
     const field = readField();
 
     // The focus state comes from the input's own focus/blur and still reaches the caller's handlers.
@@ -20,7 +20,8 @@ describe("SearchFieldDiscover chrome", () => {
     expect(field).toContain("setFocused(false)");
     expect(field).toContain("onFocus?.(event)");
     expect(field).toContain("onBlur?.(event)");
-    // In focus the leading slot is Back with an accessible name; at rest it is the search icon.
+    // In focus or holding a query the leading slot is Back with an accessible name; at rest and
+    // empty it is the search icon.
     expect(field).toMatch(
       /showBack \? \(\s*<IconButton\s+testID="search-back"\s+name="Tilbage"\s+icon="arrow-back"/,
     );
