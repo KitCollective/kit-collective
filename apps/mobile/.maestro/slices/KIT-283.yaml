@@ -43,8 +43,22 @@ name: kit-283
     point: 83%,25%
 - tapOn:
     point: 16%,40%
+# Wait for the picker's selected footer, tap confirm, and tap again while the footer
+# shows (the reason is in regression/add-jersey.yaml).
+- extendedWaitUntil:
+    visible: 4 Photos
+    timeout: 15000
+    optional: true
 - tapOn:
     point: 90%,12%
+- repeat:
+    while:
+      visible: 4 Photos
+    times: 3
+    commands:
+      - runFlow: ../subflows/settle.yaml
+      - tapOn:
+          point: 90%,12%
 # AC 6, 1: Vision off with four photos lands on the screen; every photo is in the 4:5 grid.
 - extendedWaitUntil:
     visible:

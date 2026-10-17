@@ -32,7 +32,7 @@ const registry = JSON.stringify({
   agent: { workpadHeading: "## Workpad" },
 });
 
-async function load(registryText = registry) {
+async function load(registryText = registry, { board = true } = {}) {
   const host = createFakePluginHost({
     pluginId: "optio",
     settings: { linearWebhookSecret: "whsec", linearApiKey: "lin_key" },
@@ -52,13 +52,14 @@ async function load(registryText = registry) {
   await plugin(host.bb);
   // SAFETY: the fake host's callRpc parses every result with the method's output schema in rpcContract.
   const rpc = host.harness.behavior.callRpc as Rpc;
-  await rpc("board_setup", {
-    projectId: "proj_1",
-    teamKey: "ENG",
-    backlogState: "Icebox",
-    activeStates: ["Doing"],
-    blockedState: null,
-  });
+  if (board)
+    await rpc("board_setup", {
+      projectId: "proj_1",
+      teamKey: "ENG",
+      backlogState: "Icebox",
+      activeStates: ["Doing"],
+      blockedState: null,
+    });
   createGateStore(host.bb.storage.database()).record({
     at: Date.now(),
     threadId: "thr_r",
@@ -244,6 +245,49 @@ describe("the Inbox", () => {
       expect(JSON.parse(listed.stdout).cards).toHaveLength(3);
       expect((await cli(["inbox", "--off"])).exitCode).toBe(0);
       expect((await rpc("inbox_list", null)).error).toContain("not set up");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+  it("works without the Board: its own project, and the team from factory.config.json", async () => {
+    const fetchMock = linear(() => entries);
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const withTeam = JSON.stringify({ ...JSON.parse(registry), linear: { teamKey: "ENG" } });
+      const { rpc, cli } = await load(withTeam, { board: false });
+      expect((await cli(["inbox", "--state", "Waiting", "--labels", "asks"])).exitCode).toBe(0);
+      const projectless = await rpc("inbox_list", null);
+      expect(projectless.cards).toEqual([]);
+      expect(projectless.error).toContain("the Inbox has no project");
+      const set = await cli([
+        "inbox",
+        "--state",
+        "Waiting",
+        "--labels",
+        "asks,decide",
+        "--project",
+        "proj_1",
+      ]);
+      expect(set.exitCode).toBe(0);
+      const inbox = await rpc("inbox_list", null);
+      expect(inbox.error).toBeNull();
+      expect(inbox.cards.map((card) => card.identifier)).toEqual(["ENG-1", "ENG-2", "ENG-3"]);
+      // The Linear read went to the team factory.config.json names.
+      expect(JSON.stringify(fetchMock.mock.calls.at(-1))).toContain('\\"team\\":\\"ENG\\"');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("names the missing Linear team when neither the config nor a Board gives one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      linear(() => entries),
+    );
+    try {
+      const { rpc, cli } = await load(registry, { board: false });
+      await cli(["inbox", "--state", "Waiting", "--labels", "asks", "--project", "proj_1"]);
+      expect((await rpc("inbox_list", null)).error).toContain("linear.teamKey");
     } finally {
       vi.unstubAllGlobals();
     }

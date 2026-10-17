@@ -37,8 +37,22 @@ name: kit-282
     point: 83%,25%
 - tapOn:
     point: 16%,40%
+# Wait for the picker's selected footer, tap confirm, and tap again while the footer
+# shows (the reason is in regression/add-jersey.yaml).
+- extendedWaitUntil:
+    visible: 4 Photos
+    timeout: 15000
+    optional: true
 - tapOn:
     point: 90%,12%
+- repeat:
+    while:
+      visible: 4 Photos
+    times: 3
+    commands:
+      - runFlow: ../subflows/settle.yaml
+      - tapOn:
+          point: 90%,12%
 # AC 3, 4: four or more photos with Vision on open the overview. While grouping runs the title
 # reads Sorterer n fotos, with a progress bar. The fixed Vision answers at once, so this frame
 # is taken only when the bar is still on screen.
@@ -166,8 +180,22 @@ name: kit-282
     point: 50%,25%
 - tapOn:
     point: 83%,25%
+# Wait for the picker's selected footer, tap confirm, and tap again while the footer
+# shows (the reason is in regression/add-jersey.yaml).
+- extendedWaitUntil:
+    visible: 3 Photos
+    timeout: 15000
+    optional: true
 - tapOn:
     point: 90%,12%
+- repeat:
+    while:
+      visible: 3 Photos
+    times: 3
+    commands:
+      - runFlow: ../subflows/settle.yaml
+      - tapOn:
+          point: 90%,12%
 - extendedWaitUntil:
     visible:
       id: confirm-save
