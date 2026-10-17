@@ -233,6 +233,22 @@ _Avoid_: a Staff member defined only in a plugin's database or a chat; system pr
 When a Staff member wakes on their own: a schedule or a trigger, after which they do their routine, record what they did, and stop.
 _Avoid_: polling in a loop; automation as a synonym (a bb automation is how a Heartbeat is scheduled)
 
+**Issue thread**:
+The one bb thread an issue lives in from plan to land: every run and resume of that issue happens in it, and the Lead, Engineer and Reviewer of each run are its child threads.
+_Avoid_: issue session (a session means a person is present, see **Loop**); a new thread per resume; a thread per phase
+
+**Staff chat**:
+The one standing bb thread between Nicklas and a Staff member, where they talk and where the Staff member's status and questions arrive; its memory comes from the Staff member's own memory, not from one long context. The Staff member's routine work is their activity log, not the chat.
+_Avoid_: a thread per task or per wake with a Staff member; mixing the activity log into the chat
+
+**Inbox**:
+Optio's page of everything waiting on Nicklas: issues in `Approval`, a run's `### Waiting` question, his Linear mentions, watchdog alarms and Staff questions, each answered where it shows. It reads from Linear and writes back to it; Linear stays the source of truth and works beside it.
+_Avoid_: notifications (bb's and Linear's own); a second approval state outside Linear; approving by anything but setting `Merging`
+
+**Operating setting**:
+A switch or limit of a Loop or Staff member that a person changes from Optio without a code review (on or off, a cap, a schedule, a model, a budget), recorded with who and when, and overriding `factory.config.json`. What a Loop or Staff member is and may do (its trigger, workflow, roles, tools and limits of trust) stays in the repo and changes by a reviewed PR.
+_Avoid_: editing a Charter or the Loop registry from the UI; an unlogged override
+
 **Football Data Seed**:
 The Linear project for vendor ingest: Transfermarkt hierarchy, then Football Kit Archive hierarchy, then Join workflow, then Cross MCP. Successor to KitCollective Seed. Still the one seed board beside the KitCollective product project.
 _Avoid_: a third Linear project; filing fetch tickets on the product board; keeping KitCollective Seed alive beside this one
