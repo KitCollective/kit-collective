@@ -92,4 +92,11 @@ describe("foreign jersey route presentation (KIT-290)", () => {
     expect(source).toContain('"[jerseyId]"');
     expect(source).toContain('presentation: "fullScreenModal"');
   });
+
+  it("declares the index screen before the jersey route so Søg stays the initial route", () => {
+    const source = read("app/(tabs)/search/_layout.tsx");
+
+    expect(source.indexOf('name="index"')).toBeGreaterThan(-1);
+    expect(source.indexOf('name="index"')).toBeLessThan(source.indexOf('name="[jerseyId]"'));
+  });
 });

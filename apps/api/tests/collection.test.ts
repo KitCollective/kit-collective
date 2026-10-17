@@ -898,6 +898,7 @@ describe("Collection /v1", () => {
       ]) {
         const response = await getPeerJerseyRaw(app, viewer, jersey.id);
         expect(response.statusCode).toBe(200);
+        // SAFETY: the body is the JSON object the peer jersey route returns; the test only reads its keys.
         const raw = JSON.parse(response.body) as Record<string, unknown>;
         expect(raw).not.toHaveProperty("latestBidAmountDkk");
         expect(Object.keys(raw).filter((key) => /[Aa]mount|[Bb]id(?!ding)/.test(key))).toEqual([]);

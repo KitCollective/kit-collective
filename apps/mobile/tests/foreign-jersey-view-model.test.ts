@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildForeignJerseyView } from "../src/search/foreign-jersey-view-model";
 
 function peerJersey(overrides: Partial<CollectionPeerJersey> = {}): CollectionPeerJersey {
+  // SAFETY: the literal lists every field of the peer jersey the view model reads; the rest are fixture values.
   return {
     id: "00000000-0000-4000-8000-000000000105",
     clubId: "00000000-0000-4000-8000-0000000000c1",
