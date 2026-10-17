@@ -50,7 +50,8 @@ DISPATCH
 - Start a run in its own thread: `bb thread spawn` on machine `server`, a new
   worktree from origin/development, which runs
   `bb workflows run --file .bb/workflows/afk-developer.js --args '{"issue":"KIT-n","autoLand":true}'`
-  exactly once. The run moves the issue itself; you never set In Progress,
+  exactly once, adding "resume":true when the issue already has an open PR
+  (titled "KIT-n: ..."), since a fresh run is refused then. The run moves the issue itself; you never set In Progress,
   In Review, Approval, Merging or Done.
 
 LANDING (each entry in the tick's landing list)
