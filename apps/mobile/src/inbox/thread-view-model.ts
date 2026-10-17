@@ -17,7 +17,7 @@ import { JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
 type Message = CollectionConversationMessage;
 type MessageJersey = NonNullable<Message["jersey"]>;
 
-export const JERSEY_UNAVAILABLE_LABEL = "Trøjen er ikke længere tilgængelig";
+const JERSEY_UNAVAILABLE_LABEL = "Trøjen er ikke længere tilgængelig";
 const JERSEY_GONE_LINE = "Trøjen er gået til en anden samler.";
 const PENDING_LABEL = "Afventer svar";
 
@@ -59,7 +59,7 @@ export type BidCardState = {
 export type ThreadItem =
   | { type: "date"; id: string; label: string }
   | { type: "bubble"; id: string; message: Message }
-  | { type: "bid"; id: string; message: Message; card: BidCardState }
+  | { type: "bid"; id: string; card: BidCardState }
   | { type: "system"; id: string; text: string };
 
 export function headerInitial(handle: string): string {
@@ -114,10 +114,11 @@ export function bidCardState(message: Message, peerHandle: string): BidCardState
   const amount = String(message.bidAmountDkk ?? "");
   const whoLine = incoming ? `${peerHandle} byder på din trøje` : "Du bød";
 
-  const openForBid = Boolean(message.jersey?.userJerseyId && message.jersey.openForBid);
+  // The contract sets openForBid false once the jersey is gone or private.
+  const openJerseyId = message.jersey?.openForBid ? message.jersey.userJerseyId : null;
   const sendNewBidHref =
-    !incoming && message.bidStatus === "declined" && openForBid && message.jersey?.userJerseyId
-      ? `/(tabs)/search/send-bid/${message.jersey.userJerseyId}`
+    !incoming && message.bidStatus === "declined" && openJerseyId
+      ? `/(tabs)/search/send-bid/${openJerseyId}`
       : null;
 
   const statusLabel = status?.label ?? PENDING_LABEL;
@@ -175,12 +176,7 @@ export function threadItems(detail: CollectionConversationDetail): ThreadItem[] 
       const text = systemLineText(message, detail.peerHandle);
       item = text ? { type: "system", id: message.id, text } : null;
     } else if (message.kind === "bid") {
-      item = {
-        type: "bid",
-        id: message.id,
-        message,
-        card: bidCardState(message, detail.peerHandle),
-      };
+      item = { type: "bid", id: message.id, card: bidCardState(message, detail.peerHandle) };
     } else {
       item = { type: "bubble", id: message.id, message };
     }

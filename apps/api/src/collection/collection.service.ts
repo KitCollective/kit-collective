@@ -2300,11 +2300,12 @@ export class CollectionService {
     }
 
     // A Bud whose UserJersey is gone has no owner left to answer it.
-    if (!messageRow.jerseyOwnerId) {
+    const { userJerseyId, jerseyOwnerId } = messageRow;
+    if (!userJerseyId || !jerseyOwnerId) {
       throw new BadRequestException("Bid is not pending");
     }
 
-    if (messageRow.jerseyOwnerId !== userId) {
+    if (jerseyOwnerId !== userId) {
       throw new ForbiddenException("Only the UserJersey owner can accept or decline bids");
     }
 
@@ -2317,10 +2318,6 @@ export class CollectionService {
     }
 
     const bidStatus = body.decision === "accept" ? "accepted" : "declined";
-    const userJerseyId = messageRow.userJerseyId;
-    if (!userJerseyId) {
-      throw new BadRequestException("Bid is not pending");
-    }
 
     await this.db.transaction(async (tx) => {
       const now = new Date();

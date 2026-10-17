@@ -66,7 +66,7 @@ describe("collectionConversationDetailSchema", () => {
     });
   });
 
-  it("accepts a system line with its reason, the accepted amount and a jersey that is gone", () => {
+  it("accepts a system line with its reason, its amount and a jersey that is gone", () => {
     const parsed = collectionConversationMessageSchema.parse({
       id: "00000000-0000-0000-0000-000000000005",
       kind: "system",

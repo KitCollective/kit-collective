@@ -253,7 +253,8 @@ describe("Accepting a Bud closes the jersey /v1", () => {
       jersey: closedJersey,
     });
 
-    // The Indbakke still lists both threads with a system line as their latest message.
+    // With a system line as the latest message, the Indbakke still answers 200 for all three
+    // Collectors and its body still parses.
     for (const session of [owner, first, second]) {
       const inbox = await app.inject({
         method: "GET",

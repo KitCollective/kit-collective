@@ -33,7 +33,7 @@ describe("BidCard (Revision 2026-10-10, KIT-297)", () => {
     expect(source).toMatch(/accessibilityLabel=\{card\.accessibility\.sendNewBid\}/);
   });
 
-  it("sets the amount in mono 28 with kr in mono 15, not the retired 20px helper", () => {
+  it("sets the amount in mono 28 with kr in mono 15, not bidCardAmountTypography", () => {
     const source = readFileSync(bidCardPath, "utf8");
 
     expect(source).not.toMatch(/bidCardAmountTypography/);

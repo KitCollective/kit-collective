@@ -202,6 +202,7 @@ export function ConversationView({
               {headerInitial(detail.peerHandle)}
             </Text>
           </View>
+          {/* The lock says `label` 16 / 600; there is no 600 Plex face, so `label` stays at 500 (design gap). */}
           <Text
             style={[typography.label, styles.headerHandle, { color: theme.contentPrimary }]}
             numberOfLines={1}
