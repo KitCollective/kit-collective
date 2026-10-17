@@ -99,10 +99,10 @@ describe("vision grouping API", () => {
 
     const session = await registerSession(app, "vision-grouping@test.kitcollective");
     token = session.accessToken;
-  });
+  }, 60_000);
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
   });
 
   it("returns grouping job document with photoId groups", async () => {
