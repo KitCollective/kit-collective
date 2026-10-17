@@ -83,6 +83,42 @@ test("merge lock: a lost race is HELD, not an error", () => {
   assert.equal(take({ cwd: b, pr: "2", now: 5000 }).code, 3);
 });
 
+test("merge lock: a push that fails for another reason is CLOSED with git's line, not HELD", () => {
+  const { clone, origin } = fixture();
+  const a = clone("a");
+  // The read works, the write cannot (no credentials, no permission, the network all look like this to git).
+  git(a, "remote", "set-url", "--push", "origin", join(origin, "no-such-remote.git"));
+  const taken = take({ cwd: a, pr: "1", now: 5000 });
+  assert.equal(taken.code, 1);
+  assert.match(taken.line, /^CLOSED \(merge-lock\): fatal: /);
+  assert.doesNotMatch(taken.line, /HELD|Command failed/);
+  assert.equal(status({ cwd: a, now: 5000 }).code, 3, "status still reads the real remote: free");
+});
+
+test("merge lock wait: stops at once on a CLOSED verdict instead of polling", async () => {
+  const { clone, origin } = fixture();
+  const a = clone("a");
+  git(a, "remote", "set-url", "--push", "origin", join(origin, "no-such-remote.git"));
+  let sleeps = 0;
+  const result = await waitFor(
+    { cwd: a, pr: "1" },
+    { waitSeconds: 3600, pollSeconds: 30, sleep: async () => (sleeps += 1) },
+  );
+  assert.equal(result.code, 1);
+  assert.match(result.line, /^CLOSED \(merge-lock\): fatal: /);
+  assert.equal(sleeps, 0);
+});
+
+test("merge lock: status and release keep their verdicts when the remote cannot be read", () => {
+  const { clone } = fixture();
+  const a = clone("a");
+  git(a, "remote", "set-url", "origin", join(a, "missing.git"));
+  for (const result of [status({ cwd: a }), release({ cwd: a, pr: "1" })]) {
+    assert.equal(result.code, 1);
+    assert.match(result.line, /^CLOSED \(merge-lock\): fatal: /);
+  }
+});
+
 test("merge lock wait: retries until the holder releases", async () => {
   const { clone } = fixture();
   const a = clone("a");
