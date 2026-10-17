@@ -7,6 +7,7 @@
     "build": "turbo run build",
     "test": "turbo run test --concurrency=1",
     "test:factory-scripts": "node --test scripts/tests/land-policy.test.mjs",
+    "test:optio": "pnpm --filter @kit/bb-plugin-optio typecheck && pnpm --filter @kit/bb-plugin-optio test",
     "check:factory-ci-tests": "node scripts/check-factory-ci-tests.mjs",
     "seed:bulk": "node --env-file=.env seed/apify/scripts/seed-bulk.mjs",
     "lint": "biome lint .",
