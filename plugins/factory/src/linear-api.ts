@@ -22,6 +22,17 @@ export interface BoardIssue {
   blockedBy: string[];
   /** Globs from the description's `write-scope:` line; empty when undeclared. */
   writeScope: string[];
+  /** The number of the newest pull request attached to the issue, or null. */
+  pullRequest: number | null;
+}
+
+/** The number in the newest `…/pull/<n>` URL; Linear lists attachments oldest first. */
+export function pullRequestOf(urls: string[]): number | null {
+  const numbers = urls.flatMap((url) => {
+    const match = /\/pull\/(\d+)(?:[/?#]|$)/.exec(url);
+    return match === null ? [] : [Number(match[1])];
+  });
+  return numbers.at(-1) ?? null;
 }
 
 export interface Board {
@@ -43,6 +54,7 @@ query Board($team: String!, $first: Int!, $after: String) {
       labels(first: 25) { nodes { name } }
       projectMilestone { name }
       project { name }
+      attachments(first: 25) { nodes { url } }
       inverseRelations(first: 25) { nodes { type issue { identifier state { type } } } }
     }
   }
@@ -70,6 +82,7 @@ const pageSchema = z.object({
         labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
         projectMilestone: z.object({ name: z.string() }).nullable(),
         project: z.object({ name: z.string() }).nullable(),
+        attachments: z.object({ nodes: z.array(z.object({ url: z.string() })) }),
         inverseRelations: z.object({
           nodes: z.array(
             z.object({
@@ -150,6 +163,7 @@ export async function fetchBoard(
           )
           .map((relation) => relation.issue.identifier),
         writeScope: parseWriteScope(node.description),
+        pullRequest: pullRequestOf(node.attachments.nodes.map((attachment) => attachment.url)),
       });
     }
     if (!data.issues.pageInfo.hasNextPage) return { states, issues };
@@ -172,6 +186,60 @@ export async function moveIssue(
      }`,
     { id: issueId, stateId },
   );
+}
+
+/**
+ * The workpad body with one line added at the end of its `### Notes` section, changing nothing
+ * else. A workpad without that section gets one at the end.
+ */
+export function withNote(body: string, line: string): string {
+  const lines = body.split("\n");
+  const start = lines.findIndex((text) => text.trim() === "### Notes");
+  if (start === -1) return `${body.replace(/\s+$/, "")}\n\n### Notes\n\n${line}\n`;
+  let end = lines.findIndex((text, index) => index > start && text.startsWith("### "));
+  if (end === -1) end = lines.length;
+  let last = end - 1;
+  while (last > start && lines[last]?.trim() === "") last -= 1;
+  lines.splice(last + 1, 0, line);
+  return lines.join("\n");
+}
+
+/**
+ * Adds one line under `### Notes` of the issue's single workpad comment: the one whose body starts
+ * with the heading. Returns false when the issue has none.
+ */
+export async function writeWorkpadNote(
+  apiKey: string,
+  issueId: string,
+  heading: string,
+  line: string,
+  fetchImpl: Fetch = fetch,
+): Promise<boolean> {
+  const data = z
+    .object({
+      issue: z.object({
+        comments: z.object({ nodes: z.array(z.object({ id: z.string(), body: z.string() })) }),
+      }),
+    })
+    .parse(
+      await graphql(
+        apiKey,
+        fetchImpl,
+        `query Workpad($id: String!) { issue(id: $id) { comments(first: 100) { nodes { id body } } } }`,
+        { id: issueId },
+      ),
+    );
+  const workpad = data.issue.comments.nodes.find((comment) => comment.body.startsWith(heading));
+  if (workpad === undefined) return false;
+  await graphql(
+    apiKey,
+    fetchImpl,
+    `mutation Note($id: String!, $body: String!) {
+       commentUpdate(id: $id, input: { body: $body }) { success }
+     }`,
+    { id: workpad.id, body: withNote(workpad.body, line) },
+  );
+  return true;
 }
 
 /**

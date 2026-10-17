@@ -2,8 +2,10 @@
 import type { Database } from "better-sqlite3";
 
 /**
- * Appended after every other migration list, because the lists run as one
- * sequence and an insert in the middle would move the ones after it.
+ * Appended after the Loop migrations, which development ships it after, so a
+ * database that already ran it keeps its indexes (RUN_MIGRATIONS follow it).
+ * The lists run as one sequence and an insert in the middle would move the
+ * ones after it.
  */
 export const GATE_MIGRATIONS = [
   `CREATE TABLE gate_runs (
@@ -101,6 +103,19 @@ export function createGateStore(db: Database) {
           input.reason,
         );
       return { id: Number(result.lastInsertRowid), ...input };
+    },
+    /**
+     * The newest `review` gate recorded for the issue at or after `since` (epoch ms), whatever its
+     * outcome, or null. The workers' thread ids are not known to the dispatch, so it asks by issue and time.
+     */
+    latestReview(issue: string, since: number): GateRun | null {
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+      const row = db
+        .prepare(
+          `SELECT * FROM gate_runs WHERE gate = 'review' AND issue = ? AND at >= ? ORDER BY id DESC LIMIT 1`,
+        )
+        .get(issue, since) as Row | undefined;
+      return row === undefined ? null : toGateRun(row);
     },
     /** Newest first. */
     list(limit: number): GateRun[] {

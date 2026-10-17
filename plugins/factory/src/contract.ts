@@ -97,6 +97,10 @@ const requirement = z
   })
   .strict();
 
+const handOver = z
+  .object({ reviewState: z.string().trim().min(1), approvalState: z.string().trim().min(1) })
+  .strict();
+
 const board = z.object({
   configured: z.boolean(),
   /** Why the plan could not be computed, when it could not. */
@@ -133,6 +137,8 @@ const board = z.object({
   ),
   maxAttempts: z.number(),
   autoPromote: z.boolean(),
+  /** The states of the hand-over on the recorded review gate, or null when it is off. */
+  handOver: handOver.nullable(),
   /** How many more issues the ready queue may hold. */
   room: z.number(),
   /** Backlog issues that may be promoted. */
@@ -159,6 +165,42 @@ const board = z.object({
   stalled: z.array(
     z.object({ issue: z.string(), machineId: z.string(), outcome: z.string().nullable() }),
   ),
+});
+
+const runState = z.enum(["running", "stopped", "handed-over"]);
+
+/** One run of a Loop, from start to hand-over, as the runs page shows it. */
+const loopRun = z.object({
+  id: z.string(),
+  loop: z.string().nullable(),
+  issue: z.string(),
+  machineId: z.string(),
+  state: runState,
+  resume: z.boolean(),
+  /** The workflow's current phase, or the last one it reached. */
+  step: z.string().nullable(),
+  /** Why a stopped run stopped; null while it runs or after a hand-over. */
+  stopReason: z.string().nullable(),
+  /** Where a handed-over run left the issue, e.g. its status. */
+  handedOverTo: z.string().nullable(),
+  /** The gates Optio ran for the run; empty until a gate has been recorded. */
+  gates: z.array(
+    z.object({
+      at: z.number(),
+      gate: z.string(),
+      exitCode: z.number(),
+      verdict: z.string(),
+      commit: z.string().nullable(),
+    }),
+  ),
+  startedAt: z.number(),
+  endedAt: z.number().nullable(),
+  /** The run's launcher thread, its workflow run and its pull request: null while not known. */
+  threadId: z.string().nullable(),
+  workflowRunId: z.string().nullable(),
+  prNumber: z.number().nullable(),
+  /** Null when the registry names no repository. */
+  prUrl: z.string().nullable(),
 });
 
 const ok = z.object({ ok: z.literal(true) });
@@ -258,6 +300,22 @@ export const rpcContract = defineRpcContract({
     output: z.object({ hosts: z.array(z.object({ id: z.string(), name: z.string() })) }),
   },
   board_get: { input: z.null(), output: board },
+  runs_list: {
+    input: z
+      .object({
+        /** A Loop's name; null lists every Loop. */
+        loop: z.string().min(1).nullable(),
+        state: runState.nullable(),
+      })
+      .strict(),
+    output: z.object({
+      /** The Loops to filter by: the registry's, plus any Loop that has runs and has left it. */
+      loops: z.array(z.string()),
+      runs: z.array(loopRun),
+      /** True when more runs matched than the page lists. */
+      truncated: z.boolean(),
+    }),
+  },
   board_setup: {
     input: z
       .object({
@@ -279,6 +337,8 @@ export const rpcContract = defineRpcContract({
         focus: z.string().trim().min(1).nullable().optional(),
         maxAttempts: z.number().int().min(1).max(5).optional(),
         autoPromote: z.boolean().optional(),
+        /** Where a ready run's issue goes on the recorded review gate; null switches the hand-over off. */
+        handOver: handOver.nullable().optional(),
         machines: z.array(machine).optional(),
         requirements: z.array(requirement).optional(),
       })
@@ -294,6 +354,8 @@ export type SessionDto = z.infer<typeof session>;
 export type FollowUpDto = z.infer<typeof followUp>;
 export type LinearTriggerDto = z.infer<typeof linearTrigger>;
 export type BoardDto = z.infer<typeof board>;
+export type LoopRunDto = z.infer<typeof loopRun>;
+export type RunStateDto = z.infer<typeof runState>;
 export type MachineDto = z.infer<typeof machine>;
 export type RequirementDto = z.infer<typeof requirement>;
 

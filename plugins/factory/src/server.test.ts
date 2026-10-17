@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { readdirSync } from "node:fs";
 import {
   createFakePluginHost,
@@ -8,7 +8,11 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import plugin from "../server.js";
+import { AGENT_MIGRATIONS } from "./agent-store.js";
 import type { rpcContract } from "./contract.js";
+import { DISPATCH_MIGRATIONS, LOOP_MIGRATIONS } from "./dispatch-store.js";
+import { createGateStore, GATE_MIGRATIONS } from "./gate-store.js";
+import { MIGRATIONS } from "./store.js";
 
 type Contract = typeof rpcContract;
 type Rpc = <M extends keyof Contract & string>(
@@ -19,9 +23,17 @@ type Rpc = <M extends keyof Contract & string>(
 async function load(settings: Record<string, unknown> = {}) {
   let threads = 0;
   /** What the project checkout holds: the registry the board reads every tick. */
-  const checkout: { registry: string; encoding: "utf8" | "base64" } = {
+  const checkout: {
+    registry: string;
+    encoding: "utf8" | "base64";
+    /** The launcher thread's status, and its workflow run: active in its Engineer phase until a test ends it. */
+    threadStatus: string;
+    workflow: { active: boolean; phase: string; result: unknown };
+  } = {
     registry: "",
     encoding: "utf8",
+    threadStatus: "active",
+    workflow: { active: true, phase: "Engineer", result: undefined },
   };
   const host = createFakePluginHost({
     pluginId: "optio",
@@ -33,7 +45,7 @@ async function load(settings: Record<string, unknown> = {}) {
           threads += 1;
           return { id: `thr_${threads}` };
         },
-        get: async () => ({ status: "active", archivedAt: null }),
+        get: async () => ({ status: checkout.threadStatus, archivedAt: null }),
       },
       projects: {
         list: async () => [{ id: "proj_1", name: "acme" }],
@@ -48,6 +60,20 @@ async function load(settings: Record<string, unknown> = {}) {
         }),
       },
       hosts: { list: async () => [{ id: "host_1", name: "Mac" }] },
+      plugins: {
+        // The workflows plugin: one run of the launcher thread.
+        callRpc: async ({ method }: { method: string }) => {
+          const { active, phase, result } = checkout.workflow;
+          const run = {
+            id: "wfr_1",
+            status: active ? "running" : "succeeded",
+            currentPhase: phase,
+            error: null,
+            result,
+          };
+          return method === "workflowActiveRuns" ? { runs: active ? [run] : [] } : { run };
+        },
+      },
     },
   });
   await plugin(host.bb);
@@ -62,7 +88,7 @@ async function load(settings: Record<string, unknown> = {}) {
     enabled: true,
     httpTrigger: true,
   });
-  return { harness: host.harness, rpc, agent, checkout };
+  return { harness: host.harness, rpc, agent, checkout, db: host.bb.storage.database() };
 }
 
 type Loaded = Awaited<ReturnType<typeof load>>;
@@ -197,6 +223,52 @@ describe("session instructions", () => {
   });
 });
 
+describe("the gate tool", () => {
+  it("is selected for every thread, so a workflow worker can call it", async () => {
+    const { harness } = await load();
+    const metadata: Record<string, string>[] = [
+      {},
+      { standingAgent: "devops" },
+      { dispatch: "dsp_1" },
+    ];
+    for (const pluginMetadata of metadata) {
+      const configuration = await harness.behavior.resolveAgentConfiguration(
+        makePluginAgentConfigurationContext({ pluginMetadata }),
+      );
+      expect(JSON.stringify(configuration)).toContain("optio_gate");
+    }
+  });
+});
+
+describe("bb optio hand-over", () => {
+  it("sets, shows and switches off the states of the hand-over", async () => {
+    const { harness, rpc } = await load();
+    await rpc("board_setup", {
+      projectId: "proj_1",
+      teamKey: "ENG",
+      backlogState: "Icebox",
+      activeStates: ["Doing"],
+      blockedState: null,
+    });
+    const run = async (...args: string[]) =>
+      (await harness.behavior.runCli(["hand-over", ...args])).stdout;
+    expect(await run()).toBe("Hand-over is off");
+    expect(await run("--review", "Reviewing", "--approval", "Accepted")).toContain(
+      "Reviewing -> Accepted",
+    );
+    expect((await rpc("board_get", null)).handOver).toEqual({
+      reviewState: "Reviewing",
+      approvalState: "Accepted",
+    });
+    expect(await run()).toContain("Reviewing -> Accepted");
+    expect(
+      (await harness.behavior.runCli(["hand-over", "--review", "Reviewing"])).exitCode,
+    ).not.toBe(0);
+    expect(await run("--off")).toBe("Hand-over is off");
+    expect((await rpc("board_get", null)).handOver).toBeNull();
+  });
+});
+
 describe("the board", () => {
   it("is set up from the page in dry-run and edited without JSON", async () => {
     const { rpc, checkout } = await load();
@@ -247,6 +319,15 @@ describe("the board", () => {
     expect((await rpc("board_get", null)).error).toContain("no Linear API key");
     await rpc("board_update", { focus: null });
     expect((await rpc("board_get", null)).focus).toBeNull();
+    // The hand-over states are off until set, kept by other edits, and cleared with null.
+    expect((await rpc("board_get", null)).handOver).toBeNull();
+    const handOver = { reviewState: "In Review", approvalState: "Approval" };
+    await rpc("board_update", { handOver });
+    expect((await rpc("board_get", null)).handOver).toEqual(handOver);
+    await rpc("board_update", { maxAttempts: 2 });
+    expect((await rpc("board_get", null)).handOver).toEqual(handOver);
+    await rpc("board_update", { handOver: null });
+    expect((await rpc("board_get", null)).handOver).toBeNull();
     expect((await rpc("hosts_list", null)).hosts).toEqual([{ id: "host_1", name: "Mac" }]);
   });
 });
@@ -282,6 +363,9 @@ describe("the board reads the Loop registry", () => {
         labels: { nodes: labels.map((name) => ({ name })) },
         projectMilestone: null,
         project: null,
+        attachments: {
+          nodes: identifier === "ENG-1" ? [{ url: "https://github.com/acme/app/pull/7" }] : [],
+        },
         inverseRelations: { nodes: [] },
       });
       return new Response(
@@ -400,6 +484,274 @@ describe("the board reads the Loop registry", () => {
       expect(spawns(loaded)).toHaveLength(1);
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("the plugin's migrations", () => {
+  it("keeps the order an installed Optio recorded: the Loop migrations, then the gate runs, then the runs page's", async () => {
+    // Development shipped these lists in this order; a database that ran them
+    // refuses any other order at the first statement that differs.
+    const shipped = [
+      ...MIGRATIONS,
+      ...DISPATCH_MIGRATIONS,
+      ...AGENT_MIGRATIONS,
+      ...LOOP_MIGRATIONS,
+      ...GATE_MIGRATIONS,
+    ];
+    const { db } = await load();
+    // SAFETY: _bb_migrations is the SDK's own table; the row type mirrors the two columns selected.
+    const recorded = db
+      .prepare("SELECT id, statement_hash FROM _bb_migrations ORDER BY id")
+      .all() as {
+      id: number;
+      statement_hash: string;
+    }[];
+    expect(recorded.length).toBeGreaterThan(shipped.length);
+    shipped.forEach((statement, index) => {
+      expect(recorded[index]).toEqual({
+        id: index,
+        statement_hash: createHash("sha256").update(statement).digest("hex"),
+      });
+    });
+  });
+});
+
+describe("the runs page", () => {
+  const loops = [
+    {
+      name: "Issue run",
+      enabled: true,
+      workflow: "issue-run",
+      trigger: { kind: "issue", state: "Ready", label: "agent-ready", unblocked: true },
+      machines: ["mac"],
+      maxLive: 2,
+    },
+  ];
+
+  it("lists the runs of a Loop with their step and their links, and filters them", async () => {
+    let issueState = "Ready";
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              teams: { nodes: [{ states: { nodes: [{ id: "s1", name: "Ready" }] } }] },
+              issues: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  {
+                    id: "id-ENG-1",
+                    identifier: "ENG-1",
+                    title: "One",
+                    priority: 2,
+                    createdAt: "2026-10-01T00:00:00Z",
+                    description: "",
+                    state: { name: issueState },
+                    labels: { nodes: [{ name: "agent-ready" }] },
+                    projectMilestone: null,
+                    project: null,
+                    attachments: { nodes: [{ url: "https://github.com/acme/app/pull/7" }] },
+                    inverseRelations: { nodes: [] },
+                  },
+                ],
+              },
+            },
+          }),
+        ),
+    );
+    try {
+      const loaded = await load({ linearApiKey: "lin_key" });
+      const { rpc, checkout, harness } = loaded;
+      await rpc("board_setup", {
+        projectId: "proj_1",
+        teamKey: "ENG",
+        backlogState: "Icebox",
+        activeStates: ["Doing"],
+        blockedState: null,
+      });
+      await rpc("board_update", {
+        mode: "live",
+        machines: [
+          { id: "mac", hostId: "host_1", branch: "origin/main", cap: 2, capabilities: [] },
+        ],
+      });
+      checkout.registry = JSON.stringify({ loops, github: { ownerRepo: "acme/app" } });
+      expect(await rpc("runs_list", { loop: null, state: null })).toEqual({
+        loops: ["Issue run"],
+        runs: [],
+        truncated: false,
+      });
+
+      // An open page refreshes on the `changed` signal, so every write it shows publishes one.
+      const published = () =>
+        harness.inspection.realtimeSignals.filter((signal) => signal.channel === "changed").length;
+      await harness.behavior.runSchedule("orchestrator-tick"); // starts ENG-1
+      const afterStart = published();
+      expect(afterStart).toBeGreaterThan(0);
+      await harness.behavior.runSchedule("orchestrator-tick"); // sees its workflow run
+      expect(published()).toBeGreaterThan(afterStart);
+      const afterSeen = published();
+      await harness.behavior.runSchedule("orchestrator-tick"); // sees nothing new
+      expect(published()).toBe(afterSeen);
+
+      // The gates `optio_gate` records for the issue are the run's verdicts; a refused call, another issue's gate
+      // and a gate from before the run are not.
+      const gates = createGateStore(loaded.db);
+      const gate = (over: Partial<Parameters<typeof gates.record>[0]>) =>
+        gates.record({
+          at: Date.now(),
+          threadId: "thr_2",
+          gate: "pre-review",
+          pr: 7,
+          issue: "ENG-1",
+          outcome: "ran",
+          exitCode: 0,
+          verdictLine: "pre-review: open",
+          sha: "abc123",
+          hostId: "host_1",
+          reason: null,
+          ...over,
+        });
+      gate({});
+      gate({ outcome: "refused", exitCode: null, verdictLine: null, sha: null, reason: "bad" });
+      gate({ issue: "ENG-2" });
+      gate({ at: Date.now() - 60_000 });
+      const page = await rpc("runs_list", { loop: "Issue run", state: "running" });
+      expect(page.runs).toEqual([
+        expect.objectContaining({
+          loop: "Issue run",
+          issue: "ENG-1",
+          machineId: "mac",
+          state: "running",
+          step: "Engineer",
+          stopReason: null,
+          gates: [
+            {
+              at: expect.any(Number),
+              gate: "pre-review",
+              exitCode: 0,
+              verdict: "pre-review: open",
+              commit: "abc123",
+            },
+          ],
+          threadId: "thr_1",
+          workflowRunId: "wfr_1",
+          prNumber: 7,
+          prUrl: "https://github.com/acme/app/pull/7",
+        }),
+      ]);
+      expect((await rpc("runs_list", { loop: null, state: "stopped" })).runs).toEqual([]);
+
+      // The workflow reaches its hand-over: the page shows it without opening the thread.
+      vi.setSystemTime(Date.now() + 10 * 60_000);
+      checkout.threadStatus = "idle";
+      checkout.workflow = {
+        active: false,
+        phase: "Hand-over",
+        result: { issue: "ENG-1", status: "Approval", prNumber: 7 },
+      };
+      issueState = "Approval";
+      await harness.behavior.runSchedule("orchestrator-tick");
+      expect(published()).toBeGreaterThan(afterSeen); // the step change and the hand-over
+      expect((await rpc("runs_list", { loop: null, state: "running" })).runs).toEqual([]);
+      expect((await rpc("runs_list", { loop: "Issue run", state: "handed-over" })).runs).toEqual([
+        expect.objectContaining({
+          issue: "ENG-1",
+          state: "handed-over",
+          step: "Hand-over",
+          handedOverTo: "Approval",
+          stopReason: null,
+          prNumber: 7,
+          endedAt: expect.any(Number),
+        }),
+      ]);
+      expect((await rpc("runs_list", { loop: "Other", state: null })).runs).toEqual([]);
+
+      // A registry that no longer parses still leaves the record readable, without PR links.
+      checkout.registry = "{ not json";
+      const refused = await rpc("runs_list", { loop: null, state: null });
+      expect(refused.loops).toEqual(["Issue run"]);
+      expect(refused.runs[0]).toMatchObject({ issue: "ENG-1", prNumber: 7, prUrl: null });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows why a run stopped, with the note its workflow left", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              teams: { nodes: [{ states: { nodes: [{ id: "s1", name: "Ready" }] } }] },
+              issues: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  {
+                    id: "id-ENG-1",
+                    identifier: "ENG-1",
+                    title: "One",
+                    priority: 2,
+                    createdAt: "2026-10-01T00:00:00Z",
+                    description: "",
+                    state: { name: "Ready" },
+                    labels: { nodes: [{ name: "agent-ready" }] },
+                    projectMilestone: null,
+                    project: null,
+                    attachments: { nodes: [] },
+                    inverseRelations: { nodes: [] },
+                  },
+                ],
+              },
+            },
+          }),
+        ),
+    );
+    try {
+      const { rpc, checkout, harness } = await load({ linearApiKey: "lin_key" });
+      await rpc("board_setup", {
+        projectId: "proj_1",
+        teamKey: "ENG",
+        backlogState: "Icebox",
+        activeStates: ["Doing"],
+        blockedState: null,
+      });
+      await rpc("board_update", {
+        mode: "live",
+        machines: [
+          { id: "mac", hostId: "host_1", branch: "origin/main", cap: 2, capabilities: [] },
+        ],
+      });
+      checkout.registry = JSON.stringify({ loops });
+      await harness.behavior.runSchedule("orchestrator-tick");
+      vi.setSystemTime(Date.now() + 10 * 60_000);
+      checkout.threadStatus = "idle";
+      checkout.workflow = {
+        active: false,
+        phase: "Pre-review gate",
+        result: { status: "stopped", note: "needs-human: run device-run.sh on the Mac" },
+      };
+      await harness.behavior.runSchedule("orchestrator-tick");
+      const { runs } = await rpc("runs_list", { loop: null, state: "stopped" });
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({
+        issue: "ENG-1",
+        step: "Pre-review gate",
+        handedOverTo: null,
+        prNumber: null,
+        prUrl: null,
+      });
+      expect(runs[0]?.stopReason).toContain("it said: needs-human: run device-run.sh on the Mac");
+      expect(runs[0]?.stopReason).toContain("the issue is in Ready");
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
     }
   });
 });
