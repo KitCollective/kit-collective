@@ -78,7 +78,7 @@ bb plugin build plugins/factory
 bb plugin reload optio
 ```
 
-The install is by path, so `reload` picks up the rebuilt `dist/` and keeps the plugin's settings, agents and memory. bb compiles the server side from `server.ts` in that checkout, not from `dist/`: a server change only runs once it is in the checkout the install points at, so a build from another worktree updates the page and nothing else. Never `bb plugin remove optio` to update it: removing deletes its database (agents, memory, automations).
+The install is by path, so `reload` picks up the rebuilt `dist/` and keeps the plugin's settings, agents and memory. bb compiles the server side from `server.ts` in that checkout, not from `dist/`: a server change only runs once it is in the checkout the install points at, so a build from another worktree updates the page and nothing else. Never `bb plugin remove optio` to update it: removing deletes its database (agents, memory, automations). Do not `bb plugin disable optio` and `enable` it to pick up a change either: it unloads Optio while runs are live, and on 2026-10-17 two reviewers were cut off at their result, so their runs never started the fix round (KIT-290, KIT-411). `reload` is the update.
 
 ## What it replaced
 
