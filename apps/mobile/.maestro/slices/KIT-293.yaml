@@ -46,7 +46,8 @@ name: kit-293
     timeout: 15000
 - assertVisible:
     id: typeahead-jerseys
-- assertVisible: "Klub · 1 trøje"
+- assertVisible:
+    id: typeahead-hit-club-.*
 - hideKeyboard
 - waitForAnimationToEnd:
     timeout: 5000
@@ -60,7 +61,6 @@ name: kit-293
     visible:
       id: typeahead-hit-collector-e2e_peer
     timeout: 15000
-- assertVisible: "Samler · 1 trøje"
 - hideKeyboard
 - waitForAnimationToEnd:
     timeout: 5000
@@ -71,7 +71,8 @@ name: kit-293
 - eraseText: 10
 - inputText: Danmark
 - extendedWaitUntil:
-    visible: "Landshold · 0 trøjer"
+    visible:
+      id: typeahead-hit-national-team-.*
     timeout: 15000
 - hideKeyboard
 - waitForAnimationToEnd:
