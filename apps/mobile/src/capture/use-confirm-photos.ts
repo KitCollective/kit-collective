@@ -1,6 +1,6 @@
 import type { PhotoRole } from "@kit/domain";
 import { PHOTO_ROLES } from "@kit/domain";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   addPhotosToDraft,
   bindUnboundPhotoToDraft,
@@ -15,7 +15,13 @@ import type {
   CaptureSessionMutator,
   CaptureSessionState,
 } from "@/capture/captureSessionTypes";
-import { resolveConfirmLightboxUri, resolveConfirmStripUri } from "@/capture/confirmPhotoUri";
+import {
+  type ConfirmStripPhotos,
+  type ConfirmStripSources,
+  createConfirmStripPhotos,
+  resolveConfirmLightboxUri,
+  resolveConfirmStripUri,
+} from "@/capture/confirmPhotoUri";
 import { expoGalleryPickerAdapter, expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
 import { captureQualityForRole } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
@@ -41,61 +47,29 @@ export function useConfirmPhotos({
 }: UseConfirmPhotosOptions) {
   const [lightboxRole, setLightboxRole] = useState<PhotoRole | null>(null);
   const [lightboxUri, setLightboxUri] = useState<string | undefined>(undefined);
-  const [stripPhotoUris, setStripPhotoUris] = useState<Record<PhotoRole, string | undefined>>({
-    front: undefined,
-    back: undefined,
-    left: undefined,
-    right: undefined,
-    other: undefined,
-  });
+  const [, setStripTick] = useState(0);
+  const stripRef = useRef<ConfirmStripPhotos | null>(null);
+  stripRef.current ??= createConfirmStripPhotos(resolveConfirmStripUri, () =>
+    setStripTick((tick) => tick + 1),
+  );
+  const strip = stripRef.current;
 
+  // SAFETY: PHOTO_ROLES lists every PhotoRole, so the entries cover the whole record.
+  const stripSources = Object.fromEntries(
+    PHOTO_ROLES.map((role) => [
+      role,
+      draft ? (photoUriForRole(draft, role) ?? undefined) : undefined,
+    ]),
+  ) as ConfirmStripSources;
+  const stripSourcesKey = PHOTO_ROLES.map((role) => stripSources[role] ?? "").join("\n");
+
+  // Keyed on the URIs, not the draft: a new draft object with the same photos starts no prepare.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stripSourcesKey stands for stripSources
   useEffect(() => {
-    if (!draft) {
-      setStripPhotoUris({
-        front: undefined,
-        back: undefined,
-        left: undefined,
-        right: undefined,
-        other: undefined,
-      });
-      return;
-    }
+    strip.update(stripSources);
+  }, [stripSourcesKey]);
 
-    let cancelled = false;
-    void Promise.all(
-      PHOTO_ROLES.map(async (role) => {
-        const uri = photoUriForRole(draft, role);
-        if (!uri) {
-          return [role, undefined] as const;
-        }
-        try {
-          const stripUri = await resolveConfirmStripUri(uri, role);
-          return [role, stripUri] as const;
-        } catch {
-          return [role, uri] as const;
-        }
-      }),
-    ).then((entries) => {
-      if (cancelled) {
-        return;
-      }
-      const next: Record<PhotoRole, string | undefined> = {
-        front: undefined,
-        back: undefined,
-        left: undefined,
-        right: undefined,
-        other: undefined,
-      };
-      for (const [role, uri] of entries) {
-        next[role] = uri;
-      }
-      setStripPhotoUris(next);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [draft]);
+  useEffect(() => () => strip.dispose(), [strip]);
 
   useEffect(() => {
     if (!draft || !lightboxRole) {
@@ -209,7 +183,7 @@ export function useConfirmPhotos({
   };
 
   return {
-    photoUris: stripPhotoUris,
+    photoUris: strip.uris(stripSources),
     lightboxRole,
     lightboxUri,
     dismissLightbox: () => setLightboxRole(null),
