@@ -12,6 +12,7 @@ const TEAM_ID = "33333333-3333-4333-8333-333333333333";
 const JERSEY_ID = "44444444-4444-4444-8444-444444444444";
 
 function discoverJersey(overrides: Partial<CollectionDiscoverJersey> = {}) {
+  // SAFETY: the fixture sets every required field of the discover jersey; photos are trimmed to what the view-model reads.
   return {
     id: JERSEY_ID,
     clubId: CLUB_ID,
@@ -45,6 +46,7 @@ function kinds(shelves: SearchShelf[]) {
 function shelfOf<K extends SearchShelf["kind"]>(shelves: SearchShelf[], kind: K) {
   const shelf = shelves.find((candidate) => candidate.kind === kind);
   expect(shelf, `expected a ${kind} shelf`).toBeTruthy();
+  // SAFETY: `find` matched on `kind`, so the shelf is the member of the union with that kind.
   return shelf as Extract<SearchShelf, { kind: K }>;
 }
 
