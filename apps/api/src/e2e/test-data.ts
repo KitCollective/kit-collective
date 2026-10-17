@@ -1,5 +1,6 @@
 import {
   authEvent,
+  authThrottleHit,
   collectionShortcut,
   conversation,
   conversationMessage,
@@ -231,6 +232,17 @@ export async function applyTestData(input: {
     await tx.delete(collectionShortcut).where(inArray(collectionShortcut.userId, TEST_IDS));
     await tx.delete(session).where(inArray(session.userId, TEST_IDS));
     await tx.delete(authEvent).where(inArray(authEvent.userId, TEST_IDS));
+    // Five sign-in code requests per e-mail in 15 minutes throttle the sixth; a run of flows signs
+    // in once each, so the test Collectors' own counts start from zero (KIT-284).
+    await tx.delete(authThrottleHit).where(
+      and(
+        inArray(authThrottleHit.bucket, ["email_request", "email_failure"]),
+        inArray(
+          authThrottleHit.bucketKey,
+          hashed.map((account) => account.email),
+        ),
+      ),
+    );
 
     for (const jersey of TEST_JERSEYS) {
       const side = sideOf(jersey.side);

@@ -28,6 +28,9 @@ name: add-jersey-vision-off
 # one fixture photo, newest first: the first cell, then the confirm button.
 - waitForAnimationToEnd:
     timeout: 8000
+# A cold simulator shows the picker before its cells have loaded (the first flow of a run missed
+# its taps in the first hosted run), so pause before tapping.
+- runFlow: ../subflows/settle.yaml
 - tapOn:
     point: 16%,25%
 - tapOn:
