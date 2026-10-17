@@ -3,17 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchClubSeasons } from "@/api/catalog";
 import { fetchVisionJob, startVisionSuggest, VisionPremiumRequiredError } from "@/api/vision";
 import {
-  applyIdentitySuggestion,
   catalogSideId,
   selectDraftKitType,
   setDraftBadge,
   setDraftCatalogSide,
   setDraftPlayer,
   setDraftSeason,
-  suggestedCatalogSideId,
 } from "@/capture/captureSession";
 import type { CaptureJerseyDraft, CaptureSessionMutator } from "@/capture/captureSessionTypes";
-import { resolveVisionCatalogMissHint } from "@/capture/catalogMissHint";
 import {
   confirmBadgeWasEdited,
   confirmClubWasEdited,
@@ -35,13 +32,11 @@ import {
 import {
   type IdentityDraftState,
   type IdentityDraftStates,
-  identityLandingPatch,
   identityStateFor,
-  landingFadesIn,
+  landIdentityResult,
   patchIdentityState,
   resetIdentityState,
 } from "@/capture/identityDraftState";
-import { buildSuggestOnlyVisionJob } from "@/capture/identitySuggestOnly";
 import { buildIdentitySuggestRequest } from "@/capture/identitySuggestRequest";
 
 type IdentityFieldSnapshot = {
@@ -66,29 +61,6 @@ type UseConfirmVisionOptions = {
   setSelectedSeasonLabel: (label: string | null) => void;
   onPremiumRequired?: () => Promise<boolean>;
 };
-
-function hasPreselectFields(fieldPreselect: VisionFieldPreselect | undefined): boolean {
-  return Boolean(
-    fieldPreselect?.club ||
-      fieldPreselect?.season ||
-      fieldPreselect?.type ||
-      fieldPreselect?.player ||
-      fieldPreselect?.badge,
-  );
-}
-
-function hasSuggestFields(job: VisionJobResponse): boolean {
-  return Boolean(
-    job.suggestions?.clubId ||
-      job.suggestions?.seasonId ||
-      job.suggestions?.type ||
-      job.suggestions?.playerId ||
-      job.suggestions?.patchId ||
-      job.catalogMiss ||
-      job.clubHint ||
-      job.nationalTeamHint,
-  );
-}
 
 /**
  * Keeps optional Vision work behind one interface. It owns job start/poll/apply state;
@@ -156,77 +128,23 @@ export function useConfirmVision({
       };
       snapshotsByDraftRef.current.set(currentDraftId, snapshot);
 
-      patchIdentity(currentDraftId, {
-        catalogMiss: job.catalogMiss === true,
-        catalogMissHint: job.catalogMiss ? resolveVisionCatalogMissHint(job) : null,
-      });
-
-      if (job.catalogMiss && !job.suggestions) {
-        return;
-      }
-
-      const fieldPreselect = job.fieldPreselect ?? {};
-      const suggestions = job.suggestions;
-      const shouldPreselect = hasPreselectFields(fieldPreselect);
-
-      if (!shouldPreselect && suggestions) {
-        patchIdentity(currentDraftId, identityLandingPatch({ kind: "suggest", job }));
-        return;
-      }
-
-      if (!shouldPreselect && !hasSuggestFields(job)) {
-        return;
-      }
-
-      if (suggestions) {
-        mutate((current) =>
-          applyIdentitySuggestion(current, currentDraftId, suggestions, {
-            fieldPreselect,
-            manualEdits: {
-              club: confirmClubWasEdited(),
-              season: confirmSeasonWasEdited(),
-              type: confirmKitTypeWasEdited(),
-              player: confirmPlayerWasEdited(),
-              badge: confirmBadgeWasEdited(),
-            },
-          }),
-        );
-
-        if (
-          landingFadesIn(currentDraftId, draftRef.current?.id ?? null) &&
-          !confirmSeasonWasEdited() &&
-          suggestions.seasonLabel &&
-          fieldPreselect.season
-        ) {
-          setSelectedSeasonLabel(suggestions.seasonLabel);
-        }
-
-        const suggestedSideId = suggestedCatalogSideId(suggestions, fieldPreselect);
-        if (!confirmSeasonWasEdited() && accessToken && suggestedSideId) {
-          try {
-            await fetchClubSeasons(accessToken, suggestedSideId);
-          } catch {
-            // Season list is a Data drill convenience — a miss must not unwind applied fields.
-          }
-        }
-
-        const suggestOnlyJob = buildSuggestOnlyVisionJob(job, {
+      await landIdentityResult({
+        job,
+        targetDraftId: currentDraftId,
+        activeDraftId: () => draftRef.current?.id ?? null,
+        accessToken,
+        mutate,
+        patchIdentity,
+        setSelectedSeasonLabel,
+        fetchSeasons: fetchClubSeasons,
+        manualEdits: () => ({
           club: confirmClubWasEdited(),
           season: confirmSeasonWasEdited(),
           type: confirmKitTypeWasEdited(),
           player: confirmPlayerWasEdited(),
           badge: confirmBadgeWasEdited(),
-        });
-        if (suggestOnlyJob) {
-          patchIdentity(
-            currentDraftId,
-            identityLandingPatch({ kind: "suggest", job: suggestOnlyJob }),
-          );
-          return;
-        }
-
-        patchIdentity(currentDraftId, identityLandingPatch({ kind: "applied" }));
-      }
+        }),
+      });
     },
     [accessToken, mutate, sessionId, patchIdentity, setSelectedSeasonLabel],
   );
