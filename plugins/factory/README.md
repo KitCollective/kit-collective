@@ -35,6 +35,20 @@ each machine's capacity and without write-scope overlap. A run that stops at a
 gate is reported to the orchestrator agent's thread, which resumes it or parks
 it.
 
+**Hand-over.** With `handOver` set (`bb optio hand-over --review <state> --approval <state>`),
+the Board also decides where an ended run's issue goes. For an issue the ended
+run left in the review state, it reads the newest `review` gate `optio_gate`
+recorded since the run started and the pull request's head now (a fixed `gh pr
+view` on the machine the gate ran on, through the host bundle). The issue moves
+to the approval state only when that gate exited 0 on that head. A head that
+moved, a closed gate or no record keeps the issue in the review state: the run
+is a stall, reported to the orchestrator, and the reason is added under `### Notes` of the issue's workpad (the comment that starts with `agent.workpadHeading`
+of the registry). A gate that was refused or could not be run, or a head that
+cannot be read, moves the issue to the blocked state, and a stalled issue in
+the blocked state is not moved back until it is released. Without `handOver`
+an ended run in a working state is a stall, as before. The repository comes
+from `github.ownerRepo` in the registry.
+
 The Loop registry is the `loops` block of `factory.config.json` in the
 project's checkout, read through `bb.sdk.projects.fileContent` on every tick,
 so an edit is picked up at the next tick without a reload. Each Loop has a
@@ -115,17 +129,18 @@ own tunnel to that one path.
 | `src/sessions.ts` | Starting an agent thread; the brief; due automations; workflow launchers. |
 | `src/store.ts` | The ledger of agent sessions. |
 | `src/scheduler-config.ts` | The board's stored configuration. |
-| `src/linear-api.ts` | Reads the team's issues from Linear; moves an unblocked issue. |
+| `src/linear-api.ts` | Reads the team's issues from Linear; moves an issue; adds one line under `### Notes` of the workpad. |
+| `src/hand-over.ts` | The hand-over decision: from the recorded review gate and the pull request's head to approval, stay in review, or blocked, with the reason. |
 | `src/board.ts` | The plan for one tick: starts, machines, and why the rest wait. |
 | `src/scheduler.ts` | A tick: close ended runs, plan, start, report stalls; `resume`. |
 | `src/dispatch-store.ts` | The ledger of workflow runs the board started. |
 | `src/linear-triggers.ts` | The poller that turns Linear changes into agent sessions. |
 | `src/linear.ts` | Linear webhook signature check. |
-| `host.ts` | The host bundle, run on each enrolled machine: runs the fixed probe script and the fixed gate script (`scripts/gate.mjs`) in a worktree. |
+| `host.ts` | The host bundle, run on each enrolled machine: runs the fixed probe script and the fixed gate script (`scripts/gate.mjs`) in a worktree, and reads a pull request's head with a fixed `gh pr view`. |
 | `src/host-contract.ts`, `src/host-run.ts` | The host bundle's RPC contract and its script runner. |
 | `src/host-probe.ts` | Thread id to worktree and machine, then the host bundle's probe (`bb optio host-probe <thread>`, the `optio_host_probe` agent tool). A spike. |
-| `src/gate-tool.ts` | The `optio_gate` agent tool: validate a gate call (a gate from a fixed set, a PR number, an issue key), run the repo's gate script on the calling thread's machine, record the result. An unknown gate or a bad argument is refused and recorded, never run. The host bundle passes `--timeout` to the waiting gates (`pre-review`, `review`), a minute below its own kill timeout, so CI that is still pending comes back as the gate's own waiting verdict, not as exit 143. |
-| `src/gate-store.ts` | The record of gate runs (`bb optio gates`): gate, thread, PR, issue, outcome, exit code, verdict line, commit SHA. |
+| `src/gate-tool.ts` | The `optio_gate` agent tool: validate a gate call (a gate from a fixed set, a PR number, an issue key), run the repo's gate script on the calling thread's machine, record the result. An unknown gate or a bad argument is refused and recorded, never run. The host bundle passes `--timeout` to the waiting gates (`pre-review`, `review`), a minute below its own kill timeout, so CI that is still pending comes back as the gate's own waiting verdict, not as exit 143; one tool call lets the gate run for nine minutes, and the caller asks again on exit 3. The tool is selected for every thread, because a workflow worker is not a standing agent. |
+| `src/gate-store.ts` | The record of gate runs (`bb optio gates`): gate, thread, PR, issue, outcome, exit code, verdict line, commit SHA. The hand-over reads the newest `review` record of an issue from it. |
 | `scripts/host-probe.mjs` | The fixed, read-only script the probe runs. |
 | `src/product-neutral.test.ts` | Fails when plugin code outside `examples/` names one product's values. |
 

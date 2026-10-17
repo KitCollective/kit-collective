@@ -63,6 +63,15 @@ const schedulerSchema = z
     activeStates: z.array(z.string().min(1)).min(1),
     /** Issues here go back to the first issue Loop's state once every blocker is completed or canceled. Null when the team has no such state. */
     blockedState: z.string().min(1).nullable(),
+    /**
+     * Where an ended run's issue is moved on the recorded review gate: `reviewState` is where the
+     * workflow leaves a ready issue, `approvalState` is where a green gate on the PR's current head
+     * sends it. Absent: an ended run in neither is reported as a stall, as before.
+     */
+    handOver: z
+      .object({ reviewState: z.string().min(1), approvalState: z.string().min(1) })
+      .strict()
+      .optional(),
     /** Consecutive runs that may end without a hand-over before only a person can restart the issue. */
     maxAttempts: z.number().int().min(1).max(5).default(2),
     /** How long a started run may take to show its workflow before it counts as ended. */

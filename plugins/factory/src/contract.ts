@@ -97,6 +97,10 @@ const requirement = z
   })
   .strict();
 
+const handOver = z
+  .object({ reviewState: z.string().trim().min(1), approvalState: z.string().trim().min(1) })
+  .strict();
+
 const board = z.object({
   configured: z.boolean(),
   /** Why the plan could not be computed, when it could not. */
@@ -133,6 +137,8 @@ const board = z.object({
   ),
   maxAttempts: z.number(),
   autoPromote: z.boolean(),
+  /** The states of the hand-over on the recorded review gate, or null when it is off. */
+  handOver: handOver.nullable(),
   /** How many more issues the ready queue may hold. */
   room: z.number(),
   /** Backlog issues that may be promoted. */
@@ -331,6 +337,8 @@ export const rpcContract = defineRpcContract({
         focus: z.string().trim().min(1).nullable().optional(),
         maxAttempts: z.number().int().min(1).max(5).optional(),
         autoPromote: z.boolean().optional(),
+        /** Where a ready run's issue goes on the recorded review gate; null switches the hand-over off. */
+        handOver: handOver.nullable().optional(),
         machines: z.array(machine).optional(),
         requirements: z.array(requirement).optional(),
       })

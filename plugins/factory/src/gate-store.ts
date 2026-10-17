@@ -104,6 +104,19 @@ export function createGateStore(db: Database) {
         );
       return { id: Number(result.lastInsertRowid), ...input };
     },
+    /**
+     * The newest `review` gate recorded for the issue at or after `since` (epoch ms), whatever its
+     * outcome, or null. The workers' thread ids are not known to the dispatch, so it asks by issue and time.
+     */
+    latestReview(issue: string, since: number): GateRun | null {
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+      const row = db
+        .prepare(
+          `SELECT * FROM gate_runs WHERE gate = 'review' AND issue = ? AND at >= ? ORDER BY id DESC LIMIT 1`,
+        )
+        .get(issue, since) as Row | undefined;
+      return row === undefined ? null : toGateRun(row);
+    },
     /** Newest first. */
     list(limit: number): GateRun[] {
       // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.

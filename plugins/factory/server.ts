@@ -29,7 +29,7 @@ import {
 import { createGateStore, GATE_MIGRATIONS } from "./src/gate-store.js";
 import type { GateDeps } from "./src/gate-tool.js";
 import { runGate } from "./src/gate-tool.js";
-import { hostContract } from "./src/host-contract.js";
+import { GATE_CALL_TIMEOUT_MS, hostContract } from "./src/host-contract.js";
 import { type ProbeDeps, probeThread, renderProbe } from "./src/host-probe.js";
 import { verifyLinearWebhook } from "./src/linear.js";
 import {
@@ -38,6 +38,7 @@ import {
   fetchUpdatedIssues,
   moveIssue,
   promoteIssue,
+  writeWorkpadNote,
 } from "./src/linear-api.js";
 import { createLinearPoller } from "./src/linear-triggers.js";
 import { parseRegistry, type Registry } from "./src/loop-registry.js";
@@ -213,12 +214,14 @@ export default async function plugin(bb: BbPluginApi) {
 
   // Every thread of an agent is pointed at its brief. The metadata is written
   // by this plugin at spawn, but anyone can write it: it only ever selects
-  // which brief to read, never a permission.
+  // which brief to read, never a permission. Every thread gets the gate tool, because a
+  // workflow worker is not a standing agent: the tool runs one fixed script in the
+  // caller's own worktree and records what came back, so a model cannot widen it.
   bb.agents.configure((context) => {
     const id = context.pluginMetadata.standingAgent;
     const agent = typeof id === "string" ? agents.get(id) : null;
     return {
-      tools: [],
+      tools: ["optio_gate"],
       skills: ["optio"],
       ...(agent === null ? {} : { instructions: sessionInstructions(agent) }),
     };
@@ -262,7 +265,11 @@ export default async function plugin(bb: BbPluginApi) {
   const gateDeps: GateDeps = {
     ...probeDeps,
     runGate: (hostId, cwd, call) =>
-      hostClient.call("run_gate", { cwd, ...call }, { hostId, timeoutMs: 28 * 60_000 }),
+      hostClient.call(
+        "run_gate",
+        { cwd, ...call, timeoutMs: GATE_CALL_TIMEOUT_MS },
+        { hostId, timeoutMs: 28 * 60_000 },
+      ),
     record: gateRuns.record,
     now: Date.now,
   };
@@ -392,6 +399,14 @@ export default async function plugin(bb: BbPluginApi) {
     loadRegistry: registryText,
     loadBoard: async (config) => fetchBoard(await linearApiKey(), config.teamKey),
     moveIssue: async (issueId, stateId) => moveIssue(await linearApiKey(), issueId, stateId),
+    latestReviewGate: gateRuns.latestReview,
+    async prHead(hostId, repo, pr) {
+      const { sha } = await hostClient.call("pr_head", { repo, pr }, { hostId, timeoutMs: 90_000 });
+      return sha;
+    },
+    async noteOnWorkpad(issueId, heading, line) {
+      return writeWorkpadNote(await linearApiKey(), issueId, heading, line);
+    },
     spawn: spawnThread,
     async threadStatus(threadId) {
       const thread = await bb.sdk.threads.get({ threadId }).catch(() => null);
@@ -666,6 +681,7 @@ export default async function plugin(bb: BbPluginApi) {
       decisions: [],
       maxAttempts: 2,
       autoPromote: false,
+      handOver: null,
       room: 0,
       promotable: 0,
       machines: [],
@@ -693,6 +709,7 @@ export default async function plugin(bb: BbPluginApi) {
       decisions: dispatches.decisions(20),
       maxAttempts: config.maxAttempts,
       autoPromote: config.autoPromote,
+      handOver: config.handOver ?? null,
       machines: config.machines,
       requirements: config.requirements,
       stalled: dispatches
@@ -866,13 +883,21 @@ export default async function plugin(bb: BbPluginApi) {
       await saveScheduler({ ...input, mode: "dry-run" });
       return { ok: true as const };
     },
-    async board_update({ focus, ...patch }) {
+    async board_update({ focus, handOver, ...patch }) {
       if (focus !== undefined) {
         if (focus === null) await bb.storage.kv.delete("focus");
         else await bb.storage.kv.set("focus", focus);
       }
-      if (Object.keys(patch).length > 0)
-        await saveScheduler({ ...(await requireScheduler()), ...patch });
+      if (handOver !== undefined || Object.keys(patch).length > 0) {
+        const { handOver: stored, ...current } = await requireScheduler();
+        // Undefined keeps what is stored; null switches the hand-over off.
+        const next = handOver === undefined ? stored : (handOver ?? undefined);
+        await saveScheduler({
+          ...current,
+          ...(next === undefined ? {} : { handOver: next }),
+          ...patch,
+        });
+      }
       changed();
       return { ok: true as const };
     },
@@ -1265,6 +1290,48 @@ export default async function plugin(bb: BbPluginApi) {
             return {
               exitCode: 0,
               stdout: `Promoted ${issue.identifier} to ${state}: ${issue.title}`,
+            };
+          },
+        }),
+        "hand-over": cliCommand({
+          summary:
+            "Set the states an ended run's issue moves between on the recorded review gate, or switch the hand-over off",
+          description:
+            "With the hand-over on, the board moves an ended run's issue from the review state to the approval state only when the review gate is recorded green on the pull request's current head. Without --review and --approval it shows the current setting.",
+          options: {
+            review: { type: "string", description: "Where a ready run leaves its issue" },
+            approval: { type: "string", description: "Where a green review gate sends it" },
+            off: { type: "boolean", description: "Switch the hand-over off" },
+          },
+          async run(input) {
+            const config = await requireScheduler().catch(cliFailure("board_unavailable"));
+            const { review, approval, off } = input.options;
+            if (off === true) {
+              const { handOver: _off, ...rest } = config;
+              await saveScheduler(rest).catch(cliFailure("invalid_config"));
+              return { exitCode: 0, stdout: "Hand-over is off" };
+            }
+            if (review === undefined && approval === undefined) {
+              return {
+                exitCode: 0,
+                stdout:
+                  config.handOver === undefined
+                    ? "Hand-over is off"
+                    : `Hand-over: ${config.handOver.reviewState} -> ${config.handOver.approvalState} on a green review gate`,
+              };
+            }
+            if (review === undefined || approval === undefined) {
+              throw new PluginCliError("give both --review and --approval", {
+                code: "missing_option",
+              });
+            }
+            await saveScheduler({
+              ...config,
+              handOver: { reviewState: review, approvalState: approval },
+            }).catch(cliFailure("invalid_config"));
+            return {
+              exitCode: 0,
+              stdout: `Hand-over: ${review} -> ${approval} on a green review gate`,
             };
           },
         }),

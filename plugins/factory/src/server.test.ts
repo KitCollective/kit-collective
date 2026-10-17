@@ -223,6 +223,52 @@ describe("session instructions", () => {
   });
 });
 
+describe("the gate tool", () => {
+  it("is selected for every thread, so a workflow worker can call it", async () => {
+    const { harness } = await load();
+    const metadata: Record<string, string>[] = [
+      {},
+      { standingAgent: "devops" },
+      { dispatch: "dsp_1" },
+    ];
+    for (const pluginMetadata of metadata) {
+      const configuration = await harness.behavior.resolveAgentConfiguration(
+        makePluginAgentConfigurationContext({ pluginMetadata }),
+      );
+      expect(JSON.stringify(configuration)).toContain("optio_gate");
+    }
+  });
+});
+
+describe("bb optio hand-over", () => {
+  it("sets, shows and switches off the states of the hand-over", async () => {
+    const { harness, rpc } = await load();
+    await rpc("board_setup", {
+      projectId: "proj_1",
+      teamKey: "ENG",
+      backlogState: "Icebox",
+      activeStates: ["Doing"],
+      blockedState: null,
+    });
+    const run = async (...args: string[]) =>
+      (await harness.behavior.runCli(["hand-over", ...args])).stdout;
+    expect(await run()).toBe("Hand-over is off");
+    expect(await run("--review", "Reviewing", "--approval", "Accepted")).toContain(
+      "Reviewing -> Accepted",
+    );
+    expect((await rpc("board_get", null)).handOver).toEqual({
+      reviewState: "Reviewing",
+      approvalState: "Accepted",
+    });
+    expect(await run()).toContain("Reviewing -> Accepted");
+    expect(
+      (await harness.behavior.runCli(["hand-over", "--review", "Reviewing"])).exitCode,
+    ).not.toBe(0);
+    expect(await run("--off")).toBe("Hand-over is off");
+    expect((await rpc("board_get", null)).handOver).toBeNull();
+  });
+});
+
 describe("the board", () => {
   it("is set up from the page in dry-run and edited without JSON", async () => {
     const { rpc, checkout } = await load();
@@ -273,6 +319,15 @@ describe("the board", () => {
     expect((await rpc("board_get", null)).error).toContain("no Linear API key");
     await rpc("board_update", { focus: null });
     expect((await rpc("board_get", null)).focus).toBeNull();
+    // The hand-over states are off until set, kept by other edits, and cleared with null.
+    expect((await rpc("board_get", null)).handOver).toBeNull();
+    const handOver = { reviewState: "In Review", approvalState: "Approval" };
+    await rpc("board_update", { handOver });
+    expect((await rpc("board_get", null)).handOver).toEqual(handOver);
+    await rpc("board_update", { maxAttempts: 2 });
+    expect((await rpc("board_get", null)).handOver).toEqual(handOver);
+    await rpc("board_update", { handOver: null });
+    expect((await rpc("board_get", null)).handOver).toBeNull();
     expect((await rpc("hosts_list", null)).hosts).toEqual([{ id: "host_1", name: "Mac" }]);
   });
 });

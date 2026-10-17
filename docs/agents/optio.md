@@ -42,6 +42,18 @@ The setup form keeps the operating settings only (backlog, active and blocked st
 
 In `dry-run` the scheduled tick still reads the registry and records what it would start (`mode` is `dry-run` on the row) and applies nothing. That is the evidence for a registry change: `bb optio board --json` and the page show the Loops and the plan.
 
+## The hand-over on the recorded review gate (KIT-364)
+
+The AFK developer ends a green run ready in `In Review` and writes no `Approval` itself (ADR-0062). The Board moves the issue to `Approval` when it closes the ended run, if the review gate `optio_gate` recorded is green on the pull request's current head. It is off until the states are set:
+
+```bash
+bb optio hand-over --review "In Review" --approval Approval
+bb optio hand-over            # shows the setting
+bb optio hand-over --off      # back to: an ended run in a working state is a stall
+```
+
+It needs `github.ownerRepo` and `agent.workpadHeading` in `factory.config.json` (both are there) and `gh` on the machines the gates run on. Evidence for a run: the dispatch row (`bb optio dispatches`) ends `handed-over` with outcome `Approval`, `bb optio gates` shows the `review` record, and the Linear history shows the move by the Linear API key's user. With `flow.autoLand.enabled` on, a run takes the auto-land path and never reaches this hand-over.
+
 ## After a merge that touches `plugins/factory/`
 
 ```bash

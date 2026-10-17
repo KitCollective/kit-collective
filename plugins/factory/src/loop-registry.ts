@@ -3,6 +3,7 @@
 // many runs it may have live. The Board reads it from the project checkout on
 // every tick and refuses one that does not parse.
 import { z } from "zod";
+import { REPO_SLUG } from "./host-contract.js";
 
 const machineId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/);
 
@@ -48,17 +49,16 @@ const loopSchema = z
 const registrySchema = z
   .object({
     loops: z.array(loopSchema).min(1),
-    github: z
-      .object({
-        ownerRepo: z
-          .string()
-          .regex(/^[\w.-]+\/[\w.-]+$/)
-          .optional(),
-      })
-      .passthrough()
-      .optional(),
     flow: z
       .object({ maxRunsPerDay: z.number().int().min(1).optional() })
+      .passthrough()
+      .optional(),
+    github: z
+      .object({ ownerRepo: z.string().regex(REPO_SLUG).optional() })
+      .passthrough()
+      .optional(),
+    agent: z
+      .object({ workpadHeading: z.string().min(1).optional() })
       .passthrough()
       .optional(),
   })
@@ -99,6 +99,8 @@ export type IssueLoop = Loop & { trigger: IssueTrigger };
 
 export interface Registry {
   loops: Loop[];
+  /** `agent.workpadHeading`: what the single workpad comment starts with, or null. */
+  workpadHeading: string | null;
   /** `flow.maxRunsPerDay`: starts of one issue in 24 h, or null when the config sets none. */
   maxRunsPerDay: number | null;
   /** `github.ownerRepo` (`owner/name`), which a run's PR number links into; null when unset. */
@@ -133,6 +135,7 @@ export function parseRegistry(text: string): ParsedRegistry {
       loops: result.data.loops,
       maxRunsPerDay: result.data.flow?.maxRunsPerDay ?? null,
       repo: result.data.github?.ownerRepo ?? null,
+      workpadHeading: result.data.agent?.workpadHeading ?? null,
     },
   };
 }
