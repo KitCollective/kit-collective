@@ -31,15 +31,9 @@ describe("loadOwnJersey", () => {
     expect(outcome).toEqual({ kind: "not-found" });
   });
 
-  it("returns not-found when the API answers 404", async () => {
-    const outcome = await loadOwnJersey(async () => {
-      throw statusError(404);
-    }, "jersey-2");
-
-    expect(outcome).toEqual({ kind: "not-found" });
-  });
-
-  it.each([401, 500, 503])("returns error when the API answers %i", async (status) => {
+  // The screen fetches the whole own list, so a 404 there is a failed load (for example
+  // a data-integrity failure in the list), never proof that this one jersey is gone.
+  it.each([401, 404, 500, 503])("returns error when the list answers %i", async (status) => {
     const outcome = await loadOwnJersey(async () => {
       throw statusError(status);
     }, "jersey-2");

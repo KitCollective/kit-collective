@@ -7,11 +7,6 @@ export type OwnJerseyLoadOutcome =
 
 type FetchJerseys = () => Promise<{ jerseys: CollectionJersey[] }>;
 
-// Duck-typed so this module never imports the API client (and its Expo config).
-function isNotFoundError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "status" in error && error.status === 404;
-}
-
 export async function loadOwnJersey(
   fetchJerseys: FetchJerseys,
   jerseyId: string,
@@ -20,7 +15,9 @@ export async function loadOwnJersey(
     const response = await fetchJerseys();
     const jersey = response.jerseys.find((item) => item.id === jerseyId);
     return jersey ? { kind: "found", jersey } : { kind: "not-found" };
-  } catch (error) {
-    return isNotFoundError(error) ? { kind: "not-found" } : { kind: "error" };
+  } catch {
+    // The fetch is the whole own list, so any failure (a 404 included) is a failed load.
+    // Only a successful list without the jersey proves it is gone.
+    return { kind: "error" };
   }
 }

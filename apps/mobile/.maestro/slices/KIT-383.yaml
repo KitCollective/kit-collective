@@ -1,8 +1,9 @@
 # Device flow for KIT-383: the own-jersey detail tells a failed load from a missing jersey (ADR-0049).
 #
-# The local API cannot be made to fail mid-flow, so the load-error state (AC 1, AC 2) has no step:
-# its logic is covered by tests/jersey-detail-load.test.ts. This flow shows the two answers the
-# screen can be given: a jersey that loads, and one that is absent from the list.
+# Steps: a jersey that loads, one absent from the list ("Trøjen findes ikke"), and a jersey that
+# exists but whose load fails. The failure is staged by resetting the test data mid-flow: the reset
+# deletes the Collector's sessions, so the app's next list fetch answers 401 while jersey 0101 is
+# seeded again. Retry and the full error matrix are covered by tests/jersey-detail-load.test.ts.
 # design-sections: Banner, Own UserJersey detail
 appId: app.kitcollective.mobile
 name: kit-383
@@ -39,4 +40,25 @@ name: kit-383
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: kc__kit-383__02-not-found
+# AC 1: the jersey exists, but the load fails (401 after the reset) -> load error, not "Trøjen findes ikke".
+- runScript:
+    file: ../scripts/reset-test-data.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+- openLink: kitcollective:///collection/e2e00000-0000-4000-8000-000000000101
+- tapOn:
+    text: "Åbn|Open"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-load-error
+    timeout: 20000
+- assertVisible:
+    text: "Prøv igen"
+- assertNotVisible:
+    id: jersey-detail-not-found
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-383__03-load-error
 - stopRecording
