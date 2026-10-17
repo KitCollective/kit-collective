@@ -34,6 +34,9 @@
   const runModel = process.env.RUN_MODEL ?? "claude-sonnet-5-5";
   const maxLiveRuns = Number(process.env.MAX_LIVE_RUNS ?? 3);
   const liveWindowMinutes = Number(process.env.LIVE_WINDOW_MINUTES ?? 180);
+  // Sidebar sections (bb thread section list): Max's daily thread, and one thread per issue.
+  const maxSection = process.env.MAX_SECTION ?? "sec_745wej35tx";
+  const issueSection = process.env.ISSUE_SECTION ?? "sec_qzij88jqc5";
   const landingStuckMinutes = Number(process.env.LANDING_STUCK_MINUTES ?? 30);
   const runStuckMinutes = Number(process.env.RUN_STUCK_MINUTES ?? 120);
   const maxStartsPerDay = Number(process.env.MAX_STARTS_PER_DAY ?? 3);
@@ -333,9 +336,8 @@
   // One Max at a time: while a Max thread is still working, a second one would triage and start
   // the same issues (2026-10-15: the 22:00 and 22:05 ticks both triaged the Triage pool). Skip the
   // tick without saving state, so the next tick after that thread goes idle still sees the work.
-  const maxBusy = threadList.some(
-    (thread) => thread.status === "active" && /^Max \d{4}-\d{2}-\d{2} /.test(thread.title ?? ""),
-  );
+  const isMaxThread = (thread) => /^Max (· )?\d{4}-\d{2}-\d{2}/.test(thread.title ?? "");
+  const maxBusy = threadList.some((thread) => thread.status === "active" && isMaxThread(thread));
   if (maxBusy) {
     if (dryRun)
       process.stdout.write(
@@ -379,9 +381,10 @@ ${JSON.stringify({ counts, eligibleInClaimOrder: eligible, triage: actionable.tr
 1. Run \`bash scripts/sync-development.sh\`. If it stops, note why and continue.
 2. Count live runs: \`bb workflows list\` entries with name afk-developer and status running. At most ${maxLiveRuns} may be live at once; an issue you cannot start for that reason stays untouched in To-do for a later tick.
 3. Walk eligibleInClaimOrder in order. For each, re-read it with \`LINEAR_ACTOR=max node scripts/linear.mjs issue <KIT-n>\` and drop it if it is no longer To-do + ready-for-agent + unblocked + not signal-up. If its write-scope globs overlap an issue that is In Progress (or one you started this tick), skip it, leave it as it is and comment the overlapping identifier and globs. Test globs under apps/ or packages/ (a /tests/ folder or a *.test.* file) never count as overlap: every slice may write tests (ADR-0064), and two runs on one test file meet as a merge conflict. A comment you wrote earlier about an overlap that was only test globs no longer holds: start the issue. Issues without a write-scope line are never skipped for overlap.
-4. Start each remaining issue, one thread per issue. First look for an open PR of the issue: \`gh pr list --state open --search "<KIT-n> in:title" --json number,title\`, keeping only a PR whose title starts with "<KIT-n>:". If there is one, the run must be a resume (an issue sent back to To-do after review, a merge conflict or a stopped run keeps its PR, and a fresh run is refused with "use --resume"): use the args \`{"issue":"<KIT-n>","resume":true,"autoLand":true}\` below instead. With no open PR, use them as written.
-   \`bb thread spawn --project ${project} --machine ${machine} --new-environment worktree --base-branch origin/development --provider claude-code --model ${runModel} --title "<KIT-n>" --json --prompt-file -\`
-   with this prompt on stdin (quoted heredoc, the key filled in): "Run \`bb workflows validate --file .bb/workflows/afk-developer.js\`. If it passes, run \`bb workflows run --file .bb/workflows/afk-developer.js --args '{"issue":"<KIT-n>","autoLand":true}'\` (with \`"resume":true\` added when the issue has an open PR) exactly once and state the run id. When the run's result arrives, report issue, status, stoppedAt, PR number and note in one short message. Do nothing else: no code edits, no Linear changes, no second run, never Merging, never a merge. Do not set LINEAR_ACTOR: the AFK developer run keeps LINEAR_API_KEY."
+4. Start each remaining issue. An issue has one thread for its whole life (plan, build, review, fix, land): never a second one while the first exists. First look for an open PR of the issue: \`gh pr list --state open --search "<KIT-n> in:title" --json number,title,headRefName\`, keeping only a PR whose title starts with "<KIT-n>:". If there is one, the run must be a resume (an issue sent back to To-do after review, a merge conflict or a stopped run keeps its PR, and a fresh run is refused with "use --resume"): use the args \`{"issue":"<KIT-n>","resume":true,"autoLand":true}\` below instead. With no open PR, use them as written.
+   Find the issue's thread: the \`thr_…\` id in the open PR's branch name, else the newest thread in \`bb thread list --project ${project} --json\` titled exactly "<KIT-n>" that is not archived. If there is one: when \`bb thread show <id>\` says its environment is gone, run \`bb thread restore-environment <id>\` (if that fails, spawn as below); then \`bb thread update <id> --section ${issueSection}\` and send the prompt below to it with \`bb thread tell <id> --mode auto --message-file -\`. Only when the issue has no thread at all, spawn one:
+   \`bb thread spawn --project ${project} --machine ${machine} --new-environment worktree --base-branch origin/development --provider claude-code --model ${runModel} --title "<KIT-n>" --section ${issueSection} --json --prompt-file -\`
+   Either way the prompt is (quoted heredoc, the key filled in): "First run \`git fetch -q origin development && git merge -q --ff-only origin/development || true\` so a reused worktree starts from the lane. Then run \`bb workflows validate --file .bb/workflows/afk-developer.js\`. If it passes, run \`bb workflows run --file .bb/workflows/afk-developer.js --args '{"issue":"<KIT-n>","autoLand":true}'\` (with \`"resume":true\` added when the issue has an open PR) exactly once and state the run id. When the run's result arrives, report issue, status, stoppedAt, PR number and note in one short message. Do nothing else: no code edits, no Linear changes, no second run, never Merging, never a merge. Do not set LINEAR_ACTOR: the AFK developer run keeps LINEAR_API_KEY."
    Do not move the issue yourself: the run does its session check and moves it to In Progress, so a refused run leaves no orphan. Wait for the thread to go idle (\`bb thread wait <id>\`, then \`bb thread output <id>\`), and once it reports a run id write one comment on the issue: claimed, why it was eligible, the run id. If the thread reports a refusal or no run id, write no comment and report it.
 5. Triage, for each issue in triage (oldest first), after reading it in full with \`LINEAR_ACTOR=max node scripts/linear.mjs issue <KIT-n>\` and its comments: give one verdict as your charter says (shape and promote a clear signal-up, at most 10 per day counted from your own "Max: promoted" comments of the last 24 hours; move a proposal to Backlog with your recommendation; cancel a duplicate or non-issue with wontfix and the reason; move anything unclear to Backlog with needs-info and one question). Check for duplicates among the other triage issues and the open board before you shape anything. A promoted ticket gets the issue template (What to build, Acceptance criteria with one checkbox per clause, Blocked by, a write-scope line of plain comma-separated globs with no backticks) and the project of the issue it came from (\`LINEAR_ACTOR=max node scripts/linear.mjs project <KIT-n> <source KIT-m>\`).
 6. Board hygiene. An issue in Blocked whose blockedBy list is empty while hasBlockerRelation is true: move it to To-do with one comment naming the resolved blockers. An issue that is To-do + ready-for-agent with the Agent field set: comment that the factory will not claim it until Agent is "No agent". Report, without changing anything: To-do issues carrying needs-info or ready-for-human; issues in Approval or Merging; issues in In Progress, In Review or Post-Merge not updated for 3 days or more.
@@ -398,38 +401,73 @@ Never: set In Progress, In Review, Approval, Merging or Done yourself; merge oth
 
 End with a short status report in Danish: runs started (issue, thread, run id), landings resumed (issue, PR, the last verdict line), triage verdicts (one line each: issue, up, down or question, why), hygiene moves, and what waits for Nicklas. If you started nothing, changed nothing and nothing needs attention, one line is enough.`;
 
-  const title = `Max ${now.slice(0, 16).replace("T", " ")}`;
+  // One Max thread per day: each wake is a new message in it, after its model context is cleared, so
+  // the day reads as one log in the sidebar and no tick carries the last one's context (2026-10-17: a
+  // thread per wake filled the sidebar with 60 Max threads). Memory comes from \`bb optio brief max\`.
+  const title = `Max · ${now.slice(0, 10)}`;
+  const today = threadList.find(
+    (thread) => thread.title === title && !thread.archivedAt && thread.status !== "active",
+  );
   if (dryRun) {
     process.stdout.write(
-      `DRY RUN: board changed (${JSON.stringify(counts)}), eligible: ${eligible.join(", ") || "none"}, landing: ${landing.map((l) => `${l.issue} ${l.step} #${l.pr}`).join(", ") || "none"}; would spawn "${title}" in ${environment} with a ${prompt.length}-character prompt\n`,
+      `DRY RUN: board changed (${JSON.stringify(counts)}), eligible: ${eligible.join(", ") || "none"}, landing: ${landing.map((l) => `${l.issue} ${l.step} #${l.pr}`).join(", ") || "none"}; ${today ? `would clear and tell ${today.id} ("${title}")` : `would spawn "${title}" in ${environment}`} with a ${prompt.length}-character prompt\n`,
     );
     return;
   }
-  const spawned = execFileSync(
-    bb,
-    [
-      "thread",
-      "spawn",
-      "--project",
-      project,
-      "--environment",
-      environment,
-      "--provider",
-      "claude-code",
-      "--model",
-      dispatchModel,
-      "--reasoning-level",
-      "medium",
-      "--permission-mode",
-      "auto",
-      "--title",
-      title,
-      "--prompt-file",
-      "-",
-      "--json",
-    ],
-    { input: prompt, encoding: "utf8" },
-  );
+  let spawned;
+  if (today) {
+    execFileSync(bb, ["thread", "clear", today.id], {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    execFileSync(
+      bb,
+      [
+        "thread",
+        "tell",
+        today.id,
+        "--mode",
+        "auto",
+        "--model",
+        dispatchModel,
+        "--reasoning-level",
+        "medium",
+        "--permission-mode",
+        "auto",
+        "--message-file",
+        "-",
+      ],
+      { input: prompt, encoding: "utf8" },
+    );
+    spawned = today.id;
+  } else
+    spawned = execFileSync(
+      bb,
+      [
+        "thread",
+        "spawn",
+        "--project",
+        project,
+        "--environment",
+        environment,
+        "--provider",
+        "claude-code",
+        "--model",
+        dispatchModel,
+        "--reasoning-level",
+        "medium",
+        "--permission-mode",
+        "auto",
+        "--title",
+        title,
+        "--section",
+        maxSection,
+        "--prompt-file",
+        "-",
+        "--json",
+      ],
+      { input: prompt, encoding: "utf8" },
+    );
   fs.writeFileSync(statePath, `${fingerprint}\n`);
   const id = /thr_[a-z0-9]+/.exec(spawned)?.[0] ?? "unknown thread";
   process.stdout.write(
