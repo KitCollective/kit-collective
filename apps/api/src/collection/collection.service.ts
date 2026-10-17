@@ -350,22 +350,31 @@ export class CollectionService {
       const nationalTeamLabel = row.nationalTeamId
         ? (nationalTeamLabels.get(row.nationalTeamId) ?? null)
         : null;
-      if (row.clubId && !clubLabel) {
-        throw new NotFoundException(`Club label missing for jersey ${row.id}`);
-      }
-      if (row.nationalTeamId && !nationalTeamLabel) {
-        throw new NotFoundException(`National team label missing for jersey ${row.id}`);
+      // KIT-384: same class as the photo skip above; one missing label row must not 404 the whole list.
+      const missingLabel =
+        row.clubId && !clubLabel
+          ? "club"
+          : row.nationalTeamId && !nationalTeamLabel
+            ? "national team"
+            : null;
+      if (missingLabel) {
+        this.logger.warn(
+          `Skipping UserJersey ${row.id} in own list: ${missingLabel} label missing`,
+        );
+        continue;
       }
 
       const countryLabel = countryLabels.get(row.countryId);
       if (!countryLabel) {
-        throw new NotFoundException(`Country label missing for jersey ${row.id}`);
+        this.logger.warn(`Skipping UserJersey ${row.id} in own list: country label missing`);
+        continue;
       }
 
       const leagueId = row.leagueId;
       const leagueLabel = leagueId ? (leagueLabels.get(leagueId) ?? null) : null;
       if (leagueId && !leagueLabel) {
-        throw new NotFoundException(`League label missing for jersey ${row.id}`);
+        this.logger.warn(`Skipping UserJersey ${row.id} in own list: league label missing`);
+        continue;
       }
 
       const playerFields = playerFieldsByJersey.get(row.id);
