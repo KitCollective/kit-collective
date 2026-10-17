@@ -208,7 +208,7 @@ describe("Confirm chrome", () => {
     expect(grouping).toContain("if (!accessToken || !sessionId)");
     expect(grouping).toContain("ensureSessionPhotoIds");
     expect(grouping).toContain("buildGroupingSuggestRequest");
-    expect(grouping).toContain("Promise.allSettled");
+    expect(grouping).toContain("settleWithConcurrency");
     expect(grouping).toContain("closeGroupingRun");
     expect(grouping).toContain('applyGroupingClose("timeout"');
     expect(grouping).not.toContain("confirm.grouping");

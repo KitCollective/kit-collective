@@ -13,6 +13,7 @@ import {
   parkedRow,
   pendingSkeletonRows,
   pendingUploadFailures,
+  settleWithConcurrency,
   shouldOpenBulkOverview,
   shouldOpenUnassigned,
   splitPreparedPhotos,
@@ -435,6 +436,30 @@ describe("upload failure row", () => {
       photos: ["a", "c"],
       failedUris: [uris[1]],
     });
+  });
+
+  it("prepares a big pile a few photos at a time, keeps the order and lets one failure through", async () => {
+    let running = 0;
+    let peak = 0;
+    const results = await settleWithConcurrency(
+      Array.from({ length: 16 }, (_, index) => index),
+      4,
+      async (index) => {
+        running += 1;
+        peak = Math.max(peak, running);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        running -= 1;
+        if (index === 5) {
+          throw new Error("heic");
+        }
+        return index * 2;
+      },
+    );
+    expect(peak).toBe(4);
+    expect(results).toHaveLength(16);
+    expect(results[4]).toEqual({ status: "fulfilled", value: 8 });
+    expect(results[5]?.status).toBe("rejected");
+    expect(results[15]).toEqual({ status: "fulfilled", value: 30 });
   });
 
   it("only counts failed photos that are still loose in the session", () => {

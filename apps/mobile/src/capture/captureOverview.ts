@@ -283,6 +283,33 @@ export function uploadFailureRow(
   };
 }
 
+/**
+ * Runs `task` over `items` with at most `limit` in flight, and settles every one like
+ * `Promise.allSettled` (same order). A pile of sixteen photos read at once stalls the image
+ * manipulator on a slow device, so the grouping prepare goes a few at a time.
+ */
+export async function settleWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      try {
+        results[index] = { status: "fulfilled", value: await task(items[index] as T) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 /** Splits a prepare run into what can be sent and the URIs whose prepare was rejected. */
 export function splitPreparedPhotos<T>(
   uris: string[],
