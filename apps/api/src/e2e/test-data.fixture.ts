@@ -6,9 +6,13 @@ import type { JerseyCondition, JerseySize, KitType, PhotoRole } from "@kit/domai
  */
 export const TEST_COLLECTOR_ID = "e2e00000-0000-4000-8000-000000000001";
 export const TEST_PEER_ID = "e2e00000-0000-4000-8000-000000000002";
+/** The second bidder (KIT-287). Never signs in: a Bud on a jersey needs a second Collector. */
+export const TEST_SECOND_PEER_ID = "e2e00000-0000-4000-8000-000000000003";
 
 export const TEST_COLLECTOR_HANDLE = "e2e_collector";
 export const TEST_PEER_HANDLE = "e2e_peer";
+export const TEST_SECOND_PEER_HANDLE = "freja_e2e";
+export const TEST_SECOND_PEER_EMAIL = "e2e-second-peer@test.kitcollective";
 
 /** Catalog sides the fixture needs, matched on a `catalog_label` label or alias. */
 export const TEST_DATA_CATALOG = {
@@ -137,6 +141,34 @@ export const TEST_UNANSWERED_BID = {
   ownerId: TEST_COLLECTOR_ID,
   amountDkk: 250,
 };
+
+/**
+ * Two different bidders each hold a pending Bud on the Test Collector's Brøndby IF jersey
+ * (KIT-287): the own jersey detail's bid row has several bidders there, so it opens Indbakke
+ * filtered to the jersey. FC København keeps its one bidder. The second bidder's Bud is the
+ * newer one, so the bidder initials read F then E.
+ */
+export const TEST_TWO_BIDDER_BIDS = [
+  {
+    // In the existing Conversation of the Test Collector and the test peer.
+    conversationId: TEST_UNANSWERED_BID.conversationId,
+    messageId: "e2e00000-0000-4000-8000-000000000503",
+    jerseyId: TEST_JERSEYS[1]!.id,
+    bidderId: TEST_PEER_ID,
+    ownerId: TEST_COLLECTOR_ID,
+    amountDkk: 300,
+    minutesAgo: 120,
+  },
+  {
+    conversationId: "e2e00000-0000-4000-8000-000000000504",
+    messageId: "e2e00000-0000-4000-8000-000000000505",
+    jerseyId: TEST_JERSEYS[1]!.id,
+    bidderId: TEST_SECOND_PEER_ID,
+    ownerId: TEST_COLLECTOR_ID,
+    amountDkk: 350,
+    minutesAgo: 60,
+  },
+];
 
 /** What Vision suggests to the test Collector, every run. */
 export const FIXED_VISION_SUGGESTION: { side: FixtureSide; type: KitType } = {

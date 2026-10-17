@@ -34,7 +34,11 @@ import {
   TEST_JERSEYS,
   TEST_PEER_HANDLE,
   TEST_PEER_ID,
+  TEST_SECOND_PEER_EMAIL,
+  TEST_SECOND_PEER_HANDLE,
+  TEST_SECOND_PEER_ID,
   TEST_SHORTCUT,
+  TEST_TWO_BIDDER_BIDS,
   TEST_UNANSWERED_BID,
   TEST_WISHLIST_ENTRY,
 } from "./test-data.fixture.js";
@@ -44,7 +48,7 @@ export type TestDataCredentials = {
   peer: { email: string; password: string };
 };
 
-const TEST_IDS = [TEST_COLLECTOR_ID, TEST_PEER_ID];
+const TEST_IDS = [TEST_COLLECTOR_ID, TEST_PEER_ID, TEST_SECOND_PEER_ID];
 const VARIANT_FILES = ["grid.jpg", "strip.jpg", "lightbox.jpg", "original"];
 
 function sideKey(side: FixtureSide): string {
@@ -78,6 +82,7 @@ async function assertIdentityFree(db: Db, credentials: TestDataCredentials): Pro
   const wanted = [
     { id: TEST_COLLECTOR_ID, email: credentials.collector.email, handle: TEST_COLLECTOR_HANDLE },
     { id: TEST_PEER_ID, email: credentials.peer.email, handle: TEST_PEER_HANDLE },
+    { id: TEST_SECOND_PEER_ID, email: TEST_SECOND_PEER_EMAIL, handle: TEST_SECOND_PEER_HANDLE },
   ];
   for (const { id, email, handle } of wanted) {
     const [taken] = await db
@@ -104,9 +109,9 @@ function variantKeys(objectKey: string): string[] {
 }
 
 /**
- * Puts the two test Collectors into the known state the device flows start
+ * Puts the test Collectors into the known state the device flows start
  * from. Idempotent. Reads the catalog; writes only rows owned by, or pointing
- * at, the two test Collectors.
+ * at, the test Collectors.
  */
 export async function applyTestData(input: {
   db: Db;
@@ -123,6 +128,13 @@ export async function applyTestData(input: {
   const accounts = [
     { id: TEST_COLLECTOR_ID, handle: TEST_COLLECTOR_HANDLE, ...credentials.collector },
     { id: TEST_PEER_ID, handle: TEST_PEER_HANDLE, ...credentials.peer },
+    // Never signs in; borrows the peer's password so the run needs no further secret.
+    {
+      id: TEST_SECOND_PEER_ID,
+      handle: TEST_SECOND_PEER_HANDLE,
+      email: TEST_SECOND_PEER_EMAIL,
+      password: credentials.peer.password,
+    },
   ];
   const hashed = await Promise.all(
     accounts.map(async (account) => ({
@@ -240,40 +252,50 @@ export async function applyTestData(input: {
       );
     }
 
-    const bid = TEST_UNANSWERED_BID;
-    // The conversation stores its two Collectors in id order (lower, upper).
-    const [lowerCollectorId, upperCollectorId] =
-      bid.ownerId < bid.bidderId ? [bid.ownerId, bid.bidderId] : [bid.bidderId, bid.ownerId];
     // One Conversation per pair (KIT-295): the Bud, not the Conversation, carries the UserJersey
-    // and its snapshot.
-    const bidJersey = TEST_JERSEYS.find((jersey) => jersey.id === bid.jerseyId);
-    if (!bidJersey) {
-      throw new Error("TEST_UNANSWERED_BID names a jersey that is not in TEST_JERSEYS");
+    // and its snapshot. The conversation stores its two Collectors in id order (lower, upper).
+    const seededAt = Date.now();
+    const createdConversations = new Set<string>();
+    const bids = [{ ...TEST_UNANSWERED_BID, minutesAgo: null }, ...TEST_TWO_BIDDER_BIDS];
+    for (const bid of bids) {
+      const bidJersey = TEST_JERSEYS.find((jersey) => jersey.id === bid.jerseyId);
+      if (!bidJersey) {
+        throw new Error(`Bud ${bid.messageId} names a jersey that is not in TEST_JERSEYS`);
+      }
+      const bidSide = sideOf(bidJersey.side);
+      if (!createdConversations.has(bid.conversationId)) {
+        createdConversations.add(bid.conversationId);
+        const [lowerCollectorId, upperCollectorId] =
+          bid.ownerId < bid.bidderId ? [bid.ownerId, bid.bidderId] : [bid.bidderId, bid.ownerId];
+        await tx.insert(conversation).values({
+          id: bid.conversationId,
+          lowerCollectorId,
+          upperCollectorId,
+        });
+        await tx.insert(conversationParticipant).values([
+          { conversationId: bid.conversationId, userId: bid.ownerId },
+          { conversationId: bid.conversationId, userId: bid.bidderId },
+        ]);
+      }
+      await tx.insert(conversationMessage).values({
+        id: bid.messageId,
+        conversationId: bid.conversationId,
+        senderId: bid.bidderId,
+        kind: "bid",
+        bidAmountDkk: bid.amountDkk,
+        bidStatus: "pending",
+        userJerseyId: bidJersey.id,
+        jerseyClubId: bidSide.clubId,
+        jerseyNationalTeamId: bidSide.nationalTeamId,
+        jerseySeasonId: bidSide.seasonId,
+        jerseyType: bidJersey.type,
+        jerseySize: bidJersey.size,
+        // A fixed order between Buds on one jersey; the first Bud keeps the database default.
+        ...(bid.minutesAgo === null
+          ? {}
+          : { createdAt: new Date(seededAt - bid.minutesAgo * 60_000) }),
+      });
     }
-    const bidSide = sideOf(bidJersey.side);
-    await tx.insert(conversation).values({
-      id: bid.conversationId,
-      lowerCollectorId,
-      upperCollectorId,
-    });
-    await tx.insert(conversationParticipant).values([
-      { conversationId: bid.conversationId, userId: bid.ownerId },
-      { conversationId: bid.conversationId, userId: bid.bidderId },
-    ]);
-    await tx.insert(conversationMessage).values({
-      id: bid.messageId,
-      conversationId: bid.conversationId,
-      senderId: bid.bidderId,
-      kind: "bid",
-      bidAmountDkk: bid.amountDkk,
-      bidStatus: "pending",
-      userJerseyId: bidJersey.id,
-      jerseyClubId: bidSide.clubId,
-      jerseyNationalTeamId: bidSide.nationalTeamId,
-      jerseySeasonId: bidSide.seasonId,
-      jerseyType: bidJersey.type,
-      jerseySize: bidJersey.size,
-    });
 
     const wish = sideOf(TEST_WISHLIST_ENTRY.side);
     await tx.insert(wishlistEntry).values({
@@ -294,6 +316,7 @@ export async function applyTestData(input: {
       { userId: TEST_COLLECTOR_ID, source: "comp" as const, expires: TEST_COMP_EXPIRES },
       // No live Entitlement and a spent trial: this Collector meets the paywall Sheet.
       { userId: TEST_PEER_ID, source: null, expires: null },
+      { userId: TEST_SECOND_PEER_ID, source: null, expires: null },
     ];
     for (const row of entitlements) {
       const state = { source: row.source, expires: row.expires, trialUsed: true };

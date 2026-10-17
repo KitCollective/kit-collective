@@ -7,6 +7,8 @@ export const collectionActivityItemSchema = z
   .object({
     id: z.string().uuid(),
     conversationId: z.string().uuid(),
+    /** The UserJersey the bid is about; null once it is deleted. Indbakke filters on it. */
+    userJerseyId: z.string().uuid().nullable(),
     title: z.string().min(1),
     kitLine: z.string().min(1),
     amountDkk: z.number().int().min(1),
