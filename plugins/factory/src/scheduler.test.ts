@@ -1,7 +1,13 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { planBoard, scopesOverlap } from "./board.js";
-import { createDispatchStore, DISPATCH_MIGRATIONS, LOOP_MIGRATIONS } from "./dispatch-store.js";
+import {
+  createDispatchStore,
+  DISPATCH_MIGRATIONS,
+  LOOP_MIGRATIONS,
+  RUN_MIGRATIONS,
+} from "./dispatch-store.js";
+import { createGateStore, GATE_MIGRATIONS, type GateRun } from "./gate-store.js";
 import { type Board, type BoardIssue, fetchBoard, parseWriteScope } from "./linear-api.js";
 import { parseRegistry, type Registry } from "./loop-registry.js";
 import { createScheduler } from "./scheduler.js";
@@ -52,8 +58,11 @@ const issueLoop = {
 };
 
 /** The registry text a project checkout would hold. */
-const registryText = (loops: Record<string, unknown>[] = [issueLoop], flow: unknown = undefined) =>
-  JSON.stringify({ loops, flow });
+const registryText = (
+  loops: Record<string, unknown>[] = [issueLoop],
+  flow: unknown = undefined,
+  extra: Record<string, unknown> = {},
+) => JSON.stringify({ loops, flow, ...extra });
 
 function registry(loops?: Record<string, unknown>[], flow?: unknown): Registry {
   const parsed = parseRegistry(registryText(loops, flow));
@@ -78,6 +87,7 @@ function issue(identifier: string, overrides: Partial<BoardIssue> = {}): BoardIs
     project: null,
     blockedBy: [],
     writeScope: [],
+    pullRequest: null,
     ...overrides,
   };
 }
@@ -427,7 +437,13 @@ describe("planBoard", () => {
 
 function setup(board: Board) {
   const db = new Database(":memory:");
-  for (const statement of [...DISPATCH_MIGRATIONS, ...LOOP_MIGRATIONS]) db.exec(statement);
+  for (const statement of [
+    ...DISPATCH_MIGRATIONS,
+    ...LOOP_MIGRATIONS,
+    ...GATE_MIGRATIONS,
+    ...RUN_MIGRATIONS,
+  ])
+    db.exec(statement);
   const store = createDispatchStore(db);
   const state: {
     clock: number;
@@ -440,7 +456,12 @@ function setup(board: Board) {
     lastRefill: number | null;
     workflowActive: boolean;
     threadStatus: string | null;
+    seen: { runId: string | null; step: string | null; prNumber: number | null };
     board: Board;
+    reviewGate: GateRun | null;
+    head: string | Error;
+    headReads: string[];
+    workpad: string[] | null;
   } = {
     clock: 1_000_000,
     spawned: [],
@@ -452,7 +473,12 @@ function setup(board: Board) {
     lastRefill: null,
     workflowActive: true,
     threadStatus: "idle",
+    seen: { runId: null, step: null, prNumber: null },
     board,
+    reviewGate: null,
+    head: "aaaa1111",
+    headReads: [],
+    workpad: [],
   };
   const scheduler = createScheduler({
     store,
@@ -471,7 +497,19 @@ function setup(board: Board) {
     workflowRuns: async () => ({
       active: state.workflowActive,
       last: state.workflowActive ? null : 'workflow run wf_1 succeeded in phase "Review gate"',
+      ...state.seen,
     }),
+    latestReviewGate: () => state.reviewGate,
+    async prHead(hostId, repo, pr) {
+      state.headReads.push(`${hostId} ${repo} #${pr}`);
+      if (state.head instanceof Error) throw state.head;
+      return state.head;
+    },
+    async noteOnWorkpad(_issueId, heading, line) {
+      if (state.workpad === null) return false;
+      state.workpad.push(`${heading} | ${line}`);
+      return true;
+    },
     notify: async (text) => void state.notes.push(text),
     getFocus: async () => null,
     promoteIssue: async (promoted, stateId, comment, label) =>
@@ -483,8 +521,159 @@ function setup(board: Board) {
     now: () => state.clock,
     log: () => {},
   });
-  return { scheduler, store, state };
+  return { scheduler, store, state, db };
 }
+
+describe("the hand-over on the recorded review gate", () => {
+  const states = { Ready: "state-todo", Accepted: "state-accepted", Waiting: "state-waiting" };
+  const handOver = { reviewState: "Reviewing", approvalState: "Accepted" };
+  const extra = { github: { ownerRepo: "acme/shop" }, agent: { workpadHeading: "## Workpad" } };
+  const gate = (over: Partial<GateRun> = {}): GateRun => ({
+    id: 1,
+    at: 1_000_500,
+    threadId: "thr_worker",
+    gate: "review",
+    pr: 12,
+    issue: "ENG-1",
+    outcome: "ran",
+    exitCode: 0,
+    verdictLine: "review gate open",
+    sha: "aaaa1111",
+    hostId: "host_harness",
+    reason: null,
+    ...over,
+  });
+
+  /** A run that ended with its issue left in Reviewing. */
+  async function ended(over: Partial<ReturnType<typeof setup>["state"]> = {}) {
+    const made = setup({ states, issues: [issue("ENG-1")] });
+    made.state.registryText = registryText([issueLoop], undefined, extra);
+    Object.assign(made.state, over);
+    await made.scheduler.tick(config({ handOver }), true);
+    made.state.clock += 10 * 60_000;
+    made.state.workflowActive = false;
+    made.state.board = { states, issues: [issue("ENG-1", { state: "Reviewing" })] };
+    const result = await made.scheduler.tick(config({ handOver }), true);
+    return { ...made, result };
+  }
+
+  it("moves the issue to the approval state only when the gate is green on the PR's current head", async () => {
+    const { state, store, result } = await ended({ reviewGate: gate() });
+    expect(state.moved).toEqual(["id-ENG-1->state-accepted"]);
+    expect(state.headReads).toEqual(["host_harness acme/shop #12"]);
+    expect(result.stalled).toHaveLength(0);
+    expect(store.latest("ENG-1")).toMatchObject({ status: "handed-over", outcome: "Accepted" });
+    expect(state.notes).toHaveLength(0);
+    expect(state.workpad).toEqual([]);
+  });
+
+  it("leaves the issue in review and writes why when the head moved after the green gate", async () => {
+    const { state, store, result } = await ended({ reviewGate: gate(), head: "bbbb2222" });
+    expect(state.moved).toEqual([]);
+    expect(result.stalled.map((dispatch) => dispatch.issue)).toEqual(["ENG-1"]);
+    expect(store.latest("ENG-1")).toMatchObject({ status: "stalled" });
+    expect(state.workpad).toEqual([
+      expect.stringMatching(
+        /^## Workpad \| - \d{4}-\d\d-\d\d Optio \(hand-over\): the head moved after the green review gate: it ran on aaaa1111, the pull request is at bbbb2222$/,
+      ),
+    ]);
+    expect(state.notes[0]).toContain("the pull request is at bbbb2222; the issue is in Reviewing");
+  });
+
+  it("leaves the issue in review with the verdict line when the gate is closed", async () => {
+    const { state, result } = await ended({
+      reviewGate: gate({ exitCode: 1, verdictLine: "review gate closed: audit missing" }),
+    });
+    expect(state.moved).toEqual([]);
+    expect(state.headReads).toEqual([]);
+    expect(result.stalled).toHaveLength(1);
+    expect(state.workpad?.[0]).toContain("closed (exit 1): review gate closed: audit missing");
+  });
+
+  it("leaves the issue in review when no review gate was recorded", async () => {
+    const { state, result } = await ended({ reviewGate: null });
+    expect(state.moved).toEqual([]);
+    expect(result.stalled).toHaveLength(1);
+    expect(state.workpad?.[0]).toContain("no review gate was recorded for this run");
+  });
+
+  it("moves the issue to the blocked state when the gate could not run or the head cannot be read", async () => {
+    const refused = await ended({
+      reviewGate: gate({
+        outcome: "error",
+        exitCode: null,
+        reason: "the thread has no environment",
+      }),
+    });
+    expect(refused.state.moved).toEqual(["id-ENG-1->state-waiting"]);
+    expect(refused.state.workpad?.[0]).toContain(
+      "could not be run (error): the thread has no environment",
+    );
+    expect(refused.result.stalled).toHaveLength(1);
+
+    const unreadable = await ended({ reviewGate: gate(), head: new Error("gh: not found") });
+    expect(unreadable.state.moved).toEqual(["id-ENG-1->state-waiting"]);
+    expect(unreadable.state.workpad?.[0]).toContain("head could not be read: gh: not found");
+  });
+
+  it("does not move a blocked hand-over back to the dispatch state on the next tick", async () => {
+    const made = await ended({
+      reviewGate: gate({ outcome: "refused", exitCode: null, reason: "x" }),
+    });
+    made.state.board = { states, issues: [issue("ENG-1", { state: "Waiting" })] };
+    const next = await made.scheduler.tick(config({ handOver }), true);
+    expect(next.unblocked).toEqual([]);
+    expect(made.state.moved).toEqual(["id-ENG-1->state-waiting"]);
+    // Released, it is unblocked as before.
+    made.store.release("ENG-1");
+    expect((await made.scheduler.tick(config({ handOver }), true)).unblocked).toEqual(["ENG-1"]);
+  });
+
+  it("still reports the reason when the issue has no workpad", async () => {
+    const { state } = await ended({ reviewGate: gate(), head: "bbbb2222", workpad: null });
+    expect(state.moved).toEqual([]);
+    expect(state.notes[0]).toContain("the head moved after the green review gate");
+  });
+
+  it("blocks the issue and says so when the config names no repo to read the head from", async () => {
+    const made = setup({ states, issues: [issue("ENG-1")] });
+    made.state.reviewGate = gate();
+    await made.scheduler.tick(config({ handOver }), true);
+    made.state.clock += 10 * 60_000;
+    made.state.workflowActive = false;
+    made.state.board = { states, issues: [issue("ENG-1", { state: "Reviewing" })] };
+    await made.scheduler.tick(config({ handOver }), true);
+    expect(made.state.moved).toEqual(["id-ENG-1->state-waiting"]);
+    expect(made.state.notes[0]).toContain("factory.config.json has no github.ownerRepo");
+  });
+
+  it("changes nothing without handOver in the config: an ended run in review is a stall", async () => {
+    const made = setup({ states, issues: [issue("ENG-1")] });
+    made.state.registryText = registryText([issueLoop], undefined, extra);
+    made.state.reviewGate = gate();
+    await made.scheduler.tick(config(), true);
+    made.state.clock += 10 * 60_000;
+    made.state.workflowActive = false;
+    made.state.board = { states, issues: [issue("ENG-1", { state: "Reviewing" })] };
+    const result = await made.scheduler.tick(config(), true);
+    expect(made.state.moved).toEqual([]);
+    expect(result.stalled).toHaveLength(1);
+    expect(made.state.notes[0]).toContain("the issue is in Reviewing");
+  });
+
+  it("reads an owner/name repo and the workpad heading from the registry", () => {
+    expect(parseRegistry(registryText([issueLoop], undefined, extra))).toMatchObject({
+      ok: true,
+      registry: { repo: "acme/shop", workpadHeading: "## Workpad" },
+    });
+    const badRepo = registryText([issueLoop], undefined, { github: { ownerRepo: "x y" } });
+    expect(parseRegistry(badRepo)).toMatchObject({ ok: false });
+    expect(parseRegistry(registryText())).toMatchObject({
+      ok: true,
+      registry: { repo: null, workpadHeading: null },
+    });
+  });
+});
 
 describe("refilling the queue from the backlog", () => {
   const states = { Ready: "state-todo" };
@@ -823,6 +1012,128 @@ describe("scheduler", () => {
   });
 });
 
+describe("the record of runs", () => {
+  const states = { Ready: "state-todo" };
+
+  it("follows a run from its start to its hand-over: workflow run, step and PR", async () => {
+    const { scheduler, store, state } = setup({ states, issues: [issue("ENG-1")] });
+    await scheduler.tick(config(), true);
+    expect(store.latest("ENG-1")).toMatchObject({
+      workflowRunId: null,
+      step: null,
+      prNumber: null,
+    });
+
+    // Inside the start grace the run is only observed.
+    state.clock += 30_000;
+    state.seen = { runId: "wfr_1", step: "Engineer", prNumber: null };
+    expect((await scheduler.tick(config(), true)).followed).toBe(1);
+    expect((await scheduler.tick(config(), true)).followed).toBe(0); // nothing new to show
+    expect(store.latest("ENG-1")).toMatchObject({
+      status: "active",
+      workflowRunId: "wfr_1",
+      step: "Engineer",
+      prNumber: null,
+    });
+
+    // The PR shows on the issue before the workflow reports it.
+    state.clock += 60_000;
+    state.seen = { runId: "wfr_1", step: "Pre-review gate", prNumber: null };
+    state.board = { states, issues: [issue("ENG-1", { pullRequest: 12 })] };
+    expect((await scheduler.tick(config(), true)).followed).toBe(1);
+    expect(store.latest("ENG-1")).toMatchObject({ step: "Pre-review gate", prNumber: 12 });
+
+    // The last tick sees the finished run and keeps what the earlier ones saw.
+    state.clock += 10 * 60_000;
+    state.workflowActive = false;
+    state.seen = { runId: "wfr_1", step: "Hand-over", prNumber: 12 };
+    state.board = { states, issues: [issue("ENG-1", { state: "Approval", pullRequest: 12 })] };
+    // The new step and the hand-over are two things for an open page to show.
+    expect((await scheduler.tick(config(), true)).followed).toBe(2);
+    expect(store.runs({ loop: null, state: null, limit: 10 })).toMatchObject([
+      {
+        issue: "ENG-1",
+        state: "handed-over",
+        outcome: "Approval",
+        workflowRunId: "wfr_1",
+        step: "Hand-over",
+        prNumber: 12,
+      },
+    ]);
+  });
+
+  it("lists runs per Loop and per state, newest first, with the gates recorded for each", async () => {
+    const { store, db } = setup({ states, issues: [] });
+    const start = (issueKey: string, loop: string, at: number) =>
+      store.start({ issue: issueKey, loop, machineId: "mac", resume: false, now: at });
+    const first = start("ENG-1", "Issue run", 1000);
+    store.end(first.id, "handed-over", "Approval", 2000);
+    const second = start("ENG-2", "Issue run", 3000);
+    store.end(second.id, "stalled", "stopped at the review gate", 4000);
+    const third = start("ENG-3", "Scenarios", 5000);
+    const fourth = start("ENG-4", "Issue run", 6000);
+    store.end(fourth.id, "stalled", "x", 6500);
+    store.release("ENG-4");
+    const gates = createGateStore(db);
+    const gate = (over: Partial<Parameters<typeof gates.record>[0]>) =>
+      gates.record({
+        at: 1500,
+        threadId: "thr_9",
+        gate: "pre-review",
+        pr: 7,
+        issue: "ENG-1",
+        outcome: "ran",
+        exitCode: 0,
+        verdictLine: "pre-review: open",
+        sha: "abc123",
+        hostId: null,
+        reason: null,
+        ...over,
+      });
+    gate({});
+    // Not verdicts of this run: a refused call, another issue's gate, and gates outside the run's time.
+    gate({ outcome: "refused", exitCode: null, verdictLine: null, sha: null, reason: "bad" });
+    gate({ issue: "ENG-2", at: 3500 });
+    gate({ at: 500 });
+    gate({ at: 2500 });
+
+    const states_ = (filter: Parameters<typeof store.runs>[0]) =>
+      store.runs(filter).map((run) => `${run.issue}:${run.state}`);
+    expect(states_({ loop: null, state: null, limit: 10 })).toEqual([
+      "ENG-4:stopped",
+      "ENG-3:running",
+      "ENG-2:stopped",
+      "ENG-1:handed-over",
+    ]);
+    expect(states_({ loop: "Issue run", state: null, limit: 10 })).toEqual([
+      "ENG-4:stopped",
+      "ENG-2:stopped",
+      "ENG-1:handed-over",
+    ]);
+    expect(states_({ loop: "Issue run", state: "stopped", limit: 10 })).toEqual([
+      "ENG-4:stopped",
+      "ENG-2:stopped",
+    ]);
+    expect(states_({ loop: null, state: "running", limit: 10 })).toEqual(["ENG-3:running"]);
+    expect(states_({ loop: null, state: null, limit: 2 })).toHaveLength(2);
+    expect(third.status).toBe("active");
+
+    const [handedOver] = store.runs({ loop: null, state: "handed-over", limit: 10 });
+    expect(handedOver?.gates).toEqual([
+      {
+        at: 1500,
+        gate: "pre-review",
+        exitCode: 0,
+        verdict: "pre-review: open",
+        commit: "abc123",
+        threadId: "thr_9",
+      },
+    ]);
+    const [stopped] = store.runs({ loop: null, state: "stopped", limit: 1 });
+    expect(stopped?.gates).toEqual([]);
+  });
+});
+
 describe("fetchBoard", () => {
   it("maps Linear's answer and keeps only unresolved blockers", async () => {
     const node = (identifier: string, extra: Record<string, unknown> = {}) => ({
@@ -836,6 +1147,13 @@ describe("fetchBoard", () => {
       labels: { nodes: [{ name: "agent-ready" }] },
       projectMilestone: { name: "M1" },
       project: { name: "Collection" },
+      attachments: {
+        nodes: [
+          { url: "https://linear.app/acme/issue/ENG-1" },
+          { url: "https://github.com/acme/app/pull/41" },
+          { url: "https://github.com/acme/app/pull/57/files" },
+        ],
+      },
       inverseRelations: {
         nodes: [
           { type: "blocks", issue: { identifier: "ENG-7", state: { type: "started" } } },
@@ -868,6 +1186,7 @@ describe("fetchBoard", () => {
       blockedBy: ["ENG-7"],
       writeScope: ["apps/api/**"],
       milestone: "M1",
+      pullRequest: 57,
     });
     expect(new Headers(calls[0]?.headers).get("authorization")).toBe("lin_key");
   });

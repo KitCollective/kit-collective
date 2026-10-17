@@ -128,12 +128,12 @@
     const listed = json(["thread", "list", "--project", project]);
     const threads = Array.isArray(listed) ? listed : (listed.threads ?? []);
     for (const t of threads) {
-      const match = /^Max (\d{4}-\d{2}-\d{2} \d{2}:\d{2})/.exec(t.title ?? "");
-      if (!match || t.status !== "active") continue;
-      const started =
-        Date.parse(t.createdAt ?? "") || Date.parse(`${match[1].replace(" ", "T")}:00Z`);
-      if (Date.now() - started > 45 * 60000)
-        problems.push(`max-stuck: ${t.id} (${t.title}) active for over 45 minutes`);
+      // Max's daily thread ("Max · 2026-10-17") lives all day, so a hang is an active thread with no
+      // event for 45 minutes, not an old one. The older per-wake titles ("Max 2026-10-17 17:25") match too.
+      if (!/^Max (· )?\d{4}-\d{2}-\d{2}/.test(t.title ?? "") || t.status !== "active") continue;
+      const quiet = Date.now() - Number(t.updatedAt ?? 0);
+      if (quiet > 45 * 60000)
+        problems.push(`max-stuck: ${t.id} (${t.title}) active with no event for over 45 minutes`);
     }
   } catch (error) {
     problems.push(`threads-unreadable: ${String(error.message).split("\n")[0].slice(0, 200)}`);

@@ -42,6 +42,31 @@ The setup form keeps the operating settings only (backlog, active and blocked st
 
 In `dry-run` the scheduled tick still reads the registry and records what it would start (`mode` is `dry-run` on the row) and applies nothing. That is the evidence for a registry change: `bb optio board --json` and the page show the Loops and the plan.
 
+## The hand-over on the recorded review gate (KIT-364)
+
+The AFK developer ends a green run ready in `In Review` and writes no `Approval` itself (ADR-0062). The Board moves the issue to `Approval` when it closes the ended run, if the review gate `optio_gate` recorded is green on the pull request's current head. It is off until the states are set:
+
+```bash
+bb optio hand-over --review "In Review" --approval Approval
+bb optio hand-over            # shows the setting
+bb optio hand-over --off      # back to: an ended run in a working state is a stall
+```
+
+It needs `github.ownerRepo` and `agent.workpadHeading` in `factory.config.json` (both are there) and `gh` on the machines the gates run on. Evidence for a run: the dispatch row (`bb optio dispatches`) ends `handed-over` with outcome `Approval`, `bb optio gates` shows the `review` record, and the Linear history shows the move by the Linear API key's user. With `flow.autoLand.enabled` on, a run takes the auto-land path and never reaches this hand-over.
+
+## The Inbox (KIT-398)
+
+Optio's first menu item in bb. It shows one card for every issue in the Inbox state (`Approval`), read from Linear on each open and on Refresh, with nothing cached: an issue that left `Approval` is gone on the next read. A card with `needs-info` or `ready-for-human` is a question: it shows the run's `### Waiting` ask and stage from the issue's workpad. Any other card is a green review: it shows the newest recorded `review` gate verdict line and the pull request's title. Green reviews come first, then questions, oldest in the state first inside each kind.
+
+The state and the question labels are Inbox configuration, not plugin code, so the plugin names no product value. Set them once on the install:
+
+```bash
+bb optio inbox --state Approval --labels needs-info,ready-for-human
+bb optio inbox --off    # switch the Inbox off
+```
+
+Until then `bb optio inbox` exits 1 and names this command, and the page says the same. `bb optio inbox [--json]` prints the same cards as the page. The code lives in `plugins/factory/src/inbox/` (RPC, Linear read, cards) and `plugins/factory/pages/inbox/` (the page); `app.tsx`, `server.ts` and `src/contract.ts` only register it.
+
 ## After a merge that touches `plugins/factory/`
 
 ```bash
@@ -59,4 +84,4 @@ The Meta Agents plugin (`bb meta-agents`, folder `~/Projects/bb-plugin-meta-agen
 
 ## Live checks
 
-What only the running plugin can prove (it builds and reloads, the host bundle probes a thread, the Board answers) is a named live check in `scripts/lib/live-checks.mjs`: `optio-reload`, `optio-host-probe` and `optio-board`. `node scripts/live-check.mjs list` shows them and `node scripts/live-check.mjs run <name> [--thread thr_x]` runs one from the main checkout, with one `LIVE-CHECK <name> pass|fail <line>` verdict. An issue names its checks on a `live-check:` line, and Max's live-check automation runs them after the merge (`staff/max.md`, Live checks). A new check is a reviewed change to that file, never text from an issue.
+What only the running plugin can prove (it builds and reloads, the host bundle probes a thread, the Board answers) is a named live check in `scripts/lib/live-checks.mjs`: `optio-reload`, `optio-host-probe`, `optio-board` and `optio-inbox`. `node scripts/live-check.mjs list` shows them and `node scripts/live-check.mjs run <name> [--thread thr_x]` runs one from the main checkout, with one `LIVE-CHECK <name> pass|fail <line>` verdict. An issue names its checks on a `live-check:` line, and Max's live-check automation runs them after the merge (`staff/max.md`, Live checks). A new check is a reviewed change to that file, never text from an issue.

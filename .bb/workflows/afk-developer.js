@@ -344,12 +344,15 @@ phase("Session");
 // logged, so it costs no run of the cap. The workflow file itself is read when the run starts and
 // must be the starting thread's own copy (bb refuses a path outside its workspace): a thread in an
 // existing issue worktree merges the lane in first.
+// Three dots: only what the lane changed since this branch left it counts, so a PR that edits
+// scripts/ itself is not stale (KIT-398 and KIT-411 on 2026-10-17 could never resume under a
+// two-dot compare of the worktree with the lane).
 const HARNESS_PATHS = ".bb/workflows scripts factory.config.json";
 // One runner for all three: the two git commands are read-only, and the script reads the results in
 // order, so a runner that did not stop after a failing one cannot turn a stale harness into a start.
 const opening = await sh("session-check", "Session", [
   "git fetch --quiet origin development",
-  `git diff --quiet origin/development -- ${HARNESS_PATHS}`,
+  `git diff --quiet HEAD...origin/development -- ${HARNESS_PATHS}`,
   `node scripts/session-check.mjs ${issue}${resume ? " --resume" : ""}`,
 ], false, true);
 const [fetched, same, session] = opening;
