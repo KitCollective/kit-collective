@@ -370,10 +370,11 @@ name: kit-297
       id: conversation-header
     timeout: 15000
 # AC 8: the bidder's side of the accept line, centred, worded for the bidder.
+# The line is the last item; the list ends there, so Maestro cannot centre it.
 - scrollUntilVisible:
     element:
       id: thread-system-line
-    centerElement: true
+    centerElement: false
 - assertVisible: "e2e_collector accepterede dit bud på 300 kr\\. Aftal betaling og levering med e2e_collector her i tråden\\."
 - runFlow: ../subflows/settle.yaml
 - takeScreenshot: kc__kit-297__10-bidder-side-of-the-accept-line
@@ -430,10 +431,11 @@ name: kit-297
     visible:
       id: conversation-header
     timeout: 15000
+# The new card is the last item, so it cannot be centred either.
 - scrollUntilVisible:
     element:
       id: bid-card-status-pending-sender
-    centerElement: true
+    centerElement: false
 - runFlow: ../subflows/settle.yaml
 - takeScreenshot: kc__kit-297__13-new-bud-in-the-same-thread
 # ---- freja_e2e signs in (no data reset) ----
