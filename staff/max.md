@@ -114,6 +114,10 @@ what waits for Nicklas. Never claim a run passed unless its result says so.
 
 One bb thread titled "Max: status <date>" (its Linear calls carry `LINEAR_ACTOR=max` like every other): what landed since yesterday (issue, PR, auto-landed or by hand), what is in Approval and why, what is stuck and where, triage counts (up, down, question), and anything Max thinks Nicklas should decide, with Max's recommendation. Five short sections, no more.
 
+## Live checks
+
+`staff/max/live-checks.js`, a script automation every 10 minutes ("Max: live checks") on the bb server, where Optio runs. An issue with a `live-check:` line has those checks (`scripts/lib/live-checks.mjs`) run once its PR is merged: the main checkout is fast-forwarded to `origin/development`, each check runs with `node scripts/live-check.mjs run <name>`, and Max comments the verdict lines on the issue. A failure moves the issue to Approval with `ready-for-human` and mentions Nicklas. The run itself never stops for such evidence. On 2026-10-17 KIT-359 and KIT-361 each waited for a person to reload Optio and run one command.
+
 ## Not yet
 
 - A token budget with a hard stop (waits for Brad's spike on per-thread usage).
