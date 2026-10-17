@@ -89,10 +89,9 @@ name: kit-290
 - runFlow: ../subflows/settle.yaml
 - tapOn:
     id: foreign-jersey-owner-row
-# Peer Profil lists the owner's one jersey (OB), the tile the detail does not have.
+# Peer Profil lists the owner's one jersey (OB) in a tile whose caption the detail does not have.
 - extendedWaitUntil:
-    visible:
-      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    visible: "2023/24 · Hjemme"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000
