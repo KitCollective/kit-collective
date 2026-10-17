@@ -667,16 +667,7 @@ export default async function plugin(bb: BbPluginApi) {
     };
   }
 
-  const inbox = createInbox({
-    kv: bb.storage.kv,
-    changed,
-    linearApiKey,
-    board: async () => {
-      const config = await requireScheduler();
-      return { teamKey: config.teamKey, registryText: await registryText(config).catch(() => "") };
-    },
-    verdictOf: (identifier) => gateRuns.latestReview(identifier, 0)?.verdictLine ?? null,
-  });
+  const inbox = createInbox({ bb, linearApiKey, requireScheduler, registryText, gateRuns });
 
   async function boardDto(): Promise<BoardDto> {
     const paused = (await settings.get()).paused;

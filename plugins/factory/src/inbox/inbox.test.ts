@@ -32,7 +32,7 @@ const registry = JSON.stringify({
   agent: { workpadHeading: "## Workpad" },
 });
 
-async function load() {
+async function load(registryText = registry) {
   const host = createFakePluginHost({
     pluginId: "optio",
     settings: { linearWebhookSecret: "whsec", linearApiKey: "lin_key" },
@@ -41,10 +41,10 @@ async function load() {
       projects: {
         list: async () => [{ id: "proj_1", name: "acme" }],
         fileContent: async () => ({
-          content: registry,
+          content: registryText,
           contentEncoding: "utf8",
           mimeType: "application/json",
-          sizeBytes: registry.length,
+          sizeBytes: registryText.length,
         }),
       },
     },
@@ -134,10 +134,10 @@ const linear = (rows: () => Entry[]) =>
   });
 
 /** The plugin with the Inbox set up on `Waiting`, and Linear behind `fetch`. */
-async function inboxOn(rows: () => Entry[] = () => entries) {
+async function inboxOn(rows: () => Entry[] = () => entries, registryText = registry) {
   const fetchMock = linear(rows);
   vi.stubGlobal("fetch", fetchMock);
-  const loaded = await load();
+  const loaded = await load(registryText);
   const set = await loaded.cli(["inbox", "--state", "Waiting", "--labels", "asks, decide"]);
   expect(set.exitCode).toBe(0);
   return { ...loaded, fetchMock };
@@ -206,6 +206,19 @@ describe("the Inbox", () => {
         review: { verdict: null, change: null },
       });
       expect(cards[1]).toMatchObject({ identifier: "ENG-3", waiting: null });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("reports a registry it cannot read instead of listing cards without workpads", async () => {
+    try {
+      const { rpc, cli, fetchMock } = await inboxOn(() => entries, "{ not json");
+      const inbox = await rpc("inbox_list", null);
+      expect(inbox.cards).toEqual([]);
+      expect(inbox.error).toContain("factory.config.json is not valid JSON");
+      expect((await cli(["inbox"])).exitCode).toBe(1);
+      expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
     }

@@ -1,25 +1,25 @@
 // The Inbox: what waits for a person, read from Linear on every call. `createInbox` gives the
-// area's RPC handler and CLI command; server.ts and src/contract.ts register them in one line each.
+// area's RPC handler and CLI command; server.ts builds it and registers each with one line, and
+// src/contract.ts spreads the area's `inboxContract`.
 import { type BbPluginApi, cliCommand, PluginCliError } from "@get-bb/plugin-sdk";
+import { CHANGED } from "../contract.js";
 import { parseRegistry } from "../loop-registry.js";
 import { buildCards } from "./cards.js";
 import { type InboxCardDto, type InboxConfig, inboxConfig } from "./contract.js";
 import { fetchWaiting } from "./linear.js";
 
-export { inboxContract } from "./contract.js";
-
 const CONFIG_KEY = "inbox";
 
-/** What the Inbox reads from the rest of the plugin. */
-export interface InboxDeps {
-  kv: BbPluginApi["storage"]["kv"];
-  /** The board's Linear team and the text of `factory.config.json`; throws when the board is not set up. */
-  board: () => Promise<{ teamKey: string; registryText: string }>;
+/** What the Inbox reads from the rest of the plugin; `Board` is the stored board config. */
+export interface InboxDeps<Board extends { teamKey: string }> {
+  bb: Pick<BbPluginApi, "storage" | "realtime">;
+  /** The stored board config; throws when the board is not set up. */
+  requireScheduler: () => Promise<Board>;
+  /** The text of `factory.config.json`; throws when it cannot be read. */
+  registryText: (board: Board) => Promise<string>;
   linearApiKey: () => Promise<string>;
-  /** The newest recorded review verdict line for the issue, or null. */
-  verdictOf: (identifier: string) => string | null;
-  /** Tells open pages to read again. */
-  changed: () => void;
+  /** The review gate record: the newest run for an issue. */
+  gateRuns: { latestReview(issue: string, since: number): { verdictLine: string | null } | null };
 }
 
 const SETUP = "bb optio inbox --state <state> --labels <question labels>";
@@ -39,9 +39,9 @@ function describe(cards: InboxCardDto[]): string {
   ].join("\n");
 }
 
-export function createInbox(deps: InboxDeps) {
+export function createInbox<Board extends { teamKey: string }>(deps: InboxDeps<Board>) {
   async function config(): Promise<InboxConfig | null> {
-    const stored = await deps.kv.get<unknown>(CONFIG_KEY);
+    const stored = await deps.bb.storage.kv.get<unknown>(CONFIG_KEY);
     return stored === undefined || stored === null ? null : inboxConfig.parse(stored);
   }
 
@@ -52,13 +52,14 @@ export function createInbox(deps: InboxDeps) {
       if (setting === null) {
         throw new Error(`the Inbox is not set up: run \`${SETUP}\` (docs/agents/optio.md)`);
       }
-      const { teamKey, registryText } = await deps.board();
-      const registry = parseRegistry(registryText);
-      const issues = await fetchWaiting(await deps.linearApiKey(), teamKey, setting.state);
+      const board = await deps.requireScheduler();
+      const registry = parseRegistry(await deps.registryText(board));
+      if (!registry.ok) throw new Error(registry.error);
+      const issues = await fetchWaiting(await deps.linearApiKey(), board.teamKey, setting.state);
       const cards = buildCards(issues, {
         config: setting,
-        workpadHeading: registry.ok ? registry.registry.workpadHeading : null,
-        verdictOf: deps.verdictOf,
+        workpadHeading: registry.registry.workpadHeading,
+        verdictOf: (identifier) => deps.gateRuns.latestReview(identifier, 0)?.verdictLine ?? null,
       });
       return { error: null, cards };
     } catch (error) {
@@ -78,7 +79,7 @@ export function createInbox(deps: InboxDeps) {
     async run({ options }) {
       if (options.off === true || options.state !== undefined || options.labels !== undefined) {
         if (options.off === true) {
-          await deps.kv.delete(CONFIG_KEY);
+          await deps.bb.storage.kv.delete(CONFIG_KEY);
         } else if (options.state === undefined || options.labels === undefined) {
           throw new PluginCliError("give both --state and --labels", { code: "missing_option" });
         } else {
@@ -91,9 +92,9 @@ export function createInbox(deps: InboxDeps) {
               code: "invalid_config",
             });
           }
-          await deps.kv.set(CONFIG_KEY, parsed.data);
+          await deps.bb.storage.kv.set(CONFIG_KEY, parsed.data);
         }
-        deps.changed();
+        deps.bb.realtime.publish(CHANGED, {}); // open pages read again
         return {
           exitCode: 0,
           stdout: options.off === true ? "The Inbox is off" : "The Inbox is set",
