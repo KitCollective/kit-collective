@@ -27,7 +27,7 @@ Regression flows (`E2E_FLOWS=regression`): run them at a milestone, before a pro
 | `search-bid` | Test Collector | `01-typeahead`, `02-catalog-drill`, `03-foreign-detail`, `04-send-bid`, `05-amount-entered`, `06-bid-sent` |
 | `wishlist-paywall` | second test Collector | `01-wishlist`, `02-paywall` |
 
-The three `add-jersey-*` flows beyond `add-jersey` pick the one photo of the one-photo simulator. The Data drill that Vælg opens has no `testID` on its club, season and type controls (and the club picker's rows), so `add-jersey-vision-failure` taps them by their copy (`AaB`, `2023/24`, `Hjemme`, the drill's `Gem`) and goes on to Save by hand; `add-jersey-vision-off` stops at the opened drill and asserts it by the copy of its first row. Add the testIDs to the drill to replace the copy taps.
+The three `add-jersey-*` flows beyond `add-jersey` pick the one photo of the one-photo simulator. The Data drill that Vælg opens has no `testID` on its club, season and type controls (and the club picker's rows), so `add-jersey-vision-failure` taps them by a pattern on their copy (`.*AaB.*`, `.*2023/24.*`, `.*Hjemme.*`, the drill's `Gem`) and goes on to Save by hand; `add-jersey-vision-off` stops at the opened drill and asserts it by the copy of its first row. Add the testIDs to the drill to replace the copy taps.
 
 Every flow first calls `POST /v1/e2e/test-data`, so flows are independent and a re-run starts from the same rows. A screenshot is `kc__<flow>__<step>.png`; a recording is `kc__<flow>.mp4`.
 

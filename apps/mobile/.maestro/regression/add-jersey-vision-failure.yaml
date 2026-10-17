@@ -1,7 +1,8 @@
 # Tilføj trøje when Vision fails (the fixed Vision rejects every job, KIT-284): Confirm leaves the
 # reading state for the empty identity block ("Vision fandt ikke trøjen", Vælg), and nothing is
 # stuck. Vælg opens the Data drill, where club, season and type are picked by hand, and Gem saves
-# the jersey. The drill's rows and chips have no testIDs, so the picks are tapped by their copy.
+# the jersey. The drill's rows and chips have no testIDs, and a picker row is one accessible element
+# (its initials and its name), so the picks are tapped by a pattern on their copy.
 appId: app.kitcollective.mobile
 name: add-jersey-vision-failure
 ---
@@ -68,21 +69,21 @@ name: add-jersey-vision-failure
 - takeScreenshot: kc__add-jersey-vision-failure__02-data-drill
 - tapOn: "Vælg klub eller landshold.*"
 - extendedWaitUntil:
-    visible: "AaB"
+    visible: ".*AaB.*"
     timeout: 30000
-- tapOn: "AaB"
+- tapOn: ".*AaB.*"
 - extendedWaitUntil:
     visible: "Vælg sæson.*"
     timeout: 15000
 - tapOn: "Vælg sæson.*"
 - extendedWaitUntil:
-    visible: "2023/24"
+    visible: ".*2023/24.*"
     timeout: 30000
-- tapOn: "2023/24"
+- tapOn: ".*2023/24.*"
 - extendedWaitUntil:
-    visible: "Hjemme"
+    visible: ".*Hjemme.*"
     timeout: 15000
-- tapOn: "Hjemme"
+- tapOn: ".*Hjemme.*"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: kc__add-jersey-vision-failure__03-picked-by-hand
