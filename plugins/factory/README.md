@@ -105,7 +105,7 @@ own tunnel to that one path.
 | `src/linear.ts` | Linear webhook signature check. |
 | `host.ts` | The host bundle, run on each enrolled machine: runs the fixed probe script in a worktree. |
 | `src/host-contract.ts`, `src/host-run.ts` | The host bundle's RPC contract and its script runner. |
-| `src/host-probe.ts` | Thread id to worktree and machine, then the host bundle's probe (`bb optio host-probe <thread>`, the `factory_host_probe` agent tool). A spike. |
+| `src/host-probe.ts` | Thread id to worktree and machine, then the host bundle's probe (`bb optio host-probe <thread>`, the `optio_host_probe` agent tool). A spike. |
 | `scripts/host-probe.mjs` | The fixed, read-only script the probe runs. |
 | `src/product-neutral.test.ts` | Fails when plugin code outside `examples/` names one product's values. |
 

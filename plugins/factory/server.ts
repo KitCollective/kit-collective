@@ -211,9 +211,9 @@ export default async function plugin(bb: BbPluginApi) {
   };
 
   bb.agents.registerTool({
-    name: "factory_host_probe",
+    name: "optio_host_probe",
     description:
-      "Spike: run a fixed, read-only repo script in a thread's worktree on that thread's machine, through the Factory's host bundle. Returns the exit code and the last output line.",
+      "Spike: run a fixed, read-only repo script in a thread's worktree on that thread's machine, through Optio's host bundle. Returns the exit code and the last output line.",
     parameters: z.object({
       threadId: z.string().min(1).optional().describe("Defaults to the calling thread"),
     }),

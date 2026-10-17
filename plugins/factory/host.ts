@@ -1,4 +1,4 @@
-// The Factory's host bundle: runs on every enrolled machine, next to the threads'
+// Optio's host bundle: runs on every enrolled machine, next to the threads'
 // worktrees. The server entry reaches it through bb.hosts.experimental_client.
 import { experimental_defineHostEntry } from "@get-bb/plugin-sdk";
 import { hostContract, PROBE_SCRIPT } from "./src/host-contract.js";

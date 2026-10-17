@@ -1,5 +1,5 @@
 // A fixed, harmless script for the host-bundle spike: it only reads. It prints where
-// it ran and which commit that checkout is on; the last line is the one the Factory records.
+// it ran and which commit that checkout is on; the last line is the one Optio records.
 import { execFileSync } from "node:child_process";
 import { hostname } from "node:os";
 

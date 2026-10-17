@@ -13,7 +13,7 @@ import { lastLine, runNodeScript } from "./host-run.js";
 const worktree = fileURLToPath(new URL("../../..", import.meta.url));
 const temps: string[] = [];
 const tempDir = () => {
-  const dir = mkdtempSync(join(tmpdir(), "factory-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "optio-host-"));
   temps.push(dir);
   return dir;
 };
@@ -151,7 +151,7 @@ describe("the plugin", () => {
       { method: "run_probe", hostId: "host_9", input: { cwd: "/work/tree" } },
     ]);
     expect(fake.harness.registrations.agentTools.map((tool) => tool.name)).toContain(
-      "factory_host_probe",
+      "optio_host_probe",
     );
   });
 });
