@@ -53,7 +53,7 @@ import {
 import { Logger } from "@nestjs/common";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { OBJECT_STORE } from "../dist/collection/collection.service.js";
@@ -2568,6 +2568,86 @@ describe("Collection /v1", () => {
         warn.mockRestore();
       }
     });
+
+    it.each(["club", "country", "league", "national_team"] as const)(
+      "a jersey whose %s label row is missing does not 404 the list; the others are returned and the row is logged",
+      async (missing) => {
+        const session = await registerSession(app, `kit384-${missing}@example.com`);
+        const clubFixture = await insertClubSeasonFixture();
+        const nationalTeamFixture = await insertNationalTeamSeasonFixture();
+        const badIsNationalTeam = missing === "national_team";
+
+        const ok = await postSave(session, clubFixture, [
+          { role: "front", contentBase64: JPEG_BASE64 },
+        ]);
+        expect(ok.statusCode).toBe(201);
+        const okId = collectionSaveResponseSchema.parse(JSON.parse(ok.body)).jersey.id;
+
+        // A national-team jersey is saved by hand: postSave only takes a club fixture.
+        const nationalTeamSave = await app.inject({
+          method: "POST",
+          url: "/v1/collection/jerseys/save",
+          headers: { authorization: `Bearer ${session.accessToken}`, "accept-language": "da" },
+          payload: {
+            nationalTeamId: nationalTeamFixture.nationalTeamId,
+            seasonId: nationalTeamFixture.seasonId,
+            type: "home",
+            size: "m",
+            condition: "used",
+            photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+          },
+        });
+        expect(nationalTeamSave.statusCode).toBe(201);
+        const nationalTeamId = collectionSaveResponseSchema.parse(JSON.parse(nationalTeamSave.body))
+          .jersey.id;
+
+        const badId = badIsNationalTeam ? nationalTeamId : okId;
+        const goodId = badIsNationalTeam ? okId : nationalTeamId;
+
+        // Delete the label after the Save: the Save response resolves labels too.
+        const { db, pool } = createDb(DATABASE_URL);
+        try {
+          let entityId: string;
+          if (missing === "club") {
+            entityId = clubFixture.clubId;
+          } else if (missing === "national_team") {
+            entityId = nationalTeamFixture.nationalTeamId;
+          } else if (missing === "country") {
+            const [row] = await db
+              .select({ countryId: club.countryId })
+              .from(club)
+              .where(eq(club.id, clubFixture.clubId));
+            entityId = row!.countryId;
+          } else {
+            const [row] = await db
+              .select({ leagueId: season.leagueId })
+              .from(season)
+              .where(eq(season.id, clubFixture.seasonId));
+            entityId = row!.leagueId!;
+          }
+          const deleted = await db
+            .delete(catalogLabel)
+            .where(and(eq(catalogLabel.entityType, missing), eq(catalogLabel.entityId, entityId)))
+            .returning({ id: catalogLabel.id });
+          expect(deleted.length).toBeGreaterThan(0);
+        } finally {
+          await pool.end();
+        }
+
+        const warn = vi.spyOn(Logger.prototype, "warn");
+        try {
+          const response = await listOwn(session);
+          expect(response.statusCode).toBe(200);
+          const ids = collectionJerseysSchema
+            .parse(JSON.parse(response.body))
+            .jerseys.map((jersey) => jersey.id);
+          expect(ids).toEqual([goodId]);
+          expect(warn.mock.calls.some((call) => String(call[0]).includes(badId))).toBe(true);
+        } finally {
+          warn.mockRestore();
+        }
+      },
+    );
   });
 });
 
