@@ -1221,11 +1221,39 @@ export class CollectionService {
       throw new BadRequestException({ code: photoValidationError });
     }
 
-    await this.persistPhotos(userId, jerseyId, [photo]);
-    await this.db
-      .update(userJersey)
-      .set({ updatedAt: new Date() })
-      .where(eq(userJersey.id, jerseyId));
+    const storedPhotos = await this.putSavePhotoObjects(userId, jerseyId, [photo]);
+    try {
+      await this.db.transaction(async (tx) => {
+        await tx.insert(userJerseyPhoto).values(
+          storedPhotos.map((stored) => ({
+            id: stored.photoId,
+            userJerseyId: jerseyId,
+            objectKey: stored.objectKey,
+            role: stored.photo.role,
+            source: stored.photo.source,
+            label: stored.photo.role === "other" ? stored.photo.label?.trim() || null : null,
+            ocrStatus: "none" as const,
+          })),
+        );
+        await tx
+          .update(userJersey)
+          .set({ updatedAt: new Date() })
+          .where(eq(userJersey.id, jerseyId));
+      });
+    } catch (error) {
+      await this.deleteOrphanedPhotoObjects(storedPhotos.map((stored) => stored.objectKey));
+      throw error;
+    }
+
+    for (const stored of storedPhotos) {
+      this.photoDerivativeQueueService.enqueue(this.objectStore, {
+        userId,
+        jerseyId,
+        photoId: stored.photoId,
+        role: stored.photo.role,
+        sourceObjectKey: stored.objectKey,
+      });
+    }
 
     return { jersey: await this.loadOwnJerseyOrThrow(userId, jerseyId) };
   }
