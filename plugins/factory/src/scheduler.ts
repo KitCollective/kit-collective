@@ -2,6 +2,8 @@
 // what fits, and hand every stall to the orchestrator thread.
 import { type BoardSummary, type Plan, planBoard, summarizeBoard } from "./board.js";
 import type { Decision, Dispatch, DispatchStore } from "./dispatch-store.js";
+import type { GateRun } from "./gate-store.js";
+import { decideHandOver, needsPrHead, type PrHead } from "./hand-over.js";
 import type { Board, BoardIssue } from "./linear-api.js";
 import { type IssueLoop, issueLoops, parseRegistry, type Registry } from "./loop-registry.js";
 import { machineEnvironment, type SchedulerConfig } from "./scheduler-config.js";
@@ -20,6 +22,12 @@ export interface SchedulerDeps {
   threadStatus(threadId: string): Promise<string | null>;
   /** Whether a workflow run of the thread is active, and a line about its latest run. */
   workflowRuns(threadId: string): Promise<{ active: boolean; last: string | null }>;
+  /** The newest review gate recorded for the issue since `since` (epoch ms), or null. */
+  latestReviewGate(issue: string, since: number): GateRun | null;
+  /** The pull request's head commit now, read on the machine the gate ran on. */
+  prHead(hostId: string, repo: string, pr: number): Promise<string>;
+  /** Adds one line under the workpad's Notes; false when the issue has no workpad. */
+  noteOnWorkpad(issueId: string, heading: string, line: string): Promise<boolean>;
   /** Sends a message to the standing orchestrator thread. */
   notify(text: string): Promise<void>;
   getFocus(): Promise<string | null>;
@@ -136,6 +144,73 @@ export function createScheduler(deps: SchedulerDeps) {
     }
   }
 
+  /**
+   * The hand-over of an ended run whose issue is in the review state: to the approval state only
+   * when the review gate is recorded green on the PR's current head; otherwise the issue stays in
+   * review, or goes to the blocked state, and the reason goes on the workpad. Returns null after a
+   * move to approval, else the outcome of the stall.
+   */
+  async function handOver(
+    config: SchedulerConfig,
+    registry: Registry,
+    board: Board,
+    dispatch: Dispatch,
+    issue: BoardIssue,
+  ): Promise<string | null> {
+    const states = config.handOver;
+    if (states === undefined) return null;
+    const record = deps.latestReviewGate(dispatch.issue, dispatch.startedAt);
+    let head: PrHead | null = null;
+    if (record !== null && needsPrHead(record)) {
+      try {
+        if (registry.repo === null) throw new Error("factory.config.json has no github.ownerRepo");
+        if (record.hostId === null || typeof record.pr !== "number") {
+          throw new Error("the gate record names no machine or pull request");
+        }
+        head = { ok: true, sha: await deps.prHead(record.hostId, registry.repo, record.pr) };
+      } catch (error) {
+        head = { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    const decision = decideHandOver({ record, head });
+    const target =
+      decision.move === "approval"
+        ? states.approvalState
+        : decision.move === "blocked" && config.blockedState !== null
+          ? config.blockedState
+          : null;
+    let landed: string = states.reviewState;
+    if (target !== null) {
+      const stateId = board.states[target];
+      try {
+        if (stateId === undefined)
+          throw new Error(`team ${config.teamKey} has no state "${target}"`);
+        await deps.moveIssue(issue.id, stateId);
+        landed = target;
+        deps.log(`scheduler: ${dispatch.issue} moved to ${target}: ${decision.reason}`);
+      } catch (error) {
+        const why = error instanceof Error ? error.message : String(error);
+        decision.reason = `${decision.reason}; it could not be moved to ${target}: ${why}`;
+      }
+    }
+    if (landed === states.approvalState) return null;
+    // The reason goes on the workpad. No workpad, or no heading to find it by, is not a reason to
+    // lose it: the stall report below carries it as well.
+    if (registry.workpadHeading !== null) {
+      const date = new Date(deps.now()).toISOString().slice(0, 10);
+      await deps
+        .noteOnWorkpad(
+          issue.id,
+          registry.workpadHeading,
+          `- ${date} Optio (hand-over): ${decision.reason}`,
+        )
+        .catch((error: unknown) =>
+          deps.log(`scheduler: could not write the note for ${dispatch.issue}: ${String(error)}`),
+        );
+    }
+    return `${decision.reason}; the issue is in ${landed}`;
+  }
+
   /** Ends every active run whose workflow and launcher thread have both stopped. */
   async function reconcile(
     config: SchedulerConfig,
@@ -157,6 +232,20 @@ export function createScheduler(deps: SchedulerDeps) {
         last = runs.last;
       }
       const issue = board.issues.find((candidate) => candidate.identifier === dispatch.issue);
+      if (
+        issue !== undefined &&
+        config.handOver !== undefined &&
+        issue.state === config.handOver.reviewState
+      ) {
+        const outcome = await handOver(config, registry, board, dispatch, issue);
+        if (outcome === null)
+          store.end(dispatch.id, "handed-over", `${config.handOver.approvalState}`, deps.now());
+        else {
+          store.end(dispatch.id, "stalled", outcome.slice(0, 500), deps.now());
+          stalled.push({ ...dispatch, status: "stalled", outcome });
+        }
+        continue;
+      }
       const working =
         issue !== undefined &&
         (dispatchStates.includes(issue.state) || config.activeStates.includes(issue.state));

@@ -175,6 +175,60 @@ export async function moveIssue(
 }
 
 /**
+ * The workpad body with one line added at the end of its `### Notes` section, changing nothing
+ * else. A workpad without that section gets one at the end.
+ */
+export function withNote(body: string, line: string): string {
+  const lines = body.split("\n");
+  const start = lines.findIndex((text) => text.trim() === "### Notes");
+  if (start === -1) return `${body.replace(/\s+$/, "")}\n\n### Notes\n\n${line}\n`;
+  let end = lines.findIndex((text, index) => index > start && text.startsWith("### "));
+  if (end === -1) end = lines.length;
+  let last = end - 1;
+  while (last > start && lines[last]?.trim() === "") last -= 1;
+  lines.splice(last + 1, 0, line);
+  return lines.join("\n");
+}
+
+/**
+ * Adds one line under `### Notes` of the issue's single workpad comment: the one whose body starts
+ * with the heading. Returns false when the issue has none.
+ */
+export async function writeWorkpadNote(
+  apiKey: string,
+  issueId: string,
+  heading: string,
+  line: string,
+  fetchImpl: Fetch = fetch,
+): Promise<boolean> {
+  const data = z
+    .object({
+      issue: z.object({
+        comments: z.object({ nodes: z.array(z.object({ id: z.string(), body: z.string() })) }),
+      }),
+    })
+    .parse(
+      await graphql(
+        apiKey,
+        fetchImpl,
+        `query Workpad($id: String!) { issue(id: $id) { comments(first: 100) { nodes { id body } } } }`,
+        { id: issueId },
+      ),
+    );
+  const workpad = data.issue.comments.nodes.find((comment) => comment.body.startsWith(heading));
+  if (workpad === undefined) return false;
+  await graphql(
+    apiKey,
+    fetchImpl,
+    `mutation Note($id: String!, $body: String!) {
+       commentUpdate(id: $id, input: { body: $body }) { success }
+     }`,
+    { id: workpad.id, body: withNote(workpad.body, line) },
+  );
+  return true;
+}
+
+/**
  * Promotes an issue: moves it to the state, adds the label, and leaves a
  * comment that says why. The label is found by name, the team's own first.
  */

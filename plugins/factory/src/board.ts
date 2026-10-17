@@ -114,7 +114,13 @@ export function planBoard(input: {
       if (loop !== null) live.set(loop, (live.get(loop) ?? 0) + 1);
     }
     if (activeOn !== null || config.activeStates.includes(issue.state)) holders.push(issue);
-    if (issue.state === config.blockedState && issue.blockedBy.length === 0)
+    // A stalled issue that was parked in Blocked stays there: moving it back would undo the park
+    // on the next tick, and the orchestrator must resume or release it first.
+    if (
+      issue.state === config.blockedState &&
+      issue.blockedBy.length === 0 &&
+      past?.stalled !== true
+    )
       plan.unblock.push(issue);
   }
 

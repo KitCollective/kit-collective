@@ -17,8 +17,18 @@ export type GateName = (typeof GATE_NAMES)[number];
 /** An issue key as a tracker writes it: a team key, a dash and a number. No flag can match. */
 export const ISSUE_KEY = /^[A-Z][A-Z0-9]*-[1-9][0-9]*$/;
 
+/**
+ * How long one `optio_gate` call lets the gate run. A worker's tool call is not held for the
+ * host's full 20 minutes, so the gate waits as long as one slice of a workflow's gate loop (about
+ * 8 minutes of waiting for checks) and answers `waiting` (exit 3) beyond it; the caller asks again.
+ */
+export const GATE_CALL_TIMEOUT_MS = 9 * 60_000;
+
 /** The SDK caps one host call at 30 minutes. */
 export const GATE_TIMEOUT_MAX_MS = 25 * 60_000;
+
+/** A GitHub repository as `owner/name`. No flag can match. */
+export const REPO_SLUG = /^[\w.-]+\/[\w.-]+$/;
 
 export const gateName = z.enum(GATE_NAMES);
 export const gatePr = z.number().int().positive();
@@ -53,5 +63,10 @@ export const hostContract = defineRpcContract({
       })
       .strict(),
     output: scriptResult.extend({ sha: z.string() }),
+  },
+  /** The head commit of a pull request right now, read with a fixed `gh pr view`. */
+  pr_head: {
+    input: z.object({ repo: z.string().regex(REPO_SLUG), pr: gatePr }).strict(),
+    output: z.object({ sha: z.string().regex(/^[0-9a-f]{7,64}$/) }),
   },
 });

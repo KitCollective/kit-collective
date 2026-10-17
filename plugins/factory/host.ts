@@ -53,7 +53,21 @@ export const runGate = async (input: GateInput, context: { signal: AbortSignal }
   return { ...result, sha: stdout.trim() };
 };
 
+const PR_HEAD_TIMEOUT_MS = 60_000;
+
+type PrHeadInput = (typeof hostContract.pr_head.input)["_output"];
+
+/** Reads a pull request's head commit with a fixed `gh pr view`; the caller supplies no flag. */
+export const prHead = async ({ repo, pr }: PrHeadInput, context: { signal: AbortSignal }) => {
+  const { stdout } = await execFileAsync(
+    "gh",
+    ["pr", "view", String(pr), "--repo", repo, "--json", "headRefOid", "--jq", ".headRefOid"],
+    { timeout: PR_HEAD_TIMEOUT_MS, signal: context.signal },
+  );
+  return { sha: stdout.trim() };
+};
+
 export default experimental_defineHostEntry({
   contract: hostContract,
-  handlers: { run_probe: runProbe, run_gate: runGate },
+  handlers: { run_probe: runProbe, run_gate: runGate, pr_head: prHead },
 });

@@ -1,14 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
-import { afterEach, describe, expect, it } from "vitest";
-import { gateWaitSeconds, runGate } from "../host.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { gateWaitSeconds, prHead, runGate } from "../host.js";
 import plugin from "../server.js";
 import type { GateRun } from "./gate-store.js";
 import { validateGateCall } from "./gate-tool.js";
-import { GATE_SCRIPT, hostContract } from "./host-contract.js";
+import { GATE_CALL_TIMEOUT_MS, GATE_SCRIPT, hostContract } from "./host-contract.js";
 
 const temps: string[] = [];
 afterEach(() => {
@@ -150,7 +150,14 @@ describe("optio_gate", () => {
       {
         method: "run_gate",
         hostId: "host_9",
-        input: { cwd: "/work/tree", gate: "review", pr: 12, issue: "ABC-3" },
+        // One call waits as long as one slice of a workflow's gate loop, so a worker's tool call is not held for the host's full budget.
+        input: {
+          cwd: "/work/tree",
+          gate: "review",
+          pr: 12,
+          issue: "ABC-3",
+          timeoutMs: GATE_CALL_TIMEOUT_MS,
+        },
       },
     ]);
     expect(await gates()).toMatchObject([
@@ -210,6 +217,10 @@ describe("optio_gate", () => {
 describe("the host entry's run_gate", () => {
   const signal = () => ({ signal: new AbortController().signal });
 
+  it("gives a tool call the wait budget of one workflow slice", () => {
+    expect(gateWaitSeconds(GATE_CALL_TIMEOUT_MS)).toBe(480);
+  });
+
   it("runs the fixed gate script with the validated arguments and reports the repo's own HEAD", async () => {
     const { dir, sha } = stubRepo('console.log("argv " + process.argv.slice(2).join(" "));\n');
     const result = await runGate({ cwd: dir, gate: "review", pr: 12, issue: "ABC-3" }, signal());
@@ -256,5 +267,58 @@ describe("the host entry's run_gate", () => {
     expect(await input.validate({ ...ok, script: "other.mjs" })).toHaveProperty("issues");
     expect(await input.validate({ ...ok, gate: "result" })).toHaveProperty("issues");
     expect(await input.validate({ ...ok, issue: "--x" })).toHaveProperty("issues");
+  });
+});
+
+describe("the host entry's pr_head", () => {
+  const signal = () => ({ signal: new AbortController().signal });
+
+  /** A `gh` on PATH that prints its arguments to a file and answers with a fixed head. */
+  function stubGh(answer: string, exitCode = 0) {
+    const dir = mkdtempSync(join(tmpdir(), "optio-gh-"));
+    temps.push(dir);
+    const argsFile = join(dir, "args");
+    const gh = join(dir, "gh");
+    writeFileSync(
+      gh,
+      `#!/bin/sh\nprintf '%s\\n' "$@" > '${argsFile}'\necho '${answer}'\nexit ${exitCode}\n`,
+    );
+    chmodSync(gh, 0o755);
+    vi.stubEnv("PATH", `${dir}:${process.env.PATH ?? ""}`);
+    return argsFile;
+  }
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("reads the head with a fixed gh pr view for the given repo and pull request", async () => {
+    const argsFile = stubGh("0123456789abcdef0123456789abcdef01234567");
+    const result = await prHead({ repo: "acme/shop", pr: 12 }, signal());
+    expect(result).toEqual({ sha: "0123456789abcdef0123456789abcdef01234567" });
+    const { readFileSync } = await import("node:fs");
+    expect(readFileSync(argsFile, "utf8").trim().split("\n")).toEqual([
+      "pr",
+      "view",
+      "12",
+      "--repo",
+      "acme/shop",
+      "--json",
+      "headRefOid",
+      "--jq",
+      ".headRefOid",
+    ]);
+  });
+
+  it("rejects when gh fails", async () => {
+    stubGh("boom", 1);
+    await expect(prHead({ repo: "acme/shop", pr: 12 }, signal())).rejects.toThrow();
+  });
+
+  it("accepts only an owner/name repo, a pull request and no other field", async () => {
+    const input = hostContract.pr_head.input["~standard"];
+    const ok = { repo: "acme/shop", pr: 1 };
+    expect(await input.validate(ok)).not.toHaveProperty("issues");
+    expect(await input.validate({ ...ok, repo: "--help" })).toHaveProperty("issues");
+    expect(await input.validate({ ...ok, repo: "a/b --x" })).toHaveProperty("issues");
+    expect(await input.validate({ ...ok, pr: "1" })).toHaveProperty("issues");
+    expect(await input.validate({ ...ok, cwd: "/x" })).toHaveProperty("issues");
   });
 });
