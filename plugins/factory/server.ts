@@ -428,7 +428,8 @@ export default async function plugin(bb: BbPluginApi) {
       // records what it would do.
       const result = await scheduler.tick(config, config.mode === "live", true);
       if (
-        result.started.length + result.stalled.length + result.unblocked.length > 0 ||
+        result.started.length + result.stalled.length + result.unblocked.length + result.followed >
+          0 ||
         result.refillRequested ||
         result.recorded.length > 0
       ) {

@@ -47,8 +47,9 @@ export const DISPATCH_MIGRATIONS = [
 ];
 
 /**
- * Appended after every other migration list, because the lists run as one
- * sequence and an insert in the middle would move the ones after it.
+ * Appended after the run, dispatch and agent migrations (RUN_MIGRATIONS
+ * follow it), because the lists run as one sequence and an insert in the
+ * middle would move the ones after it.
  */
 export const LOOP_MIGRATIONS = [
   `ALTER TABLE dispatches ADD COLUMN loop TEXT`,
@@ -66,7 +67,7 @@ export const LOOP_MIGRATIONS = [
 
 /**
  * Appended after the Loop migrations, for the runs page: what the board has
- * seen of a run's workflow, and the gate verdicts the Factory ran for it.
+ * seen of a run's workflow, and the gate verdicts Optio ran for it.
  */
 export const RUN_MIGRATIONS = [
   `ALTER TABLE dispatches ADD COLUMN workflow_run_id TEXT`,
@@ -99,7 +100,7 @@ export interface Decision {
   reason: string;
 }
 
-/** A gate the Factory ran for a run: its exit code, its verdict line and the commit it judged. */
+/** A gate Optio ran for a run: its exit code, its verdict line and the commit it judged. */
 export interface GateVerdict {
   at: number;
   gate: string;
@@ -216,15 +217,21 @@ export function createDispatchStore(db: Database) {
       };
     },
     /** Keeps what the board has seen of a run's workflow; a value it did not see leaves the last one. */
+    /** Whether the look showed something new: a run, a step or a PR the record did not hold. */
     observe(
       id: string,
       seen: { workflowRunId: string | null; step: string | null; prNumber: number | null },
-    ): void {
-      db.prepare(
-        `UPDATE dispatches SET workflow_run_id = COALESCE(?, workflow_run_id), step = COALESCE(?, step), pr_number = COALESCE(?, pr_number) WHERE id = ?`,
-      ).run(seen.workflowRunId, seen.step, seen.prNumber, id);
+    ): boolean {
+      return (
+        db
+          .prepare(
+            `UPDATE dispatches SET workflow_run_id = COALESCE(@run, workflow_run_id), step = COALESCE(@step, step), pr_number = COALESCE(@pr, pr_number)
+             WHERE id = @id AND ((@run IS NOT NULL AND workflow_run_id IS NOT @run) OR (@step IS NOT NULL AND step IS NOT @step) OR (@pr IS NOT NULL AND pr_number IS NOT @pr))`,
+          )
+          .run({ run: seen.workflowRunId, step: seen.step, pr: seen.prNumber, id }).changes > 0
+      );
     },
-    /** Writes a gate the Factory ran to the record of the run it judged. */
+    /** Writes a gate Optio ran to the record of the run it judged. */
     recordGate(dispatchId: string, gate: Omit<GateVerdict, "at">, now: number): void {
       db.prepare(
         `INSERT INTO gate_verdicts (dispatch_id, at, gate, exit_code, verdict, commit_sha, thread_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,

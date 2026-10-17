@@ -834,7 +834,8 @@ describe("the record of runs", () => {
     // Inside the start grace the run is only observed.
     state.clock += 30_000;
     state.seen = { runId: "wfr_1", step: "Engineer", prNumber: null };
-    await scheduler.tick(config(), true);
+    expect((await scheduler.tick(config(), true)).followed).toBe(1);
+    expect((await scheduler.tick(config(), true)).followed).toBe(0); // nothing new to show
     expect(store.latest("ENG-1")).toMatchObject({
       status: "active",
       workflowRunId: "wfr_1",
@@ -846,7 +847,7 @@ describe("the record of runs", () => {
     state.clock += 60_000;
     state.seen = { runId: "wfr_1", step: "Pre-review gate", prNumber: null };
     state.board = { states, issues: [issue("ENG-1", { pullRequest: 12 })] };
-    await scheduler.tick(config(), true);
+    expect((await scheduler.tick(config(), true)).followed).toBe(1);
     expect(store.latest("ENG-1")).toMatchObject({ step: "Pre-review gate", prNumber: 12 });
 
     // The last tick sees the finished run and keeps what the earlier ones saw.
@@ -854,7 +855,8 @@ describe("the record of runs", () => {
     state.workflowActive = false;
     state.seen = { runId: "wfr_1", step: "Hand-over", prNumber: 12 };
     state.board = { states, issues: [issue("ENG-1", { state: "Approval", pullRequest: 12 })] };
-    await scheduler.tick(config(), true);
+    // The new step and the hand-over are two things for an open page to show.
+    expect((await scheduler.tick(config(), true)).followed).toBe(2);
     expect(store.runs({ loop: null, state: null, limit: 10 })).toMatchObject([
       {
         issue: "ENG-1",

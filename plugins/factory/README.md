@@ -59,7 +59,7 @@ when its reason changes.
 
 **Runs** (a button on the Agents list and on the Board) lists every run the
 Board started, per Loop and newest first: its issue, machine, current step, how
-long it has run, the gates the Factory recorded for it, and why it stopped. It
+long it has run, the gates Optio recorded for it, and why it stopped. It
 filters by Loop and by state: *running*, *stopped* (a stall, released or not)
 and *handed over* (with where the issue went).
 
@@ -70,7 +70,7 @@ links to its launcher thread (the thread that started the workflow), copies
 `bb workflows status <run id>` for its workflow run, and opens its PR on GitHub
 when `github.ownerRepo` is set in `factory.config.json`. A stopped run's reason
 is the workflow's closing note plus the status the issue is in. Gate verdicts
-appear once the Factory records them (`gate_verdicts`); until then the row has
+appear once Optio records them (`gate_verdicts`); until then the row has
 none.
 
 ## Install

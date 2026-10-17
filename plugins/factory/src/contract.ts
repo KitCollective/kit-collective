@@ -177,7 +177,7 @@ const loopRun = z.object({
   stopReason: z.string().nullable(),
   /** Where a handed-over run left the issue, e.g. its status. */
   handedOverTo: z.string().nullable(),
-  /** The gates the Factory ran for the run; empty until a gate has been recorded. */
+  /** The gates Optio ran for the run; empty until a gate has been recorded. */
   gates: z.array(
     z.object({
       at: z.number(),

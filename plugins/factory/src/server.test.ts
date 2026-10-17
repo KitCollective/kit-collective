@@ -497,8 +497,17 @@ describe("the runs page", () => {
         truncated: false,
       });
 
+      // An open page refreshes on the `changed` signal, so every write it shows publishes one.
+      const published = () =>
+        harness.inspection.realtimeSignals.filter((signal) => signal.channel === "changed").length;
       await harness.behavior.runSchedule("orchestrator-tick"); // starts ENG-1
+      const afterStart = published();
+      expect(afterStart).toBeGreaterThan(0);
       await harness.behavior.runSchedule("orchestrator-tick"); // sees its workflow run
+      expect(published()).toBeGreaterThan(afterStart);
+      const afterSeen = published();
+      await harness.behavior.runSchedule("orchestrator-tick"); // sees nothing new
+      expect(published()).toBe(afterSeen);
       const page = await rpc("runs_list", { loop: "Issue run", state: "running" });
       expect(page.runs).toEqual([
         expect.objectContaining({
@@ -527,6 +536,7 @@ describe("the runs page", () => {
       };
       issueState = "Approval";
       await harness.behavior.runSchedule("orchestrator-tick");
+      expect(published()).toBeGreaterThan(afterSeen); // the step change and the hand-over
       expect((await rpc("runs_list", { loop: null, state: "running" })).runs).toEqual([]);
       expect((await rpc("runs_list", { loop: "Issue run", state: "handed-over" })).runs).toEqual([
         expect.objectContaining({
