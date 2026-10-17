@@ -17,6 +17,10 @@ test("parseLiveChecks reads the live-check line, plain, in backticks or escaped,
   assert.deepEqual(parseLiveChecks("no line here"), []);
 });
 
+test("optio-inbox asks the Inbox for its cards", () => {
+  assert.deepEqual(liveCheckSteps("optio-inbox"), [["bb", "optio", "inbox", "--json"]]);
+});
+
 test("liveCheckSteps runs only listed checks and fills only a valid thread id", () => {
   assert.deepEqual(liveCheckSteps("optio-host-probe", { thread: "thr_abc123" }), [
     ["bb", "optio", "host-probe", "thr_abc123"],

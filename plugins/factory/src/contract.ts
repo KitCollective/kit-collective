@@ -2,6 +2,7 @@
 // at the wire boundary.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { inboxContract } from "./inbox/contract.js";
 
 const agent = z.object({
   id: z.string(),
@@ -300,6 +301,7 @@ export const rpcContract = defineRpcContract({
     output: z.object({ hosts: z.array(z.object({ id: z.string(), name: z.string() })) }),
   },
   board_get: { input: z.null(), output: board },
+  ...inboxContract,
   runs_list: {
     input: z
       .object({
