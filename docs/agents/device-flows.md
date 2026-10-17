@@ -51,7 +51,6 @@ Flows tap by `testID`, so a copy change does not break a flow. The exceptions, e
 - the app's own upload source sheet option `Fotos` (a system action sheet), by label;
 - the system photo picker: the first cell and its confirm button, by screen point, on a simulator whose library holds exactly one photo;
 - iOS's "save password" prompt: `Ikke nu` / `Not Now`, by text, when it shows;
-- Send bud: a tap on the photo, by screen point, to dismiss the number pad that covers the form (KIT-270).
 
 When a slice adds a control a flow must tap, add the `testID` in the same PR. Adding a `testID` is not a UI change; do not restyle a screen to make a flow pass.
 
@@ -69,12 +68,13 @@ What the hosted run does not do: the upload to the evidence bucket, the before/a
 
 ### A flow from a run artifact
 
-The hosted run can also take one flow that is not in the repo, from a named run artifact: the Scenario judge's path (ADR-0060). Two workflows, each found by the run id its dispatch returns, never by "the newest run" (two dispatches a second apart would swap). The scenarios CLI does both, and the Milestone scenarios workflow uses it (`docs/agents/scenarios.md`):
+The hosted run can also take one flow that is not in the repo, from a named run artifact: the Scenario judge's path (ADR-0060). Two workflows in two repos, each found by the run id its dispatch returns, never by "the newest run" (two dispatches a second apart would swap): the producer `scenario-flow.yml` in the Holdout repo (since KIT-366; its source is `docs/agents/holdout-scenario-flow.yml`, and `kit-collective` has no `scenario-flow.yml`), and `device-flows.yml` here. The scenarios CLI does both, and the Milestone scenarios workflow uses it (`docs/agents/scenarios.md`). A hand-written test flow takes the same path:
 
 ```bash
-# 1. Put the flow into a run artifact, scenario-flow-<name>, holding <name>.yaml. The CLI reads
-#    .factory/scenario-flows/<name>.yaml (and deletes it), sends it on stdin, waits for the run
-#    and prints {"name","run"}.
+# 1. Put the flow into a run artifact of the Holdout repo, scenario-flow-<name>, holding <name>.yaml.
+#    The CLI reads .factory/scenario-flows/<name>.yaml (and deletes it), sends it on stdin with the
+#    Holdout token (SCENARIOS_GH_TOKEN, or your gh login on the Mac), waits for the run and prints
+#    {"name","run"}.
 mkdir -p .factory/scenario-flows && cp flow.yaml .factory/scenario-flows/scenario-smoke.yaml
 node scripts/scenarios.mjs flow --name scenario-smoke
 
@@ -85,11 +85,11 @@ node scripts/scenarios.mjs run --flow-run <run from step 1> --name scenario-smok
 node scripts/scenarios.mjs wait --runs <run from step 2> --sha "$(git rev-parse origin/development)" --timeout 480
 ```
 
-Both dispatches go through `gh api --method POST .../actions/workflows/<file>/dispatches --input -` with `return_run_details: true`, so GitHub answers with the run's id. `scenario-flow.yml` also has a run name, `Scenario flow <name>`, to find its run by when an answer has no id; `device-flows.yml` has none, so there the CLI stops instead of guessing.
+Both dispatches go through `gh api --method POST .../actions/workflows/<file>/dispatches --input -` with `return_run_details: true`, so GitHub answers with the run's id. The producer also has a run name, `Scenario flow <name>`, to find its run by when an answer has no id; `device-flows.yml` has none, so there the CLI stops instead of guessing. The producer is dispatched on the Holdout's `main`, `device-flows.yml` on `development`.
 
-`flow` names the file inside the artifact when it holds more than one. `device-flows.yml` downloads the artifact into `apps/mobile/.maestro/external/` (one level under `.maestro`, so `../subflows/sign-in.yaml` resolves), and from there it is a slice run: the same Postgres, local API, build and `run-local.sh`, signed in as the Test Collector, with the photos the flow's `# simulator-photos:` line names. Screenshots, recording and the API log are uploaded as `device-flows-<sha>`. The `Run the flows` step gives Maestro's iOS driver 5 minutes to start (`MAESTRO_DRIVER_STARTUP_TIMEOUT=300000`; Maestro's default is 2 minutes): a cold runner missed the default in run 38801470319, and a run that fails with no screenshot at all is a `hosted-run-error`, never a verdict (`docs/agents/scenarios.md`). It sets no `Device flows` status, has no permission to push and never commits the flow; several artifact runs on one commit do not cancel each other.
+`flow` names the file inside the artifact when it holds more than one. `device-flows.yml` reads the Holdout repo's name from `factory.config.json` (`scenarios.holdoutRepo`) and downloads the artifact from there with the Actions secret `SCENARIO_FLOWS_TOKEN` (a fine-grained token with Actions read on the Holdout repo only; only the download step gets its value, and the step before it, which gets only whether it is set, stops the run in seconds naming `scripts/holdout-flows-wizard.sh` when it is empty), into `apps/mobile/.maestro/external/` (one level under `.maestro`, so `../subflows/sign-in.yaml` resolves). From there it is a slice run: the same Postgres, local API, build and `run-local.sh`, signed in as the Test Collector, with the photos the flow's `# simulator-photos:` line names. The `Run the flows` step gives Maestro's iOS driver 5 minutes to start (`MAESTRO_DRIVER_STARTUP_TIMEOUT=300000`; Maestro's default is 2 minutes): a cold runner missed the default in run 38801470319, and a run that fails with no screenshot at all is a `hosted-run-error`, never a verdict (`docs/agents/scenarios.md`). It sets no `Device flows` status, has no permission to push and never commits the flow; several artifact runs on one commit do not cancel each other.
 
-The flow is never printed to a log, but anyone who can read the repository can read the producer's dispatch inputs, download `scenario-flow-<name>` (kept 7 days), and download `device-flows-<sha>` (kept 14 days), whose Maestro output carries the flow's steps. KIT-366 moves the flow out of this repository.
+Unlike a slice run, an artifact run leaves no flow text in `kit-collective` (KIT-366): Maestro's console, which prints every step, goes to `$RUNNER_TEMP/flows-console.log` on the runner and is never uploaded (the log shows only the exit code); then `node scripts/scenarios.mjs evidence --dir apps/mobile/.maestro/out` keeps only the `kc__*.png` screenshots and `kc__*.mp4` recordings (Maestro's failure screenshots renamed to `kc__<flow>__failure-NN.png`, everything else deleted: `commands.json`, logs, `screen-hierarchy/`), and only that folder is uploaded as `device-flows-<sha>`, without the API log. If `evidence` fails, nothing is uploaded. Debugging a broken artifact run therefore means running the flow on the Mac (below), not reading the hosted log. Slice, regression and nightly runs are unchanged. The flow's own copy is the producer's artifact in the Holdout repo, kept 1 day.
 
 ### On the approver's Mac
 

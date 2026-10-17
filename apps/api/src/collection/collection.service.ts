@@ -73,7 +73,6 @@ import {
   userJerseyFavorite,
   userJerseyPatch,
   userJerseyPhoto,
-  visionLog,
 } from "@kit/db";
 import type { JerseySize, KitType, LabelLocale } from "@kit/domain";
 import {
@@ -114,6 +113,7 @@ import { PhotoDerivativeQueueService } from "./photo-derivative-queue.service.js
 import { derivativeKeysForPhoto, storeGpsStrippedOriginal } from "./photo-derivatives.js";
 import { gridObjectKeyForNewPhoto, resolveStoredPhotoBytes } from "./photo-variant-resolve.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
+import { deleteUserJerseyRows } from "./user-jersey-delete.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");
 
@@ -337,37 +337,49 @@ export class CollectionService {
       this.loadUnansweredBidCounts(userId, jerseyIds),
     ]);
 
-    const jerseys: CollectionJersey[] = rows.map((row) => {
+    const jerseys: CollectionJersey[] = [];
+    for (const row of rows) {
+      const photos = photosByJersey.get(row.id);
+      if (!photos || photos.length === 0) {
+        // KIT-379: one photo-less UserJersey (legacy data) must not take down the whole Samling list.
+        this.logger.warn(`Skipping UserJersey ${row.id} in own list: no photo rows`);
+        continue;
+      }
+
       const clubLabel = row.clubId ? (clubLabels.get(row.clubId) ?? null) : null;
       const nationalTeamLabel = row.nationalTeamId
         ? (nationalTeamLabels.get(row.nationalTeamId) ?? null)
         : null;
-      if (row.clubId && !clubLabel) {
-        throw new NotFoundException(`Club label missing for jersey ${row.id}`);
-      }
-      if (row.nationalTeamId && !nationalTeamLabel) {
-        throw new NotFoundException(`National team label missing for jersey ${row.id}`);
+      // KIT-384: same class as the photo skip above; one missing label row must not 404 the whole list.
+      const missingLabel =
+        row.clubId && !clubLabel
+          ? "club"
+          : row.nationalTeamId && !nationalTeamLabel
+            ? "national team"
+            : null;
+      if (missingLabel) {
+        this.logger.warn(
+          `Skipping UserJersey ${row.id} in own list: ${missingLabel} label missing`,
+        );
+        continue;
       }
 
       const countryLabel = countryLabels.get(row.countryId);
       if (!countryLabel) {
-        throw new NotFoundException(`Country label missing for jersey ${row.id}`);
-      }
-
-      const photos = photosByJersey.get(row.id);
-      if (!photos || photos.length === 0) {
-        throw new NotFoundException(`Photos missing for jersey ${row.id}`);
+        this.logger.warn(`Skipping UserJersey ${row.id} in own list: country label missing`);
+        continue;
       }
 
       const leagueId = row.leagueId;
       const leagueLabel = leagueId ? (leagueLabels.get(leagueId) ?? null) : null;
       if (leagueId && !leagueLabel) {
-        throw new NotFoundException(`League label missing for jersey ${row.id}`);
+        this.logger.warn(`Skipping UserJersey ${row.id} in own list: league label missing`);
+        continue;
       }
 
       const playerFields = playerFieldsByJersey.get(row.id);
 
-      return {
+      jerseys.push({
         id: row.id,
         clubId: row.clubId,
         nationalTeamId: row.nationalTeamId,
@@ -397,8 +409,8 @@ export class CollectionService {
         biddingEnabled: row.biddingEnabled,
         private: row.private,
         unansweredBidCount: unansweredBidCounts.get(row.id) ?? 0,
-      };
-    });
+      });
+    }
 
     return collectionJerseysSchema.parse({ jerseys });
   }
@@ -1210,25 +1222,7 @@ export class CollectionService {
     }
 
     await this.db.transaction(async (tx) => {
-      // The Conversation and its messages stay; a pending Bud on the UserJersey is declined.
-      await tx
-        .update(conversationMessage)
-        .set({ bidStatus: "declined" })
-        .where(
-          and(
-            eq(conversationMessage.userJerseyId, jerseyId),
-            eq(conversationMessage.kind, "bid"),
-            eq(conversationMessage.bidStatus, "pending"),
-          ),
-        );
-
-      await tx.delete(visionLog).where(eq(visionLog.userJerseyId, jerseyId));
-      await tx.delete(jerseyDraft).where(eq(jerseyDraft.userJerseyId, jerseyId));
-      await tx.delete(userJerseyFavorite).where(eq(userJerseyFavorite.userJerseyId, jerseyId));
-      await tx.delete(userJerseyPhoto).where(eq(userJerseyPhoto.userJerseyId, jerseyId));
-      await tx
-        .delete(userJersey)
-        .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)));
+      await deleteUserJerseyRows(tx, { userJerseyId: jerseyId, userId });
     });
   }
 
@@ -2096,47 +2090,82 @@ export class CollectionService {
     await this.assertOptionalPlayerScoped(side, body.seasonId, body.playerId);
     await this.assertOptionalPatchesScoped(body.seasonId, body.patchIds);
 
-    const [insertedJersey] = await this.db
-      .insert(userJersey)
-      .values({
-        userId,
-        clubId: side.clubId,
-        nationalTeamId: side.nationalTeamId,
-        seasonId: body.seasonId,
-        playerId: body.playerId ?? null,
-        catalogKitId: body.catalogKitId ?? null,
-        type: body.type,
-        size: body.size,
-        condition: body.condition,
-        draftId: body.draftId ?? null,
-      })
-      .returning({
-        id: userJersey.id,
-        clubId: userJersey.clubId,
-        nationalTeamId: userJersey.nationalTeamId,
-        seasonId: userJersey.seasonId,
-        catalogKitId: userJersey.catalogKitId,
-        type: userJersey.type,
-        size: userJersey.size,
-        condition: userJersey.condition,
+    // KIT-379: decode and put every photo object before any row exists, then write the
+    // UserJersey, its photos, patches and draft link in one transaction. A failure at any
+    // step leaves no UserJersey without photos behind.
+    const jerseyId = crypto.randomUUID();
+    const storedPhotos = await this.putSavePhotoObjects(userId, jerseyId, body.photos);
+
+    try {
+      await this.db.transaction(async (tx) => {
+        await tx.insert(userJersey).values({
+          id: jerseyId,
+          userId,
+          clubId: side.clubId,
+          nationalTeamId: side.nationalTeamId,
+          seasonId: body.seasonId,
+          playerId: body.playerId ?? null,
+          catalogKitId: body.catalogKitId ?? null,
+          type: body.type,
+          size: body.size,
+          condition: body.condition,
+          draftId: body.draftId ?? null,
+        });
+
+        if (body.patchIds?.length) {
+          await tx.insert(userJerseyPatch).values(
+            body.patchIds.map((patchId) => ({
+              userJerseyId: jerseyId,
+              patchId,
+            })),
+          );
+        }
+
+        await tx.insert(userJerseyPhoto).values(
+          storedPhotos.map((stored) => ({
+            id: stored.photoId,
+            userJerseyId: jerseyId,
+            objectKey: stored.objectKey,
+            role: stored.photo.role,
+            source: stored.photo.source,
+            label: stored.photo.role === "other" ? stored.photo.label?.trim() || null : null,
+            ocrStatus: "none" as const,
+          })),
+        );
+
+        if (body.draftId) {
+          await tx
+            .insert(jerseyDraft)
+            .values({
+              id: body.draftId,
+              userId,
+              userJerseyId: jerseyId,
+            })
+            .onConflictDoUpdate({
+              target: jerseyDraft.id,
+              set: {
+                userJerseyId: jerseyId,
+                updatedAt: new Date(),
+              },
+            });
+        }
       });
-
-    if (!insertedJersey) {
-      throw new BadRequestException("Could not create UserJersey");
+    } catch (error) {
+      await this.deleteOrphanedPhotoObjects(storedPhotos.map((stored) => stored.objectKey));
+      throw error;
     }
 
-    if (body.patchIds?.length) {
-      await this.db.insert(userJerseyPatch).values(
-        body.patchIds.map((patchId) => ({
-          userJerseyId: insertedJersey.id,
-          patchId,
-        })),
-      );
+    for (const stored of storedPhotos) {
+      this.photoDerivativeQueueService.enqueue(this.objectStore, {
+        userId,
+        jerseyId,
+        photoId: stored.photoId,
+        role: stored.photo.role,
+        sourceObjectKey: stored.objectKey,
+      });
     }
 
-    await this.persistPhotos(userId, insertedJersey.id, body.photos);
-
-    const firstPhoto = body.photos[0];
+    const firstPhoto = storedPhotos[0];
     let effectiveVisionJobId = body.visionJobId ?? null;
     const shouldEnqueueVision =
       firstPhoto &&
@@ -2146,10 +2175,9 @@ export class CollectionService {
     if (shouldEnqueueVision) {
       const allowed = await this.billingService.canEnqueueIdentityVision(userId, body.draftId);
       if (allowed) {
-        const firstPhotoBytes = decodeBase64Photo(firstPhoto.contentBase64);
         effectiveVisionJobId = await this.visionQueueService.enqueueFromSave(
           userId,
-          firstPhotoBytes,
+          firstPhoto.bytes,
           body.draftId,
         );
       }
@@ -2159,27 +2187,22 @@ export class CollectionService {
       await this.visionService.reconcileUserActionAtSave(
         userId,
         effectiveVisionJobId,
-        insertedJersey.id,
+        jerseyId,
         body.clubId,
         body.nationalTeamId,
         body.seasonId,
         body.type,
       );
       try {
-        await this.visionService.persistVisionLabelAtSave(
-          userId,
-          effectiveVisionJobId,
-          insertedJersey.id,
-          {
-            clubId: body.clubId,
-            nationalTeamId: body.nationalTeamId,
-            seasonId: body.seasonId,
-            type: body.type,
-            catalogKitId: body.catalogKitId,
-            playerId: body.playerId,
-            patchId: body.patchIds?.[0],
-          },
-        );
+        await this.visionService.persistVisionLabelAtSave(userId, effectiveVisionJobId, jerseyId, {
+          clubId: body.clubId,
+          nationalTeamId: body.nationalTeamId,
+          seasonId: body.seasonId,
+          type: body.type,
+          catalogKitId: body.catalogKitId,
+          playerId: body.playerId,
+          patchId: body.patchIds?.[0],
+        });
       } catch (error) {
         this.logger.error(
           "Vision label persist failed after UserJersey commit",
@@ -2188,27 +2211,10 @@ export class CollectionService {
       }
     }
 
-    if (body.draftId) {
-      await this.db
-        .insert(jerseyDraft)
-        .values({
-          id: body.draftId,
-          userId,
-          userJerseyId: insertedJersey.id,
-        })
-        .onConflictDoUpdate({
-          target: jerseyDraft.id,
-          set: {
-            userJerseyId: insertedJersey.id,
-            updatedAt: new Date(),
-          },
-        });
-    }
-
-    this.matchQueueService.enqueueFromSave(insertedJersey.id, userId);
+    this.matchQueueService.enqueueFromSave(jerseyId, userId);
 
     return collectionSaveResponseSchema.parse({
-      jersey: await this.loadOwnJerseyOrThrow(userId, insertedJersey.id),
+      jersey: await this.loadOwnJerseyOrThrow(userId, jerseyId),
       visionJobId: effectiveVisionJobId ?? undefined,
     });
   }
@@ -2739,69 +2745,64 @@ export class CollectionService {
     return photosByJersey;
   }
 
-  private async persistPhotos(
+  /**
+   * Decodes every Save photo first (so one bad photo puts nothing), then puts each object.
+   * If a put fails, the objects already put are removed before the error is rethrown.
+   * Rows are written by the caller, in one transaction, after this returns.
+   */
+  private async putSavePhotoObjects(
     userId: string,
     jerseyId: string,
     photos: CollectionSavePhoto[],
-  ): Promise<CollectionJersey["photos"]> {
-    const saved: CollectionJersey["photos"] = [];
-
-    for (const photo of photos) {
-      const bytes = decodeBase64Photo(photo.contentBase64, maxSavePhotoBytesForRole(photo.role));
+  ): Promise<
+    { photo: CollectionSavePhoto; photoId: string; objectKey: string; bytes: Uint8Array }[]
+  > {
+    const decoded = photos.map((photo) => {
       const photoId = crypto.randomUUID();
-      const objectKey = gridObjectKeyForNewPhoto(userId, jerseyId, photoId);
-
-      await this.objectStore.putObject(objectKey, bytes);
-
-      const exists = await this.objectStore.objectExists(objectKey);
-      if (!exists) {
-        throw new BadRequestException(`Object store missing key after put: ${objectKey}`);
-      }
-
-      const [inserted] = await this.db
-        .insert(userJerseyPhoto)
-        .values({
-          id: photoId,
-          userJerseyId: jerseyId,
-          objectKey,
-          role: photo.role,
-          source: photo.source,
-          label: photo.role === "other" ? photo.label?.trim() || null : null,
-          ocrStatus: "none",
-        })
-        .returning({
-          id: userJerseyPhoto.id,
-          role: userJerseyPhoto.role,
-          source: userJerseyPhoto.source,
-          objectKey: userJerseyPhoto.objectKey,
-          label: userJerseyPhoto.label,
-          ocrStatus: userJerseyPhoto.ocrStatus,
-        });
-
-      if (!inserted) {
-        throw new BadRequestException("Could not persist photo row");
-      }
-
-      saved.push({
-        id: inserted.id,
-        role: inserted.role,
-        source: inserted.source,
-        objectKey: inserted.objectKey,
-        photoUrl: `/v1/collection/photos/${inserted.id}`,
-        ocrStatus: inserted.ocrStatus,
-        ...(inserted.label ? { label: inserted.label } : {}),
-      });
-
-      this.photoDerivativeQueueService.enqueue(this.objectStore, {
-        userId,
-        jerseyId,
+      return {
+        photo,
         photoId,
-        role: photo.role,
-        sourceObjectKey: objectKey,
-      });
+        objectKey: gridObjectKeyForNewPhoto(userId, jerseyId, photoId),
+        bytes: decodeBase64Photo(photo.contentBase64, maxSavePhotoBytesForRole(photo.role)),
+      };
+    });
+
+    const putKeys: string[] = [];
+    try {
+      for (const entry of decoded) {
+        await this.objectStore.putObject(entry.objectKey, entry.bytes);
+        putKeys.push(entry.objectKey);
+
+        const exists = await this.objectStore.objectExists(entry.objectKey);
+        if (!exists) {
+          throw new BadRequestException(`Object store missing key after put: ${entry.objectKey}`);
+        }
+      }
+    } catch (error) {
+      await this.deleteOrphanedPhotoObjects(putKeys);
+      throw error;
     }
 
-    return saved;
+    return decoded;
+  }
+
+  /**
+   * Best-effort removal of photo objects whose Save never committed. No row points at them,
+   * so a delete that fails only leaves unreachable bytes under a jersey prefix that does not
+   * exist; it is logged and never masks the original Save error.
+   */
+  private async deleteOrphanedPhotoObjects(objectKeys: string[]): Promise<void> {
+    for (const objectKey of objectKeys) {
+      try {
+        await this.objectStore.deleteObject(objectKey);
+      } catch (error) {
+        this.logger.warn(
+          `Could not remove orphaned photo object ${objectKey} after a failed Save: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
   }
 
   private async assertOptionalPlayerScoped(

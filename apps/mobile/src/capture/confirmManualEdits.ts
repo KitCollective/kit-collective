@@ -1,57 +1,57 @@
-let clubEdited = false;
-let seasonEdited = false;
-let kitTypeEdited = false;
-let playerEdited = false;
-let badgeEdited = false;
+import type { IdentityManualEditMask } from "./identitySuggestOnly";
 
-export function resetConfirmManualEdits(): void {
-  clubEdited = false;
-  seasonEdited = false;
-  kitTypeEdited = false;
-  playerEdited = false;
-  badgeEdited = false;
+/**
+ * Fields the collector hand-edited, per jersey. The confirm screens mark against the visible
+ * jersey (`setConfirmManualEditsDraft`); a Vision result for any jersey reads that jersey's own
+ * entry, like the Vision state in `identityDraftState.ts`.
+ */
+const editsByDraft = new Map<string, IdentityManualEditMask>();
+let visibleDraftId: string | null = null;
+
+export function setConfirmManualEditsDraft(draftId: string | null): void {
+  visibleDraftId = draftId;
+}
+
+/** Forgets one jersey's edits, or every jersey's when no id is given. */
+export function resetConfirmManualEdits(draftId?: string): void {
+  if (draftId === undefined) {
+    editsByDraft.clear();
+    return;
+  }
+  editsByDraft.delete(draftId);
+}
+
+function setVisibleEdit(field: keyof IdentityManualEditMask, edited: boolean): void {
+  if (!visibleDraftId) {
+    return;
+  }
+  editsByDraft.set(visibleDraftId, { ...editsByDraft.get(visibleDraftId), [field]: edited });
 }
 
 export function markConfirmClubEdited(): void {
-  clubEdited = true;
+  setVisibleEdit("club", true);
 }
 
 export function clearConfirmSeasonEdited(): void {
-  seasonEdited = false;
+  setVisibleEdit("season", false);
 }
 
 export function markConfirmSeasonEdited(): void {
-  seasonEdited = true;
+  setVisibleEdit("season", true);
 }
 
 export function markConfirmKitTypeEdited(): void {
-  kitTypeEdited = true;
+  setVisibleEdit("type", true);
 }
 
 export function markConfirmPlayerEdited(): void {
-  playerEdited = true;
+  setVisibleEdit("player", true);
 }
 
 export function markConfirmBadgeEdited(): void {
-  badgeEdited = true;
+  setVisibleEdit("badge", true);
 }
 
-export function confirmClubWasEdited(): boolean {
-  return clubEdited;
-}
-
-export function confirmSeasonWasEdited(): boolean {
-  return seasonEdited;
-}
-
-export function confirmKitTypeWasEdited(): boolean {
-  return kitTypeEdited;
-}
-
-export function confirmPlayerWasEdited(): boolean {
-  return playerEdited;
-}
-
-export function confirmBadgeWasEdited(): boolean {
-  return badgeEdited;
+export function confirmManualEditMask(draftId: string): IdentityManualEditMask {
+  return { ...editsByDraft.get(draftId) };
 }
