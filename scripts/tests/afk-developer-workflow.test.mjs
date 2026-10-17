@@ -265,7 +265,7 @@ test("session-check closed stops before anything else runs", async () => {
   assert.equal(spawns.length, 1);
 });
 
-const isHarnessDiff = (c) => c.startsWith("git diff --quiet origin/development");
+const isHarnessDiff = (c) => c.startsWith("git diff --quiet HEAD...origin/development");
 
 test("a worktree whose harness differs from development stops before the session check counts a start (KIT-283)", async () => {
   const { result, commands, spawns } = await run({
@@ -281,7 +281,8 @@ test("a worktree whose harness differs from development stops before the session
   assert.equal(commands[0], "git fetch --quiet origin development");
   assert.match(
     commands[1],
-    /^git diff --quiet origin\/development -- \.bb\/workflows scripts factory\.config\.json$/,
+    // Three dots: only the lane's own changes since the branch left it count (KIT-398, KIT-411).
+    /^git diff --quiet HEAD\.\.\.origin\/development -- \.bb\/workflows scripts factory\.config\.json$/,
   );
   assert.ok(!commands.some((c) => c.includes("session-check.mjs")));
   assert.ok(
