@@ -44,6 +44,8 @@ describe("collectionConversationDetailSchema", () => {
           createdAt: "2026-01-01T12:00:00.000Z",
           jersey: {
             userJerseyId: "00000000-0000-0000-0000-000000000042",
+            thumbUrl: "/v1/collection/showcase/photos/00000000-0000-0000-0000-000000000043",
+            openForBid: true,
             clubLabel: "FC København",
             seasonLabel: "2024/25",
             type: "home",
@@ -55,11 +57,46 @@ describe("collectionConversationDetailSchema", () => {
     expect(parsed.peerHandle).toBe("mikkel_fck");
     expect(parsed.messages[0]?.jersey).toEqual({
       userJerseyId: "00000000-0000-0000-0000-000000000042",
+      thumbUrl: "/v1/collection/showcase/photos/00000000-0000-0000-0000-000000000043",
+      openForBid: true,
       clubLabel: "FC København",
       seasonLabel: "2024/25",
       type: "home",
       size: "m",
     });
+  });
+
+  it("accepts a system line with its reason, the accepted amount and a jersey that is gone", () => {
+    const parsed = collectionConversationMessageSchema.parse({
+      id: "00000000-0000-0000-0000-000000000005",
+      kind: "system",
+      role: "incoming",
+      systemReason: "jersey_gone",
+      bidAmountDkk: 450,
+      createdAt: "2026-01-01T12:00:00.000Z",
+      jersey: {
+        userJerseyId: null,
+        thumbUrl: null,
+        openForBid: false,
+        clubLabel: "FC København",
+        seasonLabel: "2024/25",
+        type: "home",
+        size: "m",
+      },
+    });
+    expect(parsed.systemReason).toBe("jersey_gone");
+  });
+
+  it("rejects an unknown system reason", () => {
+    expect(() =>
+      collectionConversationMessageSchema.parse({
+        id: "00000000-0000-0000-0000-000000000006",
+        kind: "system",
+        role: "incoming",
+        systemReason: "bid_declined",
+        createdAt: "2026-01-01T12:00:00.000Z",
+      }),
+    ).toThrow();
   });
 
   it("rejects a conversation with a jerseyContext", () => {
