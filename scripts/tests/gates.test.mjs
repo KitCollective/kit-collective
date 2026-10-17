@@ -9,7 +9,10 @@ import {
   DEVICE_FLOWS_CONTEXT,
   DEVICE_FLOWS_LABEL,
   declaresScope,
+  deviceFlowsNoVerdictSentence,
   deviceFlowsRequest,
+  deviceFlowsState,
+  deviceFlowsStep,
   foldReview,
   GATE_EXIT,
   headChanged,
@@ -449,6 +452,12 @@ test("gate.mjs passes the remaining budget to wait-for-checks and logs no waitin
   // The extra context is the Device flows status, and only for a head that holds the slice flow.
   assert.match(src, /existsAtHead\(sliceFlowPath\(issue\), view\.headRefOid\)/);
   assert.match(src, /\["--also", DEVICE_FLOWS_CONTEXT\]/);
+  // The statuses are folded in only for a head that holds the slice flow; without one nothing changes.
+  assert.match(src, /hasSliceFlow && \(checks\.code === 1 \|\| checks\.code === 2\)/);
+  assert.match(
+    src,
+    /deviceFlowsStep\(checks, await commitStatuses\(view\.headRefOid\), view\.headRefOid\)/,
+  );
   assert.equal((src.match(/if \(shouldLogGate\(result\)\)/g) ?? []).length, 2);
 });
 
@@ -554,6 +563,86 @@ test("device flows request: only a head with a slice flow and no status asks for
     /^ALREADY FAILURE/,
   );
   assert.equal(sliceFlowPath("KIT-283"), "apps/mobile/.maestro/slices/KIT-283.yaml");
+});
+
+test("device flows state: error once is asked for again, error after a re-request has no verdict", () => {
+  const status = (state, context = "Device flows") => ({ context, state });
+  assert.equal(deviceFlowsState([]), "none");
+  assert.equal(deviceFlowsState([status("success", "kc/audit")]), "none");
+  assert.equal(deviceFlowsState([status("pending")]), "pending");
+  assert.equal(deviceFlowsState([status("success"), status("error")]), "green");
+  assert.equal(deviceFlowsState([status("failure"), status("error")]), "red");
+  assert.equal(deviceFlowsState([status("error")]), "error");
+  assert.equal(deviceFlowsState([status("error"), status("pending")]), "error");
+  // Newest first: error, then the re-request's pending, then the first error.
+  const again = [status("error"), status("pending"), status("error")];
+  assert.equal(deviceFlowsState(again), "no-verdict");
+  const request = deviceFlowsRequest({ hasSliceFlow: true, statuses: again });
+  assert.equal(request.request, false, "nothing more is asked for once the re-request failed too");
+  assert.match(request.line, /^NO VERDICT/);
+  // A re-request that is running again is not a verdict either way.
+  assert.equal(deviceFlowsState([status("pending"), status("error"), status("error")]), "pending");
+  assert.equal(
+    deviceFlowsNoVerdictSentence("abc1234def"),
+    "needs-human: run device-run.sh on the Mac on abc1234",
+  );
+});
+
+test("device flows step: green passes, red closes, no slice flow never gets here, no verdict is a person's", () => {
+  const status = (state) => ({ context: "Device flows", state });
+  const HEAD = "abc1234def5678";
+  const green = { code: 0, line: "GREEN (3 pass, 0 fail, 0 pending, 0 skipped); PR is MERGEABLE" };
+  assert.deepEqual(deviceFlowsStep(green, [status("success")], HEAD), green);
+
+  // A red flow is the Engineer's to fix: the closed answer stands.
+  const red = { code: 1, line: "RED (2 pass, 1 fail, 0 pending, 0 skipped): Device flows" };
+  assert.deepEqual(deviceFlowsStep(red, [status("failure")], HEAD), red);
+
+  // One error: asked for again, so the gate waits and no fix round is spent.
+  const errored = deviceFlowsStep(red, [status("error")], HEAD);
+  assert.equal(errored.code, 2);
+  assert.match(errored.line, /Device flows stopped before the flow finished on abc1234/);
+
+  // The re-request failed too: closed with the needs-human ending.
+  const noVerdict = deviceFlowsStep(
+    red,
+    [status("error"), status("pending"), status("error")],
+    HEAD,
+  );
+  assert.equal(noVerdict.code, 1);
+  assert.match(
+    noVerdict.line,
+    /device-flows-no-verdict: needs-human: run device-run\.sh on the Mac on abc1234$/,
+  );
+  assert.equal(foldReview([{ name: "checks", ...noVerdict }]).code, GATE_EXIT.closed);
+  assert.equal(foldReview([{ name: "checks", ...errored }]).code, GATE_EXIT.waiting);
+
+  // Another red check beside it is a real red: it is not hidden behind the person's ending.
+  const mixed = { code: 1, line: "RED (1 pass, 2 fail, 0 pending, 0 skipped): test, Device flows" };
+  assert.deepEqual(deviceFlowsStep(mixed, [status("error"), status("error")], HEAD), mixed);
+
+  // Still pending when the budget ran out: tagged, so the workflow ends needs-human, not ci-pending.
+  const pending = {
+    code: 2,
+    line: "TIMEOUT after 470s: PENDING (3 pass, 0 fail, 1 pending, 0 skipped): Device flows",
+  };
+  assert.match(
+    deviceFlowsStep(pending, [status("pending")], HEAD).line,
+    /device-flows-pending on abc1234$/,
+  );
+  assert.equal(deviceFlowsStep(pending, [], HEAD).code, 2);
+  // Other pending checks keep it an ordinary wait.
+  const others = {
+    code: 2,
+    line: "TIMEOUT after 470s: PENDING (1 pass, 0 fail, 2 pending, 0 skipped): test, Device flows",
+  };
+  assert.deepEqual(deviceFlowsStep(others, [status("pending")], HEAD), others);
+  // The budget-used-up line names no check at all.
+  const budget = {
+    code: 2,
+    line: "PENDING: the --timeout budget is used up by the mechanical steps; run the gate again",
+  };
+  assert.deepEqual(deviceFlowsStep(budget, [], HEAD), budget);
 });
 
 test("the hosted Device flows workflow speaks for a PR head only, and always ends with a verdict", () => {

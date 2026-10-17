@@ -34,6 +34,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  commitStatuses,
   config,
   existsAtHead,
   gh,
@@ -46,6 +47,7 @@ import {
 } from "./lib/gate-io.mjs";
 import {
   DEVICE_FLOWS_CONTEXT,
+  deviceFlowsStep,
   foldReview,
   GATE_EXIT,
   landGate,
@@ -159,10 +161,9 @@ try {
       const budget = remainingWaitSeconds(opt("--timeout") ?? "1800", Date.now() - startedAt);
       // A slice with its own Device flow is not ready for review before that flow has a verdict
       // on this head (ADR-0059): a missing status waits, a red one closes.
-      const also = (await existsAtHead(sliceFlowPath(issue), view.headRefOid))
-        ? ["--also", DEVICE_FLOWS_CONTEXT]
-        : [];
-      steps.push(
+      const hasSliceFlow = await existsAtHead(sliceFlowPath(issue), view.headRefOid);
+      const also = hasSliceFlow ? ["--also", DEVICE_FLOWS_CONTEXT] : [];
+      let checks =
         budget === null
           ? {
               name: "checks",
@@ -174,8 +175,19 @@ try {
               "--timeout",
               String(budget),
               ...also,
-            ]),
-      );
+            ]);
+      // A Device flows run that cannot reach a verdict is a person's to settle, not a fix round.
+      if (hasSliceFlow && (checks.code === 1 || checks.code === 2)) {
+        try {
+          checks = {
+            name: "checks",
+            ...deviceFlowsStep(checks, await commitStatuses(view.headRefOid), view.headRefOid),
+          };
+        } catch {
+          // The statuses could not be read: the wait-for-checks answer stands.
+        }
+      }
+      steps.push(checks);
     }
     const result = foldReview(steps);
     if (result.code === GATE_EXIT.open && scope.source === "none") {

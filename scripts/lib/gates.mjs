@@ -385,12 +385,38 @@ export function sliceFlowPath(issue) {
 }
 
 /**
+ * What the `Device flows` statuses of a head say, newest first. `error` is not a verdict (the run
+ * stopped before the flow finished), so it is asked for again once; a head with a second `error`
+ * (`no-verdict`) has had its re-request and still has no verdict (ADR-0059 "Not settled"): only a
+ * person on the Mac can give it one.
+ * @param {Array<{ context?: string, state?: string }>} statuses
+ * @returns {"none" | "pending" | "green" | "red" | "error" | "no-verdict"}
+ */
+export function deviceFlowsState(statuses) {
+  const own = statuses.filter((status) => status.context === DEVICE_FLOWS_CONTEXT);
+  const latest = own[0]?.state;
+  if (latest === undefined) return "none";
+  if (latest === "success") return "green";
+  if (latest === "failure") return "red";
+  if (latest === "error") {
+    return own.filter((status) => status.state === "error").length >= 2 ? "no-verdict" : "error";
+  }
+  return "pending";
+}
+
+/** The ending of a run that cannot get a Device flows verdict (the sentence has no `?`: a decision, not a question). */
+export function deviceFlowsNoVerdictSentence(head) {
+  return `needs-human: run device-run.sh on the Mac on ${String(head).slice(0, 7)}`;
+}
+
+/**
  * Whether to ask for a hosted Device flows run on a PR head. Statuses are GitHub's commit
  * statuses for the head, newest first. A run is asked for only when the slice has a flow and the
  * head has no verdict and no run under way: a green or running head is left alone (a macOS run
  * is not free), and a red one is the Engineer's to fix with a new commit, which is a new head.
  * `error` is not a verdict: the run stopped before the flow finished (a timeout, a runner fault),
- * so it is asked for again.
+ * so it is asked for again, once. A second `error` on the same head is `no-verdict`: nothing more
+ * is asked for and the run ends `blocked needs-human`.
  * @param {{ hasSliceFlow: boolean, statuses: Array<{ context?: string, state?: string }> }} input
  * @returns {{ request: boolean, line: string }}
  */
@@ -402,6 +428,12 @@ export function deviceFlowsRequest({ hasSliceFlow, statuses }) {
   if (!latest) {
     return { request: true, line: `REQUESTED: no ${DEVICE_FLOWS_CONTEXT} status on the head yet` };
   }
+  if (deviceFlowsState(statuses) === "no-verdict") {
+    return {
+      request: false,
+      line: `NO VERDICT: the ${DEVICE_FLOWS_CONTEXT} run stopped before the flow finished again after a re-request; run device-run.sh on the Mac`,
+    };
+  }
   if (latest.state === "error") {
     return {
       request: true,
@@ -412,6 +444,51 @@ export function deviceFlowsRequest({ hasSliceFlow, statuses }) {
     request: false,
     line: `ALREADY ${String(latest.state).toUpperCase()}: the head has a ${DEVICE_FLOWS_CONTEXT} status`,
   };
+}
+
+/** Names after the `): ` of a wait-for-checks `RED (...)`/`PENDING (...)` line (also behind `TIMEOUT after Ns: `). */
+function checkNames(line, word) {
+  const m = new RegExp(`${word} \\([^)]*\\): (.*)$`).exec(line);
+  return m ? m[1].split(", ").map((name) => name.trim()) : [];
+}
+
+/**
+ * Folds the Device flows statuses of the head into the `checks` step of a pre-review gate that
+ * waited for them (ADR-0059). `wait-for-checks` buckets a commit status `error` as red, which
+ * would close the gate and spend a fix round on a run no Engineer can fix, and a status that is
+ * still pending when the budget runs out looks like any other pending check. So, only when
+ * `Device flows` is the sole red or sole pending check:
+ *   - `error` once: waiting (the run is asked for again; no fix round);
+ *   - `no-verdict`: closed with `device-flows-no-verdict`, which ends `blocked needs-human`;
+ *   - still pending: waiting, tagged `device-flows-pending`, so an exhausted wait ends
+ *     `blocked needs-human` instead of `ci-pending`.
+ * A red flow (`failure`), any other red or pending check, and a green head pass through unchanged.
+ * @param {{ code: number, line: string }} checks the `wait-for-checks` result
+ * @param {Array<{ context?: string, state?: string }>} statuses
+ * @param {string} head
+ */
+export function deviceFlowsStep(checks, statuses, head) {
+  const sha = String(head).slice(0, 7);
+  const state = deviceFlowsState(statuses);
+  const only = (names) => names.length === 1 && names[0] === DEVICE_FLOWS_CONTEXT;
+  if (checks.code === 1 && only(checkNames(checks.line, "RED"))) {
+    if (state === "no-verdict") {
+      return {
+        code: 1,
+        line: `${checks.line}; device-flows-no-verdict: ${deviceFlowsNoVerdictSentence(head)}`,
+      };
+    }
+    if (state === "error") {
+      return {
+        code: 2,
+        line: `PENDING: ${DEVICE_FLOWS_CONTEXT} stopped before the flow finished on ${sha}; asked for again`,
+      };
+    }
+  }
+  if (checks.code === 2 && only(checkNames(checks.line, "PENDING"))) {
+    return { code: 2, line: `${checks.line}; device-flows-pending on ${sha}` };
+  }
+  return checks;
 }
 
 /** A waiting gate result (exit 3) is never written to the run log: only open or closed is an outcome. */
