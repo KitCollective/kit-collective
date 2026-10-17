@@ -306,6 +306,7 @@ jobs:
           scripts/tests/auto-land.test.mjs
           scripts/tests/scenarios.test.mjs
           scripts/tests/holdout-guard.test.mjs
+          scripts/tests/auto-land-allow.test.mjs
           scripts/tests/milestone-scenarios-workflow.test.mjs
 
       - name: Check PR write scope
