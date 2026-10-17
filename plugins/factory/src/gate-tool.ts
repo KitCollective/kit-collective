@@ -13,8 +13,7 @@ export interface GateCall {
 
 export type GateValidation = { ok: true; call: GateCall } | { ok: false; reason: string };
 
-const isGateName = (value: unknown): value is GateName =>
-  typeof value === "string" && (GATE_NAMES as readonly string[]).includes(value);
+const isGateName = (value: unknown): value is GateName => GATE_NAMES.some((name) => name === value);
 
 /** A PR number as a number or as digits only; anything else could carry a flag or a shell word. */
 function parsePr(value: unknown): number | null {
@@ -66,7 +65,7 @@ export async function runGate(
     at: deps.now(),
     threadId,
     gate: raw.gate === undefined ? "" : String(raw.gate),
-    pr: raw.pr === undefined ? null : (raw.pr as string | number),
+    pr: typeof raw.pr === "number" || typeof raw.pr === "string" ? raw.pr : null,
     issue: raw.issue === undefined ? null : String(raw.issue),
     exitCode: null,
     verdictLine: null,

@@ -6,6 +6,7 @@ import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { runGate } from "../host.js";
 import plugin from "../server.js";
+import type { GateRun } from "./gate-store.js";
 import { validateGateCall } from "./gate-tool.js";
 import { GATE_SCRIPT, hostContract } from "./host-contract.js";
 
@@ -55,7 +56,8 @@ async function pluginWith(callHost: (call: { method: string; input: unknown }) =
   await plugin(fake.bb);
   const gates = async () => {
     const cli = await fake.harness.behavior.runCli(["gates", "--json"]);
-    return JSON.parse(cli.stdout ?? "[]") as Record<string, unknown>[];
+    // SAFETY: `gates --json` prints the store's GateRun rows as a JSON array.
+    return JSON.parse(cli.stdout ?? "[]") as GateRun[];
   };
   return { fake, gates };
 }
