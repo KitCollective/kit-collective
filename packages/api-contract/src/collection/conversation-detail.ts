@@ -1,8 +1,13 @@
 import { JERSEY_SIZES, KIT_TYPES } from "@kit/domain";
 import { z } from "zod";
 
-const MESSAGE_KINDS = ["text", "image", "bid"] as const;
+const MESSAGE_KINDS = ["text", "image", "bid", "system"] as const;
 const BID_STATUSES = ["pending", "accepted", "declined"] as const;
+/**
+ * Why a system line was written. `bid_accepted`: the Bud in this Conversation was accepted.
+ * `jersey_gone`: the Bud in this Conversation was declined because the owner accepted another Bud on the jersey.
+ */
+const SYSTEM_REASONS = ["bid_accepted", "jersey_gone"] as const;
 
 export const collectionConversationReplyToSchema = z
   .object({
@@ -14,12 +19,15 @@ export const collectionConversationReplyToSchema = z
 export type CollectionConversationReplyTo = z.infer<typeof collectionConversationReplyToSchema>;
 
 /**
- * The UserJersey a message is about, as it was when the message was sent.
- * `userJerseyId` is null once the UserJersey is deleted; the labels stay readable.
+ * The UserJersey a message is about. The labels are as they were when the message was sent.
+ * `userJerseyId` and `thumbUrl` are null once the UserJersey is deleted or made private; the labels stay readable.
+ * `thumbUrl` is the jersey's first showcase photo; `openForBid` is its live åben for bud (false when gone).
  */
 const collectionConversationMessageJerseySchema = z
   .object({
     userJerseyId: z.string().uuid().nullable(),
+    thumbUrl: z.string().min(1).nullable(),
+    openForBid: z.boolean(),
     clubLabel: z.string().min(1),
     seasonLabel: z.string().min(1),
     type: z.enum(KIT_TYPES),
@@ -36,6 +44,11 @@ export const collectionConversationMessageSchema = z
     imageUrl: z.string().min(1).optional(),
     bidAmountDkk: z.number().int().min(1).optional(),
     bidStatus: z.enum(BID_STATUSES).optional(),
+    /**
+     * Set only on `kind: "system"`. A system line also carries the Bud's `jersey` and a `bidAmountDkk`:
+     * the accepted amount on `bid_accepted`, the declined Bud's own amount on `jersey_gone`.
+     */
+    systemReason: z.enum(SYSTEM_REASONS).optional(),
     createdAt: z.string().datetime(),
     replyTo: collectionConversationReplyToSchema.optional(),
     jersey: collectionConversationMessageJerseySchema.optional(),

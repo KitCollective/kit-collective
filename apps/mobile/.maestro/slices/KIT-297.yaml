@@ -1,0 +1,496 @@
+# KIT-297: the Bid card carries its jersey, and accepting a Bud closes the jersey.
+#
+# design-sections: Conversation, Bid card, Chat bubble, Button
+#
+# FIXTURE THIS FLOW READS (apps/api/src/e2e/test-data.fixture.ts): the Test Collector's thread with
+# e2e_peer (...0501) holds two incoming pending Buds: 250 kr on FC København (...0101,
+# TEST_UNANSWERED_BID, message ...0502) and 300 kr on Brøndby IF (...0102, TEST_TWO_BIDDER_BIDS[0],
+# message ...0503). freja_e2e holds the other pending Bud on Brøndby IF, 350 kr, in her own thread
+# (...0504, message ...0505). Both of the Test Collector's jerseys start with åben for bud off.
+#
+# Three Collectors sign in, in this order, and the test data is reset only before the first:
+# 1. The Test Collector sends a Bud on e2e_peer's OB jersey (...0105; the steps of
+#    regression/search-bid.yaml, no screenshots), so the thread with e2e_peer also has an outgoing
+#    pending card. Then turns åben for bud on on Brøndby IF, opens the thread with e2e_peer from
+#    FC København's bid row (as in KIT-287), accepts e2e_peer's Brøndby IF Bud and declines the
+#    FC København one. Then the Brøndby IF switch off and on again, freja's Bud declined by the
+#    accept, FC København åben for bud on (for Send nyt bud) and Brøndby IF made private (for the
+#    card whose jersey is no longer available).
+# 2. e2e_peer (as in KIT-295, no data reset): the bidder's side of the accept line, then Send nyt
+#    bud on the declined FC København Bud, and the new Bud in the same thread.
+# 3. freja_e2e (her address is fixture data, TEST_SECOND_PEER_EMAIL): the line that the jersey went
+#    to another Collector.
+#
+# Not on a screen here, proved by tests instead: that accept is one transaction and that a second
+# accept is refused, that a plain decline touches no other Bud and no jersey, a deleted (not
+# private) jersey, and the hidden thread that comes back (apps/api/tests/conversation-bid-accept.test.ts);
+# every Bid card state and accessible name (apps/mobile/tests/thread-view-model.test.ts). Two
+# accessible names are asserted below.
+#
+# Two kinds of tap are not by testID: the tab bar (as in every flow) and the Thread row, which has
+# none and lives in src/components/thread-row.tsx, outside this issue's write-scope. The row is
+# matched on its accessibility name, which starts with the fixture Handle (as in KIT-295).
+appId: app.kitcollective.mobile
+name: kit-297
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-297
+# ---- The Test Collector sends a Bud on e2e_peer's OB jersey (no screenshots) ----
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 15000
+- tapOn:
+    id: search-input
+# The typeahead's Trøjer grid holds the OB jersey (as in KIT-293).
+- inputText: OB
+- extendedWaitUntil:
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    timeout: 15000
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+- extendedWaitUntil:
+    visible:
+      id: send-bid-open
+    timeout: 15000
+- tapOn:
+    id: send-bid-open
+- extendedWaitUntil:
+    visible:
+      id: bid-amount
+    timeout: 15000
+# The amount field starts underneath the floating tab bar; scroll it clear first.
+- scroll
+- runFlow: ../subflows/settle.yaml
+- tapOn:
+    id: bid-amount
+- inputText: "200"
+# The number pad has no return key and covers the form; a tap on the photo dismisses it.
+- tapOn:
+    point: 50%,25%
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: bid-submit
+- extendedWaitUntil:
+    visible:
+      id: send-bid-open
+    timeout: 15000
+# ---- The Test Collector turns åben for bud on on Brøndby IF, so the accept has it to turn off ----
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000102
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+# The page is short; Maestro cannot centre a switch row there (KIT-287 hit the same).
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-bidding
+    centerElement: false
+- tapOn:
+    id: jersey-detail-bidding
+- runFlow: ../subflows/settle.yaml
+# AC 7 (before): Brøndby IF is åben for bud while both Buds on it are pending.
+- takeScreenshot: kc__kit-297__01-brondby-open-for-bud-before-accept
+# ---- Open the thread with e2e_peer from the FC København jersey's bid row ----
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000101
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-bid-row
+    centerElement: true
+- tapOn:
+    id: jersey-detail-bid-row
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: bid-card-accept-e2e00000-0000-4000-8000-000000000502
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+# AC 1: the header is Back, a 32px round initial, the Handle and More; no jersey line.
+# AC 2: each Bid card starts with its jersey row (thumb, club and season, type · size, chevron).
+# AC 3, 4, 6: "e2e_peer byder på din trøje", the amount in mono 28 with kr, primary Accepter and
+# secondary Afvis on an incoming pending Bud; incoming cards start-aligned.
+- takeScreenshot: kc__kit-297__02-header-and-incoming-pending-cards
+# AC 15: the Accepter button's accessible name carries handle, jersey, amount and status.
+- assertVisible: "Accepter bud fra e2e_peer på .*, 250 kr, Afventer svar"
+# AC 3, 4, 6: the Test Collector's own pending Bud reads "Du bød" and Afventer svar, no buttons,
+# end-aligned.
+- scrollUntilVisible:
+    element:
+      id: bid-card-status-pending-sender
+    centerElement: true
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__03-outgoing-pending-afventer-svar
+# AC 5, 8, 14: Accepter on the Brøndby IF Bud: the card shows Accepteret with a filled check and no
+# buttons, and the owner's centred system line (not a bubble) says payment and delivery are agreed
+# here in the thread.
+- scrollUntilVisible:
+    element:
+      id: bid-card-accept-e2e00000-0000-4000-8000-000000000503
+    direction: UP
+    centerElement: true
+- tapOn:
+    id: bid-card-accept-e2e00000-0000-4000-8000-000000000503
+- extendedWaitUntil:
+    visible:
+      id: bid-card-status-accepted
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: thread-system-line
+    centerElement: true
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__04-accepted-and-owner-system-line
+# AC 5, 10: Afvis on the FC København Bud: Afvist, no buttons, and no system line for a plain
+# decline.
+- scrollUntilVisible:
+    element:
+      id: bid-card-decline-e2e00000-0000-4000-8000-000000000502
+    direction: UP
+    centerElement: true
+- tapOn:
+    id: bid-card-decline-e2e00000-0000-4000-8000-000000000502
+- extendedWaitUntil:
+    visible:
+      id: bid-card-status-declined
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__05-declined-afvist
+# AC 2, 7: the jersey row opens that jersey, the owner's own Brøndby IF, and the accept turned its
+# åben for bud off (it was on in screenshot 01).
+# The row sits under the header after the decline; Maestro counts it visible there, so pull the
+# list down first, or the tap lands on the header.
+- swipe:
+    start: 50%, 35%
+    end: 50%, 65%
+    duration: 600
+- scrollUntilVisible:
+    element:
+      id: bid-card-jersey-e2e00000-0000-4000-8000-000000000503
+    direction: UP
+    centerElement: true
+- tapOn:
+    id: bid-card-jersey-e2e00000-0000-4000-8000-000000000503
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-bidding
+    # With no pending Bud left the page has no bid row and barely scrolls.
+    centerElement: false
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__06-accept-turned-open-for-bid-off
+# AC 11: the owner turns åben for bud on again.
+- tapOn:
+    id: jersey-detail-bidding
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__07-owner-turns-open-for-bid-on-again
+# AC 7: the accept declined freja_e2e's pending Bud on the same jersey: her card in her own thread
+# reads Afvist. The owner's side of that thread gets no line (a lock gap, flagged in the PR).
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: Indbakke
+- extendedWaitUntil:
+    visible: "freja_e2e, .*"
+    timeout: 15000
+- tapOn: "freja_e2e, .*"
+- extendedWaitUntil:
+    visible:
+      id: bid-card-status-declined
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__08-other-pending-bud-declined-by-the-accept
+# ---- FC København åben for bud on (for Send nyt bud), Brøndby IF private (no longer available) ----
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000101
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-bidding
+    centerElement: false
+- tapOn:
+    id: jersey-detail-bidding
+- runFlow: ../subflows/settle.yaml
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000102
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-private
+    centerElement: false
+- tapOn:
+    id: jersey-detail-private
+- runFlow: ../subflows/settle.yaml
+# AC 13: back in the thread with e2e_peer, the Brøndby IF card keeps its snapshot text, says the
+# jersey is no longer available and has no chevron (the row does not open).
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: Indbakke
+- extendedWaitUntil:
+    visible: "e2e_peer, .*"
+    timeout: 15000
+- tapOn: "e2e_peer, .*"
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: bid-card-unavailable-e2e00000-0000-4000-8000-000000000503
+    centerElement: true
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__09-private-jersey-no-longer-available
+# AC 15: the card's accessible name carries handle, jersey, that it is gone, amount and status.
+- assertVisible: "e2e_peer byder på din trøje, .*, Trøjen er ikke længere tilgængelig, 300 kr, Accepteret"
+# ---- e2e_peer signs in (no data reset: the Buds and the lines must stay) ----
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-have-account
+    timeout: 90000
+- tapOn:
+    id: welcome-have-account
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 60000
+- tapOn:
+    id: door-email
+- inputText: ${MAESTRO_PEER_EMAIL}
+- tapOn:
+    id: door-submit
+- extendedWaitUntil:
+    visible:
+      id: code-screen
+    timeout: 60000
+- runScript:
+    file: ../scripts/sign-in-code.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+      EMAIL: ${MAESTRO_PEER_EMAIL}
+      EXPIRE: "false"
+- inputText: ${output.code}
+- extendedWaitUntil:
+    visible:
+      id: collection-add
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: Indbakke
+- extendedWaitUntil:
+    visible: "e2e_collector, .*"
+    timeout: 15000
+- tapOn: "e2e_collector, .*"
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+# AC 8: the bidder's side of the accept line, centred, worded for the bidder.
+# The line is the last item; the list ends there, so Maestro cannot centre it.
+- scrollUntilVisible:
+    element:
+      id: thread-system-line
+    centerElement: false
+- assertVisible: "e2e_collector accepterede dit bud på 300 kr\\. Aftal betaling og levering med e2e_collector her i tråden\\."
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__10-bidder-side-of-the-accept-line
+# AC 12: the bidder's declined FC København Bud shows secondary Send nyt bud, because the owner
+# turned åben for bud on again.
+- scrollUntilVisible:
+    element:
+      id: bid-card-send-new-bid-e2e00000-0000-4000-8000-000000000502
+    direction: UP
+    centerElement: true
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__11-declined-bud-send-nyt-bud
+- tapOn:
+    id: bid-card-send-new-bid-e2e00000-0000-4000-8000-000000000502
+- extendedWaitUntil:
+    visible:
+      id: bid-amount
+    timeout: 15000
+# The amount field starts underneath the floating tab bar; scroll it clear first.
+- scroll
+- runFlow: ../subflows/settle.yaml
+- tapOn:
+    id: bid-amount
+- inputText: "275"
+- tapOn:
+    point: 50%,25%
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: bid-submit
+- waitForAnimationToEnd:
+    timeout: 5000
+- runFlow: ../subflows/settle.yaml
+# Where Send bud goes back to after the send. Send bud lives in the Søg tab and the thread in
+# Indbakke, so this shows what router.back() lands on; the flow does not assume it.
+- takeScreenshot: kc__kit-297__12-after-send-nyt-bud
+# AC 12: the new Bud lands in the same thread, pending, end-aligned. When the thread is not what
+# came back, Indbakke still holds it on top of its stack.
+- runFlow:
+    when:
+      notVisible:
+        id: conversation-header
+    commands:
+      - tapOn: Indbakke
+      - waitForAnimationToEnd:
+          timeout: 5000
+- runFlow:
+    when:
+      notVisible:
+        id: conversation-header
+    commands:
+      - tapOn: "e2e_collector, .*"
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+# The new card is the last item, so it cannot be centred either.
+- scrollUntilVisible:
+    element:
+      id: bid-card-status-pending-sender
+    centerElement: false
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__13-new-bud-in-the-same-thread
+# ---- freja_e2e signs in (no data reset) ----
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-have-account
+    timeout: 90000
+- tapOn:
+    id: welcome-have-account
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 60000
+- tapOn:
+    id: door-email
+- inputText: e2e-second-peer@test.kitcollective
+- tapOn:
+    id: door-submit
+- extendedWaitUntil:
+    visible:
+      id: code-screen
+    timeout: 60000
+- runScript:
+    file: ../scripts/sign-in-code.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+      EMAIL: e2e-second-peer@test.kitcollective
+      EXPIRE: "false"
+- inputText: ${output.code}
+- extendedWaitUntil:
+    visible:
+      id: collection-add
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: Indbakke
+- extendedWaitUntil:
+    visible: "e2e_collector, .*"
+    timeout: 15000
+- tapOn: "e2e_collector, .*"
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+# AC 9: the Collector whose Bud the accept declined sees a centred line that the jersey went to
+# another Collector.
+- extendedWaitUntil:
+    visible:
+      id: thread-system-line
+    timeout: 15000
+- assertVisible: "Trøjen er gået til en anden samler\\."
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-297__14-declined-bidder-jersey-gone-line
+- stopRecording
