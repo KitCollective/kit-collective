@@ -453,12 +453,59 @@ function checkNames(line, word) {
 }
 
 /**
+ * The waiting answer for a head whose latest `Device flows` status is a first `error`. It carries the
+ * `device-flows-pending` tag: a wait that runs out on it ends `blocked needs-human` (a run that never
+ * gets going is a run with no verdict), never `ci-pending`.
+ * @param {string} head
+ * @returns {{ code: number, line: string }}
+ */
+export function deviceFlowsErrorWaiting(head) {
+  const sha = String(head).slice(0, 7);
+  return {
+    code: 2,
+    line: `PENDING: ${DEVICE_FLOWS_CONTEXT} stopped before the flow finished on ${sha}; asked for again; device-flows-pending on ${sha}`,
+  };
+}
+
+/**
+ * Waits for the re-requested run to leave a first `error`. `wait-for-checks` treats a status `error` as
+ * red and returns at once, so without this a pre-review gate slice ends in seconds on a run that has
+ * only been asked for, and the next slice asks again, which cancels the run queued one slice earlier
+ * (`cancel-in-progress` in device-flows.yml): the five slices burn in minutes. The status turns
+ * `pending` when the hosted job starts, so the slice holds here, inside its own budget, until it does.
+ * Returns the final state: `error` only when the budget ran out first. Any state but `error` (none,
+ * pending, green, red, a second `error` = no-verdict) is left to the checks and the fold.
+ * @param {object} input
+ * @param {() => Promise<Array<{ context?: string, state?: string }>>} input.read statuses of the head, newest first
+ * @param {(ms: number) => Promise<void>} input.sleep
+ * @param {() => number} input.now ms
+ * @param {number} input.budgetSeconds
+ * @param {number} [input.intervalSeconds]
+ * @returns {Promise<ReturnType<typeof deviceFlowsState>>}
+ */
+export async function settleDeviceFlowsError({
+  read,
+  sleep,
+  now,
+  budgetSeconds,
+  intervalSeconds = 15,
+}) {
+  const started = now();
+  for (;;) {
+    const state = deviceFlowsState(await read());
+    if (state !== "error") return state;
+    if (now() - started + intervalSeconds * 1000 > budgetSeconds * 1000) return state;
+    await sleep(intervalSeconds * 1000);
+  }
+}
+
+/**
  * Folds the Device flows statuses of the head into the `checks` step of a pre-review gate that
  * waited for them (ADR-0059). `wait-for-checks` buckets a commit status `error` as red, which
  * would close the gate and spend a fix round on a run no Engineer can fix, and a status that is
  * still pending when the budget runs out looks like any other pending check. So, only when
  * `Device flows` is the sole red or sole pending check:
- *   - `error` once: waiting (the run is asked for again; no fix round);
+ *   - `error` once: waiting, tagged `device-flows-pending` (asked for again; no fix round);
  *   - `no-verdict`: closed with `device-flows-no-verdict`, which ends `blocked needs-human`;
  *   - still pending: waiting, tagged `device-flows-pending`, so an exhausted wait ends
  *     `blocked needs-human` instead of `ci-pending`.
@@ -479,10 +526,7 @@ export function deviceFlowsStep(checks, statuses, head) {
       };
     }
     if (state === "error") {
-      return {
-        code: 2,
-        line: `PENDING: ${DEVICE_FLOWS_CONTEXT} stopped before the flow finished on ${sha}; asked for again`,
-      };
+      return deviceFlowsErrorWaiting(head);
     }
   }
   if (checks.code === 2 && only(checkNames(checks.line, "PENDING"))) {

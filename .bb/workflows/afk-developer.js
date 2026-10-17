@@ -311,6 +311,48 @@ async function stopForHuman(phaseTitle, sentence) {
   return "Approval";
 }
 
+/**
+ * Fills `### Waiting` in the workpad for a stop the workflow itself found (the Engineer writes its own, but a
+ * gate-detected stop has no Engineer turn left). The workflow has no shell, so a short Haiku worker does the
+ * edit through scripts/linear.mjs; it is best effort, the stop above it already stands. Only the validated
+ * Device flows sentence enters the prompt.
+ */
+async function writeWaiting(phaseTitle, stage, sentence) {
+  if (!/^needs-human: run device-run\.sh on the Mac on [0-9a-f]{4,40}$/.test(sentence)) {
+    return false;
+  }
+  let out = null;
+  try {
+    out = await agent(
+      [
+        `You edit one section of the workpad of ${issue}. Change nothing else, in the repository or in Linear.`,
+        `1. Run \`node scripts/linear.mjs issue ${issue}\` and find the comment whose body starts with \`## Agent Workpad\` (there is one).`,
+        `2. Write its body to a new file under /tmp with the section \`### Waiting\` replaced, up to the next \`### \` heading, by exactly these lines (use \`date +%F\` for the date):`,
+        `- ${sentence} (the hosted Device flows run of the PR head cannot give a verdict and this machine has no simulator; the Device flow of the slice is run on the Mac, ADR-0059).`,
+        `- Stage: ${stage}. Asked: <today's date>`,
+        `3. Run \`node scripts/linear.mjs comment-update <that comment's id> --body-file <that file>\`. Never create a second workpad comment.`,
+        "Return written true when comment-update succeeded, else false.",
+      ].join("\n"),
+      {
+        label: `waiting:${issue}`,
+        phase: phaseTitle,
+        provider: "claude-code",
+        model: "claude-haiku-5-5",
+        reasoningLevel: "low",
+        schema: {
+          type: "object",
+          required: ["written"],
+          additionalProperties: false,
+          properties: { written: { type: "boolean" } },
+        },
+      },
+    );
+  } catch (error) {
+    out = null;
+  }
+  return out?.written === true;
+}
+
 function stopped(stoppedAt, status, extra) {
   return { issue, status, stoppedAt, ...extra };
 }
@@ -550,7 +592,9 @@ if (resume && resumePr !== null) {
     const noVerdictAtResume = deviceFlowsNoVerdict(pre);
     if (noVerdictAtResume) {
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code device-flows-no-verdict`)], true);
-      return stopped("pre-review gate", await stopForHuman("Pre-review gate", noVerdictAtResume), { prNumber: resumePr, note: noVerdictAtResume });
+      const state = await stopForHuman("Pre-review gate", noVerdictAtResume);
+      await writeWaiting("Pre-review gate", "pre-review gate", noVerdictAtResume);
+      return stopped("pre-review gate", state, { prNumber: resumePr, note: noVerdictAtResume });
     }
     if (pre.exhausted) {
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
@@ -635,7 +679,9 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
       // The hosted Device flows run cannot reach a verdict and no simulator is here: a person runs
       // device-run.sh on the Mac. Not a red gate and not a pending one, so no fix round and no Reviewer.
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code device-flows-no-verdict`)], true);
-      return stopped("pre-review gate", await stopForHuman("Pre-review gate", noVerdict), { prNumber, rounds, note: noVerdict });
+      const state = await stopForHuman("Pre-review gate", noVerdict);
+      await writeWaiting("Pre-review gate", "pre-review gate", noVerdict);
+      return stopped("pre-review gate", state, { prNumber, rounds, note: noVerdict });
     }
     if (pre.exhausted) {
       // Checks never finished inside the bound: not a red gate, so no fix round, and the issue is still In Progress.

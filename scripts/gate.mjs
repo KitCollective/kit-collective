@@ -47,6 +47,7 @@ import {
 } from "./lib/gate-io.mjs";
 import {
   DEVICE_FLOWS_CONTEXT,
+  deviceFlowsErrorWaiting,
   deviceFlowsStep,
   foldReview,
   GATE_EXIT,
@@ -55,6 +56,7 @@ import {
   prBound,
   remainingWaitSeconds,
   scopeSource,
+  settleDeviceFlowsError,
   shouldLogGate,
   sliceFlowPath,
 } from "./lib/gates.mjs";
@@ -158,13 +160,32 @@ try {
     if (steps.every((s) => s.code === 0)) {
       // --timeout is the TOTAL budget of this call (the caller's foreground command is capped),
       // so the mechanical steps above are subtracted from what the wait may use.
-      const budget = remainingWaitSeconds(opt("--timeout") ?? "1800", Date.now() - startedAt);
+      const total = opt("--timeout") ?? "1800";
+      let budget = remainingWaitSeconds(total, Date.now() - startedAt);
       // A slice with its own Device flow is not ready for review before that flow has a verdict
       // on this head (ADR-0059): a missing status waits, a red one closes.
       const hasSliceFlow = await existsAtHead(sliceFlowPath(issue), view.headRefOid);
       const also = hasSliceFlow ? ["--also", DEVICE_FLOWS_CONTEXT] : [];
-      let checks =
-        budget === null
+      // A first `error` is a run that is being asked for again: hold for it to start before the
+      // checks are read, or the checks answer red at once and the slices burn (see the lib).
+      let restarting = null;
+      if (hasSliceFlow && budget !== null) {
+        try {
+          const state = await settleDeviceFlowsError({
+            read: () => commitStatuses(view.headRefOid),
+            sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+            now: Date.now,
+            budgetSeconds: budget,
+          });
+          if (state === "error") restarting = deviceFlowsErrorWaiting(view.headRefOid);
+          budget = remainingWaitSeconds(total, Date.now() - startedAt);
+        } catch {
+          // The statuses could not be read: the checks below and the fold decide as before.
+        }
+      }
+      let checks = restarting
+        ? { name: "checks", ...restarting }
+        : budget === null
           ? {
               name: "checks",
               code: 2,

@@ -9,6 +9,7 @@ import {
   DEVICE_FLOWS_CONTEXT,
   DEVICE_FLOWS_LABEL,
   declaresScope,
+  deviceFlowsErrorWaiting,
   deviceFlowsNoVerdictSentence,
   deviceFlowsRequest,
   deviceFlowsState,
@@ -26,6 +27,7 @@ import {
   scopeEnv,
   scopeSource,
   sessionCheck,
+  settleDeviceFlowsError,
   shouldLogGate,
   sliceFlowPath,
   workpadHasPlan,
@@ -444,11 +446,10 @@ test("remainingWaitSeconds: the mechanical steps are subtracted from the total b
 
 test("gate.mjs passes the remaining budget to wait-for-checks and logs no waiting verdict", async () => {
   const src = readFileSync(GATE, "utf8");
-  assert.match(
-    src,
-    /remainingWaitSeconds\(opt\("--timeout"\) \?\? "1800", Date\.now\(\) - startedAt\)/,
-  );
+  assert.match(src, /remainingWaitSeconds\(total, Date\.now\(\) - startedAt\)/);
   assert.match(src, /\[\s*pr,\s*"--timeout",\s*String\(budget\),\s*\.\.\.also,?\s*\]/);
+  // A first `error` is waited out before the checks are read, inside the slice's own budget.
+  assert.match(src, /settleDeviceFlowsError\(\{/);
   // The extra context is the Device flows status, and only for a head that holds the slice flow.
   assert.match(src, /existsAtHead\(sliceFlowPath\(issue\), view\.headRefOid\)/);
   assert.match(src, /\["--also", DEVICE_FLOWS_CONTEXT\]/);
@@ -602,6 +603,9 @@ test("device flows step: green passes, red closes, no slice flow never gets here
   const errored = deviceFlowsStep(red, [status("error")], HEAD);
   assert.equal(errored.code, 2);
   assert.match(errored.line, /Device flows stopped before the flow finished on abc1234/);
+  // Tagged too: a wait that runs out on a run that never got going is the person's, not ci-pending.
+  assert.match(errored.line, /device-flows-pending on abc1234$/);
+  assert.deepEqual(errored, deviceFlowsErrorWaiting(HEAD));
 
   // The re-request failed too: closed with the needs-human ending.
   const noVerdict = deviceFlowsStep(
@@ -667,4 +671,51 @@ test("the hosted Device flows workflow speaks for a PR head only, and always end
   assert.match(workflow, /actions\/cache\/restore@v4/);
   assert.match(workflow, /actions\/cache\/save@v4/);
   assert.ok(workflow.indexOf("actions/cache/save@v4") < workflow.indexOf("id: flows"));
+});
+
+test("settleDeviceFlowsError holds for a re-requested run to start, and only an unstarted run stays error", async () => {
+  const status = (state) => ({ context: "Device flows", state });
+  /** @param {Array<Array<{ context: string, state: string }>>} reads answers in order; the last repeats */
+  const harness = (reads, budgetSeconds = 480) => {
+    let clock = 0;
+    let at = 0;
+    const slept = [];
+    const input = {
+      read: async () => reads[Math.min(at++, reads.length - 1)],
+      sleep: async (ms) => {
+        slept.push(ms);
+        clock += ms;
+      },
+      now: () => clock,
+      budgetSeconds,
+    };
+    return { input, slept };
+  };
+
+  // The re-request is queued: the status is still `error` for a while, then the job sets `pending`.
+  const queued = harness([
+    [status("error")],
+    [status("error")],
+    [status("pending"), status("error")],
+  ]);
+  assert.equal(await settleDeviceFlowsError(queued.input), "pending");
+  assert.equal(queued.slept.length, 2, "it waited instead of returning at once");
+
+  // Anything but a first `error` is not waited for: the checks and the fold decide.
+  for (const [statuses, state] of [
+    [[], "none"],
+    [[status("success")], "green"],
+    [[status("failure")], "red"],
+    [[status("pending")], "pending"],
+    [[status("error"), status("pending"), status("error")], "no-verdict"],
+  ]) {
+    const quick = harness([statuses]);
+    assert.equal(await settleDeviceFlowsError(quick.input), state);
+    assert.equal(quick.slept.length, 0);
+  }
+
+  // A run that never starts: the wait ends at the budget with `error`, never after it.
+  const stuck = harness([[status("error")]], 60);
+  assert.equal(await settleDeviceFlowsError(stuck.input), "error");
+  assert.ok(stuck.slept.reduce((a, b) => a + b, 0) <= 60 * 1000);
 });
