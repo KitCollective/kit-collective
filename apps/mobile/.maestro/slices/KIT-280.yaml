@@ -22,8 +22,22 @@ name: kit-280
     timeout: 8000
 - tapOn:
     point: 16%,25%
+# Wait for the picker's selected footer, tap confirm, and tap again while the footer
+# shows (the reason is in regression/add-jersey.yaml).
+- extendedWaitUntil:
+    visible: 1 Photo
+    timeout: 15000
+    optional: true
 - tapOn:
     point: 90%,12%
+- repeat:
+    while:
+      visible: 1 Photo
+    times: 3
+    commands:
+      - runFlow: ../subflows/settle.yaml
+      - tapOn:
+          point: 90%,12%
 - extendedWaitUntil:
     visible:
       id: confirm-identity-resolved

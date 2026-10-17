@@ -61,6 +61,15 @@ const registrySchema = z
       .object({ workpadHeading: z.string().min(1).optional() })
       .passthrough()
       .optional(),
+    linear: z
+      .object({
+        teamKey: z
+          .string()
+          .regex(/^[A-Z][A-Z0-9]*$/)
+          .optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough()
   .superRefine((registry, ctx) => {
@@ -105,6 +114,8 @@ export interface Registry {
   maxRunsPerDay: number | null;
   /** `github.ownerRepo` (`owner/name`), which a run's PR number links into; null when unset. */
   repo: string | null;
+  /** `linear.teamKey`: the prefix of the team's issues, or null when unset. */
+  teamKey: string | null;
 }
 
 export type ParsedRegistry = { ok: true; registry: Registry } | { ok: false; error: string };
@@ -136,6 +147,7 @@ export function parseRegistry(text: string): ParsedRegistry {
       maxRunsPerDay: result.data.flow?.maxRunsPerDay ?? null,
       repo: result.data.github?.ownerRepo ?? null,
       workpadHeading: result.data.agent?.workpadHeading ?? null,
+      teamKey: result.data.linear?.teamKey ?? null,
     },
   };
 }

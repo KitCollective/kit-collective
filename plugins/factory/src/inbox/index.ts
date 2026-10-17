@@ -11,18 +11,18 @@ import { fetchWaiting } from "./linear.js";
 const CONFIG_KEY = "inbox";
 
 /** What the Inbox reads from the rest of the plugin; `Board` is the stored board config. */
-export interface InboxDeps<Board extends { teamKey: string }> {
+export interface InboxDeps<Board extends { teamKey: string; projectId: string }> {
   bb: Pick<BbPluginApi, "storage" | "realtime">;
-  /** The stored board config; throws when the board is not set up. */
-  requireScheduler: () => Promise<Board>;
-  /** The text of `factory.config.json`; throws when it cannot be read. */
-  registryText: (board: Board) => Promise<string>;
+  /** The stored board config, or null when the Board was never set up; the Inbox does not need it. */
+  storedScheduler: () => Promise<Board | null>;
+  /** The text of a bb project's `factory.config.json`; throws when it cannot be read. */
+  projectConfigText: (projectId: string) => Promise<string>;
   linearApiKey: () => Promise<string>;
   /** The review gate record: the newest run for an issue. */
   gateRuns: { latestReview(issue: string, since: number): { verdictLine: string | null } | null };
 }
 
-const SETUP = "bb optio inbox --state <state> --labels <question labels>";
+const SETUP = "bb optio inbox --state <state> --labels <question labels> --project <bb project id>";
 
 function describe(cards: InboxCardDto[]): string {
   if (cards.length === 0) return "The Inbox is empty";
@@ -39,7 +39,9 @@ function describe(cards: InboxCardDto[]): string {
   ].join("\n");
 }
 
-export function createInbox<Board extends { teamKey: string }>(deps: InboxDeps<Board>) {
+export function createInbox<Board extends { teamKey: string; projectId: string }>(
+  deps: InboxDeps<Board>,
+) {
   async function config(): Promise<InboxConfig | null> {
     const stored = await deps.bb.storage.kv.get<unknown>(CONFIG_KEY);
     return stored === undefined || stored === null ? null : inboxConfig.parse(stored);
@@ -52,10 +54,19 @@ export function createInbox<Board extends { teamKey: string }>(deps: InboxDeps<B
       if (setting === null) {
         throw new Error(`the Inbox is not set up: run \`${SETUP}\` (docs/agents/optio.md)`);
       }
-      const board = await deps.requireScheduler();
-      const registry = parseRegistry(await deps.registryText(board));
+      // The Inbox's own project first, the Board's when it has none: it never needs the Board.
+      const board = setting.projectId === undefined ? await deps.storedScheduler() : null;
+      const projectId = setting.projectId ?? board?.projectId;
+      if (projectId === undefined) {
+        throw new Error(`the Inbox has no project: run \`${SETUP}\` (docs/agents/optio.md)`);
+      }
+      const registry = parseRegistry(await deps.projectConfigText(projectId));
       if (!registry.ok) throw new Error(registry.error);
-      const issues = await fetchWaiting(await deps.linearApiKey(), board.teamKey, setting.state);
+      const teamKey = registry.registry.teamKey ?? board?.teamKey;
+      if (teamKey === undefined) {
+        throw new Error("factory.config.json names no Linear team: set linear.teamKey");
+      }
+      const issues = await fetchWaiting(await deps.linearApiKey(), teamKey, setting.state);
       const cards = buildCards(issues, {
         config: setting,
         workpadHeading: registry.registry.workpadHeading,
@@ -69,11 +80,15 @@ export function createInbox<Board extends { teamKey: string }>(deps: InboxDeps<B
 
   const command = cliCommand({
     summary: "List what waits for a person in the Inbox: reviews first, then questions",
-    description: `With --state and --labels it sets where the Inbox looks instead: the state issues wait in, and the labels that mark a question. --off switches the Inbox off.`,
+    description: `With --state and --labels it sets where the Inbox looks instead: the state issues wait in, and the labels that mark a question. --project names the bb project whose factory.config.json gives the Linear team; without it the Board's project is used. --off switches the Inbox off.`,
     options: {
       json: { type: "boolean", description: "Emit machine-readable JSON" },
       state: { type: "string", description: "Set the state issues wait in" },
       labels: { type: "string", description: "Set the question labels, comma separated" },
+      project: {
+        type: "string",
+        description: "Set the bb project to read factory.config.json from",
+      },
       off: { type: "boolean", description: "Switch the Inbox off" },
     },
     async run({ options }) {
@@ -86,9 +101,10 @@ export function createInbox<Board extends { teamKey: string }>(deps: InboxDeps<B
           const parsed = inboxConfig.safeParse({
             state: options.state,
             questionLabels: options.labels.split(",").map((label) => label.trim()),
+            ...(options.project === undefined ? {} : { projectId: options.project }),
           });
           if (!parsed.success) {
-            throw new PluginCliError("--state and every label must be non-empty", {
+            throw new PluginCliError("--state, --project and every label must be non-empty", {
               code: "invalid_config",
             });
           }

@@ -56,16 +56,18 @@ It needs `github.ownerRepo` and `agent.workpadHeading` in `factory.config.json` 
 
 ## The Inbox (KIT-398)
 
-Optio's first menu item in bb. It shows one card for every issue in the Inbox state (`Approval`), read from Linear on each open and on Refresh, with nothing cached: an issue that left `Approval` is gone on the next read. A card with `needs-info` or `ready-for-human` is a question: it shows the run's `### Waiting` ask and stage from the issue's workpad. Any other card is a green review: it shows the newest recorded `review` gate verdict line and the pull request's title. Green reviews come first, then questions, oldest in the state first inside each kind.
+Optio's first menu item in bb. It reads every issue in the Inbox state (`Approval`) from Linear on each open and on Refresh, with nothing cached: an issue that left `Approval` is gone on the next read. The page is laid out like a mail client: the messages on the left, the open message on the right. The open message is the panel's `subPath` (the issue identifier), so each message has its own link; on a narrow viewport the list and the message take turns. A message with `needs-info` or `ready-for-human` is a question: it shows the run's `### Waiting` ask and stage from the issue's workpad. Any other message is a green review: it shows the newest recorded `review` gate verdict line and the pull request's title. Green reviews come first, then questions, oldest in the state first inside each kind.
 
-The state and the question labels are Inbox configuration, not plugin code, so the plugin names no product value. Set them once on the install:
+bb's left sidebar stays bb's thread list: a menu page cannot put its own list there. The sidebar becomes Optio's own (with the Inbox at the top) only through the thread list in KIT-405.
+
+The state, the question labels and the bb project are Inbox configuration, not plugin code, so the plugin names no product value. The Inbox does not need the Board: it reads the Linear team (`linear.teamKey`) and the workpad heading from the project's `factory.config.json`. Without `--project` it uses the Board's project. Set them once on the install:
 
 ```bash
-bb optio inbox --state Approval --labels needs-info,ready-for-human
+bb optio inbox --state Approval --labels needs-info,ready-for-human --project <bb project id>
 bb optio inbox --off    # switch the Inbox off
 ```
 
-Until then `bb optio inbox` exits 1 and names this command, and the page says the same. `bb optio inbox [--json]` prints the same cards as the page. The code lives in `plugins/factory/src/inbox/` (RPC, Linear read, cards) and `plugins/factory/pages/inbox/` (the page); `app.tsx`, `server.ts` and `src/contract.ts` only register it.
+`bb project list` shows the project id. Until the Inbox is set, `bb optio inbox` exits 1 and names this command, and the page says the same. `bb optio inbox [--json]` prints the same messages as the page. The code lives in `plugins/factory/src/inbox/` (RPC, Linear read, cards) and `plugins/factory/pages/inbox/` (the page); `app.tsx`, `server.ts` and `src/contract.ts` only register it.
 
 ## After a merge that touches `plugins/factory/`
 
@@ -76,7 +78,7 @@ bb plugin build plugins/factory
 bb plugin reload optio
 ```
 
-The install is by path, so `reload` picks up the rebuilt `dist/` and keeps the plugin's settings, agents and memory. Never `bb plugin remove optio` to update it: removing deletes its database (agents, memory, automations).
+The install is by path, so `reload` picks up the rebuilt `dist/` and keeps the plugin's settings, agents and memory. bb compiles the server side from `server.ts` in that checkout, not from `dist/`: a server change only runs once it is in the checkout the install points at, so a build from another worktree updates the page and nothing else. Never `bb plugin remove optio` to update it: removing deletes its database (agents, memory, automations). Do not `bb plugin disable optio` and `enable` it to pick up a change either: it unloads Optio while runs are live, and on 2026-10-17 two reviewers were cut off at their result, so their runs never started the fix round (KIT-290, KIT-411). `reload` is the update.
 
 ## What it replaced
 
