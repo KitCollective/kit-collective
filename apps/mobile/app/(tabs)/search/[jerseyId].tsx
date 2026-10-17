@@ -1,18 +1,7 @@
-import { KIT_TYPE_LABELS_DA } from "@kit/domain";
+import type { CollectionPeerJersey } from "@kit/api-contract";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BiddingFetchError, fetchPeerJersey } from "@/api/bidding";
 import { resolvePhotoUrl } from "@/api/collection";
@@ -20,19 +9,23 @@ import { addFavorite, fetchFavorites, removeFavorite } from "@/api/favorites";
 import { blockPeer, reportPeer } from "@/api/moderation";
 import { useAuth } from "@/auth/AuthProvider";
 import { Sheet } from "@/components/catalog-ui";
-import { ListPeerStubRow, ProfileSurfaceGroup } from "@/components/profile-ui";
-import { Button, IconButton } from "@/components/ui";
+import { Button, ButtonDock, IconButton } from "@/components/ui";
+import {
+  JerseyFactRow,
+  JerseyPlayerRow,
+  JerseyTitleBlock,
+} from "@/jersey-detail/jersey-detail-rows";
+import { JerseyPhotoPager } from "@/jersey-detail/jersey-photos";
+import { peerJerseyDockState } from "@/search/bid-rules";
+import { ForeignJerseyOwnerRow } from "@/search/foreign-jersey-owner-row";
+import { buildForeignJerseyView } from "@/search/foreign-jersey-view-model";
 import { useTypography } from "@/theme/brand-fonts";
-import { radius, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
-
-const BIDDING_CLOSED_HELPER =
-  "Ejer har lukket for bud på denne trøje. Du kan stadig gemme den som favorit.";
 
 export default function ForeignJerseyDetailScreen() {
   const { jerseyId } = useLocalSearchParams<{ jerseyId: string }>();
   const router = useRouter();
-  const { width: screenWidth } = useWindowDimensions();
   const { accessToken } = useAuth();
   const theme = useTheme();
   const typography = useTypography();
@@ -40,9 +33,7 @@ export default function ForeignJerseyDetailScreen() {
   const pagerRef = useRef<ScrollView>(null);
 
   const [loading, setLoading] = useState(true);
-  const [peerJersey, setPeerJersey] = useState<Awaited<ReturnType<typeof fetchPeerJersey>> | null>(
-    null,
-  );
+  const [peerJersey, setPeerJersey] = useState<CollectionPeerJersey | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -135,25 +126,25 @@ export default function ForeignJerseyDetailScreen() {
   };
 
   const handleReport = () => {
-    if (!peerJersey) {
+    if (!peerJersey || !accessToken) {
       return;
     }
 
-    void runModeration("Rapportér", () => reportPeer(accessToken!, peerJersey.ownerId, {}));
+    void runModeration("Rapportér", () => reportPeer(accessToken, peerJersey.ownerId, {}));
   };
 
   const handleBlock = () => {
-    if (!peerJersey) {
+    if (!peerJersey || !accessToken) {
       return;
     }
 
-    void runModeration("Blokér", () => blockPeer(accessToken!, peerJersey.ownerId));
+    void runModeration("Blokér", () => blockPeer(accessToken, peerJersey.ownerId));
   };
 
-  const onPhotoScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
-    setPhotoIndex(index);
-  };
+  const view = useMemo(
+    () => (peerJersey ? buildForeignJerseyView(peerJersey) : null),
+    [peerJersey],
+  );
 
   if (loading) {
     return (
@@ -163,131 +154,77 @@ export default function ForeignJerseyDetailScreen() {
     );
   }
 
-  if (!peerJersey) {
+  if (!peerJersey || !view) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
+      <View
+        testID="foreign-jersey-not-found"
+        style={[styles.centered, { backgroundColor: theme.canvas }]}
+      >
         <Text style={[typography.body, { color: theme.contentSecondary }]}>Trøjen findes ikke</Text>
         <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
       </View>
     );
   }
 
-  const metaLine = `${peerJersey.seasonLabel} · ${KIT_TYPE_LABELS_DA[peerJersey.type]}`;
-  const showPagerDots = peerJersey.photos.length > 1;
+  const dockState = peerJerseyDockState({ biddingEnabled: peerJersey.biddingEnabled });
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.fillPrimary }]}>
+    <View testID="foreign-jersey-detail" style={[styles.root, { backgroundColor: theme.canvas }]}>
       <ScrollView
-        ref={pagerRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onPhotoScroll}
-        style={styles.stage}
-        contentContainerStyle={styles.stageContent}
+        contentContainerStyle={{
+          paddingBottom: dockState === "none" ? insets.bottom + space.insetLg : space.insetLg,
+        }}
+        showsVerticalScrollIndicator={false}
       >
-        {peerJersey.photos.map((photo) => (
-          <Image
-            key={photo.id}
-            source={{
-              uri: resolvePhotoUrl(photo.photoUrl),
-              headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-            }}
-            style={[styles.stagePhoto, { width: screenWidth }]}
-            resizeMode="cover"
-            accessibilityLabel={`${peerJersey.clubLabel} ${photo.role}`}
-          />
-        ))}
+        <JerseyPhotoPager
+          pagerRef={pagerRef}
+          photos={peerJersey.photos}
+          photoUris={peerJersey.photos.map((photo) => resolvePhotoUrl(photo.photoUrl, "lightbox"))}
+          title={view.title}
+          accessToken={accessToken}
+          index={photoIndex}
+          onIndexChange={setPhotoIndex}
+          onBack={() => router.back()}
+          onMore={() => setOverflowOpen(true)}
+          favorite={{ active: isFavorite, onPress: () => void handleToggleFavorite() }}
+        />
+
+        <View style={styles.column}>
+          <JerseyTitleBlock caption={view.caption} title={view.title} season={view.season} />
+
+          {view.playerRow ? <JerseyPlayerRow row={view.playerRow} /> : null}
+
+          <View>
+            {view.factRows.map((row, index) => (
+              <JerseyFactRow key={row.key} row={row} hairline={index < view.factRows.length - 1} />
+            ))}
+          </View>
+
+          <ForeignJerseyOwnerRow owner={view.owner} onPress={() => router.push(view.owner.href)} />
+        </View>
       </ScrollView>
 
-      <View style={[styles.stageChrome, { paddingTop: insets.top + space.insetSm }]}>
-        <IconButton
-          name="Tilbage"
-          icon="arrow-back"
-          iconColor={theme.contentInverse}
-          onPress={() => router.back()}
-        />
-        <View style={styles.chromeActions}>
-          <IconButton
-            name={isFavorite ? "Fjern favorit" : "Gem favorit"}
-            icon={isFavorite ? "heart" : "heart-outline"}
-            iconColor={theme.contentInverse}
-            disabled={favoriteBusy}
-            onPress={() => void handleToggleFavorite()}
-          />
-          <IconButton
-            name="Flere handlinger"
-            icon="ellipsis-horizontal"
-            iconColor={theme.contentInverse}
-            onPress={() => setOverflowOpen(true)}
-          />
-        </View>
-      </View>
-
-      {showPagerDots ? (
-        <View
-          style={[styles.pagerDots, { top: insets.top + space.insetSm + 44 }]}
-          accessibilityLabel={`Foto ${photoIndex + 1} af ${peerJersey.photos.length}`}
-        >
-          {peerJersey.photos.map((photo, index) => (
-            <View
-              key={photo.id}
-              style={[
-                styles.pagerDot,
-                {
-                  backgroundColor: theme.contentInverse,
-                  opacity: index === photoIndex ? 1 : 0.35,
-                },
-              ]}
-            />
-          ))}
-        </View>
+      {dockState === "send" ? (
+        <ButtonDock>
+          {/* A row so KIT-298 can add the 54px message Icon button before Send bud. */}
+          <View style={styles.dockRow}>
+            <View style={styles.dockPrimary}>
+              <Button
+                label="Send bud"
+                testID="send-bid-open"
+                width="fill"
+                onPress={() => router.push(`/(tabs)/search/send-bid/${jerseyId}`)}
+              />
+            </View>
+          </View>
+        </ButtonDock>
       ) : null}
-
-      <View
-        style={[
-          styles.bottomSheet,
-          {
-            backgroundColor: theme.surfaceRaised,
-            paddingBottom: insets.bottom + space.insetMd,
-          },
-        ]}
-      >
-        <View
-          style={[styles.sheetHandle, { backgroundColor: theme.borderSubtle }]}
-          accessibilityElementsHidden
-        />
-        <Text style={[typography.title, { color: theme.contentPrimary }]}>
-          {peerJersey.clubLabel}
-        </Text>
-        <Text style={[typography.mono, { color: theme.contentSecondary }]}>{metaLine}</Text>
-
-        <ProfileSurfaceGroup>
-          <ListPeerStubRow
-            handle={peerJersey.ownerHandle}
-            meta="Samler"
-            onPress={() => router.push(`/(tabs)/search/peer/${peerJersey.ownerHandle}`)}
-          />
-        </ProfileSurfaceGroup>
-
-        {peerJersey.biddingEnabled ? (
-          <Button
-            label="Send bud"
-            testID="send-bid-open"
-            width="fill"
-            onPress={() => router.push(`/(tabs)/search/send-bid/${jerseyId}`)}
-          />
-        ) : (
-          <Text style={[typography.body, { color: theme.contentSecondary }]}>
-            {BIDDING_CLOSED_HELPER}
-          </Text>
-        )}
-      </View>
 
       <Sheet visible={overflowOpen} title="Handlinger" onDismiss={() => setOverflowOpen(false)}>
         <View style={styles.overflowActions}>
           <Button
             label="Rapportér"
+            testID="foreign-jersey-report"
             variant="secondary"
             width="fill"
             disabled={moderationBusy}
@@ -295,6 +232,7 @@ export default function ForeignJerseyDetailScreen() {
           />
           <Button
             label="Blokér"
+            testID="foreign-jersey-block"
             variant="destructive"
             width="fill"
             disabled={moderationBusy}
@@ -316,62 +254,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: space.gapMd,
   },
-  stage: {
-    ...StyleSheet.absoluteFill,
-  },
-  stageContent: {
-    flexGrow: 1,
-  },
-  stagePhoto: {
-    height: "100%",
-  },
-  stageChrome: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  column: {
     paddingHorizontal: space.insetMd,
-  },
-  chromeActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.gapSm,
-  },
-  pagerDots: {
-    position: "absolute",
-    alignSelf: "center",
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: space.gapSm,
-  },
-  pagerDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radius.pill,
-  },
-  bottomSheet: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    paddingHorizontal: space.insetLg,
     paddingTop: space.insetMd,
+    gap: space.gapLg,
+  },
+  dockRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: space.gapMd,
   },
-  sheetHandle: {
-    alignSelf: "center",
-    width: 36,
-    height: 4,
-    borderRadius: radius.pill,
-    marginBottom: space.gapSm,
+  dockPrimary: {
+    flex: 1,
   },
   overflowActions: {
     gap: space.gapSm,

@@ -13,6 +13,15 @@ export default function SearchLayout() {
         animation: stackRouteMotion(route.name, reduceMotion),
         contentStyle: { backgroundColor: theme.canvas },
       })}
-    />
+    >
+      {/* Declared first: the first declared screen is the Stack's initial route. */}
+      <Stack.Screen name="index" />
+      {/*
+        A foreign UserJersey hides the Tab bar (docs/design-system.md → Foreign UserJersey detail).
+        The bar is hidden the way the capture flow hides it: the route is presented as a full-screen
+        modal (Tab bar → Hide behavior), not with NativeTabs `hidden`, which remounts the navigator.
+      */}
+      <Stack.Screen name="[jerseyId]" options={{ presentation: "fullScreenModal" }} />
+    </Stack>
   );
 }
