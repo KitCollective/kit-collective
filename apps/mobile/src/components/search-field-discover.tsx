@@ -1,5 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRef, useState } from "react";
 import { Pressable, StyleSheet, TextInput, type TextInputProps, View } from "react-native";
+import { IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -8,29 +10,59 @@ type SearchFieldDiscoverProps = TextInputProps & {
   /** Required: the placeholder is not a label substitute. */
   accessibilityLabel: string;
   onClear?: () => void;
+  /** Runs after Back has blurred and cleared the field. */
+  onBack?: () => void;
 };
 
 /**
  * Search field, `discover` variant (docs/design-system.md → Search field, Revision
  * 2026-10-10): the Søg tab's field. `fill.secondary`, `radius.pill`, 48 high, no border.
+ * In focus, Back (Tilbage) replaces the search icon: it blurs and clears the field.
  */
 export function SearchFieldDiscover({
   value,
   onClear,
+  onBack,
+  onFocus,
+  onBlur,
   style,
   testID,
   ...props
 }: SearchFieldDiscoverProps) {
   const theme = useTheme();
   const typography = useTypography();
+  const inputRef = useRef<TextInput>(null);
+  const [focused, setFocused] = useState(false);
+
+  const handleBack = () => {
+    inputRef.current?.blur();
+    onClear?.();
+    onBack?.();
+  };
 
   return (
     <View
       testID="search-field-discover"
-      style={[styles.field, { backgroundColor: theme.fillSecondary }]}
+      style={[
+        styles.field,
+        { backgroundColor: theme.fillSecondary },
+        focused && styles.fieldFocused,
+      ]}
     >
-      <Ionicons name="search" size={18} color={theme.contentMuted} accessibilityElementsHidden />
+      {focused ? (
+        <IconButton
+          testID="search-back"
+          name="Tilbage"
+          icon="arrow-back"
+          iconSize={20}
+          iconColor={theme.contentMuted}
+          onPress={handleBack}
+        />
+      ) : (
+        <Ionicons name="search" size={18} color={theme.contentMuted} accessibilityElementsHidden />
+      )}
       <TextInput
+        ref={inputRef}
         testID={testID}
         style={[typography.body, styles.input, { color: theme.contentPrimary }, style]}
         placeholderTextColor={theme.contentMuted}
@@ -39,11 +71,20 @@ export function SearchFieldDiscover({
         returnKeyType="search"
         value={value}
         {...props}
+        onFocus={(event) => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          onBlur?.(event);
+        }}
       />
       {value && onClear ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Ryd søgning"
+          testID="search-clear"
           onPress={onClear}
           style={styles.clearButton}
         >
@@ -63,6 +104,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     paddingLeft: space.insetMd,
     paddingRight: space.insetSm,
+  },
+  // The 44 Back button carries its own inset, so the glyph lines up with the search icon.
+  fieldFocused: {
+    paddingLeft: space.insetSm,
   },
   input: {
     flex: 1,
