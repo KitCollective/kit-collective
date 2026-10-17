@@ -92,7 +92,11 @@ async function identitySuggestion(app: NestFastifyApplication, accessToken: stri
     });
     const job = visionJobResponseSchema.parse(JSON.parse(response.body));
     if (job.status !== "pending") {
-      return { status: job.status, suggestions: job.suggestions };
+      return {
+        status: job.status,
+        suggestions: job.suggestions,
+        fieldPreselect: job.fieldPreselect,
+      };
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
@@ -173,6 +177,27 @@ describe("fixed Vision for the test Collector", () => {
     expect(second).toEqual(first);
   });
 
+  it("hands the app a suggestion with nothing preselected after a reset to low-confidence", async () => {
+    await applyTestData({
+      db,
+      objectStore: createMemoryObjectStore(),
+      credentials: CREDENTIALS,
+      vision: "low-confidence",
+    });
+    const login = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: CREDENTIALS.collector,
+    });
+    const { accessToken } = identitySessionSchema.parse(JSON.parse(login.body));
+    const fixed = await resolveCatalogSide(db, FIXED_VISION_SUGGESTION.side);
+
+    const job = await identitySuggestion(app, accessToken);
+
+    expect(job.status).toBe("ready");
+    expect(job.suggestions).toMatchObject({ clubId: fixed?.clubId, seasonId: fixed?.seasonId });
+    expect(job.fieldPreselect ?? {}).toEqual({});
+  });
   it("groups the test Collector's photos the same way on two consecutive runs", async () => {
     const login = await app.inject({
       method: "POST",

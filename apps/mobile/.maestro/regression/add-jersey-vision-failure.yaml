@@ -51,7 +51,7 @@ name: add-jersey-vision-failure
       id: confirm-identity-in-flight
     timeout: 90000
 - extendedWaitUntil:
-    visible: "Vision fandt ikke trøjen"
+    visible: "Vision fandt ikke trøjen.*"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000
