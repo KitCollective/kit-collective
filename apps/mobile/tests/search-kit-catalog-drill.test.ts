@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { buildSearchTypeahead } from "../src/search/search-view-model";
 
 const kitRoutePath = join(__dirname, "../app/(tabs)/search/kit/[kitId].tsx");
 const clubRoutePath = join(__dirname, "../app/(tabs)/search/club/[clubId].tsx");
@@ -31,12 +32,15 @@ describe("Søg Kit catalog drill (KIT-157)", () => {
   });
 
   it("opens typeahead Kit hits on the kit catalog drill", () => {
+    const kitId = "99999999-9999-4999-8999-999999999999";
+    const { hits } = buildSearchTypeahead({
+      kits: [{ kitId, label: "OB 2023/24 Hjemme", jerseyCount: 1, photo: null }],
+    });
     const source = readFileSync(searchIndexPath, "utf8");
 
-    expect(source).toMatch(/const openKitDrill = /);
+    expect(hits[0]?.href).toBe(`/(tabs)/search/kit/${kitId}?label=OB%202023%2F24%20Hjemme`);
     expect(source).not.toMatch(/openKitStub/);
-    expect(source).toMatch(/\/\(tabs\)\/search\/kit\//);
-    expect(source).toMatch(/onPress=\{\(\) => openKitDrill\(kitHit\.kitId, kitHit\.label\)\}/);
+    expect(source).toMatch(/onPress=\{\(\) => router\.push\(hit\.href\)\}/);
   });
 
   it("fetches kit drills from the kits collection path", () => {

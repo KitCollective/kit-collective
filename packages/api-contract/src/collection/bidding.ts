@@ -123,10 +123,27 @@ export const collectionDiscoverCatalogDrillSchema = z
 
 export type CollectionDiscoverCatalogDrill = z.infer<typeof collectionDiscoverCatalogDrillSchema>;
 
+export const collectionDiscoverTypeaheadClubSchema = collectionDiscoverHomeClubSchema.extend({
+  jerseyCount: discoverCopyCountSchema,
+});
+
+export type CollectionDiscoverTypeaheadClub = z.infer<typeof collectionDiscoverTypeaheadClubSchema>;
+
+export const collectionDiscoverTypeaheadNationalTeamSchema =
+  collectionDiscoverHomeNationalTeamSchema.extend({
+    jerseyCount: discoverCopyCountSchema,
+  });
+
+export type CollectionDiscoverTypeaheadNationalTeam = z.infer<
+  typeof collectionDiscoverTypeaheadNationalTeamSchema
+>;
+
 export const collectionDiscoverTypeaheadKitSchema = z
   .object({
     kitId: z.string().uuid(),
     label: z.string().min(1),
+    jerseyCount: discoverCopyCountSchema,
+    photo: collectionJerseyPhotoSchema.nullable(),
   })
   .strict();
 
@@ -136,6 +153,8 @@ export const collectionDiscoverTypeaheadPlayerSchema = z
   .object({
     playerId: z.string().uuid(),
     playerLabel: z.string().min(1),
+    jerseyCount: discoverCopyCountSchema,
+    number: z.number().int().nullable(),
   })
   .strict();
 
@@ -143,13 +162,22 @@ export type CollectionDiscoverTypeaheadPlayer = z.infer<
   typeof collectionDiscoverTypeaheadPlayerSchema
 >;
 
+export const collectionDiscoverTypeaheadCollectorSchema =
+  collectionDiscoverHomeCollectorSchema.extend({
+    jerseyCount: discoverCopyCountSchema,
+  });
+
+export type CollectionDiscoverTypeaheadCollector = z.infer<
+  typeof collectionDiscoverTypeaheadCollectorSchema
+>;
+
 export const collectionDiscoverTypeaheadSchema = z
   .object({
-    clubs: z.array(collectionDiscoverHomeClubSchema).optional(),
-    nationalTeams: z.array(collectionDiscoverHomeNationalTeamSchema).optional(),
+    clubs: z.array(collectionDiscoverTypeaheadClubSchema).optional(),
+    nationalTeams: z.array(collectionDiscoverTypeaheadNationalTeamSchema).optional(),
     kits: z.array(collectionDiscoverTypeaheadKitSchema).optional(),
     players: z.array(collectionDiscoverTypeaheadPlayerSchema).optional(),
-    collectors: z.array(collectionDiscoverHomeCollectorSchema).optional(),
+    collectors: z.array(collectionDiscoverTypeaheadCollectorSchema).optional(),
     jerseys: z.array(collectionDiscoverJerseySchema).optional(),
   })
   .strict();
