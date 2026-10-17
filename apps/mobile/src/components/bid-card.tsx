@@ -28,6 +28,8 @@ type BidCardProps = {
   thumbUri: string | null;
   imageHeaders?: Record<string, string>;
   responding?: boolean;
+  /** Lock → Bid card → Properties: Accepter and Afvis show only for an incoming pending Bud. */
+  incomingPending: boolean;
   onAccept?: () => void;
   onDecline?: () => void;
   onNavigate: (href: string) => void;
@@ -39,6 +41,7 @@ export function BidCard({
   thumbUri,
   imageHeaders,
   responding = false,
+  incomingPending,
   onAccept,
   onDecline,
   onNavigate,
@@ -163,7 +166,7 @@ export function BidCard({
         ) : null}
       </View>
 
-      {card.actions === "answer" ? (
+      {incomingPending ? (
         <View style={styles.actions}>
           <View style={styles.action}>
             <Button

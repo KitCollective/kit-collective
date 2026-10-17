@@ -249,7 +249,7 @@ export function ConversationView({
           }
 
           if (item.type === "bid") {
-            const answer = item.card.actions === "answer";
+            const incomingPending = item.card.actions === "answer";
             const thumbPath = item.card.jersey?.thumbPath;
             return (
               <BidCard
@@ -258,8 +258,13 @@ export function ConversationView({
                 thumbUri={thumbPath ? resolvePhotoUrl(thumbPath, "grid") : null}
                 imageHeaders={imageHeaders}
                 responding={respondingBidId === item.id}
-                onAccept={answer ? () => void handleRespondBid(item.id, "accept") : undefined}
-                onDecline={answer ? () => void handleRespondBid(item.id, "decline") : undefined}
+                incomingPending={incomingPending}
+                onAccept={
+                  incomingPending ? () => void handleRespondBid(item.id, "accept") : undefined
+                }
+                onDecline={
+                  incomingPending ? () => void handleRespondBid(item.id, "decline") : undefined
+                }
                 // SAFETY: the view-model builds only routes that exist under app/(tabs).
                 onNavigate={(href) => router.push(href as Href)}
               />

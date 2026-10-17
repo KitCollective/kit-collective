@@ -17,11 +17,14 @@ describe("bidCardAmountTypography", () => {
 });
 
 describe("BidCard (Revision 2026-10-10, KIT-297)", () => {
-  it("renders from the thread view-model, with Accepter and Afvis only for the answer actions", () => {
+  it("renders from the thread view-model, with Accepter and Afvis only when incomingPending", () => {
     const source = readFileSync(bidCardPath, "utf8");
+    const view = readFileSync(conversationViewPath, "utf8");
 
     expect(source).toMatch(/BidCardState/);
-    expect(source).toMatch(/card\.actions === "answer"/);
+    expect(source).toMatch(/incomingPending: boolean/);
+    expect(source).toMatch(/\{incomingPending \? \(/);
+    expect(view).toMatch(/const incomingPending = item\.card\.actions === "answer"/);
     expect(source).toMatch(/label="Accepter"/);
     expect(source).toMatch(/label="Afvis"/);
     expect(source).toMatch(/label="Send nyt bud"/);
