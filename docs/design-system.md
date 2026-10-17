@@ -819,17 +819,18 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Avatar
 
-**Purpose**: Show the signed-in collector’s identity photo on own Profil.
+**Purpose**: Show a collector’s identity photo: the signed-in collector on own Profil, and other collectors in Søg (typeahead, the **Samlere** shelf) and the Owner row of a foreign jersey.
 
 **Anatomy**: Circle. Photo fills the circle (cover crop) when present. Fallback: one or two letters from the username on `fill.secondary` (`type.label` or `type.heading-sm` by size). No KC monogram. No club Mark.
 
-**Properties**: `uri` optional. `initials` required for fallback and accessible name. `size`: `lg` | `md`.
+**Properties**: `uri` optional. `initials` required for fallback and accessible name. `size`: `lg` | `md` | `sm`.
 
 **Variants**: None beyond size.
 | Size | Diameter | Where |
 | --- | --- | --- |
 | `lg` | 64px | Own Profil identity card (home) |
 | `md` | 56px | Rediger profil “Skift foto” row |
+| `sm` | 44px | A collector in a 44px leading slot: Søg typeahead hit, **Samlere** shelf row, Owner row on a foreign jersey. Fallback initials in `type.label`. Added 2026-10-17 by Nicklas (KIT-394). |
 
 **States**: Rest, pressed (when the control changes the photo), focus. Missing photo is fallback, not an error.
 
@@ -837,7 +838,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Composition**: Own Profil identity card and Rediger profil photo row. Photo pick uses the platform picker; do not invent a crop editor this gap. Not a replacement for Jersey tile, Mark, Thread row initial, or the admin 32px operator monogram.
 
-**Unsupported**: KC monogram as a collector face. Square crop. A third size. Using Avatar for the other collector on Detaljer / Thread row (that 44px initial stays). Using Avatar as a club/country Mark.
+**Unsupported**: KC monogram as a collector face. Square crop. A fourth size. *(Until 2026-10-17 this line said "A third size"; superseded by Nicklas, KIT-394: `sm` 44 is the third.)* Using Avatar for the other collector on Detaljer / Thread row (that 44px initial stays). Using Avatar as a club/country Mark.
 
 **Example** *(not a rule)*: Home card: 64px photo of the collector, handle `eskou` beside it. No photo: “E” on `fill.secondary`.
 
