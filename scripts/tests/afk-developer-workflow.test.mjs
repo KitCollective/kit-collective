@@ -28,10 +28,6 @@ const SHA = "a".repeat(40);
  * @param {(round: number) => any} [opts.engineer] returns the engineer result (or null / throws)
  * @param {(round: number) => any} [opts.reviewer]
  * @param {any} [opts.lead]
- * @param {(call: { gate: string, pr: number, issue: string }) => { code: number, line: string } | { outcome: string, reason?: string } | null | undefined} [opts.gate]
- *   answers a gate-tool call; `{ code, line }` is a record that ran, `{ outcome }` a refused or errored one,
- *   null a caller that returned nothing. Without it the `shell` answer for the equivalent
- *   `gate.mjs` command is used, so a test can script a gate either way.
  */
 async function run({
   args = { issue: "KIT-9" },
@@ -40,12 +36,8 @@ async function run({
   reviewer,
   lead,
   startDecision,
-  gate,
 } = {}) {
   const commands = [];
-  // What the gate tool was called with, and every runner command and gate call in the order they happened.
-  const gateCalls = [];
-  const events = [];
   const spawns = [];
   const phases = [];
   let engineerRound = 0;
@@ -60,28 +52,6 @@ async function run({
   };
   const fakeAgent = async (prompt, options = {}) => {
     spawns.push({ prompt, options });
-    if (options.label.startsWith("gate:")) {
-      // A gate caller: it passes the arguments to the tool, which Optio runs and records.
-      const call = JSON.parse(/these arguments: (\{.*\})/.exec(prompt)[1]);
-      gateCalls.push(call);
-      events.push(`optio_gate ${call.gate} ${call.pr}`);
-      let scripted = gate?.(call);
-      if (scripted === undefined) {
-        scripted = shell?.(`node scripts/gate.mjs ${call.gate} ${call.pr} --issue ${call.issue}`);
-      }
-      if (scripted === null) return null;
-      scripted ??= { code: 0, line: "OPEN: fine" };
-      const record = { id: gateCalls.length, sha: SHA, reason: "" };
-      return "outcome" in scripted
-        ? {
-            ...record,
-            exitCode: -1,
-            verdictLine: "",
-            reason: scripted.reason ?? "",
-            outcome: scripted.outcome,
-          }
-        : { ...record, outcome: "ran", exitCode: scripted.code, verdictLine: scripted.line };
-    }
     if (options.schema?.required?.includes("results")) {
       const lines = prompt
         .split("\n")
@@ -92,7 +62,6 @@ async function run({
       const results = [];
       for (const command of lines) {
         commands.push(command);
-        events.push(command);
         const custom = shell?.(command);
         // `null` plays a runner that ended its turn without a results array entry (KIT-285).
         if (custom === null) return { results };
@@ -135,7 +104,7 @@ async function run({
     () => {},
     args,
   );
-  return { result, commands, spawns, phases, gateCalls, events };
+  return { result, commands, spawns, phases };
 }
 
 /** The last Linear state the workflow wrote, i.e. what Linear shows when the run returns. */
@@ -176,22 +145,22 @@ test("the literal provider and model in every agent() call match PROVIDER and MO
     assert.ok(models.includes(literal), `model ${literal} is not a value of MODELS`);
 });
 
-test("green path: ends ready In Review, writes no Approval, and takes both gates from the tool", async () => {
-  const { result, commands, events, gateCalls, phases } = await run();
-  assert.equal(result.status, "In Review");
-  assert.equal(result.stoppedAt, "ready");
+test("green path: ends at Approval, in the documented order, with a dry-run receipt", async () => {
+  const { result, commands, phases } = await run();
+  assert.equal(result.status, "Approval");
   assert.equal(result.prNumber, 77);
   assert.match(result.receipt, /OPEN|WOULD POST/);
-  const at = (needle) => events.findIndex((c) => c.includes(needle));
+  const at = (needle) => commands.findIndex((c) => c.includes(needle));
   const order = [
     "session-check.mjs KIT-9",
     "run-log.mjs start",
     "start-decision.mjs --issue KIT-9",
-    "optio_gate pre-review 77",
+    "gate.mjs pre-review 77",
     "head-changed.mjs KIT-9 --pr 77",
     'state KIT-9 "In Review"',
-    "optio_gate review 77",
+    "gate.mjs review 77",
     "audit-receipt.mjs post 77",
+    'state KIT-9 "Approval"',
   ];
   const positions = order.map(at);
   assert.ok(
@@ -203,54 +172,11 @@ test("green path: ends ready In Review, writes no Approval, and takes both gates
     [...positions].sort((a, b) => a - b),
   );
   // The matrix is validated only by the full gate, after the reviewer.
-  assert.ok(at("optio_gate review") > at("--step reviewer"));
-  assert.ok(phases.indexOf("Reviewer") < phases.indexOf("Review gate"));
-  // S1: no Approval write on the green path, and no runner command relays a gate.
-  assert.ok(!commands.some((c) => c.includes('"Approval"')), "a green run writes no Approval");
-  assert.equal(lastState(commands), "In Review");
-  assert.ok(!commands.some((c) => c.includes("gate.mjs")), "no runner command runs a gate");
-  assert.deepEqual(gateCalls, [
-    { gate: "pre-review", pr: 77, issue: "KIT-9" },
-    { gate: "review", pr: 77, issue: "KIT-9" },
-  ]);
-});
-
-test("a gate call is a Haiku caller told to call optio_gate once with fixed arguments and no shell", async () => {
-  const { spawns } = await run();
-  const calls = agentSpawns(spawns).filter((s) => s.options.label.startsWith("gate:"));
-  assert.deepEqual(
-    calls.map((s) => s.options.label),
-    ["gate:pre-review", "gate:review"],
+  assert.ok(
+    commands.findIndex((c) => c.includes("gate.mjs review")) >
+      commands.findIndex((c) => c.includes("--step reviewer")),
   );
-  for (const call of calls) {
-    assert.equal(call.options.model, "claude-haiku-5-5");
-    assert.match(call.prompt, /Call the `optio_gate` tool exactly once/);
-    assert.match(call.prompt, /Run no shell command/);
-    assert.deepEqual(call.options.schema.required, [
-      "id",
-      "outcome",
-      "exitCode",
-      "verdictLine",
-      "sha",
-      "reason",
-    ]);
-  }
-  assert.match(calls[0].prompt, /\{"gate":"pre-review","pr":77,"issue":"KIT-9"\}/);
-  assert.match(calls[1].prompt, /\{"gate":"review","pr":77,"issue":"KIT-9"\}/);
-});
-
-test("a gate that Optio refused or could not run is a runner failure, never a verdict or a fix round", async () => {
-  for (const outcome of ["refused", "error"]) {
-    const { result, gateCalls, commands } = await run({
-      gate: (call) =>
-        call.gate === "pre-review" ? { outcome, reason: "no environment yet" } : undefined,
-    });
-    assert.equal(result.stoppedAt, "pre-review gate", outcome);
-    assert.equal(result.status, "In Progress", outcome);
-    assert.match(result.note, new RegExp(`gate-tool-${outcome}: .*no environment yet`));
-    assert.equal(gateCalls.length, 1, "a record that exists is not asked for again");
-    assert.ok(!commands.some((c) => c.includes("--step reviewer")));
-  }
+  assert.ok(phases.indexOf("Reviewer") < phases.indexOf("Review gate"));
 });
 
 test("it never merges, enqueues, posts a receipt or sets Merging, Post-Merge or Done", async () => {
@@ -339,7 +265,7 @@ test("session-check closed stops before anything else runs", async () => {
   assert.equal(spawns.length, 1);
 });
 
-const isHarnessDiff = (c) => c.startsWith("git diff --quiet origin/development");
+const isHarnessDiff = (c) => c.startsWith("git diff --quiet HEAD...origin/development");
 
 test("a worktree whose harness differs from development stops before the session check counts a start (KIT-283)", async () => {
   const { result, commands, spawns } = await run({
@@ -355,7 +281,8 @@ test("a worktree whose harness differs from development stops before the session
   assert.equal(commands[0], "git fetch --quiet origin development");
   assert.match(
     commands[1],
-    /^git diff --quiet origin\/development -- \.bb\/workflows scripts factory\.config\.json$/,
+    // Three dots: only the lane's own changes since the branch left it count (KIT-398, KIT-411).
+    /^git diff --quiet HEAD\.\.\.origin\/development -- \.bb\/workflows scripts factory\.config\.json$/,
   );
   assert.ok(!commands.some((c) => c.includes("session-check.mjs")));
   assert.ok(
@@ -402,7 +329,7 @@ test("an Engineer that ends without a result is logged as no-result-line and ret
         ? new Error("no result")
         : { outcome: "ready", sentence: "ok", threadId: ENGINEER_THREAD, prNumber: 77 },
   });
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   assert.ok(commands.some((c) => c.includes("reason") && c.includes("--code no-result-line")));
   const twice = await run({ engineer: () => new Error("no result") });
   assert.equal(twice.result.status, "In Progress");
@@ -458,7 +385,7 @@ test("a red review with only light findings at the cap gets one extra round, and
     agentSpawns(capped.spawns).filter((s) => s.options.label.startsWith("engineer:")).length,
     3,
   );
-  // Light red at the cap, then green: the extra round ends ready through the normal green path.
+  // Light red at the cap, then green: the extra round reaches Approval through the normal green path.
   const fixed = await run({
     reviewer: (n) =>
       n <= 2 ? light : { verdict: "green", sha: SHA, sentence: "ok", threadId: REVIEWER_THREAD },
@@ -471,24 +398,24 @@ test("a red review with only light findings at the cap gets one extra round, and
   assert.ok(!heavy.commands.some((c) => c.includes("light-extra-round")));
 });
 
-test("red then green: the second round ends ready In Review", async () => {
+test("red then green: the second round reaches Approval", async () => {
   const { result } = await run({
     reviewer: (n) =>
       n === 1
         ? { verdict: "red", sha: SHA, sentence: "fix x", threadId: REVIEWER_THREAD }
         : undefined,
   });
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   assert.equal(result.rounds, 2);
 });
 
 test("a closed pre-review gate (scope missing in the PR) is logged with its own reason and fed back", async () => {
-  let calls = 0;
+  let gateCalls = 0;
   const { result, commands, spawns } = await run({
     shell: (c) => {
       if (!c.includes("gate.mjs pre-review")) return undefined;
-      calls += 1;
-      return calls === 1
+      gateCalls += 1;
+      return gateCalls === 1
         ? {
             code: 1,
             line: "CLOSED (review): scope-in-pr: scope-missing-in-pr: the issue declares write-scope a/**",
@@ -499,20 +426,20 @@ test("a closed pre-review gate (scope missing in the PR) is logged with its own 
   assert.ok(commands.some((c) => c.includes("--code scope-missing-in-pr")));
   const second = agentSpawns(spawns).filter((s) => s.options.label.startsWith("engineer:"))[1];
   assert.match(second.prompt, /scope-missing-in-pr/);
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
 });
 
 test("the pre-review gate waits again on exit 3 and the matrix is not read before the reviewer", async () => {
   let n = 0;
-  const { result, commands, gateCalls } = await run({
+  const { result, commands } = await run({
     shell: (c) => {
       if (!c.includes("gate.mjs pre-review")) return undefined;
       n += 1;
       return n < 3 ? { code: 3, line: "WAITING: checks pending" } : { code: 0, line: "OPEN" };
     },
   });
-  assert.equal(result.status, "In Review");
-  assert.equal(gateCalls.filter((c) => c.gate === "pre-review").length, 3);
+  assert.equal(result.status, "Approval");
+  assert.equal(commands.filter((c) => c.includes("gate.mjs pre-review")).length, 3);
   assert.ok(!commands.some((c) => c.includes("review-matrix")));
 });
 
@@ -635,7 +562,7 @@ test("hostile text from the Reviewer never reaches a command", async () => {
   assert.ok(badLead.commands.every((c) => !c.includes("plan; id")));
 });
 
-test("a refused receipt dry run holds In Review, a passed one ends ready", async () => {
+test("a refused receipt dry run holds In Review, not Approval", async () => {
   const refused = await run({
     shell: (c) =>
       c.includes("audit-receipt.mjs")
@@ -654,9 +581,8 @@ test("a refused receipt dry run holds In Review, a passed one ends ready", async
         ? { code: 0, line: "WOULD POST (receipt): kc/audit success" }
         : undefined,
   });
-  assert.equal(passed.result.status, "In Review");
-  assert.equal(passed.result.stoppedAt, "ready");
-  assert.equal(lastState(passed.commands), "In Review");
+  assert.equal(passed.result.status, "Approval");
+  assert.equal(lastState(passed.commands), "Approval");
 });
 
 test("the returned status matches the last Linear state in every stop path", async () => {
@@ -701,31 +627,29 @@ test("the runner prompt forbids backgrounding and prose endings and says to wait
   assert.match(runner, /Do not end your turn with prose/);
 });
 
-test("a gate caller that returns nothing is asked once more, then succeeds", async () => {
+test("an empty runner result for the gate is retried once, then succeeds", async () => {
   let calls = 0;
-  const { result, commands, gateCalls } = await run({
+  const { result, commands } = await run({
     shell: (c) => {
       if (!isPre(c)) return undefined;
       calls += 1;
       return calls === 1 ? null : undefined;
     },
   });
-  assert.equal(result.status, "In Review");
-  assert.equal(gateCalls.filter((g) => g.gate === "pre-review").length, 2);
+  assert.equal(result.status, "Approval");
+  assert.equal(commands.filter(isPre).length, 2);
   assert.ok(!commands.some((c) => c.includes("--code runner-no-result")));
 });
 
-test("a gate caller that returns nothing twice stops with runner-no-result, never as a gate verdict", async () => {
-  const { result, commands, gateCalls } = await run({
-    shell: (c) => (isPre(c) ? null : undefined),
-  });
+test("a runner that returns nothing twice stops with runner-no-result, never as a gate verdict", async () => {
+  const { result, commands } = await run({ shell: (c) => (isPre(c) ? null : undefined) });
   assert.equal(result.status, "In Progress");
   assert.equal(result.stoppedAt, "pre-review gate");
   assert.match(
     result.note,
-    /runner-no-result: the gate caller returned no record for pre-review PR 77/,
+    /runner-no-result: the command runner returned nothing for: node scripts\/gate\.mjs pre-review 77/,
   );
-  assert.equal(gateCalls.length, 2);
+  assert.equal(commands.filter(isPre).length, 2);
   assert.ok(commands.some((c) => c.includes("reason") && c.includes("--code runner-no-result")));
   assert.ok(!commands.some((c) => c.includes("--code gate-closed")));
   assert.ok(!commands.some((c) => c.includes("reviewer")), "no Reviewer is spawned");
@@ -762,14 +686,14 @@ test("every runner command is wrapped so the shell prints its own exit code", as
   assert.match(runner, /Never work out or guess the exit code/);
 });
 
-test("an exit code that is not a real one is a runner failure, never a closed gate (KIT-295)", async () => {
-  const { result, commands, gateCalls } = await run({
-    // A record whose exit code is not a real one (the tool never sends it) is no verdict.
-    shell: (c) => (isPre(c) ? { code: -1, line: "OPEN (review): checks clean" } : undefined),
+test("an exit code the runner made up is a runner failure, never a closed gate (KIT-295)", async () => {
+  const { result, commands } = await run({
+    shell: (c) =>
+      isPre(c) ? { exit: "-1", code: 0, line: "OPEN (review): checks clean" } : undefined,
   });
   assert.equal(result.stoppedAt, "pre-review gate");
   assert.match(result.note, /runner-no-result/);
-  assert.equal(gateCalls.length, 2);
+  assert.equal(commands.filter(isPre).length, 2);
   assert.ok(!commands.some((c) => c.includes("--code gate-closed")));
 });
 
@@ -809,7 +733,7 @@ test("resume looks the PR up read-only and hands its number to the Engineer", as
   assert.match(engineer.prompt, /PR #55 exist/);
   assert.match(engineer.prompt, /never open a second PR/);
   assert.equal(result.prNumber, 55);
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   assert.ok(commands.some((c) => c.includes('state KIT-9 "In Progress"')));
 });
 
@@ -887,7 +811,7 @@ test("a gate that keeps waiting is bounded: five slices, then a clear stop in th
   const pre = await run({
     shell: (c) => (isPre(c) ? { code: 3, line: "WAITING: checks pending" } : undefined),
   });
-  assert.equal(pre.gateCalls.filter((g) => g.gate === "pre-review").length, 5);
+  assert.equal(pre.commands.filter(isPre).length, 5);
   assert.equal(pre.result.status, "In Progress");
   assert.equal(pre.result.stoppedAt, "pre-review gate");
   assert.match(pre.result.note, /still waiting after 5 slices of 480s/);
@@ -900,7 +824,7 @@ test("a gate that keeps waiting is bounded: five slices, then a clear stop in th
         ? { code: 3, line: "WAITING (review): checks pending" }
         : undefined,
   });
-  assert.equal(review.gateCalls.filter((g) => g.gate === "review").length, 5);
+  assert.equal(review.commands.filter((c) => c.includes("gate.mjs review")).length, 5);
   assert.equal(review.result.status, "In Review");
   assert.equal(review.result.stoppedAt, "review gate");
   assert.match(review.result.note, /still waiting after 5 slices/);
@@ -917,7 +841,7 @@ const PENDING_LINE = (n) =>
   `WAITING (review): checks: TIMEOUT after 470s: PENDING (2 pass, 0 fail, 1 pending, 0 skipped): Device flows; device-flows-pending on abc1234${n}`;
 
 test("a Device flows run with no verdict ends needs-human in Approval, with no fix round and no Reviewer", async () => {
-  const { result, commands, spawns, gateCalls } = await run({
+  const { result, commands, spawns } = await run({
     shell: (c) => (isPre(c) ? { code: 1, line: NO_VERDICT_LINE } : undefined),
   });
   assert.equal(result.status, "Approval");
@@ -927,7 +851,7 @@ test("a Device flows run with no verdict ends needs-human in Approval, with no f
   assert.ok(commands.some((c) => c.includes("--code device-flows-no-verdict")));
   assert.equal(lastState(commands), "Approval");
   assert.ok(!commands.some((c) => c.includes("--code gate-closed")));
-  assert.equal(gateCalls.length, 1);
+  assert.equal(commands.filter(isPre).length, 1);
   const agents = agentSpawns(spawns);
   assert.equal(agents.filter((s) => s.options.label.startsWith("engineer:")).length, 1);
   assert.equal(agents.filter((s) => s.options.label.startsWith("reviewer:")).length, 0);
@@ -937,7 +861,7 @@ test("a Device flows status still pending after five slices ends needs-human, no
   const pending = await run({
     shell: (c) => (isPre(c) ? { code: 3, line: PENDING_LINE("") } : undefined),
   });
-  assert.equal(pending.gateCalls.length, 5);
+  assert.equal(pending.commands.filter(isPre).length, 5);
   assert.equal(pending.result.status, "Approval");
   assert.equal(pending.result.note, "needs-human: run device-run.sh on the Mac on abc1234");
   assert.equal(lastState(pending.commands), "Approval");
@@ -970,7 +894,7 @@ test("a red Device flows flow (or any closed gate without the no-verdict tag) st
         : { code: 0, line: "OPEN" };
     },
   });
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   assert.ok(commands.some((c) => c.includes("--code gate-closed")));
   assert.ok(!commands.some((c) => c.includes("--code device-flows-no-verdict")));
 });
@@ -994,19 +918,19 @@ test("a Device flows error that is asked for again and then turns green ends In 
       return { code: 0, line: "OPEN (review): clean" };
     },
   });
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   assert.ok(result.stoppedAt !== "pre-review gate");
 });
 
 test("the Device flows request rides in front of every pre-review slice, not only the first", async () => {
-  const { commands, events } = await run({
+  const { commands } = await run({
     shell: (c) => (isPre(c) ? { code: 3, line: "WAITING: checks pending" } : undefined),
   });
   const asks = commands.filter((c) => c.includes("request-device-flows.mjs 77 --issue KIT-9"));
   assert.equal(asks.length, 5);
-  events.forEach((e, i) => {
-    if (e.startsWith("optio_gate pre-review"))
-      assert.ok(events[i - 1].includes("request-device-flows.mjs"), "the ask comes first");
+  commands.forEach((c, i) => {
+    if (isPre(c))
+      assert.ok(commands[i - 1].includes("request-device-flows.mjs"), "the ask comes first");
   });
 });
 
@@ -1091,7 +1015,7 @@ test("the review gate keeps going when early slices wait and a later one is open
       return n < 3 ? { code: 3, line: "WAITING" } : { code: 0, line: "OPEN (review)" };
     },
   });
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
 });
 
 test("the Engineer prompt asks for foreground slices and treats exit 5 as blocked", async () => {
@@ -1118,7 +1042,7 @@ test("resume skips the Lead when the workpad already has a plan, and logs it", a
   assert.ok(commands.some(planCheck));
   assert.ok(commands.some((c) => c.includes("--code lead-skipped")));
   assert.ok(!agentSpawns(spawns).some((s) => s.options.label.startsWith("lead:")));
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
 });
 
 test("resume without a plan still runs the Lead; an unreadable workpad stops the run", async () => {
@@ -1164,14 +1088,14 @@ const autoLandShell =
     return undefined;
   };
 
-test("autoLand off (the default): the run ends ready In Review and only asks whether the config switch is on", async () => {
+test("autoLand off (the default): the run ends at Approval and only asks whether the config switch is on", async () => {
   const { result, commands } = await run({ shell: autoLandShell() });
-  assert.equal(result.status, "In Review");
-  assert.equal(lastState(commands), "In Review");
+  assert.equal(result.status, "Approval");
+  assert.equal(lastState(commands), "Approval");
   assert.ok(!commands.some((c) => /auto-land\.mjs (start|finish)/.test(c)));
   // A runner that answers anything but the exact line leaves the default.
   const odd = await run({ shell: autoLandShell({ enabled: { code: 0, line: "OPEN: fine" } }) });
-  assert.equal(odd.result.status, "In Review");
+  assert.equal(odd.result.status, "Approval");
 });
 
 test("autoLand true: green hands the issue to auto-land start with --force-enabled, then finish, and ends Done", async () => {
@@ -1295,12 +1219,12 @@ test("autoLand must be a boolean in the input schema, and never changes how the 
 });
 
 test("a resume whose head is ready goes straight to the Reviewer: no Engineer, no In Progress (KIT-295)", async () => {
-  const { result, commands, spawns, gateCalls } = await run({
+  const { result, commands, spawns } = await run({
     args: { issue: "KIT-9", resume: true },
     shell: resumeShell(0),
   });
   assert.equal(engineers(spawns).length, 0);
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   assert.equal(result.prNumber, 55);
   assert.equal(result.rounds, 0);
   const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:"));
@@ -1308,7 +1232,7 @@ test("a resume whose head is ready goes straight to the Reviewer: no Engineer, n
   assert.ok(!commands.some((c) => c.includes('state KIT-9 "In Progress"')));
   assert.ok(commands.some((c) => c.includes("--code engineer-skipped")));
   assert.equal(
-    gateCalls.filter((g) => g.gate === "pre-review").length,
+    commands.filter(isPre).length,
     1,
     "the pre-review gate runs once, before the Reviewer",
   );
@@ -1341,7 +1265,7 @@ test("a red review of a head reviewed as it is still leaves every Engineer round
   });
   assert.equal(engineers(spawns).length, 1);
   assert.match(engineers(spawns)[0].prompt, /The Reviewer returned red/);
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   assert.equal(result.rounds, 1);
   assert.ok(commands.some((c) => c.includes("--step engineer") && c.includes("--mode fix")));
   assert.ok(commands.some((c) => c.includes("--round 0")));
@@ -1368,7 +1292,7 @@ test("a resume whose pre-review gate is closed builds, with the gate line as the
     engineers(spawns)[0].prompt,
     /The pre-review gate is closed: CLOSED \(review\): scope/,
   );
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
 });
 
 test("a resume point the runner could not read stops the run before any worker is spent", async () => {
@@ -1395,36 +1319,31 @@ test("a fresh run, and a resume without a PR, never ask for the resume point", a
 const runners = (spawns) => spawns.filter((s) => s.options.schema?.required?.includes("results"));
 const labels = (spawns) => runners(spawns).map((s) => s.options.label);
 
-test("a green run spends seven runners and two gate callers: the log lines ride in the prep runner of each gate", async () => {
-  const { result, events, spawns } = await run();
-  assert.equal(result.status, "In Review");
+test("a green run spends eight runners: the log lines ride with the gates", async () => {
+  const { result, commands, spawns } = await run();
+  assert.equal(result.status, "Approval");
   assert.deepEqual(labels(spawns), [
     "session-check",
     "start",
-    "prep:pre-review",
+    "gate:pre-review",
     "head-changed",
     "linear:In Review",
-    "prep:review",
+    "gate:review",
     "receipt:dry-run",
+    "linear:Approval",
   ]);
-  assert.deepEqual(
-    agentSpawns(spawns)
-      .filter((s) => s.options.label.startsWith("gate:"))
-      .map((s) => s.options.label),
-    ["gate:pre-review", "gate:review"],
-  );
-  const at = (needle) => events.findIndex((c) => c.includes(needle));
+  const at = (needle) => commands.findIndex((c) => c.includes(needle));
   assert.ok(at("--step engineer --outcome ready") >= 0);
-  assert.ok(at("--step engineer --outcome ready") < at("optio_gate pre-review"));
+  assert.ok(at("--step engineer --outcome ready") < at("gate.mjs pre-review"));
   assert.ok(at("--step reviewer --outcome green") >= 0);
-  assert.ok(at("--step reviewer --outcome green") < at("optio_gate review"));
+  assert.ok(at("--step reviewer --outcome green") < at("gate.mjs review"));
   assert.ok(
-    at("optio_gate review") < at("audit-receipt.mjs"),
+    at("gate.mjs review") < at("audit-receipt.mjs"),
     "the receipt reads a run log that has the reviewer",
   );
 });
 
-test("a gate caller that comes back empty is asked once more and repeats no log line", async () => {
+test("a shared runner that comes back incomplete asks the gate once more alone and repeats no log line", async () => {
   let calls = 0;
   const { result, commands, spawns } = await run({
     shell: (c) => {
@@ -1433,9 +1352,9 @@ test("a gate caller that comes back empty is asked once more and repeats no log 
       return calls === 1 ? null : undefined;
     },
   });
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   assert.equal(commands.filter((c) => c.includes("spawn --issue KIT-9 --step engineer")).length, 1);
-  assert.equal(agentSpawns(spawns).filter((s) => s.options.label === "gate:pre-review").length, 2);
+  assert.equal(labels(spawns).filter((l) => l === "gate:pre-review").length, 2);
 });
 
 test("a stop before a gate still writes the log lines that would have ridden with it", async () => {
@@ -1475,7 +1394,7 @@ test("a fix round opens without a runner of its own for In Progress", async () =
           }
         : undefined,
   });
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   assert.equal(result.rounds, 2);
   assert.ok(!labels(spawns).includes("linear:In Progress"));
   const red = runners(spawns).find((s) => s.options.label === "log:red").prompt;
@@ -1484,7 +1403,7 @@ test("a fix round opens without a runner of its own for In Progress", async () =
   const states = commands
     .filter((c) => /linear\.mjs state /.test(c))
     .map((c) => /"([^"]+)"$/.exec(c)[1]);
-  assert.deepEqual(states, ["In Progress", "In Review", "In Progress", "In Review"]);
+  assert.deepEqual(states, ["In Progress", "In Review", "In Progress", "In Review", "Approval"]);
 });
 
 test("the last red review of a run does not move the issue back to In Progress", async () => {
@@ -1509,17 +1428,18 @@ test("a resume that reviews the head as it is writes both skip lines on runners 
     startDecision: { plan: true },
     shell: resumeShell(0),
   });
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   assert.deepEqual(labels(spawns), [
     "session-check",
     "start",
     "pr-lookup",
     "plan-check",
     "resume-point",
-    "prep:pre-review",
+    "gate:pre-review",
     "linear:In Review",
-    "prep:review",
+    "gate:review",
     "receipt:dry-run",
+    "linear:Approval",
   ]);
   const point = runners(spawns).find((s) => s.options.label === "resume-point").prompt;
   assert.match(point, /--code lead-skipped/);
@@ -1527,22 +1447,21 @@ test("a resume that reviews the head as it is writes both skip lines on runners 
   assert.match(review, /--code engineer-skipped/);
 });
 
-test("the hosted Device flows run is asked for in the pre-review gate's prep runner, before the gate call (ADR-0059)", async () => {
-  const { events, spawns } = await run();
-  const request = events.indexOf("node scripts/request-device-flows.mjs 77 --issue KIT-9");
+test("the hosted Device flows run is asked for in the pre-review gate's own runner, before the gate (ADR-0059)", async () => {
+  const { commands, spawns } = await run();
+  const request = commands.findIndex(
+    (c) => c === "node scripts/request-device-flows.mjs 77 --issue KIT-9",
+  );
   assert.ok(request >= 0);
-  assert.ok(request < events.findIndex((e) => e.startsWith("optio_gate pre-review")));
-  const prep = runners(spawns).find((s) => s.options.label === "prep:pre-review").prompt;
-  assert.match(prep, /request-device-flows\.mjs 77 --issue KIT-9/);
-  assert.doesNotMatch(prep, /gate\.mjs/);
+  assert.ok(request < commands.findIndex(isPre));
+  const gate = runners(spawns).find((s) => s.options.label === "gate:pre-review").prompt;
+  assert.match(gate, /request-device-flows\.mjs 77 --issue KIT-9/);
 
   const resumed = await run({ args: { issue: "KIT-9", resume: true }, shell: resumeShell(0) });
-  const asked = resumed.events.findIndex((c) =>
+  const asked = resumed.commands.findIndex((c) =>
     c.includes("request-device-flows.mjs 55 --issue KIT-9"),
   );
-  assert.ok(
-    asked >= 0 && asked < resumed.events.findIndex((e) => e.startsWith("optio_gate pre-review")),
-  );
+  assert.ok(asked >= 0 && asked < resumed.commands.findIndex(isPre));
 });
 
 test("the runner and the Engineer are told to set the shell tool's timeout, which otherwise backgrounds a wait after 2 minutes (KIT-286)", async () => {
@@ -1568,7 +1487,7 @@ test("a receipt refused for a missing result line asks the Reviewer once, then t
         : { code: 0, line: "WOULD POST (receipt): kc/audit success" };
     },
   });
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   assert.equal(commands.filter(isReceipt).length, 2);
   const tell = commands.find((c) => c.startsWith("bb thread tell thr_reviewer01 "));
   assert.ok(tell, "the Reviewer is asked for its line");
@@ -1699,15 +1618,15 @@ test("the titles command is the last of the start runner and a resume carries it
   assert.ok(engineerPrompts(resumed.spawns)[0].includes(`1. ${TITLES[0]}`));
 });
 
-test("a milestone with no Holdout file gives 'no Scenarios' in the prompt and the run ends ready In Review", async () => {
+test("a milestone with no Holdout file gives 'no Scenarios' in the prompt and the run reaches Approval", async () => {
   const empty = withTitles([], {
     verdict: "SCENARIOS titles x/y.md: no Scenarios (no Holdout file)",
   });
   const { result, spawns } = await run({ shell: titlesAnswer(empty) });
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   assert.ok(engineerPrompts(spawns)[0].includes("Milestone Scenarios: no Scenarios."));
   const none = await run({ shell: titlesAnswer({ ...empty, path: null }) });
-  assert.equal(none.result.status, "In Review");
+  assert.equal(none.result.status, "Approval");
   assert.ok(engineerPrompts(none.spawns)[0].includes("Milestone Scenarios: no Scenarios."));
 });
 
@@ -1732,7 +1651,7 @@ test("a title or answer that fails its pattern never enters a prompt or a comman
   };
   for (const [name, answer] of Object.entries(bad)) {
     const { result, commands, spawns } = await run({ shell: titlesAnswer(answer) });
-    assert.equal(result.status, "In Review", name);
+    assert.equal(result.status, "Approval", name);
     const [prompt] = engineerPrompts(spawns);
     assert.ok(prompt.includes("no usable answer"), `${name}: not marked unusable`);
     assert.ok(!prompt.includes("fine title"), `${name}: part of a bad answer got through`);
@@ -1740,42 +1659,18 @@ test("a title or answer that fails its pattern never enters a prompt or a comman
   }
   // A failing exit code or a runner that dropped the command is the same: no usable answer, run goes on.
   const failed = await run({ shell: titlesAnswer(withTitles(TITLES), 4) });
-  assert.equal(failed.result.status, "In Review");
+  assert.equal(failed.result.status, "Approval");
   assert.ok(engineerPrompts(failed.spawns)[0].includes("no usable answer"));
   const dropped = await run({ shell: (c) => (TITLES_COMMAND.test(c) ? null : undefined) });
-  assert.equal(dropped.result.status, "In Review");
+  assert.equal(dropped.result.status, "Approval");
   assert.ok(engineerPrompts(dropped.spawns)[0].includes("no usable answer"));
 });
 
 test("a failing titles command does not stop the start, and a failing start step still does", async () => {
   const { result } = await run({ shell: titlesAnswer("boom", 4) });
-  assert.equal(result.status, "In Review");
+  assert.equal(result.status, "Approval");
   const stop = await run({
     shell: (c) => (c.includes("start-decision") ? { code: 4, line: "nope" } : undefined),
   });
   assert.equal(stop.result.stoppedAt, "start");
-});
-
-test("no runner command runs a gate script on any path: gates go through the tool", async () => {
-  const runs = [
-    await run(),
-    await run({ args: { issue: "KIT-9", resume: true }, shell: resumeShell(0) }),
-    await run({ args: { issue: "KIT-9", resume: true }, shell: resumeShell(1) }),
-    await run({
-      gate: (call) => (call.gate === "pre-review" ? { code: 1, line: "CLOSED" } : undefined),
-    }),
-    await run({
-      gate: (call) => (call.gate === "review" ? { code: 1, line: "CLOSED" } : undefined),
-    }),
-    await run({ gate: () => ({ code: 3, line: "WAITING" }) }),
-    await run({ args: { issue: "KIT-9", autoLand: true }, shell: autoLandShell() }),
-  ];
-  for (const { commands } of runs) {
-    assert.ok(!commands.some((c) => /scripts\/gate\.mjs/.test(c)));
-  }
-});
-
-test("a gate that is not pre-review or review, or a PR that is not a number, is refused before any call", async () => {
-  assert.match(SOURCE, /const GATE_NAMES = \["pre-review", "review"\]/);
-  assert.match(SOURCE, /Number\.isInteger\(pr\) \|\| pr < 1/);
 });
