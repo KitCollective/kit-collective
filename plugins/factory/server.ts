@@ -21,6 +21,8 @@ import { AGENT_MIGRATIONS, type Agent, createAgentStore } from "./src/agent-stor
 import type { BoardSummary, Plan } from "./src/board.js";
 import { type BoardDto, CHANGED, rpcContract } from "./src/contract.js";
 import { createDispatchStore, DISPATCH_MIGRATIONS, LOOP_MIGRATIONS } from "./src/dispatch-store.js";
+import { hostContract } from "./src/host-contract.js";
+import { type ProbeDeps, probeThread, renderProbe } from "./src/host-probe.js";
 import { verifyLinearWebhook } from "./src/linear.js";
 import {
   fetchBoard,
@@ -191,6 +193,39 @@ export default async function plugin(bb: BbPluginApi) {
       skills: ["optio"],
       ...(agent === null ? {} : { instructions: sessionInstructions(agent) }),
     };
+  });
+
+  // The host bundle (host.ts) runs scripts on the machine a thread's worktree is on.
+  // This spike only proves the path: thread -> environment -> machine -> script in the worktree.
+  const hostClient = bb.hosts.experimental_client({ contract: hostContract });
+  const probeDeps: ProbeDeps = {
+    async threadEnvironment(threadId) {
+      const thread = await bb.sdk.threads.get({ threadId });
+      return thread.environmentId;
+    },
+    async environment(environmentId) {
+      const environment = await bb.sdk.environments.get({ environmentId });
+      return { hostId: environment.hostId, path: environment.path };
+    },
+    runProbe: (hostId, cwd) => hostClient.call("run_probe", { cwd }, { hostId, timeoutMs: 90_000 }),
+  };
+
+  bb.agents.registerTool({
+    name: "optio_host_probe",
+    description:
+      "Spike: run a fixed, read-only repo script in a thread's worktree on that thread's machine, through Optio's host bundle. Returns the exit code and the last output line.",
+    parameters: z.object({
+      threadId: z.string().min(1).optional().describe("Defaults to the calling thread"),
+    }),
+    async execute(params, ctx) {
+      try {
+        const record = await probeThread(probeDeps, params.threadId ?? ctx.threadId);
+        return { content: [{ type: "text", text: JSON.stringify(record) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { content: [{ type: "text", text: message }], isError: true };
+      }
+    },
   });
 
   // The composer integration: `@` lists the agents, and a picked agent's brief
@@ -1167,6 +1202,25 @@ export default async function plugin(bb: BbPluginApi) {
                       )
                       .join("\n"),
             };
+          },
+        }),
+        "host-probe": cliCommand({
+          summary:
+            "Spike: run the fixed probe script in a thread's worktree through the host bundle",
+          positionals: [{ name: "thread", description: "Thread id", required: true }],
+          options: { json },
+          async run(input) {
+            try {
+              const record = await probeThread(probeDeps, input.positionals.thread);
+              return {
+                exitCode: record.exitCode,
+                stdout: input.options.json ? JSON.stringify(record) : renderProbe(record),
+              };
+            } catch (error) {
+              throw new PluginCliError(error instanceof Error ? error.message : String(error), {
+                code: "host_probe_failed",
+              });
+            }
           },
         }),
         urls: cliCommand({
