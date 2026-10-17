@@ -17,13 +17,20 @@ const IDENTITY = {
   GIT_COMMITTER_EMAIL: "merge-lock@kitcollective.invalid",
 };
 
-/** git's own first error line (`fatal: ...`), not node's "Command failed: git ..." header. */
+/**
+ * git's own first error line (`fatal: ...`, `error: ...`, or a `remote: ...` line from the server),
+ * not node's "Command failed: git ..." header and not the "To <url>" line a rejected push starts with.
+ */
 function firstErrorLine(error) {
   const lines = `${error?.stderr ?? ""}\n${error?.message ?? ""}`
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("Command failed"));
-  return lines[0] ?? "git failed without output";
+  return (
+    lines.find((line) => /^(fatal|error|remote):/.test(line)) ??
+    lines.find((line) => !line.startsWith("To ")) ??
+    "git failed without output"
+  );
 }
 
 function git(cwd, args, { input, ...extraEnv } = {}) {
