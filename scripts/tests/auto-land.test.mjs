@@ -84,7 +84,12 @@ if (args[0] === "pr" && args[1] === "view") {
     s.advanceOnChecks = null; save(s);
   }
   if (s.moveHeadOnChecks) { s.pr.headRefOid = s.moveHeadOnChecks; s.moveHeadOnChecks = null; save(s); }
-  console.log(JSON.stringify(s.checks));
+  // Like the real gh: --slurp with --jq is refused, and --slurp returns the pages in one array.
+  if (args.includes("--slurp") && (args.includes("--jq") || args.includes("-q"))) {
+    console.error("the --slurp option is not supported with --jq or --template");
+    process.exit(1);
+  }
+  console.log(JSON.stringify(args.includes("--slurp") ? [{ total_count: s.checks.length, check_runs: s.checks }] : s.checks));
 } else if (args[0] === "api" && /\\/statuses\\//.test(joined)) {
   if (args.includes("-f")) {
     const field = (name) => args.find((a) => a.startsWith(name + "="))?.slice(name.length + 1);

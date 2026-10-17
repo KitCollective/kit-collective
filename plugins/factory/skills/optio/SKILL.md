@@ -65,7 +65,9 @@ The agent tool `optio_gate` runs one of the repo's flow gates (`pre-review`,
 its worktree. Optio records the exit code, the verdict line, the commit SHA, the
 gate and your thread id, and returns the same record: go by its `exitCode`
 (0 open, 1 closed, 3 waiting, 4 unknown). An unknown gate or a malformed
-argument is refused and recorded, never run.
+argument is refused and recorded, never run. Every thread has the tool. A call
+waits about eight minutes for checks, so on exit 3 call it again. Call it once
+per answer you need; never work out an exit code yourself.
 
 ## Automations
 
@@ -114,7 +116,10 @@ reads the team's issues from Linear and:
 - moves a blocked issue back to the first enabled issue Loop's state once every
   blocker is completed or canceled;
 - closes its runs that ended. A run whose issue is still in the dispatch state
-  or a working state **stalled**: it stopped at a gate. The board never restarts
+  or a working state **stalled**: it stopped at a gate. With the hand-over on, an
+  ended run whose issue is in the review state is moved to the approval state
+  when the review gate is recorded green on the pull request's current head
+  (that run is handed over, not stalled); The board never restarts
   a stalled issue by itself and never merges; it reports the stall to the
   orchestrator agent's thread in an `[optio]` message.
 
@@ -132,6 +137,7 @@ are edited on the Agents page under Board.
 | `bb optio resume <issue> [--machine <id>]` | Start a stalled issue's workflow again with `resume`. Refused at the attempt cap or when the machine is full. |
 | `bb optio release <issue>` | Clear a stall after the issue was parked or fixed by hand. |
 | `bb optio dispatches [--limit <n>]` | The workflow runs the board started. |
+| `bb optio hand-over [--review <state> --approval <state>] [--off]` | Shows, sets or switches off the hand-over: an ended run's issue moves from the review state to the approval state only when the review gate is recorded green on the pull request's current head. Otherwise it stays in review (or goes to the blocked state) with the reason in the workpad's Notes. |
 
 ### When an `[optio]` message arrives
 
