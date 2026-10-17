@@ -51,8 +51,10 @@ import {
 
 const VISION_JOB_STATUSES = ["pending", "ready", "failed", "noop"] as const;
 const VISION_USER_ACTIONS = ["accepted", "edited", "ignored"] as const;
-const MESSAGE_KINDS = ["text", "image", "bid"] as const;
+const MESSAGE_KINDS = ["text", "image", "bid", "system"] as const;
 const BID_STATUSES = ["pending", "accepted", "declined"] as const;
+/** Why a `system` message was written; see the collection detail contract. */
+const SYSTEM_REASONS = ["bid_accepted", "jersey_gone"] as const;
 const IDENTITY_LINKED_PROVIDERS = ["google", "facebook"] as const;
 
 export const entitlementSourceEnum = pgEnum("entitlement_source", ENTITLEMENT_SOURCES);
@@ -101,6 +103,7 @@ export const visionImproveEntityTypeEnum = pgEnum(
 export const visionImproveFieldEnum = pgEnum("vision_improve_field", VISION_IMPROVE_FIELDS);
 export const messageKindEnum = pgEnum("message_kind", MESSAGE_KINDS);
 export const bidStatusEnum = pgEnum("bid_status", BID_STATUSES);
+export const systemReasonEnum = pgEnum("system_reason", SYSTEM_REASONS);
 
 export const country = pgTable(
   "country",
@@ -737,6 +740,8 @@ export const conversationMessage = pgTable(
     ),
     bidAmountDkk: integer("bid_amount_dkk"),
     bidStatus: bidStatusEnum("bid_status"),
+    /** Set on `system` messages only (and always there). */
+    systemReason: systemReasonEnum("system_reason"),
     /** The UserJersey the message is about. Null once that UserJersey is deleted. */
     userJerseyId: uuid("user_jersey_id").references(() => userJersey.id, { onDelete: "set null" }),
     /** Snapshot of that UserJersey when the message was sent; outlives the UserJersey. */
@@ -768,6 +773,11 @@ export const conversationMessage = pgTable(
           )
         )
       )`,
+    ),
+    // `kind::text`: Postgres refuses a new enum value in the transaction that adds it (0039).
+    check(
+      "conversation_message_system_reason",
+      sql`((${table.kind}::text = 'system') = (${table.systemReason} IS NOT NULL))`,
     ),
   ],
 );
