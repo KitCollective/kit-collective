@@ -32,6 +32,19 @@ test("the repo's own checks table is valid", () => {
   assert.ok(config.checks.suites.some((s) => s.needs?.includes("postgres")));
 });
 
+test("a diff touching only plugins/factory runs the optio, typecheck and review-gate suites", () => {
+  const config = JSON.parse(readFileSync("factory.config.json", "utf8"));
+  const picked = suitesFor(
+    ["plugins/factory/src/board.ts"],
+    config.checks.suites,
+    config.checks.globalPaths,
+  );
+  assert.deepEqual(picked.map((s) => s.id).sort(), ["optio", "review-gate", "typecheck"]);
+  const optio = picked.find((s) => s.id === "optio");
+  assert.equal(optio.command, "pnpm test:optio");
+  assert.equal(optio.needs, undefined);
+});
+
 test("validation names every problem", () => {
   assert.ok(validateChecks(undefined).length > 0);
   const bad = {

@@ -1,8 +1,9 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { planBoard, scopesOverlap } from "./board.js";
-import { createDispatchStore, DISPATCH_MIGRATIONS } from "./dispatch-store.js";
+import { createDispatchStore, DISPATCH_MIGRATIONS, LOOP_MIGRATIONS } from "./dispatch-store.js";
 import { type Board, type BoardIssue, fetchBoard, parseWriteScope } from "./linear-api.js";
+import { parseRegistry, type Registry } from "./loop-registry.js";
 import { createScheduler } from "./scheduler.js";
 import { parseScheduler, type SchedulerConfig } from "./scheduler-config.js";
 import type { SpawnRequest } from "./sessions.js";
@@ -13,13 +14,9 @@ function config(overrides: Record<string, unknown> = {}): SchedulerConfig {
       mode: "live",
       projectId: "proj_1",
       teamKey: "ENG",
-      workflow: "issue-run",
-      dispatchState: "Ready",
-      readyLabel: "agent-ready",
       backlogState: "Icebox",
       activeStates: ["Doing", "Reviewing"],
       blockedState: "Waiting",
-      skipLabels: ["on-hold"],
       machines: [
         {
           id: "mac",
@@ -37,6 +34,34 @@ function config(overrides: Record<string, unknown> = {}): SchedulerConfig {
   if (!parsed.ok || parsed.config === null) throw new Error(parsed.ok ? "empty" : parsed.error);
   return parsed.config;
 }
+
+const issueLoop = {
+  name: "Issue run",
+  enabled: true,
+  workflow: "issue-run",
+  trigger: {
+    kind: "issue",
+    state: "Ready",
+    label: "agent-ready",
+    unblocked: true,
+    skipLabels: ["on-hold"],
+    priorityOrder: [1, 2, 3, 4, 0],
+  },
+  machines: ["harness", "mac"],
+  maxLive: 16,
+};
+
+/** The registry text a project checkout would hold. */
+const registryText = (loops: Record<string, unknown>[] = [issueLoop], flow: unknown = undefined) =>
+  JSON.stringify({ loops, flow });
+
+function registry(loops?: Record<string, unknown>[], flow?: unknown): Registry {
+  const parsed = parseRegistry(registryText(loops, flow));
+  if (!parsed.ok) throw new Error(parsed.error);
+  return parsed.registry;
+}
+
+const trigger = (overrides: Record<string, unknown>) => ({ ...issueLoop.trigger, ...overrides });
 
 let serial = 0;
 function issue(identifier: string, overrides: Partial<BoardIssue> = {}): BoardIssue {
@@ -57,18 +82,28 @@ function issue(identifier: string, overrides: Partial<BoardIssue> = {}): BoardIs
   };
 }
 
-const plan = (issues: BoardIssue[], focus: string | null = null, overrides = {}) =>
-  planBoard({ issues, config: config(overrides), focus, history: new Map() });
+const plan = (
+  issues: BoardIssue[],
+  focus: string | null = null,
+  overrides = {},
+  loaded: Registry = registry(),
+) => planBoard({ issues, config: config(overrides), registry: loaded, focus, history: new Map() });
 
 describe("scheduler config", () => {
-  it("takes the states and the ready label from the config, with no default", () => {
-    for (const field of [
-      "dispatchState",
-      "readyLabel",
-      "backlogState",
-      "activeStates",
-      "blockedState",
-    ]) {
+  it("keeps what the Loop registry took over, so a config stored before it still parses", () => {
+    const stored = {
+      ...config(),
+      workflow: "issue-run",
+      dispatchState: "Ready",
+      readyLabel: "agent-ready",
+      skipLabels: ["on-hold"],
+      priorityOrder: [1, 2, 3, 4, 0],
+    };
+    expect(parseScheduler(JSON.stringify(stored))).toMatchObject({ ok: true });
+  });
+
+  it("takes the operating states from the config, with no default", () => {
+    for (const field of ["backlogState", "activeStates", "blockedState"]) {
       const stored = { ...config(), [field]: undefined };
       expect(parseScheduler(JSON.stringify(stored))).toMatchObject({
         ok: false,
@@ -108,8 +143,8 @@ describe("planBoard", () => {
     ]);
     expect(result.start.map((start) => start.issue.identifier)).toEqual(["ENG-1"]);
     expect(result.waiting).toEqual([
-      { identifier: "ENG-2", reason: "blocked by ENG-1" },
-      { identifier: "ENG-3", reason: "labelled on-hold" },
+      { identifier: "ENG-2", loop: "Issue run", reason: "blocked by ENG-1" },
+      { identifier: "ENG-3", loop: "Issue run", reason: "labelled on-hold" },
     ]);
   });
 
@@ -129,7 +164,7 @@ describe("planBoard", () => {
       "ENG-4",
     ]);
     expect(result.waiting).toEqual([
-      { identifier: "ENG-3", reason: "no free slot on harness or mac" },
+      { identifier: "ENG-3", loop: "Issue run", reason: "no free slot on harness or mac" },
     ]);
   });
 
@@ -143,7 +178,9 @@ describe("planBoard", () => {
       ["ENG-1", "harness"],
       ["ENG-2", "mac"],
     ]);
-    expect(result.waiting).toEqual([{ identifier: "ENG-3", reason: "no free slot on mac" }]);
+    expect(result.waiting).toEqual([
+      { identifier: "ENG-3", loop: "Issue run", reason: "no free slot on mac" },
+    ]);
   });
 
   it("holds an issue whose write scope overlaps work in progress or an earlier start", () => {
@@ -155,8 +192,8 @@ describe("planBoard", () => {
     ]);
     expect(result.start.map((start) => start.issue.identifier)).toEqual(["ENG-3"]);
     expect(result.waiting).toEqual([
-      { identifier: "ENG-2", reason: "write scope overlaps ENG-1" },
-      { identifier: "ENG-4", reason: "write scope overlaps ENG-3" },
+      { identifier: "ENG-2", loop: "Issue run", reason: "write scope overlaps ENG-1" },
+      { identifier: "ENG-4", loop: "Issue run", reason: "write scope overlaps ENG-3" },
     ]);
   });
 
@@ -164,14 +201,20 @@ describe("planBoard", () => {
     const result = planBoard({
       issues: [issue("ENG-1", { state: "Doing" }), issue("ENG-2"), issue("ENG-3"), issue("ENG-4")],
       config: config(),
+      registry: registry(),
       focus: null,
       history: new Map([
-        ["ENG-1", { activeOn: "harness", stalled: false, startedBefore: true }],
-        ["ENG-2", { activeOn: null, stalled: true, startedBefore: true }],
-        ["ENG-3", { activeOn: null, stalled: false, startedBefore: true }],
+        [
+          "ENG-1",
+          { activeOn: "harness", activeLoop: "Issue run", stalled: false, startedBefore: true },
+        ],
+        ["ENG-2", { activeOn: null, activeLoop: null, stalled: true, startedBefore: true }],
+        ["ENG-3", { activeOn: null, activeLoop: null, stalled: false, startedBefore: true }],
       ]),
     });
-    expect(result.running).toEqual([{ identifier: "ENG-1", machineId: "harness" }]);
+    expect(result.running).toEqual([
+      { identifier: "ENG-1", machineId: "harness", loop: "Issue run" },
+    ]);
     expect(
       result.start.map((start) => [start.issue.identifier, start.machineId, start.resume]),
     ).toEqual([
@@ -179,6 +222,184 @@ describe("planBoard", () => {
       ["ENG-4", "mac", false],
     ]);
     expect(result.waiting[0]?.identifier).toBe("ENG-2");
+  });
+
+  describe("per Loop", () => {
+    const second = {
+      ...issueLoop,
+      name: "Review run",
+      workflow: "review-run",
+      trigger: trigger({ state: "Queued", label: "needs-review", skipLabels: [] }),
+      machines: ["harness"],
+      maxLive: 1,
+    };
+    const two = () => registry([issueLoop, second]);
+
+    it("gives each Loop its own candidates, workflow and machines", () => {
+      const result = plan(
+        [
+          issue("ENG-1"),
+          issue("ENG-2", { state: "Queued", labels: ["needs-review"] }),
+          issue("ENG-3", { state: "Queued", labels: ["agent-ready"] }),
+        ],
+        null,
+        {},
+        two(),
+      );
+      expect(
+        result.start.map((start) => [start.issue.identifier, start.loop, start.machineId]),
+      ).toEqual([
+        ["ENG-1", "Issue run", "harness"],
+        ["ENG-2", "Review run", "harness"],
+      ]);
+      expect(result.ready).toBe(2);
+    });
+
+    it("shares machine capacity and write scope across Loops", () => {
+      const result = plan(
+        [
+          issue("ENG-1"),
+          issue("ENG-2"),
+          issue("ENG-3", { state: "Queued", labels: ["needs-review"] }),
+          issue("ENG-4", { writeScope: ["apps/admin/**"] }),
+          issue("ENG-5", {
+            state: "Queued",
+            labels: ["needs-review"],
+            writeScope: ["apps/admin/src/**"],
+          }),
+        ],
+        null,
+        { machines: [{ id: "harness", cap: 2, hostId: "h", branch: "origin/main" }] },
+        registry([
+          { ...issueLoop, machines: ["harness"] },
+          { ...second, maxLive: 5 },
+        ]),
+      );
+      expect(result.start.map((start) => start.issue.identifier)).toEqual(["ENG-1", "ENG-2"]);
+      expect(result.waiting).toEqual([
+        { identifier: "ENG-4", loop: "Issue run", reason: "no free slot on harness" },
+        { identifier: "ENG-3", loop: "Review run", reason: "no free slot on harness" },
+        { identifier: "ENG-5", loop: "Review run", reason: "no free slot on harness" },
+      ]);
+    });
+
+    it("holds an issue whose write scope overlaps a start of another Loop", () => {
+      const result = plan(
+        [
+          issue("ENG-1", { writeScope: ["apps/admin/**"] }),
+          issue("ENG-2", {
+            state: "Queued",
+            labels: ["needs-review"],
+            writeScope: ["apps/admin/src/**"],
+          }),
+        ],
+        null,
+        {},
+        two(),
+      );
+      expect(result.start.map((start) => start.issue.identifier)).toEqual(["ENG-1"]);
+      expect(result.waiting).toEqual([
+        { identifier: "ENG-2", loop: "Review run", reason: "write scope overlaps ENG-1" },
+      ]);
+    });
+
+    it("keeps a Loop to its own machines and says when it names one the board does not have", () => {
+      const result = plan(
+        [issue("ENG-1", { labels: ["agent-ready", "api"] }), issue("ENG-2")],
+        null,
+        {},
+        registry([{ ...issueLoop, machines: ["harness", "ghost"] }]),
+      );
+      expect(result.start.map((start) => [start.issue.identifier, start.machineId])).toEqual([
+        ["ENG-2", "harness"],
+      ]);
+      expect(result.waiting).toEqual([
+        { identifier: "ENG-1", loop: "Issue run", reason: "no machine has postgres" },
+      ]);
+      const unknown = plan(
+        [issue("ENG-1")],
+        null,
+        {},
+        registry([{ ...issueLoop, machines: ["ghost"] }]),
+      );
+      expect(unknown.waiting).toEqual([
+        { identifier: "ENG-1", loop: "Issue run", reason: 'no machine "ghost"' },
+      ]);
+    });
+
+    it("caps the live runs of each Loop, counting the runs already going", () => {
+      const result = planBoard({
+        issues: [issue("ENG-1", { state: "Doing" }), issue("ENG-2"), issue("ENG-3")],
+        config: config(),
+        registry: registry([{ ...issueLoop, maxLive: 2 }]),
+        focus: null,
+        history: new Map([
+          [
+            "ENG-1",
+            { activeOn: "harness", activeLoop: "Issue run", stalled: false, startedBefore: true },
+          ],
+        ]),
+      });
+      expect(result.start.map((start) => start.issue.identifier)).toEqual(["ENG-2"]);
+      expect(result.waiting).toEqual([
+        { identifier: "ENG-3", loop: "Issue run", reason: "Issue run has 2 of 2 live runs" },
+      ]);
+    });
+
+    it("plans nothing for a disabled Loop and does not count its trigger as ready", () => {
+      const result = plan([issue("ENG-1")], null, {}, registry([{ ...issueLoop, enabled: false }]));
+      expect(result.start).toEqual([]);
+      expect(result.ready).toBe(0);
+    });
+
+    it("applies the trigger's skip labels, priority order and unblocked rule", () => {
+      const result = plan(
+        [
+          issue("ENG-1", { priority: 1 }),
+          issue("ENG-2", { priority: 4 }),
+          issue("ENG-3", { priority: 3, labels: ["agent-ready", "hold"] }),
+          issue("ENG-4", { blockedBy: ["ENG-9"] }),
+        ],
+        null,
+        {},
+        registry([
+          {
+            ...issueLoop,
+            trigger: trigger({
+              skipLabels: ["hold"],
+              priorityOrder: [4, 3, 2, 1, 0],
+              unblocked: false,
+            }),
+          },
+        ]),
+      );
+      expect(result.start.map((start) => start.issue.identifier)).toEqual([
+        "ENG-2",
+        "ENG-4",
+        "ENG-1",
+      ]);
+      expect(result.waiting).toEqual([
+        { identifier: "ENG-3", loop: "Issue run", reason: "labelled hold" },
+      ]);
+    });
+
+    it("holds an issue started as often as flow.maxRunsPerDay allows in the last 24 h", () => {
+      const result = planBoard({
+        issues: [issue("ENG-1"), issue("ENG-2")],
+        config: config(),
+        registry: registry([issueLoop], { maxRunsPerDay: 3 }),
+        focus: null,
+        history: new Map(),
+        recentStarts: new Map([
+          ["ENG-1", 3],
+          ["ENG-2", 2],
+        ]),
+      });
+      expect(result.start.map((start) => start.issue.identifier)).toEqual(["ENG-2"]);
+      expect(result.waiting).toEqual([
+        { identifier: "ENG-1", loop: "Issue run", reason: "started 3 times in 24 h (cap 3)" },
+      ]);
+    });
   });
 
   it("lists blocked issues whose blockers are resolved", () => {
@@ -192,14 +413,16 @@ describe("planBoard", () => {
 
 function setup(board: Board) {
   const db = new Database(":memory:");
-  for (const statement of DISPATCH_MIGRATIONS) db.exec(statement);
+  for (const statement of [...DISPATCH_MIGRATIONS, ...LOOP_MIGRATIONS]) db.exec(statement);
   const store = createDispatchStore(db);
   const state: {
     clock: number;
     spawned: SpawnRequest[];
     notes: string[];
     moved: string[];
-    promoted: { identifier: string; stateId: string; comment: string }[];
+    promoted: { identifier: string; stateId: string; comment: string; label: string }[];
+    registryText: string | (() => never);
+    registryReads: number;
     lastRefill: number | null;
     workflowActive: boolean;
     threadStatus: string | null;
@@ -210,6 +433,8 @@ function setup(board: Board) {
     notes: [],
     moved: [],
     promoted: [],
+    registryText: registryText(),
+    registryReads: 0,
     lastRefill: null,
     workflowActive: true,
     threadStatus: "idle",
@@ -217,6 +442,11 @@ function setup(board: Board) {
   };
   const scheduler = createScheduler({
     store,
+    async loadRegistry() {
+      state.registryReads += 1;
+      if (typeof state.registryText === "function") return state.registryText();
+      return state.registryText;
+    },
     loadBoard: async () => state.board,
     moveIssue: async (issueId, stateId) => void state.moved.push(`${issueId}->${stateId}`),
     async spawn(request) {
@@ -230,8 +460,8 @@ function setup(board: Board) {
     }),
     notify: async (text) => void state.notes.push(text),
     getFocus: async () => null,
-    promoteIssue: async (promoted, stateId, comment) =>
-      void state.promoted.push({ identifier: promoted.identifier, stateId, comment }),
+    promoteIssue: async (promoted, stateId, comment, label) =>
+      void state.promoted.push({ identifier: promoted.identifier, stateId, comment, label }),
     getLastRefill: async () => state.lastRefill,
     setLastRefill: async (at) => {
       state.lastRefill = at;
@@ -305,6 +535,7 @@ describe("refilling the queue from the backlog", () => {
         stateId: "state-todo",
         comment:
           "Orchestrator: promoted from Icebox to Ready with agent-ready.\n\nWhy now: finishes Launch 1.0",
+        label: "agent-ready",
       },
     ]);
   });
@@ -346,6 +577,132 @@ describe("scheduler", () => {
     });
     const result = await scheduler.tick(config(), false);
     expect(result.plan.start).toHaveLength(1);
+    expect(state.spawned).toHaveLength(0);
+    expect(state.moved).toHaveLength(0);
+    expect(store.list(10)).toHaveLength(0);
+    expect(store.decisions(10)).toHaveLength(0);
+  });
+
+  it("refuses a registry that does not parse: nothing is read, started or moved, and the reason is recorded", async () => {
+    const { scheduler, store, state } = setup({
+      states,
+      issues: [issue("ENG-1"), issue("ENG-2", { state: "Waiting" })],
+    });
+    state.registryText = "{ not json";
+    const result = await scheduler.tick(config(), true);
+    expect(result.refusal).toContain("factory.config.json is not valid JSON");
+    expect(result.registry).toBeNull();
+    expect(result.plan.start).toEqual([]);
+    expect(state.spawned).toHaveLength(0);
+    expect(state.moved).toHaveLength(0);
+    expect(state.notes).toHaveLength(0);
+    expect(store.decisions(10)).toMatchObject([
+      { kind: "refusal", mode: "live", loop: null, issue: null },
+    ]);
+    // The same refusal on the next tick is not written again.
+    await scheduler.tick(config(), true);
+    expect(store.decisions(10)).toHaveLength(1);
+    // A read that only shows the page records nothing.
+    expect((await scheduler.tick(config(), false)).refusal).not.toBeNull();
+    expect(store.decisions(10)).toHaveLength(1);
+  });
+
+  it("refuses when the file cannot be read", async () => {
+    const { scheduler, state } = setup({ states, issues: [issue("ENG-1")] });
+    state.registryText = () => {
+      throw new Error("no such file");
+    };
+    const result = await scheduler.tick(config(), true);
+    expect(result.refusal).toBe("could not read factory.config.json: no such file");
+    expect(state.spawned).toHaveLength(0);
+  });
+
+  it("reads the registry on every tick, so an edit is picked up without a reload", async () => {
+    const { scheduler, state } = setup({ states, issues: [issue("ENG-1")] });
+    state.registryText = registryText([{ ...issueLoop, enabled: false }]);
+    expect((await scheduler.tick(config(), true)).started).toHaveLength(0);
+    state.registryText = registryText([{ ...issueLoop, workflow: "other-run" }]);
+    await scheduler.tick(config(), true);
+    expect(state.registryReads).toBe(2);
+    expect(state.spawned[0]?.prompt).toContain("bb workflows run --name other-run ");
+  });
+
+  it("starts each issue with its own Loop's workflow and remembers the Loop", async () => {
+    const { scheduler, store, state } = setup({
+      states: { Ready: "state-todo", Queued: "state-queued" },
+      issues: [issue("ENG-1"), issue("ENG-2", { state: "Queued", labels: ["needs-review"] })],
+    });
+    state.registryText = registryText([
+      issueLoop,
+      {
+        ...issueLoop,
+        name: "Review run",
+        workflow: "review-run",
+        trigger: trigger({ state: "Queued", label: "needs-review" }),
+        maxLive: 1,
+      },
+    ]);
+    await scheduler.tick(config(), true);
+    expect(state.spawned.map((request) => request.prompt.match(/--name (\S+)/)?.[1])).toEqual([
+      "issue-run",
+      "review-run",
+    ]);
+    expect(store.latest("ENG-2")).toMatchObject({ loop: "Review run", status: "active" });
+    expect(store.history().get("ENG-2")).toMatchObject({ activeLoop: "Review run" });
+  });
+
+  it("writes every start, skip and refusal with its reason, and does not repeat a wait", async () => {
+    const { scheduler, store, state } = setup({
+      states,
+      issues: [issue("ENG-1"), issue("ENG-2", { labels: ["agent-ready", "on-hold"] })],
+    });
+    const first = await scheduler.tick(config(), true);
+    expect(first.recorded).toMatchObject([
+      { kind: "skip", issue: "ENG-2", loop: "Issue run", reason: "labelled on-hold", mode: "live" },
+      { kind: "start", issue: "ENG-1", loop: "Issue run", reason: "started on harness" },
+    ]);
+    state.clock += 60_000;
+    expect((await scheduler.tick(config(), true)).recorded).toEqual([]);
+    expect(store.decisions(10)).toHaveLength(2);
+    // A wait that changes its reason is a new row.
+    state.board = { states, issues: [issue("ENG-1"), issue("ENG-2", { blockedBy: ["ENG-1"] })] };
+    expect((await scheduler.tick(config(), true)).recorded).toMatchObject([
+      { kind: "skip", issue: "ENG-2", reason: "blocked by ENG-1" },
+    ]);
+  });
+
+  it("holds an issue started as often as flow.maxRunsPerDay allows, and says so", async () => {
+    const { scheduler, store, state } = setup({ states, issues: [issue("ENG-1")] });
+    state.registryText = registryText([issueLoop], { maxRunsPerDay: 2 });
+    for (const [index, outcome] of ["x", "y"].entries()) {
+      const run = store.start({
+        issue: "ENG-1",
+        loop: "Issue run",
+        machineId: "mac",
+        resume: false,
+        now: state.clock - (index + 1) * 3600_000,
+      });
+      store.end(run.id, "handed-over", outcome, state.clock);
+    }
+    const result = await scheduler.tick(config(), true);
+    expect(result.plan.waiting).toEqual([
+      { identifier: "ENG-1", loop: "Issue run", reason: "started 2 times in 24 h (cap 2)" },
+    ]);
+    expect(state.spawned).toHaveLength(0);
+    // A day later the starts no longer count.
+    state.clock += 25 * 3600_000;
+    expect((await scheduler.tick(config(), true)).started).toHaveLength(1);
+  });
+
+  it("in dry-run records what it would do and applies nothing", async () => {
+    const { scheduler, store, state } = setup({
+      states,
+      issues: [issue("ENG-1"), issue("ENG-2", { state: "Waiting" })],
+    });
+    const result = await scheduler.tick(config(), false, true);
+    expect(result.recorded).toMatchObject([
+      { kind: "start", issue: "ENG-1", mode: "dry-run", reason: "would start on harness" },
+    ]);
     expect(state.spawned).toHaveLength(0);
     expect(state.moved).toHaveLength(0);
     expect(store.list(10)).toHaveLength(0);
@@ -437,9 +794,15 @@ describe("scheduler", () => {
   it("refuses a resume when the machine is full", async () => {
     const { scheduler, store, state } = setup({ states, issues: [] });
     const now = state.clock;
-    const stalled = store.start({ issue: "ENG-1", machineId: "mac", resume: false, now });
+    const stalled = store.start({
+      issue: "ENG-1",
+      loop: "Issue run",
+      machineId: "mac",
+      resume: false,
+      now,
+    });
     store.end(stalled.id, "stalled", "x", now);
-    store.start({ issue: "ENG-2", machineId: "mac", resume: false, now });
+    store.start({ issue: "ENG-2", loop: "Issue run", machineId: "mac", resume: false, now });
     await expect(scheduler.resume(config(), "ENG-1")).rejects.toThrow(
       "no free slot on mac (1 of 1 in use)",
     );

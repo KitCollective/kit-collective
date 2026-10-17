@@ -3,10 +3,13 @@ import { test } from "node:test";
 import {
   createIssue,
   createProjectComment,
+  fillWaiting,
   LinearUsageError,
   listIssues,
   parseCreateArgs,
   parseProjectCommentArgs,
+  parseWaitingArgs,
+  replaceWorkpadSection,
   SCENARIO_FAILURE_FOOTER,
 } from "../lib/linear-issues.mjs";
 
@@ -486,4 +489,124 @@ test("list marks an issue whose description carries the Milestone scenarios foot
       ["KIT-3", false],
     ],
   );
+});
+
+const WORKPAD = [
+  "## Agent Workpad",
+  "",
+  "```text",
+  "development:bb/kit-9@abc1234",
+  "```",
+  "",
+  "### Waiting",
+  "",
+  "- (none)",
+  "",
+  "### Plan",
+  "",
+  "- [ ] 1. Parent",
+  "",
+  "### Notes",
+  "",
+  "- first line",
+  "- second line",
+  "",
+].join("\n");
+
+test("replaceWorkpadSection replaces only the named section and leaves every other byte", () => {
+  const next = replaceWorkpadSection(WORKPAD, "Waiting", [
+    "- ask",
+    "- Stage: gate. Asked: 2026-10-17",
+  ]);
+  assert.equal(next, WORKPAD.replace("- (none)", "- ask\n- Stage: gate. Asked: 2026-10-17"));
+  const last = replaceWorkpadSection(WORKPAD, "Notes", ["- only"]);
+  assert.equal(last, WORKPAD.replace("- first line\n- second line", "- only"));
+  assert.equal(replaceWorkpadSection(WORKPAD, "Evidence", ["x"]), null);
+  assert.equal(
+    replaceWorkpadSection("## Agent Workpad\n### Waitingness\n- a\n", "Waiting", ["x"]),
+    null,
+  );
+});
+
+test("waiting parses an issue key, --stage and --ask, and refuses a missing or empty one", () => {
+  assert.deepEqual(parseWaitingArgs(["kit-9", "--stage", "pre-review gate", "--ask", "run it"]), {
+    issue: "KIT-9",
+    stage: "pre-review gate",
+    ask: "run it",
+  });
+  for (const argv of [
+    [],
+    ["--stage", "s", "--ask", "a"],
+    ["KIT-9", "--ask", "a"],
+    ["KIT-9", "--stage", "s"],
+    ["KIT-9", "--stage", "--ask", "a"],
+    ["KIT-9", "--stage", "s", "--ask", "  "],
+    ["KIT-9", "--stage", "s", "--ask", "two\nlines"],
+  ]) {
+    assert.throws(() => parseWaitingArgs(argv), LinearUsageError, JSON.stringify(argv));
+  }
+});
+
+function fakeWorkpadIssue(comments) {
+  const updates = [];
+  async function gql(query, variables = {}) {
+    if (query.includes("commentUpdate")) {
+      updates.push({ id: variables.id, body: variables.input.body });
+      return { commentUpdate: { success: true } };
+    }
+    if (query.includes("comments(")) {
+      assert.equal(variables.id, "KIT-9");
+      return { issue: { comments: { nodes: comments } } };
+    }
+    if (query.includes("commentCreate")) {
+      throw new Error("waiting must never create a comment");
+    }
+    throw new Error(`unexpected query: ${query}`);
+  }
+  return { gql, updates };
+}
+
+test("waiting updates the one workpad comment, its Waiting section only", async () => {
+  const fake = fakeWorkpadIssue([
+    { id: "c-note", body: "Max: claimed." },
+    { id: "c-pad", body: WORKPAD },
+  ]);
+  const id = await fillWaiting(fake.gql, {
+    issue: "KIT-9",
+    stage: "pre-review gate",
+    ask: "needs-human: run device-run.sh on the Mac on abc1234",
+    date: "2026-10-17",
+  });
+  assert.equal(id, "c-pad");
+  assert.deepEqual(fake.updates, [
+    {
+      id: "c-pad",
+      body: WORKPAD.replace(
+        "- (none)",
+        "- needs-human: run device-run.sh on the Mac on abc1234\n- Stage: pre-review gate. Asked: 2026-10-17",
+      ),
+    },
+  ]);
+});
+
+test("waiting refuses zero or two workpads and a workpad without ### Waiting, and writes nothing", async () => {
+  const cases = [
+    [[{ id: "c-1", body: "Max: claimed." }], /no workpad/],
+    [
+      [
+        { id: "c-1", body: WORKPAD },
+        { id: "c-2", body: WORKPAD },
+      ],
+      /2 workpad/,
+    ],
+    [[{ id: "c-1", body: "## Agent Workpad\n\n### Plan\n\n- x\n" }], /no ### Waiting/],
+  ];
+  for (const [comments, message] of cases) {
+    const fake = fakeWorkpadIssue(comments);
+    await assert.rejects(
+      fillWaiting(fake.gql, { issue: "KIT-9", stage: "s", ask: "a", date: "2026-10-17" }),
+      message,
+    );
+    assert.equal(fake.updates.length, 0);
+  }
 });

@@ -242,11 +242,15 @@ async function shAfter(before, label, phaseTitle, command) {
   return (await sh(label, phaseTitle, [command]))[0];
 }
 
-/** Runs one gate command in slices; `exhausted` is set when every slice still said waiting. `before` rides along with the first slice. */
-async function gateSlices(label, phaseTitle, command, before = [], retry = true) {
+/**
+ * Runs one gate command in slices; `exhausted` is set when every slice still said waiting. `before` rides along
+ * with the first slice, `every` in front of each later one (a command that decides for itself, so repeating it is safe).
+ */
+async function gateSlices(label, phaseTitle, command, before = [], retry = true, every = []) {
   let out = { code: 4, line: `no output from ${label}` };
   for (let slice = 1; slice <= GATE_SLICES; slice += 1) {
-    out = (slice === 1 && (before.length > 0 || retry) ? await shAfter(before, label, phaseTitle, command) : (await sh(label, phaseTitle, [command], false, retry))[0]) ?? out;
+    const ahead = slice === 1 ? before : every;
+    out = (ahead.length > 0 || (slice === 1 && retry) ? await shAfter(ahead, label, phaseTitle, command) : (await sh(label, phaseTitle, [command], false, retry))[0]) ?? out;
     if (out.code !== 3) {
       return out;
     }
@@ -256,9 +260,24 @@ async function gateSlices(label, phaseTitle, command, before = [], retry = true)
 
 const logCmd = (event, flags) => `node scripts/run-log.mjs ${event} ${flags}`;
 // Asks for the hosted Device flows run of the PR head (ADR-0059). It decides for itself: nothing is
-// asked for without a slice flow, or when the head already has the status. The pre-review gate
-// waits for the status with the checks, so this always rides in front of that gate.
+// asked for without a slice flow, when the head already has the status, or when a re-request has
+// failed too. The pre-review gate waits for the status with the checks, so this rides in front of
+// every slice of that gate: a first `error` is asked for again inside the run.
 const requestDeviceFlows = (pr) => `node scripts/request-device-flows.mjs ${pr} --issue ${issue}`;
+
+/**
+ * The sentence of a pre-review gate that cannot get a Device flows verdict (the `error` run was asked for
+ * again and failed too, or the status was still pending when the wait ran out), or null. No simulator is
+ * here, so a person runs device-run.sh on the Mac: no fix round, no Reviewer.
+ */
+function deviceFlowsNoVerdict(pre) {
+  const closed = pre.code === 1 ? /device-flows-no-verdict: (needs-human: run device-run\.sh on the Mac on [0-9a-f]+)/.exec(pre.line) : null;
+  if (closed) {
+    return closed[1];
+  }
+  const pending = pre.exhausted ? /device-flows-pending on ([0-9a-f]+)/.exec(pre.line) : null;
+  return pending ? `needs-human: run device-run.sh on the Mac on ${pending[1]}` : null;
+}
 
 /** The one place a Linear state command is built, so no caller can write a state outside MAY_SET. */
 function stateCmd(state) {
@@ -268,12 +287,30 @@ function stateCmd(state) {
   return `node scripts/linear.mjs state ${issue} "${state}"`;
 }
 
+/**
+ * The command that fills `### Waiting` in the workpad for a stop the workflow itself found (the Engineer writes
+ * its own, but a gate-detected stop has no Engineer turn left). Only text this workflow wrote or validated
+ * enters it, never an agent's or a runner's sentence, and it must be one plain line (the runner wraps each
+ * command in a shell, ADR-0058).
+ */
+function waitingCmd(stage, ask) {
+  const plain = /^[A-Za-z0-9 .,:#()'\/_-]+$/;
+  if (!plain.test(stage) || !plain.test(ask)) {
+    throw new Error("waiting text must be one plain line");
+  }
+  return `node scripts/linear.mjs waiting ${issue} --stage "${stage}" --ask "${ask}"`;
+}
+
 async function move(phaseTitle, state) {
   return sh(`linear:${state}`, phaseTitle, [stateCmd(state)]);
 }
 
-/** A human is needed or another issue must finish first (the `blocked` sentence of the Engineer or Lead). */
-async function stopForHuman(phaseTitle, sentence) {
+/**
+ * A human is needed or another issue must finish first (the `blocked` sentence of the Engineer or Lead).
+ * `waiting` ({ stage, ask }) is a stop the workflow found itself: its `### Waiting` is filled after the move,
+ * so a failed write leaves the stop standing.
+ */
+async function stopForHuman(phaseTitle, sentence, waiting = null) {
   const text = String(sentence ?? "");
   const blockedBy = /^blocked-by (KIT-\d+)\b/.exec(text);
   if (blockedBy) {
@@ -288,6 +325,7 @@ async function stopForHuman(phaseTitle, sentence) {
   await sh("linear:approval", phaseTitle, [
     `node scripts/linear.mjs label ${issue} swap ready-for-agent ${label}`,
     `node scripts/linear.mjs state ${issue} "Approval"`,
+    ...(waiting ? [waitingCmd(waiting.stage, waiting.ask)] : []),
   ]);
   return "Approval";
 }
@@ -493,6 +531,7 @@ async function engineerPass(round, feedback, engineerModelAlias) {
     scenarioLine,
     "Read `### Plan` in the workpad when there is one. Copy the issue's write-scope: line into the PR body (plain globs, no backslashes).",
     `Wait for CI only in the foreground, in slices (a foreground command is capped at 10 minutes, and your shell tool backgrounds it after 2 unless you set the tool's timeout to 600000 ms, so set it): \`node scripts/wait-for-checks.mjs <pr> --timeout ${GATE_SLICE_SECONDS}\`. On exit 2 (still pending) run the same command again in the same turn, up to ${GATE_SLICES} times in all; only after that end with \`blocked ci-pending\`. Exit 5 means gh is unusable: report \`blocked\` with the verdict line and do not retry. Never start it in the background and end your turn.`,
+    `A slice with a slice flow (apps/mobile/.maestro/slices/${issue}.yaml) needs a green \`Device flows\` status on the PR head (the pre-review gate row in implement/SKILL.md). This machine has no simulator: ask for the hosted run with \`node scripts/request-device-flows.mjs <pr> --issue ${issue}\` and wait with \`node scripts/gate.mjs pre-review <pr> --issue ${issue} --timeout ${GATE_SLICE_SECONDS}\` in the same slices. A red flow is yours to fix. If the status stays missing or pending after ${GATE_SLICES} slices, or ends \`error\` again after a re-request, never return ready: write the ask and the stage under workpad \`### Waiting\` and return blocked with the sentence \`needs-human: run device-run.sh on the Mac on <sha>\`.`,
     "Never move the issue to Merging, Post-Merge or Done, never merge, never enable auto-merge, never post a kc/audit status. Move nothing in Linear except the workpad and your evidence comments.",
     feedback ? `Change request from the last round (fix the class, not the instance):\n${feedback}` : "",
     "Return outcome ready (only when the pre-review gate in implement/SKILL.md is true), blocked (sentence starts `needs-human:` or `blocked-by KIT-m:`) or failed, one sentence, the PR number, and your own thread id ($BB_THREAD_ID) in threadId.",
@@ -523,9 +562,15 @@ if (resume && resumePr !== null) {
   }
   if (point.code === 0) {
     phase("Pre-review gate");
-    const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${resumePr} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [requestDeviceFlows(resumePr)]);
+    const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${resumePr} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [requestDeviceFlows(resumePr)], true, [requestDeviceFlows(resumePr)]);
     if (pre.runner) {
       return stopped("pre-review gate", "stopped", { prNumber: resumePr, note: pre.line });
+    }
+    const noVerdictAtResume = deviceFlowsNoVerdict(pre);
+    if (noVerdictAtResume) {
+      await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code device-flows-no-verdict`)], true);
+      const state = await stopForHuman("Pre-review gate", noVerdictAtResume, { stage: "pre-review gate", ask: noVerdictAtResume });
+      return stopped("pre-review gate", state, { prNumber: resumePr, note: noVerdictAtResume });
     }
     if (pre.exhausted) {
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
@@ -600,10 +645,18 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
 
     // -- Pre-review gate: mechanical steps and checks only, no matrix (ADR-0058).
     phase("Pre-review gate");
-    const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [...engineerLog, requestDeviceFlows(prNumber)]);
+    const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [...engineerLog, requestDeviceFlows(prNumber)], true, [requestDeviceFlows(prNumber)]);
     if (pre.runner) {
       // The runner failed, not the gate: sh() logged runner-no-result, and no fix round can help.
       return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
+    }
+    const noVerdict = deviceFlowsNoVerdict(pre);
+    if (noVerdict) {
+      // The hosted Device flows run cannot reach a verdict and no simulator is here: a person runs
+      // device-run.sh on the Mac. Not a red gate and not a pending one, so no fix round and no Reviewer.
+      await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code device-flows-no-verdict`)], true);
+      const state = await stopForHuman("Pre-review gate", noVerdict, { stage: "pre-review gate", ask: noVerdict });
+      return stopped("pre-review gate", state, { prNumber, rounds, note: noVerdict });
     }
     if (pre.exhausted) {
       // Checks never finished inside the bound: not a red gate, so no fix round, and the issue is still In Progress.
@@ -710,7 +763,10 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     }
     // Out of rounds: a person has to act, and Linear still says In Review, so say Approval.
     const why = gate.code !== 0 ? gate.line : review.sentence;
-    const state = await stopForHuman("Review gate", `needs-human: round cap reached after a ${review.verdict} review: ${why}`);
+    const state = await stopForHuman("Review gate", `needs-human: round cap reached after a ${review.verdict} review: ${why}`, {
+      stage: "review gate",
+      ask: `needs-human: round cap reached after a ${review.verdict === "red" ? "red" : "gate-closed"} review, the findings are under ### Review feedback`,
+    });
     return stopped("review gate", state, { prNumber, rounds, verdict: review.verdict, note: why });
   }
   // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.

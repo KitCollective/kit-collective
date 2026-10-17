@@ -1,99 +1,125 @@
 import type { CollectionJersey } from "@kit/api-contract";
-import { JERSEY_CONDITION_LABELS_DA, JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
-import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
+  Platform,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { patchJerseyBidding, patchJerseyPrivate } from "@/api/bidding";
-import { deleteUserJersey, fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
+import {
+  addUserJerseyPhoto,
+  deleteUserJersey,
+  fetchCollectionJerseys,
+  resolvePhotoUrl,
+} from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
 import { createEditCaptureSession } from "@/capture/captureSession";
 import { createSqliteCaptureSessionStore } from "@/capture/captureSessionSqliteStore";
-import { Sheet } from "@/components/catalog-ui";
+import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
+import { captureQualityForRole, readPreparedPhotoBase64 } from "@/capture/photoBytes";
+import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
+import { Banner } from "@/components/catalog-ui";
+import { formatThreadTime } from "@/components/thread-row";
 import { Button, IconButton } from "@/components/ui";
+import {
+  JerseyBidRow,
+  JerseyFactRow,
+  JerseyPlayerRow,
+  JerseySwitchRow,
+  JerseyTitleBlock,
+} from "@/jersey-detail/jersey-detail-rows";
+import { JerseyDeleteConfirmSheet, JerseyMoreSheet } from "@/jersey-detail/jersey-detail-sheets";
+import {
+  type BidRowTarget,
+  buildJerseyDetailView,
+  canAddJerseyPhoto,
+  JERSEY_PHOTO_ADD_ERROR,
+  jerseySettingsView,
+  replaceJerseyInList,
+} from "@/jersey-detail/jersey-detail-view-model";
+import { JerseyPhotoPager, JerseyThumbStrip } from "@/jersey-detail/jersey-photos";
+import { loadOwnJersey } from "@/jersey-detail/own-jersey-load";
+import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
 import { useTypography } from "@/theme/brand-fonts";
-import { radius, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-const TAB_BAR_STYLE_VISIBLE = {
-  position: "absolute" as const,
-  backgroundColor: "transparent",
-  borderTopWidth: 0,
-  elevation: 0,
-};
+type PendingMoreAction = "edit" | "delete";
+
+const PICKED_PHOTO_ROLE = "other";
 
 export default function JerseyDetailScreen() {
   const { jerseyId } = useLocalSearchParams<{ jerseyId: string }>();
   const router = useRouter();
-  const navigation = useNavigation();
   const { width: screenWidth } = useWindowDimensions();
   const { accessToken } = useAuth();
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
   const pagerRef = useRef<ScrollView>(null);
+  const pendingMoreAction = useRef<PendingMoreAction | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [jersey, setJersey] = useState<CollectionJersey | null>(null);
+  // The owner's full list, createdAt desc (no shortcut filter): the ordinal n comes from it.
+  const [list, setList] = useState<CollectionJersey[]>([]);
   const [biddingEnabled, setBiddingEnabled] = useState(false);
   const [savingBidding, setSavingBidding] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [savingPrivate, setSavingPrivate] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [addingPhoto, setAddingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  // Set when a photo was just added: the pager jumps to the new (last) photo once it is rendered.
+  const jumpToNewPhoto = useRef(false);
 
-  useLayoutEffect(() => {
-    const tabNav = navigation.getParent();
-    tabNav?.setOptions({ tabBarStyle: { display: "none" } });
-    return () => {
-      tabNav?.setOptions({ tabBarStyle: TAB_BAR_STYLE_VISIBLE });
-    };
-  }, [navigation]);
+  const loadSeq = useRef(0);
 
-  const loadJersey = useCallback(async () => {
-    if (!accessToken || !jerseyId) {
-      return;
+  const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
+    if (accessToken && jerseyId) {
+      let fetched: CollectionJersey[] = [];
+      const outcome = await loadOwnJersey(async () => {
+        const response = await fetchCollectionJerseys(accessToken);
+        fetched = response.jerseys;
+        return response;
+      }, jerseyId);
+      if (seq !== loadSeq.current) {
+        return;
+      }
+      const found = outcome.kind === "found" ? outcome.jersey : null;
+      setLoadFailed(outcome.kind === "error");
+      setList(fetched);
+      setJersey(found);
+      setBiddingEnabled(found?.biddingEnabled ?? false);
+      setIsPrivate(found?.private ?? false);
+      setPhotoIndex(0);
     }
-
-    const response = await fetchCollectionJerseys(accessToken);
-    const found = response.jerseys.find((item) => item.id === jerseyId) ?? null;
-    setJersey(found);
-    setBiddingEnabled(found?.biddingEnabled ?? false);
-    setIsPrivate(found?.private ?? false);
-    setPhotoIndex(0);
+    setLoading(false);
   }, [accessToken, jerseyId]);
 
   useEffect(() => {
-    let active = true;
-
-    async function run() {
-      try {
-        await loadJersey();
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void run();
+    void load();
 
     return () => {
-      active = false;
+      loadSeq.current += 1;
     };
-  }, [loadJersey]);
+  }, [load]);
+
+  const retryLoad = () => {
+    setLoading(true);
+    void load();
+  };
 
   const toggleBidding = async (nextValue: boolean) => {
     if (!accessToken || !jerseyId) {
@@ -149,6 +175,69 @@ export default function JerseyDetailScreen() {
     });
   };
 
+  // Samling's place-overview cache only refetches when the place goes live again: a jersey it
+  // holds gets its new photo list, so the tile and the count there stay true.
+  const syncCollectionCache = (updated: CollectionJersey) => {
+    const previous = readPlaceOverview("collection");
+    if (!previous) {
+      return;
+    }
+    writePlaceOverview("collection", {
+      ...previous,
+      jerseys: replaceJerseyInList(previous.jerseys, updated),
+      allJerseys: replaceJerseyInList(previous.allJerseys, updated),
+    });
+  };
+
+  const handleAddPhoto = async () => {
+    if (!accessToken || !jersey || addingPhoto) {
+      return;
+    }
+
+    setPhotoError(null);
+    try {
+      const uris = await pickGalleryPhotos(
+        { quality: captureQualityForRole(PICKED_PHOTO_ROLE) },
+        expoGalleryPickerAdapter,
+      );
+      const uri = uris?.[0];
+      if (!uri) {
+        return;
+      }
+
+      setAddingPhoto(true);
+      const contentBase64 = await readPreparedPhotoBase64(uri, PICKED_PHOTO_ROLE, "display");
+      const updated = await addUserJerseyPhoto(accessToken, jersey.id, {
+        role: PICKED_PHOTO_ROLE,
+        source: "gallery",
+        contentBase64,
+      });
+      jumpToNewPhoto.current = true;
+      setJersey(updated);
+      setList((current) => replaceJerseyInList(current, updated));
+      syncCollectionCache(updated);
+    } catch {
+      setPhotoError(JERSEY_PHOTO_ADD_ERROR);
+    } finally {
+      setAddingPhoto(false);
+    }
+  };
+
+  // Samling keeps a place-overview cache that only refetches when the place goes live again;
+  // drop the deleted jersey from it so Samling never shows it.
+  const dropFromCollectionCache = (deletedId: string) => {
+    const previous = readPlaceOverview("collection");
+    if (!previous) {
+      return;
+    }
+    writePlaceOverview("collection", {
+      ...previous,
+      jerseys: previous.jerseys.filter((item) => item.id !== deletedId),
+      allJerseys: previous.allJerseys.filter((item) => item.id !== deletedId),
+      totalJerseyCount: Math.max(0, previous.totalJerseyCount - 1),
+    });
+  };
+
   const handleDelete = async () => {
     if (!accessToken || !jerseyId) {
       return;
@@ -157,6 +246,7 @@ export default function JerseyDetailScreen() {
     setDeleting(true);
     try {
       await deleteUserJersey(accessToken, jerseyId);
+      dropFromCollectionCache(jerseyId);
       setDeleteSheetOpen(false);
       router.replace("/(tabs)/collection");
     } catch {
@@ -166,10 +256,59 @@ export default function JerseyDetailScreen() {
     }
   };
 
-  const onPhotoScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
-    setPhotoIndex(index);
+  // The More sheet closes first; on iOS the next surface (the capture route or the confirm
+  // Sheet) waits for Modal.onDismiss so it does not layer over a closing Modal.
+  const runPendingMoreAction = () => {
+    const next = pendingMoreAction.current;
+    pendingMoreAction.current = null;
+    if (next === "edit") {
+      handleEdit();
+    } else if (next === "delete") {
+      setDeleteSheetOpen(true);
+    }
   };
+
+  const chooseMoreAction = (action: PendingMoreAction) => {
+    setMoreOpen(false);
+    pendingMoreAction.current = action;
+    if (Platform.OS !== "ios") {
+      runPendingMoreAction();
+    }
+  };
+
+  const openBidTarget = (target: BidRowTarget) => {
+    if (target.kind === "thread") {
+      router.push(`/(tabs)/inbox/${target.conversationId}`);
+      return;
+    }
+    // Several bidders: Indbakke opens filtered to this jersey (it reads the `jerseyId` param).
+    router.push({ pathname: "/(tabs)/inbox", params: { jerseyId: target.jerseyId } });
+  };
+
+  const selectPhoto = (index: number) => {
+    setPhotoIndex(index);
+    pagerRef.current?.scrollTo({ x: index * screenWidth, animated: true });
+  };
+
+  const photoCount = jersey?.photos.length ?? 0;
+  useEffect(() => {
+    if (!jumpToNewPhoto.current || photoCount === 0) {
+      return;
+    }
+    jumpToNewPhoto.current = false;
+    const lastIndex = photoCount - 1;
+    setPhotoIndex(lastIndex);
+    // After the frame that lays out the new page, so the offset is not clamped to the old width.
+    requestAnimationFrame(() => {
+      pagerRef.current?.scrollTo({ x: lastIndex * screenWidth, animated: true });
+    });
+  }, [photoCount, screenWidth]);
+
+  const view = useMemo(
+    () => (jersey ? buildJerseyDetailView({ jersey, list, formatTime: formatThreadTime }) : null),
+    [jersey, list],
+  );
+  const settings = jerseySettingsView({ biddingEnabled, isPrivate, savingBidding, savingPrivate });
 
   if (loading) {
     return (
@@ -179,170 +318,135 @@ export default function JerseyDetailScreen() {
     );
   }
 
-  if (!jersey) {
+  if (loadFailed) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
-        <Text style={[typography.body, { color: theme.contentSecondary }]}>Trøjen findes ikke</Text>
-        <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
+      <View
+        testID="jersey-detail-load-error"
+        style={[
+          styles.errorScreen,
+          { backgroundColor: theme.canvas, paddingTop: insets.top + space.insetSm },
+        ]}
+      >
+        <IconButton
+          testID="jersey-detail-back"
+          name="Tilbage"
+          icon="arrow-back"
+          onPress={() => router.back()}
+        />
+        <View style={styles.loadError}>
+          <Banner
+            tone="danger"
+            message="Kunne ikke hente trøjen. Prøv igen."
+            action={
+              <Button
+                testID="jersey-detail-load-retry"
+                label="Prøv igen"
+                variant="tertiary"
+                onPress={retryLoad}
+              />
+            }
+          />
+        </View>
       </View>
     );
   }
 
-  const metaLine = `${jersey.seasonLabel} · ${KIT_TYPE_LABELS_DA[jersey.type]} · ${JERSEY_SIZE_LABELS_DA[jersey.size]} · ${JERSEY_CONDITION_LABELS_DA[jersey.condition]}`;
-  const showPagerDots = jersey.photos.length > 1;
-
-  return (
-    <View testID="jersey-detail-own" style={[styles.root, { backgroundColor: theme.fillPrimary }]}>
-      <ScrollView
-        ref={pagerRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onPhotoScroll}
-        style={styles.stage}
-        contentContainerStyle={styles.stageContent}
+  if (!jersey || !view) {
+    return (
+      <View
+        testID="jersey-detail-not-found"
+        style={[styles.centered, { backgroundColor: theme.canvas }]}
       >
-        {jersey.photos.map((photo) => (
-          <Image
-            key={photo.id}
-            source={{
-              uri: resolvePhotoUrl(photo.photoUrl, "lightbox"),
-              headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-            }}
-            style={[styles.stagePhoto, { width: screenWidth }]}
-            resizeMode="cover"
-            accessibilityLabel={`${jersey.clubLabel} ${photo.role}`}
-          />
-        ))}
-      </ScrollView>
-
-      <View style={[styles.stageChrome, { paddingTop: insets.top + space.insetSm }]}>
+        <Text style={[typography.body, { color: theme.contentSecondary }]}>Trøjen findes ikke</Text>
         <IconButton
+          testID="jersey-detail-back"
           name="Tilbage"
           icon="arrow-back"
-          iconColor={theme.contentInverse}
           onPress={() => router.back()}
         />
-        {showPagerDots ? (
-          <View
-            style={styles.pagerDots}
-            accessibilityLabel={`Foto ${photoIndex + 1} af ${jersey.photos.length}`}
-          >
-            {jersey.photos.map((photo, index) => (
-              <View
-                key={photo.id}
-                style={[
-                  styles.pagerDot,
-                  {
-                    backgroundColor: theme.contentInverse,
-                    opacity: index === photoIndex ? 1 : 0.35,
-                  },
-                ]}
-              />
+      </View>
+    );
+  }
+
+  const bidRow = view.bidRow;
+
+  return (
+    <View testID="jersey-detail-own" style={[styles.root, { backgroundColor: theme.canvas }]}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: insets.bottom + space.insetLg }}
+        showsVerticalScrollIndicator={false}
+      >
+        <JerseyPhotoPager
+          pagerRef={pagerRef}
+          photos={jersey.photos}
+          photoUris={jersey.photos.map((photo) => resolvePhotoUrl(photo.photoUrl, "lightbox"))}
+          title={view.title}
+          accessToken={accessToken}
+          index={photoIndex}
+          onIndexChange={setPhotoIndex}
+          onBack={() => router.back()}
+          onMore={() => setMoreOpen(true)}
+        />
+        <JerseyThumbStrip
+          photos={jersey.photos}
+          accessToken={accessToken}
+          index={photoIndex}
+          onSelect={selectPhoto}
+          canAddPhoto={canAddJerseyPhoto(jersey.photos.length)}
+          addingPhoto={addingPhoto}
+          onAddPhoto={() => void handleAddPhoto()}
+        />
+
+        <View style={styles.column}>
+          {photoError ? <Banner tone="danger" message={photoError} /> : null}
+          <JerseyTitleBlock caption={view.caption} title={view.title} season={view.season} />
+
+          {bidRow ? (
+            <JerseyBidRow row={bidRow} onPress={() => openBidTarget(bidRow.target)} />
+          ) : null}
+
+          <JerseyPlayerRow row={view.playerRow} />
+
+          <View>
+            {view.factRows.map((row, index) => (
+              <JerseyFactRow key={row.key} row={row} hairline={index < view.factRows.length - 1} />
             ))}
           </View>
-        ) : (
-          <View style={styles.pagerSpacer} />
-        )}
-      </View>
 
-      <View
-        style={[
-          styles.bottomSheet,
-          {
-            backgroundColor: theme.surfaceRaised,
-            paddingBottom: insets.bottom + space.insetMd,
-          },
-        ]}
-      >
-        <View
-          style={[styles.sheetHandle, { backgroundColor: theme.borderSubtle }]}
-          accessibilityElementsHidden
-        />
-        <Text style={[typography.title, { color: theme.contentPrimary }]}>{jersey.clubLabel}</Text>
-        <Text style={[typography.mono, { color: theme.contentSecondary }]}>{metaLine}</Text>
-
-        <View
-          style={[
-            styles.switchRow,
-            {
-              borderColor: theme.borderSubtle,
-              opacity: isPrivate ? 0.4 : 1,
-            },
-          ]}
-        >
-          <View style={styles.switchCopy}>
-            <Text style={[typography.label, { color: theme.contentPrimary }]}>Åben for bud</Text>
-            <Text style={[typography.caption, { color: theme.contentSecondary }]}>
-              Andre samlere kan finde trøjen under Søg og sende bud.
-            </Text>
+          <View>
+            <JerseySwitchRow
+              row={settings.bidding}
+              onValueChange={(value) => void toggleBidding(value)}
+              testID="jersey-detail-bidding"
+            />
+            <JerseySwitchRow
+              row={settings.private}
+              onValueChange={(value) => void togglePrivate(value)}
+              testID="jersey-detail-private"
+            />
           </View>
-          <Switch
-            accessibilityLabel="Åben for bud"
-            accessibilityRole="switch"
-            accessibilityState={{ checked: biddingEnabled, disabled: savingBidding || isPrivate }}
-            value={biddingEnabled}
-            disabled={savingBidding || isPrivate}
-            onValueChange={(value) => void toggleBidding(value)}
-            trackColor={{ false: theme.borderSubtle, true: theme.fillPrimary }}
-            thumbColor={theme.contentInverse}
-          />
         </View>
+      </ScrollView>
 
-        <View style={[styles.switchRow, { borderColor: theme.borderSubtle }]}>
-          <View style={styles.switchCopy}>
-            <Text style={[typography.label, { color: theme.contentPrimary }]}>Privat</Text>
-            <Text style={[typography.caption, { color: theme.contentSecondary }]}>
-              Skjuler trøjen fra søgning og andre samlere.
-            </Text>
-          </View>
-          <Switch
-            accessibilityLabel="Privat"
-            accessibilityRole="switch"
-            accessibilityState={{ checked: isPrivate, disabled: savingPrivate }}
-            value={isPrivate}
-            disabled={savingPrivate}
-            onValueChange={(value) => void togglePrivate(value)}
-            trackColor={{ false: theme.borderSubtle, true: theme.fillPrimary }}
-            thumbColor={theme.contentInverse}
-          />
-        </View>
+      <JerseyMoreSheet
+        visible={moreOpen}
+        onDismiss={() => {
+          pendingMoreAction.current = null;
+          setMoreOpen(false);
+        }}
+        onModalHide={runPendingMoreAction}
+        onEdit={() => chooseMoreAction("edit")}
+        onDelete={() => chooseMoreAction("delete")}
+      />
 
-        <View style={styles.actionRow}>
-          <Button label="Rediger" variant="secondary" width="fill" onPress={handleEdit} />
-          <Button
-            label="Slet"
-            variant="destructive"
-            width="fill"
-            onPress={() => setDeleteSheetOpen(true)}
-          />
-        </View>
-      </View>
-
-      <Sheet
+      <JerseyDeleteConfirmSheet
         visible={deleteSheetOpen}
-        title="Slet trøje?"
+        jersey={jersey}
+        accessToken={accessToken}
+        loading={deleting}
+        onConfirm={() => void handleDelete()}
         onDismiss={() => setDeleteSheetOpen(false)}
-      >
-        <Text style={[typography.body, { color: theme.contentSecondary }]}>
-          Trøjen fjernes permanent fra din samling.
-        </Text>
-        <View style={styles.deleteActions}>
-          <Button
-            label="Annuller"
-            variant="tertiary"
-            width="fill"
-            onPress={() => setDeleteSheetOpen(false)}
-          />
-          <Button
-            label="Slet trøje"
-            variant="destructive"
-            width="fill"
-            loading={deleting}
-            onPress={() => void handleDelete()}
-          />
-        </View>
-      </Sheet>
+      />
     </View>
   );
 }
@@ -357,75 +461,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: space.gapMd,
   },
-  stage: {
-    ...StyleSheet.absoluteFill,
-  },
-  stageContent: {
-    flexGrow: 1,
-  },
-  stagePhoto: {
-    height: "100%",
-  },
-  stageChrome: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  errorScreen: {
+    flex: 1,
+    alignItems: "flex-start",
+    gap: space.gapMd,
     paddingHorizontal: space.insetMd,
   },
-  pagerDots: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.gapSm,
+  loadError: {
+    alignSelf: "stretch",
   },
-  pagerDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radius.pill,
-  },
-  pagerSpacer: {
-    width: 44,
-  },
-  bottomSheet: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    paddingHorizontal: space.insetLg,
+  column: {
+    paddingHorizontal: space.insetMd,
     paddingTop: space.insetMd,
-    gap: space.gapMd,
-  },
-  sheetHandle: {
-    alignSelf: "center",
-    width: 36,
-    height: 4,
-    borderRadius: radius.pill,
-    marginBottom: space.gapSm,
-  },
-  switchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: space.gapMd,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: space.insetMd,
-  },
-  switchCopy: {
-    flex: 1,
-    gap: space.gapSm,
-  },
-  actionRow: {
-    gap: space.gapSm,
-    marginTop: space.gapSm,
-  },
-  deleteActions: {
-    gap: space.gapSm,
-    marginTop: space.gapMd,
+    gap: space.gapLg,
   },
 });

@@ -8,8 +8,6 @@ import {
   type CollectionConversations,
   type CollectionDiscoverCatalogDrill,
   type CollectionDiscoverHome,
-  type CollectionDiscoverHomeClub,
-  type CollectionDiscoverHomeCollector,
   type CollectionDiscoverHomeNationalTeam,
   type CollectionDiscoverJerseys,
   type CollectionDiscoverTypeahead,
@@ -18,6 +16,7 @@ import {
   type CollectionFavorites,
   type CollectionJersey,
   type CollectionJerseys,
+  type CollectionJerseyUpdateResponse,
   type CollectionPeerJersey,
   type CollectionPeerJerseys,
   type CollectionRespondBidResponse,
@@ -45,6 +44,7 @@ import {
   collectionPrivatePatchSchema,
   collectionRespondBidRequestSchema,
   collectionRespondBidResponseSchema,
+  collectionSavePhotoSchema,
   collectionSaveRequestSchema,
   collectionSaveResponseSchema,
   collectionSendBidRequestSchema,
@@ -120,6 +120,13 @@ export const OBJECT_STORE = Symbol("OBJECT_STORE");
 function canonicalCollectorPair(leftId: string, rightId: string): [string, string] {
   return leftId < rightId ? [leftId, rightId] : [rightId, leftId];
 }
+
+type UnansweredBidSummary = {
+  count: number;
+  latestAt: string;
+  bidderInitials: string[];
+  conversationId: string | null;
+};
 
 type MessageJerseySnapshotRow = {
   userJerseyId: string | null;
@@ -324,7 +331,7 @@ export class CollectionService {
       squadPlayersByScope,
       playerFieldsByJersey,
       patchesByJersey,
-      unansweredBidCounts,
+      unansweredBidSummaries,
     ] = await Promise.all([
       this.resolveEntityLabels("club", clubIds, locale),
       this.resolveEntityLabels("national_team", nationalTeamIds, locale),
@@ -334,7 +341,7 @@ export class CollectionService {
       this.loadSquadPlayersForScopes(squadScopes, locale),
       this.loadPlayerFieldsForJerseys(rows, locale),
       this.loadPatchesForJerseys(jerseyIds, locale),
-      this.loadUnansweredBidCounts(userId, jerseyIds),
+      this.loadUnansweredBidSummaries(userId, jerseyIds),
     ]);
 
     const jerseys: CollectionJersey[] = [];
@@ -346,6 +353,7 @@ export class CollectionService {
         continue;
       }
 
+      const bidSummary = unansweredBidSummaries.get(row.id);
       const clubLabel = row.clubId ? (clubLabels.get(row.clubId) ?? null) : null;
       const nationalTeamLabel = row.nationalTeamId
         ? (nationalTeamLabels.get(row.nationalTeamId) ?? null)
@@ -408,7 +416,14 @@ export class CollectionService {
         photos,
         biddingEnabled: row.biddingEnabled,
         private: row.private,
-        unansweredBidCount: unansweredBidCounts.get(row.id) ?? 0,
+        unansweredBidCount: bidSummary?.count ?? 0,
+        ...(bidSummary
+          ? {
+              unansweredBidLatestAt: bidSummary.latestAt,
+              unansweredBidderInitials: bidSummary.bidderInitials,
+              unansweredBidConversationId: bidSummary.conversationId,
+            }
+          : {}),
       });
     }
 
@@ -573,6 +588,7 @@ export class CollectionService {
         id: conversationMessage.id,
         conversationId: conversationMessage.conversationId,
         senderId: conversationMessage.senderId,
+        userJerseyId: conversationMessage.userJerseyId,
         bidAmountDkk: conversationMessage.bidAmountDkk,
         bidStatus: conversationMessage.bidStatus,
         createdAt: conversationMessage.createdAt,
@@ -650,6 +666,7 @@ export class CollectionService {
       return {
         id: row.id,
         conversationId: row.conversationId,
+        userJerseyId: row.userJerseyId,
         title: activityTitle(viewerIsOwner, row.bidStatus),
         kitLine,
         amountDkk: row.bidAmountDkk,
@@ -1032,6 +1049,7 @@ export class CollectionService {
         nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
+        size: userJersey.size,
         seasonLabel: season.label,
         ownerHandle: user.handle,
       })
@@ -1165,6 +1183,80 @@ export class CollectionService {
     return { jersey: await this.loadOwnJerseyOrThrow(userId, jerseyId) };
   }
 
+  /**
+   * Adds one photo to a UserJersey the caller owns. The set after the add (existing photos plus
+   * the new one) must still pass the same role and cap rules as Save.
+   */
+  async addJerseyPhoto(
+    userId: string,
+    jerseyId: string,
+    rawBody: unknown,
+  ): Promise<CollectionJerseyUpdateResponse> {
+    const parsed = collectionSavePhotoSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+    const photo = parsed.data;
+
+    const [existing] = await this.db
+      .select({ id: userJersey.id })
+      .from(userJersey)
+      .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)))
+      .limit(1);
+    if (!existing) {
+      throw new NotFoundException("UserJersey not found");
+    }
+
+    const existingPhotos = await this.db
+      .select({ role: userJerseyPhoto.role, label: userJerseyPhoto.label })
+      .from(userJerseyPhoto)
+      .where(eq(userJerseyPhoto.userJerseyId, jerseyId));
+
+    const photoValidationError = validateJerseyPhotos([
+      ...existingPhotos.map((row) => ({ role: row.role, label: row.label ?? undefined })),
+      photo,
+    ]);
+    if (photoValidationError) {
+      throw new BadRequestException({ code: photoValidationError });
+    }
+
+    const storedPhotos = await this.putSavePhotoObjects(userId, jerseyId, [photo]);
+    try {
+      await this.db.transaction(async (tx) => {
+        await tx.insert(userJerseyPhoto).values(
+          storedPhotos.map((stored) => ({
+            id: stored.photoId,
+            userJerseyId: jerseyId,
+            objectKey: stored.objectKey,
+            role: stored.photo.role,
+            source: stored.photo.source,
+            label: stored.photo.role === "other" ? stored.photo.label?.trim() || null : null,
+            ocrStatus: "none" as const,
+          })),
+        );
+        await tx
+          .update(userJersey)
+          .set({ updatedAt: new Date() })
+          .where(eq(userJersey.id, jerseyId));
+      });
+    } catch (error) {
+      await this.deleteOrphanedPhotoObjects(storedPhotos.map((stored) => stored.objectKey));
+      throw error;
+    }
+
+    for (const stored of storedPhotos) {
+      this.photoDerivativeQueueService.enqueue(this.objectStore, {
+        userId,
+        jerseyId,
+        photoId: stored.photoId,
+        role: stored.photo.role,
+        sourceObjectKey: stored.objectKey,
+      });
+    }
+
+    return { jersey: await this.loadOwnJerseyOrThrow(userId, jerseyId) };
+  }
+
   async deleteOwnJersey(userId: string, jerseyId: string): Promise<void> {
     const [jerseyRow] = await this.db
       .select({ id: userJersey.id })
@@ -1249,6 +1341,7 @@ export class CollectionService {
         nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
+        size: userJersey.size,
         seasonLabel: season.label,
         ownerHandle: user.handle,
       })
@@ -1304,6 +1397,7 @@ export class CollectionService {
           ...side,
           seasonId: row.seasonId,
           type: row.type,
+          size: row.size,
           seasonLabel: row.seasonLabel,
           ownerHandle: row.ownerHandle,
           photos,
@@ -1376,6 +1470,7 @@ export class CollectionService {
         nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
+        size: userJersey.size,
         biddingEnabled: userJersey.biddingEnabled,
         seasonLabel: season.label,
         ownerHandle: user.handle,
@@ -1394,46 +1489,73 @@ export class CollectionService {
 
     const moreJerseys = await this.decorateDiscoverJerseys(visibleRows, locale);
 
-    const clubs: CollectionDiscoverHomeClub[] = [];
-    const seenClubs = new Set<string>();
-    const nationalTeams: CollectionDiscoverHomeNationalTeam[] = [];
-    const seenNationalTeams = new Set<string>();
+    const rowById = new Map(visibleRows.map((row) => [row.id, row]));
+    const clubCopies = new Map<string, { label: string; count: number }>();
+    const nationalTeamCopies = new Map<string, { label: string; count: number }>();
+    const collectorCopies = new Map<
+      string,
+      { row: (typeof visibleRows)[number]; jerseyCount: number; openForBidCount: number }
+    >();
     for (const jersey of moreJerseys) {
+      const row = rowById.get(jersey.id);
+      if (!row) {
+        continue;
+      }
       if (jersey.clubId) {
-        if (seenClubs.has(jersey.clubId)) {
-          continue;
-        }
-        seenClubs.add(jersey.clubId);
-        clubs.push({ clubId: jersey.clubId, clubLabel: jersey.clubLabel });
-        continue;
+        const entry = clubCopies.get(jersey.clubId) ?? { label: jersey.clubLabel, count: 0 };
+        entry.count += 1;
+        clubCopies.set(jersey.clubId, entry);
+      } else if (jersey.nationalTeamId) {
+        const entry = nationalTeamCopies.get(jersey.nationalTeamId) ?? {
+          label: jersey.clubLabel,
+          count: 0,
+        };
+        entry.count += 1;
+        nationalTeamCopies.set(jersey.nationalTeamId, entry);
       }
-      if (jersey.nationalTeamId && !seenNationalTeams.has(jersey.nationalTeamId)) {
-        seenNationalTeams.add(jersey.nationalTeamId);
-        nationalTeams.push({
-          nationalTeamId: jersey.nationalTeamId,
-          nationalTeamLabel: jersey.clubLabel,
-        });
+      const collector = collectorCopies.get(row.ownerId) ?? {
+        row,
+        jerseyCount: 0,
+        openForBidCount: 0,
+      };
+      collector.jerseyCount += 1;
+      if (row.biddingEnabled) {
+        collector.openForBidCount += 1;
       }
+      collectorCopies.set(row.ownerId, collector);
     }
 
-    const openForBid = moreJerseys.filter((jersey) => {
-      const row = visibleRows.find((item) => item.id === jersey.id);
-      return row?.biddingEnabled === true;
-    });
+    const byCopiesThenLabel = (
+      left: { label: string; count: number },
+      right: { label: string; count: number },
+    ) => right.count - left.count || left.label.localeCompare(right.label, "da");
 
-    const collectors: CollectionDiscoverHomeCollector[] = [];
-    const seenCollectors = new Set<string>();
-    for (const row of visibleRows) {
-      if (seenCollectors.has(row.ownerId) || !moreJerseys.some((jersey) => jersey.id === row.id)) {
-        continue;
-      }
-      seenCollectors.add(row.ownerId);
-      collectors.push({
-        handle: row.ownerHandle,
-        initial: handleInitial(row.ownerHandle),
-        avatarUrl: row.ownerAvatarObjectKey ? `/v1/identity/peers/${row.ownerId}/avatar` : null,
-      });
-    }
+    const clubs = [...clubCopies.entries()]
+      .map(([clubId, entry]) => ({ clubId, label: entry.label, count: entry.count }))
+      .sort(byCopiesThenLabel)
+      .map(({ clubId, label, count }) => ({ clubId, clubLabel: label, jerseyCount: count }));
+    const nationalTeams = [...nationalTeamCopies.entries()]
+      .map(([nationalTeamId, entry]) => ({
+        nationalTeamId,
+        label: entry.label,
+        count: entry.count,
+      }))
+      .sort(byCopiesThenLabel)
+      .map(({ nationalTeamId, label, count }) => ({
+        nationalTeamId,
+        nationalTeamLabel: label,
+        jerseyCount: count,
+      }));
+
+    const openForBid = moreJerseys.filter((jersey) => rowById.get(jersey.id)?.biddingEnabled);
+
+    const collectors = [...collectorCopies.entries()].map(([ownerId, entry]) => ({
+      handle: entry.row.ownerHandle,
+      initial: handleInitial(entry.row.ownerHandle),
+      avatarUrl: entry.row.ownerAvatarObjectKey ? `/v1/identity/peers/${ownerId}/avatar` : null,
+      jerseyCount: entry.jerseyCount,
+      openForBidCount: entry.openForBidCount,
+    }));
 
     return collectionDiscoverHomeSchema.parse({
       ...(clubs.length > 0 ? { clubs } : {}),
@@ -1464,6 +1586,7 @@ export class CollectionService {
       nationalTeamId: userJersey.nationalTeamId,
       seasonId: userJersey.seasonId,
       type: userJersey.type,
+      size: userJersey.size,
       seasonLabel: season.label,
       ownerHandle: user.handle,
     } as const;
@@ -1669,6 +1792,7 @@ export class CollectionService {
         nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
+        size: userJersey.size,
         seasonLabel: season.label,
         ownerHandle: user.handle,
       })
@@ -2662,6 +2786,7 @@ export class CollectionService {
       nationalTeamId: string | null;
       seasonId: string;
       type: CollectionDiscoverJerseys["jerseys"][number]["type"];
+      size: CollectionDiscoverJerseys["jerseys"][number]["size"];
       seasonLabel: string;
       ownerHandle: string;
     }>,
@@ -2687,6 +2812,7 @@ export class CollectionService {
           ...side,
           seasonId: row.seasonId,
           type: row.type,
+          size: row.size,
           seasonLabel: row.seasonLabel,
           ownerHandle: row.ownerHandle,
           photos,
@@ -2953,17 +3079,18 @@ export class CollectionService {
   }
 
   /**
-   * Pending bids from other collectors per owned jersey, by the Indbakke rule: the conversation is
-   * visible to the owner (not hidden) and the bidder is not a blocked peer.
+   * Pending Buds from other collectors per owned jersey, by the Indbakke rule: the Conversation is
+   * visible to the owner (not hidden) and the bidder is not a blocked peer. One query feeds the
+   * count, the latest two bidders' initials, the latest Bud time and the single Conversation id.
    */
-  private async loadUnansweredBidCounts(
+  private async loadUnansweredBidSummaries(
     ownerId: string,
     jerseyIds: string[],
-  ): Promise<Map<string, number>> {
-    const countsByJersey = new Map<string, number>();
+  ): Promise<Map<string, UnansweredBidSummary>> {
+    const summaryByJersey = new Map<string, UnansweredBidSummary>();
 
     if (jerseyIds.length === 0) {
-      return countsByJersey;
+      return summaryByJersey;
     }
 
     const blockedPeerIds = [...(await this.moderationService.getBlockedPeerIds(ownerId))];
@@ -2972,7 +3099,10 @@ export class CollectionService {
     const rows = await this.db
       .select({
         userJerseyId: conversationMessage.userJerseyId,
-        unansweredBidCount: count(),
+        senderId: conversationMessage.senderId,
+        senderHandle: user.handle,
+        conversationId: conversationMessage.conversationId,
+        createdAt: conversationMessage.createdAt,
       })
       .from(conversationMessage)
       .innerJoin(conversation, eq(conversationMessage.conversationId, conversation.id))
@@ -2983,6 +3113,7 @@ export class CollectionService {
           eq(conversationParticipant.userId, ownerId),
         ),
       )
+      .innerJoin(user, eq(user.id, conversationMessage.senderId))
       .where(
         and(
           inArray(conversationMessage.userJerseyId, jerseyIds),
@@ -2995,15 +3126,47 @@ export class CollectionService {
             : undefined,
         ),
       )
-      .groupBy(conversationMessage.userJerseyId);
+      .orderBy(desc(conversationMessage.createdAt));
 
+    // Newest first: the first Bud per jersey sets latestAt, distinct senders fill the initials.
+    const conversationIdsByJersey = new Map<string, Set<string>>();
+    const sendersByJersey = new Map<string, Set<string>>();
     for (const row of rows) {
-      if (row.userJerseyId) {
-        countsByJersey.set(row.userJerseyId, row.unansweredBidCount);
+      if (!row.userJerseyId) {
+        continue;
+      }
+      let summary = summaryByJersey.get(row.userJerseyId);
+      if (!summary) {
+        summary = {
+          count: 0,
+          latestAt: row.createdAt.toISOString(),
+          bidderInitials: [],
+          conversationId: null,
+        };
+        summaryByJersey.set(row.userJerseyId, summary);
+        conversationIdsByJersey.set(row.userJerseyId, new Set());
+        sendersByJersey.set(row.userJerseyId, new Set());
+      }
+      summary.count += 1;
+      conversationIdsByJersey.get(row.userJerseyId)?.add(row.conversationId);
+      const senders = sendersByJersey.get(row.userJerseyId);
+      if (senders && !senders.has(row.senderId)) {
+        senders.add(row.senderId);
+        if (summary.bidderInitials.length < 2) {
+          summary.bidderInitials.push(handleInitial(row.senderHandle));
+        }
       }
     }
 
-    return countsByJersey;
+    for (const [jerseyId, summary] of summaryByJersey) {
+      const conversationIds = conversationIdsByJersey.get(jerseyId);
+      const senders = sendersByJersey.get(jerseyId);
+      if (senders?.size === 1 && conversationIds?.size === 1) {
+        summary.conversationId = [...conversationIds][0] ?? null;
+      }
+    }
+
+    return summaryByJersey;
   }
 
   private async loadPatchesForJerseys(

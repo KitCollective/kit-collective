@@ -6,15 +6,21 @@
  */
 
 import { blockerIsResolved } from "./land-policy.mjs";
-import { matchesGlob, parseWriteScopeGlobs } from "./pr-write-scope.mjs";
+import { isCompanionPath, matchesGlob, parseWriteScopeGlobs } from "./pr-write-scope.mjs";
 import { HIGH_RISK_GLOBS, startDecision } from "./start-decision.mjs";
 
 /** A runaway guard, not a throttle: starts per 24 h. `flow.autoLand.maxPerDay` of factory.config.json overrides it. */
 export const DEFAULT_MAX_PER_DAY = 100;
 /** The circuit breaker opens after this many consecutive failures. `flow.autoLand.breakerAfter` overrides it. */
 export const DEFAULT_BREAKER_AFTER = 3;
-/** A diff of more lines than this (added plus deleted, binary files counted as this many) is for a person. */
-export const MAX_DIFF_LINES = 400;
+/**
+ * A runaway guard, not a review budget: a diff of more lines than this (added plus deleted) is for a
+ * person. A whole UI slice with its tests is 800 to 3,000 lines, so 400 sent nearly every slice to
+ * Approval (ADR-0064). A binary file counts as BINARY_LINES.
+ */
+export const MAX_DIFF_LINES = 4000;
+/** What one binary file adds to the diff size. */
+export const BINARY_LINES = 400;
 /** Total budget of one `start` call, under the 600 s foreground cap of a claude-code thread. */
 export const START_BUDGET_SECONDS = 480;
 /** Kept back from the gate's wait for the lock, sync, Linear and enqueue steps that follow it. */
@@ -196,7 +202,7 @@ export function issueReadiness(linear) {
  *   scope?: string[], maxLines?: number,
  * }} o `files` and `lines` are the PR's merge-base diff
  */
-export function riskClass({ description, labels, files, lines, maxLines = MAX_DIFF_LINES }) {
+export function riskClass({ description, labels, files, lines, issue, maxLines = MAX_DIFF_LINES }) {
   const decision = startDecision({ body: description, labels });
   if (decision.highRisk) {
     return refuse(
@@ -211,10 +217,17 @@ export function riskClass({ description, labels, files, lines, maxLines = MAX_DI
     return refuse("needs-human", `the diff touches ${risky}, a high-risk or factory path`);
   }
   const lower = labels.map((label) => label.toLowerCase());
-  if (lower.includes("surface:mobile") && !lower.includes("no-device-needed")) {
+  // A slice flow in the diff makes the hosted `Device flows` status part of the review gate
+  // (ADR-0059), so the device check is a machine's, not a person's (ADR-0064).
+  const sliceFlow = `apps/mobile/.maestro/slices/${issue}.yaml`;
+  if (
+    lower.includes("surface:mobile") &&
+    !lower.includes("no-device-needed") &&
+    !(issue && files.includes(sliceFlow))
+  ) {
     return refuse(
       "needs-human",
-      "the issue is surface:mobile without no-device-needed (no simulator on this machine)",
+      `the issue is surface:mobile with neither a slice flow (${sliceFlow}) nor no-device-needed`,
     );
   }
   if (lines > maxLines) {
@@ -227,7 +240,9 @@ export function riskClass({ description, labels, files, lines, maxLines = MAX_DI
       "the issue declares no write-scope, so the diff cannot be bounded",
     );
   }
-  const outside = files.filter((file) => !scope.some((glob) => matchesGlob(file, glob)));
+  const outside = files.filter(
+    (file) => !scope.some((glob) => matchesGlob(file, glob)) && !isCompanionPath(file, issue),
+  );
   if (outside.length > 0) {
     return refuse(
       "out-of-scope",
@@ -238,7 +253,7 @@ export function riskClass({ description, labels, files, lines, maxLines = MAX_DI
 }
 
 /** Added plus deleted lines of `git diff --numstat` output; a binary file counts as `binaryLines`. */
-export function diffLines(numstat, binaryLines = MAX_DIFF_LINES) {
+export function diffLines(numstat, binaryLines = BINARY_LINES) {
   let total = 0;
   for (const row of String(numstat ?? "").split("\n")) {
     const m = /^(\d+|-)\t(\d+|-)\t/.exec(row);

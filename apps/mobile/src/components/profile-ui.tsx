@@ -101,11 +101,13 @@ export function TextField({
 type ListNavigateRowProps = {
   title: string;
   meta?: string;
-  icon: IoniconName;
+  /** Leading icon: own Profil home rows only (docs/design-system.md List row); omit elsewhere. */
+  icon?: IoniconName;
   onPress: () => void;
+  testID?: string;
 };
 
-export function ListNavigateRow({ title, meta, icon, onPress }: ListNavigateRowProps) {
+export function ListNavigateRow({ title, meta, icon, onPress, testID }: ListNavigateRowProps) {
   const theme = useTheme();
   const typography = useTypography();
 
@@ -113,9 +115,12 @@ export function ListNavigateRow({ title, meta, icon, onPress }: ListNavigateRowP
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
+      testID={testID}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
-      <Ionicons name={icon} size={22} color={theme.contentPrimary} accessibilityElementsHidden />
+      {icon ? (
+        <Ionicons name={icon} size={22} color={theme.contentPrimary} accessibilityElementsHidden />
+      ) : null}
       <View style={styles.rowBody}>
         <Text style={[typography.body, { color: theme.contentPrimary }]}>{title}</Text>
         {meta ? <Text style={[typography.mono, { color: theme.contentMuted }]}>{meta}</Text> : null}
@@ -135,9 +140,16 @@ type ListDangerRowProps = {
   icon: IoniconName;
   onPress: () => void;
   showHairline?: boolean;
+  testID?: string;
 };
 
-export function ListDangerRow({ title, icon, onPress, showHairline = false }: ListDangerRowProps) {
+export function ListDangerRow({
+  title,
+  icon,
+  onPress,
+  showHairline = false,
+  testID,
+}: ListDangerRowProps) {
   const theme = useTheme();
   const typography = useTypography();
 
@@ -146,6 +158,7 @@ export function ListDangerRow({ title, icon, onPress, showHairline = false }: Li
       accessibilityRole="button"
       accessibilityLabel={title}
       onPress={onPress}
+      testID={testID}
       style={({ pressed }) => [
         styles.row,
         showHairline && {

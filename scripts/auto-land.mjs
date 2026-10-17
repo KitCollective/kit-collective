@@ -325,6 +325,7 @@ async function start() {
     labels: issueData.labels ?? [],
     files,
     lines,
+    issue,
   });
   if (risky) await refused(risky, head);
 

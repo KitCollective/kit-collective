@@ -71,7 +71,7 @@ function readVisionCase(body: unknown): VisionCase | undefined {
 }
 
 /**
- * Device-flow support (KIT-267): the reset of the two test Collectors. Answers
+ * Device-flow support (KIT-267): the reset of the test Collectors. Answers
  * 404 unless `E2E_TEST_DATA_TOKEN` switches it on, and always on a production
  * process.
  */

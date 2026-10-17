@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import type {
   CollectionDiscoverHome,
   CollectionDiscoverHomeClub,
@@ -7,7 +8,7 @@ import type {
   CollectionDiscoverTypeahead,
 } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -19,25 +20,36 @@ import {
   View,
 } from "react-native";
 import { fetchDiscoverHome, fetchDiscoverTypeahead } from "@/api/bidding";
-import { resolvePhotoUrl } from "@/api/collection";
 import { resolvePeerAvatarUrl } from "@/api/peer-profile";
 import { useAuth } from "@/auth/AuthProvider";
 import { Avatar } from "@/components/avatar";
-import { ListRow, Mark, SearchField } from "@/components/catalog-ui";
+import { ListRow } from "@/components/catalog-ui";
+import { Chip } from "@/components/chip";
 import { JerseyTile } from "@/components/jersey-tile";
 import { ScreenHeader } from "@/components/screen-header";
+import { SearchFieldDiscover } from "@/components/search-field-discover";
 import { tabBarContentInset } from "@/components/tab-bar-metrics";
-import { EmptyState } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { registerPlaceHome, useIsPlaceHomeLive } from "@/navigation/place-homes";
 import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
 import { PlacePagerScreen } from "@/navigation/place-pager-screen";
 import { usePlaceOverview } from "@/navigation/use-place-overview";
+import { OpenForBidScreen } from "@/search/open-for-bid-screen";
+import { searchTilePhotoSource } from "@/search/search-tile-photo";
+import { buildSearchHome } from "@/search/search-view-model";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useStableSafeAreaInsets } from "@/theme/use-stable-safe-area-insets";
 import { useTheme } from "@/theme/use-theme";
 
 export default function SearchScreen() {
+  const { shelf } = useLocalSearchParams<{ shelf?: string }>();
+  const insets = useStableSafeAreaInsets();
+
+  // Se alle on the Åbne for bud shelf: a pushed entry of this route, so back returns to the home.
+  if (shelf === "open-for-bid") {
+    return <OpenForBidScreen contentPaddingBottom={tabBarContentInset(insets.bottom)} />;
+  }
   return <PlacePagerScreen place="search" />;
 }
 
@@ -140,15 +152,8 @@ function SearchHome() {
     router.push(`/(tabs)/search/kit/${kitId}?label=${encodeURIComponent(label)}`);
   };
 
-  const photoSource = (jersey: CollectionDiscoverJersey) => {
-    const primaryPhoto = jersey.photos[0];
-    return primaryPhoto
-      ? {
-          uri: resolvePhotoUrl(primaryPhoto.photoUrl),
-          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-        }
-      : undefined;
-  };
+  const photoSource = (jersey: CollectionDiscoverJersey) =>
+    searchTilePhotoSource(jersey.photos[0] ?? null, accessToken);
 
   const renderJerseyTile = (jersey: CollectionDiscoverJersey, tileSize: number) => (
     <View key={jersey.id} style={{ width: tileSize }}>
@@ -162,17 +167,7 @@ function SearchHome() {
     </View>
   );
 
-  const clubs = home.clubs ?? [];
-  const nationalTeams = home.nationalTeams ?? [];
-  const openForBid = home.openForBid ?? [];
-  const collectors = home.collectors ?? [];
-  const moreJerseys = home.moreJerseys ?? [];
-  const magazineEmpty =
-    clubs.length === 0 &&
-    nationalTeams.length === 0 &&
-    openForBid.length === 0 &&
-    collectors.length === 0 &&
-    moreJerseys.length === 0;
+  const { shelves } = buildSearchHome(home);
   const searching = query.trim().length > 0;
   const typeaheadClubs = typeahead.clubs ?? [];
   const typeaheadNationalTeams = typeahead.nationalTeams ?? [];
@@ -192,11 +187,10 @@ function SearchHome() {
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <ScreenHeader title="Søg" />
       <View style={styles.searchWrapper}>
-        <SearchField
-          variant="collection"
+        <SearchFieldDiscover
           value={query}
           onChangeText={setQuery}
-          placeholder="Søg"
+          placeholder="Klub, spiller eller samler"
           accessibilityLabel="Søg"
           testID="search-input"
           onClear={() => setQuery("")}
@@ -316,7 +310,7 @@ function SearchHome() {
             ) : null}
           </ScrollView>
         )
-      ) : magazineEmpty ? (
+      ) : shelves.length === 0 ? (
         <EmptyState
           title="Ingen trøjer at browse"
           body="Når andre samlere gemmer synlige trøjer, vises de her."
@@ -325,114 +319,118 @@ function SearchHome() {
         <ScrollView
           contentContainerStyle={[styles.magazineContent, { paddingBottom: tabBarPadding }]}
         >
-          {clubs.length > 0 ? (
-            <View testID="magazine-shelf-clubs" style={styles.shelf}>
-              <Text style={[typography.section, { color: theme.contentPrimary }]}>Klubber</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.rail}
-              >
-                {clubs.map((club) => (
-                  <Pressable
-                    key={club.clubId}
-                    accessibilityRole="button"
-                    accessibilityLabel={club.clubLabel}
-                    onPress={() => openClubDrill(club)}
-                    style={styles.clubMark}
-                  >
-                    <Mark label={club.clubLabel} size="md" />
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          ) : null}
-          {nationalTeams.length > 0 ? (
-            <View testID="magazine-shelf-national-teams" style={styles.shelf}>
-              <Text style={[typography.section, { color: theme.contentPrimary }]}>Landshold</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.rail}
-              >
-                {nationalTeams.map((team) => (
-                  <Pressable
-                    key={team.nationalTeamId}
-                    accessibilityRole="button"
-                    accessibilityLabel={team.nationalTeamLabel}
-                    onPress={() => openNationalTeamDrill(team)}
-                    style={styles.clubMark}
-                  >
-                    <Mark label={team.nationalTeamLabel} size="md" />
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          ) : null}
-          {openForBid.length > 0 ? (
-            <View testID="magazine-shelf-open-for-bid" style={styles.shelf}>
-              <Text style={[typography.section, { color: theme.contentPrimary }]}>
-                Åbne for bud
-              </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.rail}
-              >
-                {openForBid.map((jersey) => renderJerseyTile(jersey, tileWidth))}
-              </ScrollView>
-            </View>
-          ) : null}
-          {collectors.length > 0 ? (
-            <View testID="magazine-shelf-collectors" style={styles.shelf}>
-              <Text style={[typography.section, { color: theme.contentPrimary }]}>Samlere</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.rail}
-              >
-                {collectors.map((collector) => {
-                  const avatarUri = resolvePeerAvatarUrl(collector.avatarUrl);
-                  return (
-                    <Pressable
-                      key={collector.handle}
-                      accessibilityRole="button"
-                      accessibilityLabel={collector.handle}
-                      onPress={() => openPeerProfile(collector)}
-                      style={styles.collector}
-                    >
-                      <Avatar
-                        handle={collector.handle}
-                        uri={avatarUri}
-                        uriHeaders={
-                          accessToken && avatarUri
-                            ? { Authorization: `Bearer ${accessToken}` }
-                            : undefined
-                        }
-                        size="md"
-                      />
-                      <Text
-                        style={[typography.headingSm, { color: theme.contentPrimary }]}
-                        numberOfLines={1}
-                      >
-                        {collector.handle}
+          {shelves.map((shelf) => {
+            switch (shelf.kind) {
+              case "open-for-bid":
+                return (
+                  <View key={shelf.kind} testID="magazine-shelf-open-for-bid" style={styles.shelf}>
+                    <View style={styles.shelfHeading}>
+                      <Text style={[typography.section, { color: theme.contentPrimary }]}>
+                        Åbne for bud
                       </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          ) : null}
-          {moreJerseys.length > 0 ? (
-            <View testID="magazine-shelf-more-jerseys" style={styles.shelf}>
-              <Text style={[typography.section, { color: theme.contentPrimary }]}>
-                Flere trøjer
-              </Text>
-              <View style={styles.grid}>
-                {moreJerseys.map((jersey) => renderJerseyTile(jersey, tileWidth))}
-              </View>
-            </View>
-          ) : null}
+                      <Button
+                        label="Se alle"
+                        variant="tertiary"
+                        onPress={() => router.push(shelf.seeAllHref)}
+                      />
+                    </View>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.rail}
+                    >
+                      {shelf.tiles.map((tile) => (
+                        <View key={tile.id} style={styles.shelfTile}>
+                          <JerseyTile
+                            photoSource={searchTilePhotoSource(tile.photo, accessToken)}
+                            clubLabel={tile.clubLabel}
+                            seasonLabel={tile.seasonLabel}
+                            typeLabel={tile.typeLabel}
+                            caption={tile.caption}
+                            onPress={() => router.push(tile.href)}
+                            testID={`jersey-tile-${tile.id}`}
+                          />
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </View>
+                );
+              case "sides":
+                return (
+                  <View key={shelf.kind} testID="magazine-shelf-sides" style={styles.shelf}>
+                    <Text style={[typography.section, { color: theme.contentPrimary }]}>
+                      Klubber og landshold
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.chipRail}
+                    >
+                      {shelf.chips.map((chip) => (
+                        <Chip
+                          key={chip.key}
+                          label={chip.label}
+                          onPress={() => router.push(chip.href)}
+                        />
+                      ))}
+                    </ScrollView>
+                  </View>
+                );
+              case "collectors":
+                return (
+                  <View key={shelf.kind} testID="magazine-shelf-collectors" style={styles.shelf}>
+                    <Text style={[typography.section, { color: theme.contentPrimary }]}>
+                      Samlere
+                    </Text>
+                    {shelf.rows.map((row) => {
+                      const avatarUri = resolvePeerAvatarUrl(row.avatarUrl);
+                      return (
+                        <Pressable
+                          key={row.handle}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${row.handle}, ${row.caption}`}
+                          onPress={() => router.push(row.href)}
+                          style={({ pressed }) => [styles.collectorRow, pressed && styles.pressed]}
+                        >
+                          <Avatar
+                            handle={row.handle}
+                            uri={avatarUri}
+                            uriHeaders={
+                              accessToken && avatarUri
+                                ? { Authorization: `Bearer ${accessToken}` }
+                                : undefined
+                            }
+                            size="md"
+                          />
+                          <View style={styles.collectorText}>
+                            <Text
+                              style={[typography.headingSm, { color: theme.contentPrimary }]}
+                              numberOfLines={1}
+                            >
+                              {row.handle}
+                            </Text>
+                            <Text
+                              style={[typography.caption, { color: theme.contentSecondary }]}
+                              numberOfLines={1}
+                            >
+                              {row.caption}
+                            </Text>
+                          </View>
+                          <Ionicons
+                            name="chevron-forward"
+                            size={18}
+                            color={theme.contentMuted}
+                            accessibilityElementsHidden
+                          />
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                );
+              default:
+                return null;
+            }
+          })}
         </ScrollView>
       )}
     </View>
@@ -465,11 +463,29 @@ const styles = StyleSheet.create({
     gap: space.gapMd,
     paddingRight: space.insetMd,
   },
-  clubMark: {
-    minWidth: 44,
-    minHeight: 44,
+  shelfHeading: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
+  },
+  shelfTile: {
+    width: 148,
+  },
+  chipRail: {
+    gap: space.gapSm,
+    paddingRight: space.insetMd,
+  },
+  collectorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.gapMd,
+    minHeight: 56,
+  },
+  collectorText: {
+    flex: 1,
+  },
+  pressed: {
+    opacity: 0.9,
   },
   collector: {
     alignItems: "center",

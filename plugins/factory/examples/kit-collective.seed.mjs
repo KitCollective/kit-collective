@@ -62,13 +62,10 @@ const agents = [
   },
 ];
 
-/** KitCollective's board: the Linear names the plugin reads all come from here. */
+/** KitCollective's board: its operating settings. The workflow, state and label of each Loop come from the `loops` block of factory.config.json. */
 export const boardSetup = {
   projectId: PROJECT,
   teamKey: "KIT",
-  workflow: "afk-developer",
-  dispatchState: "To-do",
-  readyLabel: "ready-for-agent",
   backlogState: "Backlog",
   activeStates: ["In Progress", "In Review"],
   blockedState: "Blocked",

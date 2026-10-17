@@ -1,6 +1,6 @@
 import type { CollectionActivityItem, CollectionConversation } from "@kit/api-contract";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, useWindowDimensions, View } from "react-native";
 import { fetchActivity } from "@/api/activity";
 import { fetchConversations } from "@/api/conversations";
@@ -13,6 +13,8 @@ import { formatThreadTime, ThreadRow } from "@/components/thread-row";
 import { TopTabs } from "@/components/top-tabs";
 import { EmptyState } from "@/components/ui";
 import { useInboxChrome } from "@/inbox/inbox-chrome";
+import { filterInboxByJersey } from "@/inbox/inbox-jersey-filter";
+import { InboxJerseyFilterChip } from "@/inbox/inbox-jersey-filter-chip";
 import { InboxInnerPager } from "@/navigation/inbox-inner-pager";
 import { registerPlaceHome, useIsPlaceHomeLive } from "@/navigation/place-homes";
 import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
@@ -35,9 +37,11 @@ function InboxHome() {
   const { accessToken } = useAuth();
   const theme = useTheme();
   const router = useRouter();
+  const { jerseyId: routeJerseyId } = useLocalSearchParams<{ jerseyId?: string }>();
   const insets = useStableSafeAreaInsets();
   const { setConversationVisible, refreshUnreadCount } = useInboxChrome();
   const swipe = usePlaceSwipe();
+  const { setInboxTab } = swipe;
   const reduceMotion = useReduceMotion();
   const { width } = useWindowDimensions();
   const isWide = width >= WIDE_BREAKPOINT;
@@ -52,6 +56,10 @@ function InboxHome() {
     cachedInbox?.activityItems ?? [],
   );
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  // The jersey this Indbakke is filtered to (the own jersey detail's bid row). PlacePager also
+  // renders this home as a neighbour page, so only the live copy reads the route param; it keeps
+  // the value while blurred (a thread on top of Indbakke must not flash the unfiltered lists).
+  const [jerseyFilterId, setJerseyFilterId] = useState<string | null>(null);
   const activeTab = swipe.inboxTab;
   const swipeInnerTabs = !isWide && !reduceMotion;
 
@@ -102,6 +110,16 @@ function InboxHome() {
     if (!isLive) {
       return;
     }
+    setJerseyFilterId(routeJerseyId ?? null);
+    if (routeJerseyId) {
+      setInboxTab("Aktivitet");
+    }
+  }, [isLive, routeJerseyId, setInboxTab]);
+
+  useEffect(() => {
+    if (!isLive) {
+      return;
+    }
     void loadInbox();
   }, [isLive, loadInbox]);
 
@@ -145,15 +163,25 @@ function InboxHome() {
     swipe.setInboxTab(tab);
   };
 
+  const filtered = useMemo(
+    () => filterInboxByJersey(conversations, activityItems, jerseyFilterId),
+    [conversations, activityItems, jerseyFilterId],
+  );
+  const filterActive = jerseyFilterId !== null;
+
   const messagesList =
-    conversations.length === 0 ? (
+    filtered.conversations.length === 0 ? (
       <EmptyState
-        title="Ingen beskeder endnu"
-        body="Når en anden samler byder på en af dine trøjer, starter samtalen her."
+        title={filterActive ? "Ingen beskeder om trøjen" : "Ingen beskeder endnu"}
+        body={
+          filterActive
+            ? "Der er ingen samtaler om denne trøje lige nu."
+            : "Når en anden samler byder på en af dine trøjer, starter samtalen her."
+        }
       />
     ) : (
       <FlatList
-        data={conversations}
+        data={filtered.conversations}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View
@@ -183,14 +211,18 @@ function InboxHome() {
     );
 
   const activityList =
-    activityItems.length === 0 ? (
+    filtered.activityItems.length === 0 ? (
       <EmptyState
-        title="Ingen aktivitet endnu"
-        body="Bud og svar vises her, når samtaler kommer i gang."
+        title={filterActive ? "Ingen aktivitet om trøjen" : "Ingen aktivitet endnu"}
+        body={
+          filterActive
+            ? "Der er ingen bud eller svar om denne trøje lige nu."
+            : "Bud og svar vises her, når samtaler kommer i gang."
+        }
       />
     ) : (
       <FlatList
-        data={activityItems}
+        data={filtered.activityItems}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingBottom: tabBarPadding }}
         renderItem={({ item }) => (
@@ -203,6 +235,12 @@ function InboxHome() {
     <>
       <ScreenHeader title="Indbakke" />
       <TopTabs items={INBOX_TABS} active={activeTab} onChange={selectTab} />
+      {filterActive ? (
+        <InboxJerseyFilterChip
+          kitLine={filtered.kitLine}
+          onClear={() => router.setParams({ jerseyId: undefined })}
+        />
+      ) : null}
     </>
   );
 

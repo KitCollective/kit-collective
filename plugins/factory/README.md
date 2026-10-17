@@ -28,16 +28,32 @@ Everything is set up on the **Agents** page in the bb sidebar.
 
 ## The board
 
-The Board view is the orchestrator's scheduler. In `live` mode, every minute, it
-reads a Linear team's issues and starts the configured workflow for what is
-unblocked, in focus-milestone and priority order, within each machine's
-capacity and without write-scope overlap. A run that stops at a gate is
-reported to the orchestrator agent's thread, which resumes it or parks it.
+The Board view is the orchestrator's scheduler. Every minute it reads the
+**Loop registry**, then a Linear team's issues, and starts each Loop's workflow
+for what its trigger matches, in focus-milestone and priority order, within
+each machine's capacity and without write-scope overlap. A run that stops at a
+gate is reported to the orchestrator agent's thread, which resumes it or parks
+it.
 
-The Linear states and the ready label the board reads (dispatch, backlog,
-active and blocked states) are set when the board is set up; they have no
-default. Mode, focus milestone, machines, capacity and routing rules are form
-fields on the page. A new board starts in `dry-run`: it shows the plan and starts nothing.
+The Loop registry is the `loops` block of `factory.config.json` in the
+project's checkout, read through `bb.sdk.projects.fileContent` on every tick,
+so an edit is picked up at the next tick without a reload. Each Loop has a
+name, a trigger, the workflow it runs, the machines it may use and a live-run
+cap. An `issue` trigger names the state a ready issue waits in, the label that
+marks it ready, whether a blocker holds it, the labels that skip it and the
+priority order. A `milestone-done` trigger (every issue of a milestone in a
+finished state) is defined and must stay `enabled: false`. A registry that does
+not parse is refused: nothing is planned, started or moved, the page and
+`bb optio board` say why, and the refusal is written to the record of runs.
+`flow.maxRunsPerDay` in the same file caps how often one issue is started in 24
+hours.
+
+The page keeps the operating settings: the backlog, active and blocked states,
+mode, focus milestone, machines, capacity and routing rules. They are form
+fields. A new board starts in `dry-run`: it reads the registry, shows the plan,
+records what it would do and starts nothing. The page's "Record of runs" lists
+every start, skip and refusal with its reason; a wait is written again only
+when its reason changes.
 
 ## Install
 
@@ -53,9 +69,9 @@ Then, under Settings → Installed plugins → Optio, set the Linear API key
 (or the path of a dotenv file with `LINEAR_API_KEY`) if you use the board.
 
 The seed under `examples/` creates three agents and a board through the
-plugin's RPC; read it as an example of the shapes. It is the only place that
-names one product's team key, workflow, labels and states: the plugin reads
-them from the board's configuration.
+plugin's RPC; read it as an example of the shapes. It is the only place in the
+plugin that names one product's team key, labels and states: the plugin reads
+them from the board's configuration and the project's Loop registry.
 
 ## Triggering an agent from another system
 
@@ -87,6 +103,10 @@ own tunnel to that one path.
 | `src/dispatch-store.ts` | The ledger of workflow runs the board started. |
 | `src/linear-triggers.ts` | The poller that turns Linear changes into agent sessions. |
 | `src/linear.ts` | Linear webhook signature check. |
+| `host.ts` | The host bundle, run on each enrolled machine: runs the fixed probe script in a worktree. |
+| `src/host-contract.ts`, `src/host-run.ts` | The host bundle's RPC contract and its script runner. |
+| `src/host-probe.ts` | Thread id to worktree and machine, then the host bundle's probe (`bb optio host-probe <thread>`, the `optio_host_probe` agent tool). A spike. |
+| `scripts/host-probe.mjs` | The fixed, read-only script the probe runs. |
 | `src/product-neutral.test.ts` | Fails when plugin code outside `examples/` names one product's values. |
 
 `src/dispatch.test.ts` tests `src/sessions.ts` and `src/agent-store.ts`; the

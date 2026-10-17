@@ -1,13 +1,18 @@
 // One tick of the orchestrator: close runs that ended, plan the board, start
 // what fits, and hand every stall to the orchestrator thread.
 import { type BoardSummary, type Plan, planBoard, summarizeBoard } from "./board.js";
-import type { Dispatch, DispatchStore } from "./dispatch-store.js";
+import type { Decision, Dispatch, DispatchStore } from "./dispatch-store.js";
 import type { Board, BoardIssue } from "./linear-api.js";
+import { type IssueLoop, issueLoops, parseRegistry, type Registry } from "./loop-registry.js";
 import { machineEnvironment, type SchedulerConfig } from "./scheduler-config.js";
 import type { SpawnRequest } from "./sessions.js";
 
+const DAY_MS = 24 * 3600_000;
+
 export interface SchedulerDeps {
   store: DispatchStore;
+  /** The text of `factory.config.json` in the project checkout. Read on every tick. */
+  loadRegistry(config: SchedulerConfig): Promise<string>;
   loadBoard(config: SchedulerConfig): Promise<Board>;
   moveIssue(issueId: string, stateId: string): Promise<void>;
   spawn(request: SpawnRequest): Promise<{ id: string }>;
@@ -18,8 +23,8 @@ export interface SchedulerDeps {
   /** Sends a message to the standing orchestrator thread. */
   notify(text: string): Promise<void>;
   getFocus(): Promise<string | null>;
-  /** Moves a backlog issue to the dispatch state with the ready label and a comment. */
-  promoteIssue(issue: BoardIssue, stateId: string, comment: string): Promise<void>;
+  /** Moves a backlog issue to the Loop's state with its ready label and a comment. */
+  promoteIssue(issue: BoardIssue, stateId: string, comment: string, label: string): Promise<void>;
   /** When the orchestrator was last asked to refill the queue (epoch ms), or null. */
   getLastRefill(): Promise<number | null>;
   setLastRefill(at: number): Promise<void>;
@@ -35,12 +40,18 @@ export interface TickResult {
   unblocked: string[];
   /** Whether this tick asked the orchestrator to promote from the backlog. */
   refillRequested: boolean;
+  /** Why the registry was refused: nothing was planned or started. Null when it was read. */
+  refusal: string | null;
+  /** The registry this tick planned from; null when it was refused. */
+  registry: Registry | null;
+  /** What the tick wrote to the record of runs, empty when it recorded nothing. */
+  recorded: Decision[];
 }
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
 function launcherPrompt(
-  config: SchedulerConfig,
+  workflow: string,
   issue: string,
   machineId: string,
   resume: boolean,
@@ -49,7 +60,7 @@ function launcherPrompt(
   return [
     `You are the launcher for ${issue}. Run this one command in the workspace root, in the foreground, exactly as written:`,
     "",
-    `    bb workflows run --name ${config.workflow} --args ${shellQuote(args)} --json`,
+    `    bb workflows run --name ${workflow} --args ${shellQuote(args)} --json`,
     "",
     "Do not change the command and do not run anything else.",
     "Reply with the run id the command printed, or with its error output verbatim.",
@@ -59,17 +70,60 @@ function launcherPrompt(
 export function createScheduler(deps: SchedulerDeps) {
   const { store } = deps;
 
-  async function start(config: SchedulerConfig, issue: string, machineId: string, resume: boolean) {
+  /** Reads and validates the registry; a file that cannot be read is a refusal too. */
+  async function readRegistry(
+    config: SchedulerConfig,
+  ): Promise<{ ok: true; registry: Registry } | { ok: false; error: string }> {
+    let text: string;
+    try {
+      text = await deps.loadRegistry(config);
+    } catch (error) {
+      return {
+        ok: false,
+        error: `could not read factory.config.json: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+    return parseRegistry(text);
+  }
+
+  const emptyPlan = (focus: string | null): Plan => ({
+    focus,
+    running: [],
+    start: [],
+    waiting: [],
+    unblock: [],
+    ready: 0,
+    room: 0,
+    promotable: [],
+  });
+
+  const planFor = async (config: SchedulerConfig, board: Board, registry: Registry) =>
+    planBoard({
+      issues: board.issues,
+      config,
+      registry,
+      focus: await deps.getFocus(),
+      history: store.history(),
+      recentStarts: store.startsSince(deps.now() - DAY_MS),
+    });
+
+  async function start(
+    config: SchedulerConfig,
+    loop: { name: string; workflow: string },
+    issue: string,
+    machineId: string,
+    resume: boolean,
+  ) {
     const machine = config.machines.find((candidate) => candidate.id === machineId);
     if (machine === undefined) throw new Error(`no machine "${machineId}"`);
-    const dispatch = store.start({ issue, machineId, resume, now: deps.now() });
+    const dispatch = store.start({ issue, loop: loop.name, machineId, resume, now: deps.now() });
     try {
       const thread = await deps.spawn({
         projectId: config.projectId,
-        prompt: launcherPrompt(config, issue, machineId, resume),
+        prompt: launcherPrompt(loop.workflow, issue, machineId, resume),
         title: `${issue} on ${machineId}${resume ? " (resume)" : ""}`,
         environment: machineEnvironment(machine),
-        pluginMetadata: { dispatch: dispatch.id, issue, machine: machineId },
+        pluginMetadata: { dispatch: dispatch.id, issue, machine: machineId, loop: loop.name },
       });
       store.attach(dispatch.id, thread.id);
       deps.log(`scheduler: started ${issue} on ${machineId} in ${thread.id}`);
@@ -83,8 +137,15 @@ export function createScheduler(deps: SchedulerDeps) {
   }
 
   /** Ends every active run whose workflow and launcher thread have both stopped. */
-  async function reconcile(config: SchedulerConfig, board: Board): Promise<Dispatch[]> {
+  async function reconcile(
+    config: SchedulerConfig,
+    registry: Registry,
+    board: Board,
+  ): Promise<Dispatch[]> {
     const stalled: Dispatch[] = [];
+    const dispatchStates = registry.loops.flatMap((loop) =>
+      loop.trigger.kind === "issue" ? [loop.trigger.state] : [],
+    );
     for (const dispatch of store.active()) {
       if (deps.now() - dispatch.startedAt < config.startGraceSeconds * 1000) continue;
       let last: string | null = "the launcher thread never started";
@@ -98,7 +159,7 @@ export function createScheduler(deps: SchedulerDeps) {
       const issue = board.issues.find((candidate) => candidate.identifier === dispatch.issue);
       const working =
         issue !== undefined &&
-        (issue.state === config.dispatchState || config.activeStates.includes(issue.state));
+        (dispatchStates.includes(issue.state) || config.activeStates.includes(issue.state));
       if (!working) {
         store.end(dispatch.id, "handed-over", issue?.state ?? "closed", deps.now());
         continue;
@@ -140,45 +201,104 @@ export function createScheduler(deps: SchedulerDeps) {
 
   return {
     /**
-     * Plans the board. With `apply`, also closes ended runs, moves unblocked
-     * issues back to the dispatch state, starts the planned runs and reports
-     * stalls; without it nothing is written anywhere.
+     * Plans the board from the registry in the project checkout, which it
+     * reads first: a registry that does not parse is refused and nothing is
+     * planned, started or moved. With `apply`, also closes ended runs, moves
+     * unblocked issues back to the dispatch state, starts the planned runs and
+     * reports stalls. With `record` (the default when applying), every start,
+     * skip and refusal is written to the record of runs. Without both, nothing
+     * is written anywhere.
      */
-    async tick(config: SchedulerConfig, apply: boolean): Promise<TickResult> {
+    async tick(config: SchedulerConfig, apply: boolean, record = apply): Promise<TickResult> {
+      const mode = apply ? "live" : "dry-run";
+      const read = await readRegistry(config);
+      if (!read.ok) {
+        deps.log(`scheduler: registry refused: ${read.error}`);
+        return {
+          plan: emptyPlan(await deps.getFocus()),
+          summary: { states: {}, milestones: {} },
+          started: [],
+          stalled: [],
+          unblocked: [],
+          refillRequested: false,
+          refusal: read.error,
+          registry: null,
+          recorded: record
+            ? store.record(deps.now(), mode, [
+                { loop: null, issue: null, kind: "refusal", reason: read.error },
+              ])
+            : [],
+        };
+      }
+      const { registry } = read;
       const board = await deps.loadBoard(config);
-      const stalled = apply ? await reconcile(config, board) : [];
-      const plan = planBoard({
-        issues: board.issues,
-        config,
-        focus: await deps.getFocus(),
-        history: store.history(),
-      });
+      const stalled = apply ? await reconcile(config, registry, board) : [];
+      const plan = await planFor(config, board, registry);
       const result: TickResult = {
         plan,
-        summary: summarizeBoard(board.issues, config),
+        summary: summarizeBoard(board.issues, registry),
         started: [],
         stalled,
         unblocked: [],
         refillRequested: false,
+        refusal: null,
+        registry,
+        recorded: [],
       };
-      if (!apply) return result;
+      const decisions: Parameters<DispatchStore["record"]>[2] = plan.waiting.map((waiting) => ({
+        loop: waiting.loop,
+        issue: waiting.identifier,
+        kind: "skip",
+        reason: waiting.reason,
+      }));
+      if (!apply) {
+        if (record) {
+          decisions.push(
+            ...plan.start.map((planned) => ({
+              loop: planned.loop,
+              issue: planned.issue.identifier,
+              kind: "start" as const,
+              reason: `would start on ${planned.machineId}${planned.resume ? " (resume)" : ""}`,
+            })),
+          );
+          result.recorded = store.record(deps.now(), mode, decisions);
+        }
+        return result;
+      }
 
-      const dispatchStateId = board.states[config.dispatchState];
+      const unblockLoop = issueLoops(registry)[0];
+      const dispatchStateId =
+        unblockLoop === undefined ? undefined : board.states[unblockLoop.trigger.state];
       for (const issue of plan.unblock) {
-        if (dispatchStateId === undefined) break;
+        if (unblockLoop === undefined || dispatchStateId === undefined) break;
         await deps.moveIssue(issue.id, dispatchStateId);
         result.unblocked.push(issue.identifier);
-        deps.log(`scheduler: ${issue.identifier} is unblocked, moved to ${config.dispatchState}`);
+        deps.log(
+          `scheduler: ${issue.identifier} is unblocked, moved to ${unblockLoop.trigger.state}`,
+        );
       }
       for (const planned of plan.start) {
+        const loop = registry.loops.find((candidate) => candidate.name === planned.loop);
+        if (loop === undefined) continue;
         const dispatch = await start(
           config,
+          loop,
           planned.issue.identifier,
           planned.machineId,
           planned.resume,
         );
-        (dispatch.status === "stalled" ? result.stalled : result.started).push(dispatch);
+        const failed = dispatch.status === "stalled";
+        (failed ? result.stalled : result.started).push(dispatch);
+        decisions.push({
+          loop: loop.name,
+          issue: planned.issue.identifier,
+          kind: failed ? "skip" : "start",
+          reason: failed
+            ? (dispatch.outcome ?? "could not start")
+            : `started on ${planned.machineId}${planned.resume ? " (resume)" : ""}`,
+        });
       }
+      if (record) result.recorded = store.record(deps.now(), mode, decisions);
       for (const dispatch of result.stalled) {
         await deps.notify(stallMessage(config, dispatch)).catch((error: unknown) => {
           deps.log(
@@ -203,22 +323,22 @@ export function createScheduler(deps: SchedulerDeps) {
     },
 
     /**
-     * Promotes one backlog issue to the dispatch state with the ready label.
-     * The orchestrator chooses the issue; this enforces what may be promoted
-     * and that the queue never grows past what the machines can take.
+     * Promotes one backlog issue to the first enabled issue Loop's state with
+     * its ready label. The orchestrator chooses the issue; this enforces what
+     * may be promoted and that the queue never grows past what the machines
+     * can take.
      */
     async promote(
       config: SchedulerConfig,
       identifier: string,
       reason: string,
-    ): Promise<BoardIssue> {
+    ): Promise<{ issue: BoardIssue; state: string }> {
+      const read = await readRegistry(config);
+      if (!read.ok) throw new Error(`the registry is refused: ${read.error}`);
+      const loop: IssueLoop | undefined = issueLoops(read.registry)[0];
+      if (loop === undefined) throw new Error("no enabled Loop starts from an issue");
       const board = await deps.loadBoard(config);
-      const plan = planBoard({
-        issues: board.issues,
-        config,
-        focus: await deps.getFocus(),
-        history: store.history(),
-      });
+      const plan = await planFor(config, board, read.registry);
       const issue = board.issues.find((candidate) => candidate.identifier === identifier);
       if (issue === undefined)
         throw new Error(`${identifier} is not an open issue of team ${config.teamKey}`);
@@ -229,23 +349,24 @@ export function createScheduler(deps: SchedulerDeps) {
       }
       if (issue.blockedBy.length > 0)
         throw new Error(`${identifier} is blocked by ${issue.blockedBy.join(", ")}`);
-      const skip = config.skipLabels.find((label) => issue.labels.includes(label));
+      const skip = loop.trigger.skipLabels.find((label) => issue.labels.includes(label));
       if (skip !== undefined) throw new Error(`${identifier} is labelled ${skip}`);
       if (plan.room === 0) {
         throw new Error(
           `the queue is full: ${plan.running.length} running and ${plan.ready} ready against the machines' capacity. Promote when something finishes`,
         );
       }
-      const stateId = board.states[config.dispatchState];
-      if (stateId === undefined)
-        throw new Error(`team ${config.teamKey} has no state "${config.dispatchState}"`);
+      const { state, label } = loop.trigger;
+      const stateId = board.states[state];
+      if (stateId === undefined) throw new Error(`team ${config.teamKey} has no state "${state}"`);
       await deps.promoteIssue(
         issue,
         stateId,
-        `Orchestrator: promoted from ${config.backlogState} to ${config.dispatchState} with ${config.readyLabel}.\n\nWhy now: ${reason}`,
+        `Orchestrator: promoted from ${config.backlogState} to ${state} with ${label}.\n\nWhy now: ${reason}`,
+        label,
       );
       deps.log(`scheduler: promoted ${identifier}: ${reason}`);
-      return issue;
+      return { issue, state };
     },
 
     /** Restarts a stalled issue with `resume`, within the attempt cap and the machine's capacity. */
@@ -260,13 +381,21 @@ export function createScheduler(deps: SchedulerDeps) {
           `${issue} reached the cap of ${config.maxAttempts} attempts: park it for a person, then release it`,
         );
       }
+      const read = await readRegistry(config);
+      if (!read.ok) throw new Error(`the registry is refused: ${read.error}`);
+      const loop =
+        read.registry.loops.find((candidate) => candidate.name === latest.loop) ??
+        issueLoops(read.registry)[0];
+      if (loop === undefined) throw new Error("no enabled Loop starts from an issue");
       const target = machineId ?? latest.machineId;
       const machine = config.machines.find((candidate) => candidate.id === target);
       if (machine === undefined) throw new Error(`no machine "${target}"`);
+      if (!loop.machines.includes(target))
+        throw new Error(`Loop "${loop.name}" may not use machine "${target}"`);
       const busy = store.active().filter((dispatch) => dispatch.machineId === target).length;
       if (busy >= machine.cap)
         throw new Error(`no free slot on ${target} (${busy} of ${machine.cap} in use)`);
-      const dispatch = await start(config, issue, target, true);
+      const dispatch = await start(config, loop, issue, target, true);
       if (dispatch.status === "stalled") throw new Error(dispatch.outcome ?? "could not start");
       return dispatch;
     },

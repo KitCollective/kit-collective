@@ -20,7 +20,9 @@ import { z } from "zod";
 import { AGENT_MIGRATIONS, type Agent, createAgentStore } from "./src/agent-store.js";
 import type { BoardSummary, Plan } from "./src/board.js";
 import { type BoardDto, CHANGED, rpcContract } from "./src/contract.js";
-import { createDispatchStore, DISPATCH_MIGRATIONS } from "./src/dispatch-store.js";
+import { createDispatchStore, DISPATCH_MIGRATIONS, LOOP_MIGRATIONS } from "./src/dispatch-store.js";
+import { hostContract } from "./src/host-contract.js";
+import { type ProbeDeps, probeThread, renderProbe } from "./src/host-probe.js";
 import { verifyLinearWebhook } from "./src/linear.js";
 import {
   fetchBoard,
@@ -75,9 +77,15 @@ function describeRun(run: Run): string {
     .trimEnd();
 }
 
-function describePlan(plan: Plan, summary: BoardSummary, mode: string): string {
+function describePlan(
+  plan: Plan,
+  summary: BoardSummary,
+  mode: string,
+  loops: { name: string; workflow: string; enabled: boolean; maxLive: number }[],
+): string {
   const lines = [
     `Mode: ${mode}. Focus: ${plan.focus ?? "none"}.`,
+    `Loops: ${loops.map((loop) => `${loop.name} (${loop.workflow}, ${loop.enabled ? `up to ${loop.maxLive} live` : "disabled"})`).join("; ")}.`,
     `Open issues: ${
       Object.entries(summary.states)
         .map(([state, count]) => `${state} ${count}`)
@@ -96,18 +104,21 @@ function describePlan(plan: Plan, summary: BoardSummary, mode: string): string {
   );
   section(
     "Running",
-    plan.running.map((run) => `${run.identifier}  on ${run.machineId}`),
+    plan.running.map(
+      (run) =>
+        `${run.identifier}  on ${run.machineId}${run.loop === null ? "" : `  [${run.loop}]`}`,
+    ),
   );
   section(
     mode === "live" ? "Starting now" : "Would start",
     plan.start.map(
-      ({ issue, machineId, resume }) =>
-        `${issue.identifier}  on ${machineId}${resume ? " (resume)" : ""}  P${issue.priority}  ${issue.milestone ?? "no milestone"}  ${issue.title}`,
+      ({ issue, loop, machineId, resume }) =>
+        `${issue.identifier}  [${loop}]  on ${machineId}${resume ? " (resume)" : ""}  P${issue.priority}  ${issue.milestone ?? "no milestone"}  ${issue.title}`,
     ),
   );
   section(
     "Waiting",
-    plan.waiting.map((wait) => `${wait.identifier}  ${wait.reason}`),
+    plan.waiting.map((wait) => `${wait.identifier}  [${wait.loop}]  ${wait.reason}`),
   );
   section(
     "Unblocked, moving back",
@@ -146,7 +157,12 @@ export default async function plugin(bb: BbPluginApi) {
   });
 
   const db = bb.storage.database();
-  bb.storage.migrate(db, [...MIGRATIONS, ...DISPATCH_MIGRATIONS, ...AGENT_MIGRATIONS]);
+  bb.storage.migrate(db, [
+    ...MIGRATIONS,
+    ...DISPATCH_MIGRATIONS,
+    ...AGENT_MIGRATIONS,
+    ...LOOP_MIGRATIONS,
+  ]);
   const runs = createRunStore(db);
   const dispatches = createDispatchStore(db);
   const agents = createAgentStore(db);
@@ -177,6 +193,39 @@ export default async function plugin(bb: BbPluginApi) {
       skills: ["optio"],
       ...(agent === null ? {} : { instructions: sessionInstructions(agent) }),
     };
+  });
+
+  // The host bundle (host.ts) runs scripts on the machine a thread's worktree is on.
+  // This spike only proves the path: thread -> environment -> machine -> script in the worktree.
+  const hostClient = bb.hosts.experimental_client({ contract: hostContract });
+  const probeDeps: ProbeDeps = {
+    async threadEnvironment(threadId) {
+      const thread = await bb.sdk.threads.get({ threadId });
+      return thread.environmentId;
+    },
+    async environment(environmentId) {
+      const environment = await bb.sdk.environments.get({ environmentId });
+      return { hostId: environment.hostId, path: environment.path };
+    },
+    runProbe: (hostId, cwd) => hostClient.call("run_probe", { cwd }, { hostId, timeoutMs: 90_000 }),
+  };
+
+  bb.agents.registerTool({
+    name: "optio_host_probe",
+    description:
+      "Spike: run a fixed, read-only repo script in a thread's worktree on that thread's machine, through Optio's host bundle. Returns the exit code and the last output line.",
+    parameters: z.object({
+      threadId: z.string().min(1).optional().describe("Defaults to the calling thread"),
+    }),
+    async execute(params, ctx) {
+      try {
+        const record = await probeThread(probeDeps, params.threadId ?? ctx.threadId);
+        return { content: [{ type: "text", text: JSON.stringify(record) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { content: [{ type: "text", text: message }], isError: true };
+      }
+    },
   });
 
   // The composer integration: `@` lists the agents, and a picked agent's brief
@@ -270,6 +319,15 @@ export default async function plugin(bb: BbPluginApi) {
   let schedulerConfig: SchedulerConfig | null = null;
   const scheduler = createScheduler({
     store: dispatches,
+    async loadRegistry(config) {
+      const file = await bb.sdk.projects.fileContent({
+        projectId: config.projectId,
+        path: "factory.config.json",
+      });
+      return file.contentEncoding === "base64"
+        ? Buffer.from(file.content, "base64").toString("utf8")
+        : file.content;
+    },
     loadBoard: async (config) => fetchBoard(await linearApiKey(), config.teamKey),
     moveIssue: async (issueId, stateId) => moveIssue(await linearApiKey(), issueId, stateId),
     spawn: spawnThread,
@@ -310,13 +368,13 @@ export default async function plugin(bb: BbPluginApi) {
       });
     },
     getFocus: async () => (await bb.storage.kv.get<string>("focus")) ?? null,
-    async promoteIssue(issue, stateId, comment) {
+    async promoteIssue(issue, stateId, comment, label) {
       if (schedulerConfig === null) throw new Error("the board is not loaded");
       await promoteIssue(await linearApiKey(), {
         issueId: issue.id,
         stateId,
         teamKey: schedulerConfig.teamKey,
-        label: schedulerConfig.readyLabel,
+        label,
         comment,
       });
     },
@@ -331,14 +389,17 @@ export default async function plugin(bb: BbPluginApi) {
   async function liveTick(): Promise<void> {
     if (ticking || (await settings.get()).paused) return;
     const config = await storedScheduler();
-    if (config === null || config.mode !== "live") return;
+    if (config === null || config.mode === "off") return;
     ticking = true;
     try {
       schedulerConfig = config;
-      const result = await scheduler.tick(config, true);
+      // Dry-run reads the registry and plans like live, applies nothing, and
+      // records what it would do.
+      const result = await scheduler.tick(config, config.mode === "live", true);
       if (
         result.started.length + result.stalled.length + result.unblocked.length > 0 ||
-        result.refillRequested
+        result.refillRequested ||
+        result.recorded.length > 0
       ) {
         changed();
       }
@@ -486,7 +547,9 @@ export default async function plugin(bb: BbPluginApi) {
       focus: (await bb.storage.kv.get<string>("focus")) ?? null,
       projectId: "",
       teamKey: "",
-      workflow: "",
+      registryError: null,
+      loops: [],
+      decisions: [],
       maxAttempts: 2,
       autoPromote: false,
       room: 0,
@@ -513,7 +576,7 @@ export default async function plugin(bb: BbPluginApi) {
       mode: config.mode,
       projectId: config.projectId,
       teamKey: config.teamKey,
-      workflow: config.workflow,
+      decisions: dispatches.decisions(20),
       maxAttempts: config.maxAttempts,
       autoPromote: config.autoPromote,
       machines: config.machines,
@@ -531,16 +594,27 @@ export default async function plugin(bb: BbPluginApi) {
         })),
     };
     try {
-      const { plan, summary } = await scheduler.tick(config, false);
+      const { plan, summary, registry, refusal } = await scheduler.tick(config, false);
+      if (registry === null) return { ...base, registryError: refusal };
       return {
         ...base,
+        loops: registry.loops.map((loop) => ({
+          name: loop.name,
+          workflow: loop.workflow,
+          kind: loop.trigger.kind,
+          enabled: loop.enabled,
+          machines: loop.machines,
+          maxLive: loop.maxLive,
+          running: plan.running.filter((run) => run.loop === loop.name).length,
+        })),
         states: Object.entries(summary.states).map(([name, count]) => ({ name, count })),
         milestones: Object.entries(summary.milestones).map(([name, count]) => ({ name, ...count })),
         room: plan.room,
         promotable: plan.promotable.length,
         running: plan.running,
-        start: plan.start.map(({ issue, machineId, resume }) => ({
+        start: plan.start.map(({ issue, loop, machineId, resume }) => ({
           identifier: issue.identifier,
+          loop,
           title: issue.title,
           machineId,
           resume,
@@ -945,15 +1019,41 @@ export default async function plugin(bb: BbPluginApi) {
           options: { json },
           async run(input) {
             const config = await requireScheduler().catch(cliFailure("board_unavailable"));
-            const { plan, summary } = await scheduler
+            const { plan, summary, registry, refusal } = await scheduler
               .tick(config, false)
               .catch(cliFailure("board_unavailable"));
             const mode = (await settings.get()).paused ? "paused" : config.mode;
+            if (registry === null) {
+              return {
+                exitCode: 1,
+                stdout: input.options.json
+                  ? JSON.stringify({ mode, refusal })
+                  : `Mode: ${mode}. The registry was refused, so nothing is planned or started: ${refusal}`,
+              };
+            }
+            const loops = registry.loops.map((loop) => ({
+              name: loop.name,
+              workflow: loop.workflow,
+              kind: loop.trigger.kind,
+              enabled: loop.enabled,
+              machines: loop.machines,
+              maxLive: loop.maxLive,
+            }));
             return {
               exitCode: 0,
               stdout: input.options.json
-                ? JSON.stringify({ mode, summary, ...plan })
-                : describePlan(plan, summary, mode),
+                ? JSON.stringify({
+                    mode,
+                    loops,
+                    summary,
+                    ...plan,
+                    start: plan.start.map(({ issue, ...rest }) => ({
+                      ...rest,
+                      identifier: issue.identifier,
+                    })),
+                    decisions: dispatches.decisions(20),
+                  })
+                : describePlan(plan, summary, mode, loops),
             };
           },
         }),
@@ -1043,13 +1143,13 @@ export default async function plugin(bb: BbPluginApi) {
               );
             }
             schedulerConfig = config;
-            const issue = await scheduler
+            const { issue, state } = await scheduler
               .promote(config, input.positionals.issue, input.options.reason)
               .catch(cliFailure("promote_refused"));
             changed();
             return {
               exitCode: 0,
-              stdout: `Promoted ${issue.identifier} to ${config.dispatchState}: ${issue.title}`,
+              stdout: `Promoted ${issue.identifier} to ${state}: ${issue.title}`,
             };
           },
         }),
@@ -1102,6 +1202,25 @@ export default async function plugin(bb: BbPluginApi) {
                       )
                       .join("\n"),
             };
+          },
+        }),
+        "host-probe": cliCommand({
+          summary:
+            "Spike: run the fixed probe script in a thread's worktree through the host bundle",
+          positionals: [{ name: "thread", description: "Thread id", required: true }],
+          options: { json },
+          async run(input) {
+            try {
+              const record = await probeThread(probeDeps, input.positionals.thread);
+              return {
+                exitCode: record.exitCode,
+                stdout: input.options.json ? JSON.stringify(record) : renderProbe(record),
+              };
+            } catch (error) {
+              throw new PluginCliError(error instanceof Error ? error.message : String(error), {
+                code: "host_probe_failed",
+              });
+            }
           },
         }),
         urls: cliCommand({
