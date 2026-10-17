@@ -103,9 +103,11 @@ own tunnel to that one path.
 | `src/dispatch-store.ts` | The ledger of workflow runs the board started. |
 | `src/linear-triggers.ts` | The poller that turns Linear changes into agent sessions. |
 | `src/linear.ts` | Linear webhook signature check. |
-| `host.ts` | The host bundle, run on each enrolled machine: runs the fixed probe script in a worktree. |
+| `host.ts` | The host bundle, run on each enrolled machine: runs the fixed probe script and the fixed gate script (`scripts/gate.mjs`) in a worktree. |
 | `src/host-contract.ts`, `src/host-run.ts` | The host bundle's RPC contract and its script runner. |
 | `src/host-probe.ts` | Thread id to worktree and machine, then the host bundle's probe (`bb optio host-probe <thread>`, the `optio_host_probe` agent tool). A spike. |
+| `src/gate-tool.ts` | The `optio_gate` agent tool: validate a gate call (a gate from a fixed set, a PR number, an issue key), run the repo's gate script on the calling thread's machine, record the result. An unknown gate or a bad argument is refused and recorded, never run. The host bundle passes `--timeout` to the waiting gates (`pre-review`, `review`), a minute below its own kill timeout, so CI that is still pending comes back as the gate's own waiting verdict, not as exit 143. |
+| `src/gate-store.ts` | The record of gate runs (`bb optio gates`): gate, thread, PR, issue, outcome, exit code, verdict line, commit SHA. |
 | `scripts/host-probe.mjs` | The fixed, read-only script the probe runs. |
 | `src/product-neutral.test.ts` | Fails when plugin code outside `examples/` names one product's values. |
 

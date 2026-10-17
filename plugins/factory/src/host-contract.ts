@@ -7,6 +7,23 @@ import { z } from "zod";
 /** The one script the spike runs, relative to a worktree's root. It is fixed here, never sent by a caller. */
 export const PROBE_SCRIPT = "plugins/factory/scripts/host-probe.mjs";
 
+/** The one gate script the gate tool runs, relative to a worktree's root. Fixed here, never sent by a caller. */
+export const GATE_SCRIPT = "scripts/gate.mjs";
+
+/** The gates the tool will run: the flow gates of `gate.mjs`. Its `result` subcommand reads a file and is not a gate. */
+export const GATE_NAMES = ["pre-review", "review", "land"] as const;
+export type GateName = (typeof GATE_NAMES)[number];
+
+/** An issue key as a tracker writes it: a team key, a dash and a number. No flag can match. */
+export const ISSUE_KEY = /^[A-Z][A-Z0-9]*-[1-9][0-9]*$/;
+
+/** The SDK caps one host call at 30 minutes. */
+export const GATE_TIMEOUT_MAX_MS = 25 * 60_000;
+
+export const gateName = z.enum(GATE_NAMES);
+export const gatePr = z.number().int().positive();
+export const gateIssue = z.string().regex(ISSUE_KEY);
+
 export const scriptResult = z.object({
   exitCode: z.number().int(),
   /** The last non-empty line of stdout, or of stderr when stdout was empty. */
@@ -23,5 +40,18 @@ export const hostContract = defineRpcContract({
   run_probe: {
     input: z.object({ cwd: z.string().min(1) }).strict(),
     output: scriptResult,
+  },
+  run_gate: {
+    input: z
+      .object({
+        cwd: z.string().min(1),
+        gate: gateName,
+        pr: gatePr,
+        issue: gateIssue,
+        /** Below the client's own timeout, so a slow gate comes back as exit 143 instead of a thrown call. */
+        timeoutMs: z.number().int().positive().max(GATE_TIMEOUT_MAX_MS).optional(),
+      })
+      .strict(),
+    output: scriptResult.extend({ sha: z.string() }),
   },
 });
