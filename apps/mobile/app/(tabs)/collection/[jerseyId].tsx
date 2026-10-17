@@ -189,12 +189,24 @@ export default function JerseyDetailScreen() {
           { backgroundColor: theme.canvas, paddingTop: insets.top + space.insetSm },
         ]}
       >
-        <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
+        <IconButton
+          testID="jersey-detail-back"
+          name="Tilbage"
+          icon="arrow-back"
+          onPress={() => router.back()}
+        />
         <View style={styles.loadError}>
           <Banner
             tone="danger"
             message="Kunne ikke hente trøjen. Prøv igen."
-            action={<Button label="Prøv igen" variant="tertiary" onPress={retryLoad} />}
+            action={
+              <Button
+                testID="jersey-detail-load-retry"
+                label="Prøv igen"
+                variant="tertiary"
+                onPress={retryLoad}
+              />
+            }
           />
         </View>
       </View>
@@ -208,7 +220,12 @@ export default function JerseyDetailScreen() {
         style={[styles.centered, { backgroundColor: theme.canvas }]}
       >
         <Text style={[typography.body, { color: theme.contentSecondary }]}>Trøjen findes ikke</Text>
-        <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
+        <IconButton
+          testID="jersey-detail-back"
+          name="Tilbage"
+          icon="arrow-back"
+          onPress={() => router.back()}
+        />
       </View>
     );
   }
@@ -243,6 +260,7 @@ export default function JerseyDetailScreen() {
 
       <View style={[styles.stageChrome, { paddingTop: insets.top + space.insetSm }]}>
         <IconButton
+          testID="jersey-detail-back"
           name="Tilbage"
           icon="arrow-back"
           iconColor={theme.contentInverse}
