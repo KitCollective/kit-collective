@@ -19,7 +19,10 @@ type Rpc = <M extends keyof Contract & string>(
 async function load(settings: Record<string, unknown> = {}) {
   let threads = 0;
   /** What the project checkout holds: the registry the board reads every tick. */
-  const checkout = { registry: "", encoding: "utf8" as "utf8" | "base64" };
+  const checkout: { registry: string; encoding: "utf8" | "base64" } = {
+    registry: "",
+    encoding: "utf8",
+  };
   const host = createFakePluginHost({
     pluginId: "optio",
     settings: { linearWebhookSecret: "whsec", ...settings },

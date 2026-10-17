@@ -193,9 +193,9 @@ export function createDispatchStore(db: Database) {
     /** Runs started per issue since `since` (epoch ms), resumes included. */
     startsSince(since: number): Map<string, number> {
       const counts = new Map<string, number>();
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors the selected columns.
       const rows = db
         .prepare(`SELECT issue, COUNT(*) AS n FROM dispatches WHERE started_at >= ? GROUP BY issue`)
-        // SAFETY: the query reads a table this store's own migrations create; the row type mirrors the selected columns.
         .all(since) as { issue: string; n: number }[];
       for (const row of rows) counts.set(row.issue, row.n);
       return counts;
