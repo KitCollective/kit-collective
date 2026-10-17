@@ -2145,6 +2145,146 @@ describe("Collection /v1", () => {
     expect(labelCountAfter?.value).toBe(labelCountBefore?.value);
   });
 
+  it("carries counts, kit photo and player number on typeahead hits that match the drill", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const { db, pool } = createDb(DATABASE_URL);
+    const [kitA] = await db
+      .insert(kit)
+      .values({ clubId: fixture.clubId, seasonId: fixture.seasonId, type: "home" })
+      .returning({ id: kit.id });
+    const [kitB] = await db
+      .insert(kit)
+      .values({ clubId: fixture.clubId, seasonId: fixture.seasonId, type: "home" })
+      .returning({ id: kit.id });
+    const [newerSeason] = await db
+      .insert(season)
+      .values({
+        label: "2024/25",
+        startsOn: "2024-07-01",
+        endsOn: "2025-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+    const [numberedPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+    const [unnumberedPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+    await db.insert(playerClubSeason).values([
+      {
+        playerId: numberedPlayer!.id,
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        squadNumber: 9,
+      },
+      {
+        playerId: numberedPlayer!.id,
+        clubId: fixture.clubId,
+        seasonId: newerSeason!.id,
+        squadNumber: 10,
+      },
+      {
+        playerId: unnumberedPlayer!.id,
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        squadNumber: null,
+      },
+    ]);
+    await db.insert(catalogLabel).values([
+      {
+        entityType: "player",
+        entityId: numberedPlayer!.id,
+        locale: "da",
+        kind: "label",
+        text: "Tal Tellemand",
+        source: "seed",
+      },
+      {
+        entityType: "player",
+        entityId: unnumberedPlayer!.id,
+        locale: "da",
+        kind: "label",
+        text: "Tal Uden Nummer",
+        source: "seed",
+      },
+    ]);
+    await pool.end();
+
+    const owner = await registerSession(app, "typeahead-count-owner@example.com");
+    const viewer = await registerSession(app, "typeahead-count-viewer@example.com");
+    const blockedOwner = await registerSession(app, "typeahead-count-blocked@example.com");
+
+    const visibleJersey = await saveJerseyForUser(app, owner, fixture, {
+      catalogKitId: kitA!.id,
+    });
+    const privateKitAJersey = await saveJerseyForUser(app, owner, fixture, {
+      catalogKitId: kitA!.id,
+    });
+    const privateKitBJersey = await saveJerseyForUser(app, owner, fixture, {
+      catalogKitId: kitB!.id,
+    });
+    await patchJerseyPrivate(app, owner, privateKitAJersey.id, true);
+    await patchJerseyPrivate(app, owner, privateKitBJersey.id, true);
+    await saveJerseyForUser(app, viewer, fixture, { catalogKitId: kitA!.id });
+    await saveJerseyForUser(app, blockedOwner, fixture, { catalogKitId: kitA!.id });
+    const blockResponse = await app.inject({
+      method: "POST",
+      url: `/v1/moderation/peers/${blockedOwner.user.id}/block`,
+      headers: { authorization: `Bearer ${viewer.accessToken}` },
+    });
+    expect(blockResponse.statusCode).toBe(201);
+
+    const headers = { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" };
+    const typeahead = async (q: string) => {
+      const response = await app.inject({
+        method: "GET",
+        url: `/v1/collection/discover/typeahead?q=${encodeURIComponent(q)}`,
+        headers,
+      });
+      expect(response.statusCode).toBe(200);
+      return collectionDiscoverTypeaheadSchema.parse(JSON.parse(response.body));
+    };
+    const drillCount = async (path: string) => {
+      const response = await app.inject({ method: "GET", url: path, headers });
+      expect(response.statusCode).toBe(200);
+      return collectionDiscoverCatalogDrillSchema.parse(JSON.parse(response.body)).count;
+    };
+
+    const clubHits = await typeahead("København");
+    const clubHit = clubHits.clubs?.find((hit) => hit.clubId === fixture.clubId);
+    expect(clubHit?.jerseyCount).toBe(1);
+    expect(clubHit?.jerseyCount).toBe(
+      await drillCount(`/v1/collection/discover/clubs/${fixture.clubId}`),
+    );
+
+    const kitAHit = clubHits.kits?.find((hit) => hit.kitId === kitA!.id);
+    expect(kitAHit?.jerseyCount).toBe(1);
+    expect(kitAHit?.jerseyCount).toBe(await drillCount(`/v1/collection/discover/kits/${kitA!.id}`));
+    expect(kitAHit?.photo?.id).toBe(visibleJersey.photos[0]?.id);
+
+    const kitBHit = clubHits.kits?.find((hit) => hit.kitId === kitB!.id);
+    expect(kitBHit?.jerseyCount).toBe(0);
+    expect(kitBHit?.photo).toBeNull();
+
+    const ownerHandleHits = await typeahead(owner.user.handle);
+    expect(
+      ownerHandleHits.collectors?.find((hit) => hit.handle === owner.user.handle)?.jerseyCount,
+    ).toBe(1);
+    const blockedHandleHits = await typeahead(blockedOwner.user.handle);
+    expect(blockedHandleHits.collectors).toBeUndefined();
+
+    const playerHits = await typeahead("Tal ");
+    const numbered = playerHits.players?.find((hit) => hit.playerId === numberedPlayer!.id);
+    expect(numbered?.number).toBe(10);
+    expect(numbered?.jerseyCount).toBe(1);
+    expect(numbered?.jerseyCount).toBe(
+      await drillCount(`/v1/collection/discover/players/${numberedPlayer!.id}`),
+    );
+    const unnumbered = playerHits.players?.find((hit) => hit.playerId === unnumberedPlayer!.id);
+    expect(unnumbered?.number).toBeNull();
+    expect(unnumbered?.jerseyCount).toBe(1);
+    expect(unnumbered?.jerseyCount).toBe(
+      await drillCount(`/v1/collection/discover/players/${unnumberedPlayer!.id}`),
+    );
+  });
+
   it("stores grid JPEG on save and serves variant=grid", async () => {
     const session = await registerSession(app, "grid-variant@example.com");
     const fixture = await insertClubSeasonFixture();

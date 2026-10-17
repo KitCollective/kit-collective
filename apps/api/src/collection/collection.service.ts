@@ -8,7 +8,6 @@ import {
   type CollectionConversations,
   type CollectionDiscoverCatalogDrill,
   type CollectionDiscoverHome,
-  type CollectionDiscoverHomeNationalTeam,
   type CollectionDiscoverJerseys,
   type CollectionDiscoverTypeahead,
   type CollectionDiscoverTypeaheadKit,
@@ -1580,6 +1579,59 @@ export class CollectionService {
     const pattern = `%${normalizedQuery}%`;
     const blockedPeerIds = await this.moderationService.getBlockedPeerIds(userId);
 
+    const jerseyRows = await this.db
+      .select({
+        id: userJersey.id,
+        ownerId: userJersey.userId,
+        catalogKitId: userJersey.catalogKitId,
+        clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
+        seasonId: userJersey.seasonId,
+        type: userJersey.type,
+        size: userJersey.size,
+        seasonLabel: season.label,
+        ownerHandle: user.handle,
+      })
+      .from(userJersey)
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .innerJoin(user, eq(userJersey.userId, user.id))
+      .where(and(ne(userJersey.userId, userId), eq(userJersey.private, false)))
+      .orderBy(desc(userJersey.updatedAt));
+
+    // Every hit count comes from this one set (not own, not private, owner not blocked, and
+    // decorated exactly like the catalog drill) so a hit count equals the drill count.
+    const visibleJerseyRows = jerseyRows.filter((row) => !blockedPeerIds.has(row.ownerId));
+    const decoratedJerseys = await this.decorateDiscoverJerseys(visibleJerseyRows, locale);
+    const jerseyRowById = new Map(visibleJerseyRows.map((row) => [row.id, row]));
+    const clubCounts = new Map<string, number>();
+    const nationalTeamCounts = new Map<string, number>();
+    const kitCounts = new Map<string, number>();
+    const kitPhotos = new Map<string, CollectionJersey["photos"][number]>();
+    const ownerCounts = new Map<string, number>();
+    const bump = (counts: Map<string, number>, key: string) =>
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    for (const jersey of decoratedJerseys) {
+      const row = jerseyRowById.get(jersey.id);
+      if (!row) {
+        continue;
+      }
+      if (jersey.clubId) {
+        bump(clubCounts, jersey.clubId);
+      }
+      if (jersey.nationalTeamId) {
+        bump(nationalTeamCounts, jersey.nationalTeamId);
+      }
+      bump(ownerCounts, row.ownerId);
+      if (row.catalogKitId) {
+        bump(kitCounts, row.catalogKitId);
+        // Rows are newest first, so the first visible copy of a kit supplies its photo.
+        const photo = jersey.photos[0];
+        if (photo && !kitPhotos.has(row.catalogKitId)) {
+          kitPhotos.set(row.catalogKitId, photo);
+        }
+      }
+    }
+
     const clubMatches = await this.db
       .selectDistinct({ entityId: catalogLabel.entityId })
       .from(catalogLabel)
@@ -1588,7 +1640,7 @@ export class CollectionService {
     const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
     const clubs = clubIds.flatMap((clubId) => {
       const clubLabel = clubLabels.get(clubId);
-      return clubLabel ? [{ clubId, clubLabel }] : [];
+      return clubLabel ? [{ clubId, clubLabel, jerseyCount: clubCounts.get(clubId) ?? 0 }] : [];
     });
 
     const nationalTeamMatches = await this.db
@@ -1606,12 +1658,19 @@ export class CollectionService {
       nationalTeamIds,
       locale,
     );
-    const nationalTeams: CollectionDiscoverHomeNationalTeam[] = nationalTeamIds.flatMap(
-      (nationalTeamId) => {
+    const nationalTeams: NonNullable<CollectionDiscoverTypeahead["nationalTeams"]> =
+      nationalTeamIds.flatMap((nationalTeamId) => {
         const nationalTeamLabel = nationalTeamLabels.get(nationalTeamId);
-        return nationalTeamLabel ? [{ nationalTeamId, nationalTeamLabel }] : [];
-      },
-    );
+        return nationalTeamLabel
+          ? [
+              {
+                nationalTeamId,
+                nationalTeamLabel,
+                jerseyCount: nationalTeamCounts.get(nationalTeamId) ?? 0,
+              },
+            ]
+          : [];
+      });
 
     const playerMatches = await this.db
       .selectDistinct({ entityId: catalogLabel.entityId })
@@ -1621,9 +1680,23 @@ export class CollectionService {
       );
     const playerIds = playerMatches.map((row) => row.entityId);
     const playerLabels = await this.resolveEntityLabels("player", playerIds, locale);
+    const squadSeasons = await this.loadTypeaheadSquadSeasons(playerIds);
     const players: CollectionDiscoverTypeaheadPlayer[] = playerIds.flatMap((playerId) => {
       const playerLabel = playerLabels.get(playerId);
-      return playerLabel ? [{ playerId, playerLabel }] : [];
+      if (!playerLabel) {
+        return [];
+      }
+      const squad = squadSeasons.get(playerId);
+      const jerseyCount = squad
+        ? decoratedJerseys.filter((jersey) =>
+            jersey.clubId
+              ? squad.clubSeasons.has(`${jersey.clubId}:${jersey.seasonId}`)
+              : jersey.nationalTeamId
+                ? squad.nationalTeamSeasons.has(`${jersey.nationalTeamId}:${jersey.seasonId}`)
+                : false,
+          ).length
+        : 0;
+      return [{ playerId, playerLabel, jerseyCount, number: squad?.number ?? null }];
     });
 
     const kitRows = await this.db
@@ -1671,6 +1744,8 @@ export class CollectionService {
         {
           kitId: row.id,
           label: `${sideLabel} ${row.seasonLabel} ${KIT_TYPE_LABELS_DA[row.type]}`,
+          jerseyCount: kitCounts.get(row.id) ?? 0,
+          photo: kitPhotos.get(row.id) ?? null,
         },
       ];
     });
@@ -1689,27 +1764,9 @@ export class CollectionService {
         handle: row.handle,
         initial: handleInitial(row.handle),
         avatarUrl: row.avatarObjectKey ? `/v1/identity/peers/${row.id}/avatar` : null,
+        jerseyCount: ownerCounts.get(row.id) ?? 0,
       }));
 
-    const jerseyRows = await this.db
-      .select({
-        id: userJersey.id,
-        ownerId: userJersey.userId,
-        clubId: userJersey.clubId,
-        nationalTeamId: userJersey.nationalTeamId,
-        seasonId: userJersey.seasonId,
-        type: userJersey.type,
-        size: userJersey.size,
-        seasonLabel: season.label,
-        ownerHandle: user.handle,
-      })
-      .from(userJersey)
-      .innerJoin(season, eq(userJersey.seasonId, season.id))
-      .innerJoin(user, eq(userJersey.userId, user.id))
-      .where(and(ne(userJersey.userId, userId), eq(userJersey.private, false)))
-      .orderBy(desc(userJersey.updatedAt));
-    const visibleJerseyRows = jerseyRows.filter((row) => !blockedPeerIds.has(row.ownerId));
-    const decoratedJerseys = await this.decorateDiscoverJerseys(visibleJerseyRows, locale);
     const jerseyClubIds = uniqueNonNullIds(visibleJerseyRows.map((row) => row.clubId));
     const jerseyNationalTeamIds = uniqueNonNullIds(
       visibleJerseyRows.map((row) => row.nationalTeamId),
@@ -1738,6 +1795,79 @@ export class CollectionService {
       ...(collectors.length > 0 ? { collectors } : {}),
       ...(jerseys.length > 0 ? { jerseys } : {}),
     });
+  }
+
+  /**
+   * Squad membership keys (`sideId:seasonId`) per player, the same pairs the player drill joins on,
+   * plus the squad number of the player's most recent season that has one. One query per squad table.
+   */
+  private async loadTypeaheadSquadSeasons(playerIds: string[]) {
+    const byPlayer = new Map<
+      string,
+      { clubSeasons: Set<string>; nationalTeamSeasons: Set<string>; number: number | null }
+    >();
+    if (playerIds.length === 0) {
+      return byPlayer;
+    }
+
+    const [clubSquads, nationalTeamSquads] = await Promise.all([
+      this.db
+        .select({
+          playerId: playerClubSeason.playerId,
+          sideId: playerClubSeason.clubId,
+          seasonId: playerClubSeason.seasonId,
+          squadNumber: playerClubSeason.squadNumber,
+          startsOn: season.startsOn,
+        })
+        .from(playerClubSeason)
+        .innerJoin(season, eq(playerClubSeason.seasonId, season.id))
+        .where(inArray(playerClubSeason.playerId, playerIds)),
+      this.db
+        .select({
+          playerId: playerNationalTeamSeason.playerId,
+          sideId: playerNationalTeamSeason.nationalTeamId,
+          seasonId: playerNationalTeamSeason.seasonId,
+          squadNumber: playerNationalTeamSeason.squadNumber,
+          startsOn: season.startsOn,
+        })
+        .from(playerNationalTeamSeason)
+        .innerJoin(season, eq(playerNationalTeamSeason.seasonId, season.id))
+        .where(inArray(playerNationalTeamSeason.playerId, playerIds)),
+    ]);
+
+    const latestNumber = new Map<string, { startsOn: string; number: number }>();
+    const entryFor = (playerId: string) => {
+      let entry = byPlayer.get(playerId);
+      if (!entry) {
+        entry = { clubSeasons: new Set(), nationalTeamSeasons: new Set(), number: null };
+        byPlayer.set(playerId, entry);
+      }
+      return entry;
+    };
+    const noteNumber = (playerId: string, startsOn: string, squadNumber: number | null) => {
+      if (squadNumber === null) {
+        return;
+      }
+      const current = latestNumber.get(playerId);
+      // Club squad rows are noted first, so a club number wins a tie on the same season start.
+      if (!current || startsOn > current.startsOn) {
+        latestNumber.set(playerId, { startsOn, number: squadNumber });
+      }
+    };
+
+    for (const row of clubSquads) {
+      entryFor(row.playerId).clubSeasons.add(`${row.sideId}:${row.seasonId}`);
+      noteNumber(row.playerId, row.startsOn, row.squadNumber);
+    }
+    for (const row of nationalTeamSquads) {
+      entryFor(row.playerId).nationalTeamSeasons.add(`${row.sideId}:${row.seasonId}`);
+      noteNumber(row.playerId, row.startsOn, row.squadNumber);
+    }
+    for (const [playerId, latest] of latestNumber) {
+      entryFor(playerId).number = latest.number;
+    }
+
+    return byPlayer;
   }
 
   async getPeerJersey(

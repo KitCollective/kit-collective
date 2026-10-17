@@ -1,0 +1,93 @@
+# KIT-293: Typeahead as one flat list (ADR-0049).
+#
+# design-sections: Søg home and typeahead, Search field, Number emblem, Avatar, Empty state, Jersey tile
+#
+# FIXTURE THIS FLOW NEEDS (apps/api/src/e2e/test-data.fixture.ts): the second test Collector
+# (e2e_peer) owns one public jersey, the OB home shirt, size XL. The Test Collector's own jerseys
+# never show in Søg. So "OB" finds the club OB (1 trøje) and that jersey; "e2e_peer" finds the
+# Collector (1 trøje); "Danmark" finds the national team (0 trøjer, its only shirt is the Test
+# Collector's own).
+#
+# Not shown by this data and so proved by the view-model suite (apps/mobile/tests/
+# search-view-model.test.ts) instead: the Player row with a Number emblem, the Player row without a
+# number, the Kit row with a jersey thumb and the Kit row without a photo (the test data has no
+# squad numbers and no catalog kit on a jersey), and the order across kinds.
+#
+# One tap is not shown: opening a hit. A hit's testID carries the catalog id, which the test data
+# does not fix; the drills are covered by regression/search-bid.yaml and the view-model suite.
+appId: app.kitcollective.mobile
+name: kit-293
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-293
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 15000
+- tapOn:
+    id: search-input
+# AC 1: hits appear from the first character. One letter is enough to fill the list.
+- inputText: O
+- extendedWaitUntil:
+    visible:
+      id: typeahead-list
+    timeout: 15000
+# AC 2, 3, 4, 6, 7, 8: one flat list, no heading per kind, each row a name with its kind and
+# count as the caption, a 44px initials tile for the club, then the Trøjer heading with its
+# count and the two-column Jersey tile grid carrying the owner's size.
+- inputText: B
+- extendedWaitUntil:
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    timeout: 15000
+- assertVisible:
+    id: typeahead-jerseys
+- assertVisible: "Klub · 1 trøje"
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-293__01-flat-list-club-and-trojer-grid
+# AC 4: a Collector leads with a round Avatar, the caption says Samler.
+- tapOn:
+    id: search-input
+- eraseText: 10
+- inputText: e2e_peer
+- extendedWaitUntil:
+    visible:
+      id: typeahead-hit-collector-e2e_peer
+    timeout: 15000
+- assertVisible: "Samler · 1 trøje"
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-293__02-collector-avatar-row
+# AC 4: a national team leads with initials on fill.secondary, the caption says Landshold.
+- tapOn:
+    id: search-input
+- eraseText: 10
+- inputText: Danmark
+- extendedWaitUntil:
+    visible: "Landshold · 0 trøjer"
+    timeout: 15000
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-293__03-national-team-initials-row
+# AC 9: no hits shows Ingen resultater as the Empty state.
+- tapOn:
+    id: search-input
+- eraseText: 10
+- inputText: zzzqxj
+- extendedWaitUntil:
+    visible:
+      id: typeahead-empty
+    timeout: 15000
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-293__04-no-hits-empty-state
+- stopRecording
