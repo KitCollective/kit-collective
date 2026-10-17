@@ -65,6 +65,11 @@ name: add-jersey
     visible:
       id: post-save-to-collection
     timeout: 30000
+# The Saved sheet's two exits: Tilføj næste trøje and Se samlingen.
+- assertVisible:
+    id: post-save-next
+- assertVisible: "Tilføj næste trøje"
+- assertVisible: "Se samlingen"
 # The count line of the Saved sheet fills in after the sheet opens (a read that Save does not wait
 # for): wait for it, or the screenshot differs from run to run. The number is not fixed by copy.
 - extendedWaitUntil:

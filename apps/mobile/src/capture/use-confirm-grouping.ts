@@ -1,7 +1,12 @@
 import type { VisionJobResponse } from "@kit/api-contract";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchVisionGroupingJob, startVisionGroupingSuggest } from "@/api/vision-grouping";
-import { inBatches, pendingUploadFailures, splitPreparedPhotos } from "@/capture/captureOverview";
+import {
+  inBatches,
+  pendingUploadFailures,
+  retryUploadFailures,
+  splitPreparedPhotos,
+} from "@/capture/captureOverview";
 import {
   applyGroupingSuggestion,
   ensureSessionPhotoIds,
@@ -309,25 +314,30 @@ export function useConfirmGrouping({
 
     retryingUploadRef.current = true;
     try {
-      const { photos, failedUris } = await prepareGroupingPhotos(snapshot, uris);
-      const request = buildGroupingSuggestRequest({
-        sessionId,
-        photos,
-        priorGroups: groupingPriorGroups(snapshotRef.current ?? snapshot),
+      const outcome = await retryUploadFailures({
+        uris,
+        prepare: (retried) => prepareGroupingPhotos(snapshot, retried),
+        send: async (photos) => {
+          const request = buildGroupingSuggestRequest({
+            sessionId,
+            photos,
+            priorGroups: groupingPriorGroups(snapshotRef.current ?? snapshot),
+          });
+          // Nothing to send (a lone photo with no jersey to join) still counts as prepared.
+          return request
+            ? withinTimeout(
+                startVisionGroupingSuggest(accessToken, request),
+                GROUPING_START_TIMEOUT_MS,
+              )
+            : null;
+        },
       });
-      // Nothing to send (a lone photo with no jersey to join) still counts as prepared.
-      const nextJobId = request ? await startVisionGroupingSuggest(accessToken, request) : null;
       if (!mountedRef.current) {
         return;
       }
-      setUploadFailed(failedUris);
-      if (nextJobId) {
-        setFollowUpJobId(nextJobId);
-      }
-    } catch {
-      // The send itself failed: those photos still did not reach Vision, so the row stays.
-      if (mountedRef.current) {
-        setUploadFailed(uris);
+      setUploadFailed(outcome.stillFailed);
+      if (outcome.jobId) {
+        setFollowUpJobId(outcome.jobId);
       }
     } finally {
       retryingUploadRef.current = false;

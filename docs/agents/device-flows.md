@@ -22,12 +22,12 @@ Regression flows (`E2E_FLOWS=regression`): run them at a milestone, before a pro
 | `add-jersey` | Test Collector | `01-source-sheet`, `02-confirm`, `03-size-and-condition`, `04-ready-to-save`, `05-saved`, `06-collection` (the system photo picker between the first two is tapped through, not screenshotted) |
 | `add-jersey-low-confidence` | Test Collector, Vision `low-confidence` | `01-block-asks` (Brug forslaget / Vælg selv), `02-suggestion-accepted`, `03-ready-to-save`, `04-saved` |
 | `add-jersey-vision-off` | Test Collector | `01-sheet-vision-off`, `02-empty-identity-block` (Vision er slået fra, Vælg), `03-data-drill` (stops there: see below) |
-| `add-jersey-vision-failure` | Test Collector, Vision `failure` | `01-empty-identity-block` (Vision fandt ikke trøjen, no reading state left), `02-data-drill` (stops there: see below) |
+| `add-jersey-vision-failure` | Test Collector, Vision `failure` | `01-empty-identity-block` (Vision fandt ikke trøjen, no reading state left), `02-data-drill`, `03-picked-by-hand` (AaB, 2023/24, Hjemme), `04-ready-to-save`, `05-saved` (Save works by hand) |
 | `collection` | Test Collector | `01-collection`, `02-shortcut-filter`, `03-own-detail` |
 | `search-bid` | Test Collector | `01-typeahead`, `02-catalog-drill`, `03-foreign-detail`, `04-send-bid`, `05-amount-entered`, `06-bid-sent` |
 | `wishlist-paywall` | second test Collector | `01-wishlist`, `02-paywall` |
 
-The three `add-jersey-*` flows beyond `add-jersey` pick the one photo of the one-photo simulator. The Data drill that Vælg opens has no `testID` on its club, season and type controls (and the club picker's rows), so `add-jersey-vision-off` and `add-jersey-vision-failure` stop at the opened drill and do not Save; they assert it by the copy of its first row, not tap it. Add the testIDs to the drill to take the flows through the pick and Save.
+The three `add-jersey-*` flows beyond `add-jersey` pick the one photo of the one-photo simulator. The Data drill that Vælg opens has no `testID` on its club, season and type controls (and the club picker's rows), so `add-jersey-vision-failure` taps them by their copy (`AaB`, `2023/24`, `Hjemme`, the drill's `Gem`) and goes on to Save by hand; `add-jersey-vision-off` stops at the opened drill and asserts it by the copy of its first row. Add the testIDs to the drill to replace the copy taps.
 
 Every flow first calls `POST /v1/e2e/test-data`, so flows are independent and a re-run starts from the same rows. A screenshot is `kc__<flow>__<step>.png`; a recording is `kc__<flow>.mp4`.
 
@@ -42,7 +42,7 @@ The reset takes an optional JSON body, `{"vision": "<case>"}`, that picks what t
 | `mixed-grouping` | groups of two photos with confidence 90, 60, 30 in turn: a bound row, a Tjek row, and photos left in the inbox |
 | `failure` | every Vision job fails at once |
 
-The reset also deletes the Test Collector's auth sessions, so a case cannot be switched mid-flow: run `../subflows/sign-in.yaml` again with the other `VISION`. A flow that calls the reset script directly and passes none sends an empty body and gets `resolved`. `slices/KIT-284.yaml` is the bulk and failure case: 16 photos through the overview with `mixed-grouping` (bound, Tjek and inbox rows, Gem og næste), then four photos with `failure` (Vision svarede ikke, Prøv Vision igen, Sortér selv, the photos kept). A partial upload failure (`overview-upload-failed`) cannot be forced on a simulator; the unit tests cover it.
+The reset also deletes the Test Collector's auth sessions, so a case cannot be switched mid-flow: run `../subflows/sign-in.yaml` again with the other `VISION`. `slices/KIT-284.yaml` is the bulk and failure case: 16 photos through the overview with `mixed-grouping` (bound, Tjek and inbox rows, Gem og næste), then four photos with `failure` (Vision svarede ikke, Prøv Vision igen, Sortér selv, the photos kept). A partial upload failure (`overview-upload-failed`) cannot be forced on a simulator; the unit tests cover it.
 
 Not covered: Android, physical devices, the camera branch of Tilføj trøje, showcase and first photos (unreachable from a cold start today).
 
@@ -67,7 +67,7 @@ Flows tap by `testID`, so a copy change does not break a flow. The exceptions, e
 
 - the native tab bar: `Søg` and `Ønsker` are tapped by label;
 - the app's own upload source sheet option `Fotos` (a system action sheet), by label;
-- the system photo picker: the first cell and its confirm button, by screen point, on a simulator whose library holds exactly one photo; a flow with several photos taps the cells by screen point too, three to a row, newest first (the points of `slices/KIT-284.yaml` are unverified until its first hosted run);
+- the system photo picker: the first cell and its confirm button, by screen point, on a simulator whose library holds exactly one photo; a flow with several photos taps the cells by screen point too, three to a row, newest first;
 - iOS's "save password" prompt: `Ikke nu` / `Not Now`, by text, when it shows;
 - two waits for text: the Saved sheet's count line (`Trøje nr. n i din samling`, which fills in after the sheet opens) and the first row of the Data drill; they assert, they never tap.
 

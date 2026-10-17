@@ -16,14 +16,15 @@
 # - AC 1 (a photo that cannot be prepared is named and retryable, the rest carries on): a prepare
 #   failure cannot be forced on a simulator. captureOverview and the grouping hook tests cover it
 #   (the overview-upload-failed row is never shown by a flow).
-# - Vælg after a failed identity read, with the Data drill: add-jersey-vision-failure and
-#   add-jersey-vision-off in regression/ show the empty identity block and the opened drill.
+# - Vælg after a failed identity read, with the Data drill: add-jersey-vision-failure in
+#   regression/ shows the empty identity block, picks by hand and Saves; add-jersey-vision-off
+#   shows the empty block and the opened drill.
 # - Vision failing on Confirm for one photo is the same regression flow, not repeated here.
 #
-# UNVERIFIED until the first hosted run: the picker points below. They are those of KIT-282 (first
-# cell at 16%,25%, row pitch about 15% of the height on an iPhone 17), carried over to five rows,
-# and a scroll for the sixteenth photo. A hosted run's screenshots tell whether the sixteen taps
-# land; if not, only the points change.
+# The picker points below are those of KIT-282 (first cell at 16%,25%, row pitch about 15% of the
+# height on an iPhone 17), carried over to five rows, and a scroll for the sixteenth photo. The
+# hosted run on the PR head passed with all sixteen taps landing; if a picker changes, only the
+# points change.
 appId: app.kitcollective.mobile
 name: kit-284
 ---

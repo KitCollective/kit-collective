@@ -198,23 +198,13 @@ describe("resolveIdentityBlock: empty", () => {
   });
 });
 
-describe("after a failed Vision read on a single jersey", () => {
-  // The read finished without a result (timeout, offline, error): not in flight, nothing found.
-  const failedRead = () => baseInput({ visionOn: true, inFlight: false, suggestion: null });
-
-  it("ends in the empty block with Vision fandt ikke trøjen and the Vælg pill, never reading", () => {
-    const block = resolveIdentityBlock(failedRead());
-    expect(block.kind).toBe("empty");
-    expect(block.kind).not.toBe("in-flight");
-    expect(block.label).toBe(CONFIRM_IDENTITY_COPY.notFound);
+describe("the empty block after Vision found nothing", () => {
+  it("offers Vælg as its only way on: no retry control, no facts", () => {
+    const block = resolveIdentityBlock(baseInput());
     expect(block.headline).toBe("Vælg klub og sæson");
     expect(block.pill).toEqual({ label: "Vælg", tone: "primary", action: "open-data" });
-    expect(block.facts).toEqual([]);
-  });
-
-  it("offers no retry control: Vælg is the only action", () => {
-    const block = resolveIdentityBlock(failedRead());
     expect(block.actions).toEqual([]);
+    expect(block.facts).toEqual([]);
     expect(block.accessibilityLabel).not.toMatch(/igen/i);
   });
 

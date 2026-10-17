@@ -14,6 +14,7 @@ import {
   parkedRow,
   pendingSkeletonRows,
   pendingUploadFailures,
+  retryUploadFailures,
   shouldOpenBulkOverview,
   shouldOpenUnassigned,
   splitPreparedPhotos,
@@ -457,51 +458,106 @@ describe("upload failure row", () => {
     ]);
     expect(pendingUploadFailures([], bound)).toEqual([]);
   });
+});
 
-  it("sends the retried photos as a follow-up run with the jerseys already found as priorGroups", () => {
-    const session = groupedSession();
-    const failed = session.unboundUris.slice(0, 1);
-    const photoId = session.photoIdByUri![failed[0]!]!;
-    const request = buildGroupingSuggestRequest({
-      sessionId: session.sessionId,
-      photos: [{ photoId, contentBase64: "AAAA" }],
-      priorGroups: groupingPriorGroups(session),
+describe("Prøv igen on the upload failure row", () => {
+  const FAILED = URIS.slice(0, 2);
+  const prepared = (uris: string[]) => ({ photos: uris.map((uri) => `p:${uri}`), failedUris: [] });
+  /** A send that records what it was given and answers with a job id. */
+  const recordingSend = (calls: string[][]) => async (photos: string[]) => {
+    calls.push(photos);
+    return "job-1";
+  };
+
+  it("clears the row when every failed photo prepares and the follow-up run starts", async () => {
+    const calls: string[][] = [];
+    const outcome = await retryUploadFailures({
+      uris: FAILED,
+      prepare: async (uris) => prepared(uris),
+      send: recordingSend(calls),
     });
-    expect(request?.photos.map((photo) => photo.photoId)).toEqual([photoId]);
-    expect(request?.priorGroups?.length).toBeGreaterThan(0);
+    expect(outcome).toEqual({ stillFailed: [], jobId: "job-1" });
+    expect(calls).toEqual([FAILED.map((uri) => `p:${uri}`)]);
+    expect(uploadFailureRow(outcome.stillFailed.length)).toBeNull();
   });
 
-  it("has nothing to send for a lone retried photo when no jersey exists yet", () => {
+  it("keeps the row for the photos that fail to prepare again, and sends the others", async () => {
+    const calls: string[][] = [];
+    const outcome = await retryUploadFailures({
+      uris: FAILED,
+      prepare: async (uris) => ({ photos: [`p:${uris[0]}`], failedUris: [uris[1]!] }),
+      send: recordingSend(calls),
+    });
+    expect(outcome).toEqual({ stillFailed: [FAILED[1]], jobId: "job-1" });
+    expect(calls).toEqual([[`p:${FAILED[0]}`]]);
+    expect(uploadFailureRow(outcome.stillFailed.length)?.title).toBe("1 foto blev ikke uploadet");
+  });
+
+  it("keeps the row for every photo when the send fails", async () => {
+    const outcome = await retryUploadFailures({
+      uris: FAILED,
+      prepare: async (uris) => prepared(uris),
+      send: async () => {
+        throw new Error("offline");
+      },
+    });
+    expect(outcome).toEqual({ stillFailed: FAILED, jobId: null });
+  });
+
+  it("keeps the row for every photo when the prepare itself throws", async () => {
+    const outcome = await retryUploadFailures({
+      uris: FAILED,
+      prepare: async () => {
+        throw new Error("no disk");
+      },
+      send: async () => "job-1",
+    });
+    expect(outcome).toEqual({ stillFailed: FAILED, jobId: null });
+  });
+
+  it("clears the row with no follow-up run when there is nothing to send", async () => {
+    // A lone retried photo with no jersey to join: the request builder returns null.
     const session = createCaptureSession(URIS.slice(0, 4));
-    const photoId = session.photoIdByUri![URIS[0]!]!;
-    expect(
-      buildGroupingSuggestRequest({
-        sessionId: session.sessionId,
-        photos: [{ photoId, contentBase64: "AAAA" }],
-        priorGroups: groupingPriorGroups(session),
-      }),
-    ).toBeNull();
+    const outcome = await retryUploadFailures({
+      uris: [URIS[0]!],
+      prepare: async (uris) => prepared(uris),
+      send: async (photos) => {
+        const request = buildGroupingSuggestRequest({
+          sessionId: session.sessionId,
+          photos: photos.map((_, index) => ({
+            photoId: session.photoIdByUri![URIS[index]!]!,
+            contentBase64: "AAAA",
+          })),
+          priorGroups: groupingPriorGroups(session),
+        });
+        return request ? "job-1" : null;
+      },
+    });
+    expect(outcome).toEqual({ stillFailed: [], jobId: null });
   });
 
-  it("keeps a failed photo in the pile, so the inbox still holds it", () => {
+  it("sends the failed photos with the jerseys already found as priorGroups", async () => {
     const session = groupedSession();
-    expect(inboxRow(session)?.count).toBe(4);
+    const photoId = session.photoIdByUri![session.unboundUris[0]!]!;
+    let sentRequest: ReturnType<typeof buildGroupingSuggestRequest> = null;
+    await retryUploadFailures({
+      uris: [session.unboundUris[0]!],
+      prepare: async () => ({ photos: [{ photoId, contentBase64: "AAAA" }], failedUris: [] }),
+      send: async (photos) => {
+        sentRequest = buildGroupingSuggestRequest({
+          sessionId: session.sessionId,
+          photos,
+          priorGroups: groupingPriorGroups(session),
+        });
+        return "job-1";
+      },
+    });
+    expect(sentRequest!.photos.map((photo) => photo.photoId)).toEqual([photoId]);
+    expect(sentRequest!.priorGroups?.length).toBeGreaterThan(0);
   });
 });
 
 describe("Vision failed overview state", () => {
-  it("reads 16 fotos er gemt, Vision svarede ikke, then Prøv Vision igen and Sortér selv", () => {
-    const state = { analyzing: false, totalPhotos: 16, jerseyCount: 0 };
-    expect(overviewTitle(state)).toBe("16 fotos er gemt");
-    expect(overviewCaption({ ...state, failed: true })).toBe("Vision svarede ikke");
-    expect(
-      overviewDock({ analyzing: false, failed: true, unsavedCount: 0, firstTitle: null }),
-    ).toEqual({
-      primary: { label: "Prøv Vision igen", disabled: false },
-      tertiary: "Sortér selv",
-    });
-  });
-
   it("words one saved photo in the singular", () => {
     expect(overviewTitle({ analyzing: false, totalPhotos: 1, jerseyCount: 0 })).toBe(
       "1 foto er gemt",

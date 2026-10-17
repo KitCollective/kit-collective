@@ -319,6 +319,32 @@ export function pendingUploadFailures(failedUris: string[], state: CaptureSessio
   return failedUris.filter((uri) => loose.has(uri));
 }
 
+export type UploadRetryOutcome = {
+  /** The URIs the row still has to name: nothing left means the row is gone. */
+  stillFailed: string[];
+  /** The follow-up run for the photos that went through, when there was something to send. */
+  jobId: string | null;
+};
+
+/**
+ * Prøv igen: prepares only the failed photos and hands them to `send`. A photo that fails to
+ * prepare again, or every photo when the send itself fails, stays in the row.
+ */
+export async function retryUploadFailures<T>(input: {
+  uris: string[];
+  prepare: (uris: string[]) => Promise<{ photos: T[]; failedUris: string[] }>;
+  /** Resolves to the follow-up job id, or null when there is nothing to send (no jersey to join). */
+  send: (photos: T[]) => Promise<string | null>;
+}): Promise<UploadRetryOutcome> {
+  try {
+    const { photos, failedUris } = await input.prepare(input.uris);
+    const jobId = await input.send(photos);
+    return { stillFailed: failedUris, jobId };
+  } catch {
+    return { stillFailed: input.uris, jobId: null };
+  }
+}
+
 export type OverviewDockModel = {
   primary: { label: string; disabled: boolean };
   tertiary: string | null;
