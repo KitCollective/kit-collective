@@ -43,7 +43,8 @@ name: kit-295
       id: typeahead-list
     timeout: 15000
 - hideKeyboard
-- tapOn: "OB, Klub"
+- tapOn:
+    id: typeahead-hit-club-.*
 - extendedWaitUntil:
     visible:
       id: jersey-tile-e2e00000-0000-4000-8000-000000000105
