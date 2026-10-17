@@ -284,28 +284,15 @@ export function uploadFailureRow(
 }
 
 /**
- * Runs `task` over `items` with at most `limit` in flight, and settles every one like
- * `Promise.allSettled` (same order). A pile of sixteen photos read at once stalls the image
- * manipulator on a slow device, so the grouping prepare goes a few at a time.
+ * Cuts a pile into batches of `size`. A pile of sixteen photos read at once stalls the image
+ * manipulator on a slow device, so the grouping prepare goes a batch at a time.
  */
-export async function settleWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  task: (item: T) => Promise<R>,
-): Promise<PromiseSettledResult<R>[]> {
-  const results: PromiseSettledResult<R>[] = new Array(items.length);
-  const queue = items.entries();
-  const worker = async () => {
-    for (const [index, item] of queue) {
-      try {
-        results[index] = { status: "fulfilled", value: await task(item) };
-      } catch (reason) {
-        results[index] = { status: "rejected", reason };
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
+export function inBatches<T>(items: T[], size: number): T[][] {
+  const batches: T[][] = [];
+  for (let start = 0; start < items.length; start += size) {
+    batches.push(items.slice(start, start + size));
+  }
+  return batches;
 }
 
 /** Splits a prepare run into what can be sent and the URIs whose prepare was rejected. */

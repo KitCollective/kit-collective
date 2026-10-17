@@ -1,11 +1,7 @@
 import type { VisionJobResponse } from "@kit/api-contract";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchVisionGroupingJob, startVisionGroupingSuggest } from "@/api/vision-grouping";
-import {
-  pendingUploadFailures,
-  settleWithConcurrency,
-  splitPreparedPhotos,
-} from "@/capture/captureOverview";
+import { inBatches, pendingUploadFailures, splitPreparedPhotos } from "@/capture/captureOverview";
 import {
   applyGroupingSuggestion,
   ensureSessionPhotoIds,
@@ -25,12 +21,30 @@ import { motion } from "@/theme/tokens";
 
 const GROUPING_TIMEOUT_MS = 15_000;
 const GROUPING_POLL_INTERVAL_MS = 2_000;
+const GROUPING_START_TIMEOUT_MS = 30_000;
 /** Photos read and shrunk at once; a pile of sixteen in parallel stalls a slow device. */
-const GROUPING_PREPARE_CONCURRENCY = 4;
+const GROUPING_PREPARE_BATCH = 4;
 /** Between two landed groups, so the overview fills row by row rather than all at once. */
 export const GROUPING_ROW_STAGGER_MS = motion.fast;
 
 type PreparedGroupingPhoto = { photoId: string; contentBase64: string };
+
+/** A start request that never answers must end as "Vision did not answer", not a spinner. */
+function withinTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Vision grouping start timed out")), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -38,14 +52,19 @@ function wait(ms: number): Promise<void> {
 
 /** Prepares each photo on its own, so one that fails never takes the others down with it. */
 async function prepareGroupingPhotos(state: CaptureSessionState, uris: string[]) {
-  const prepared = await settleWithConcurrency(
-    uris,
-    GROUPING_PREPARE_CONCURRENCY,
-    async (uri): Promise<PreparedGroupingPhoto> => ({
-      photoId: state.photoIdByUri?.[uri] ?? "",
-      contentBase64: await readPreparedPhotoBase64(uri, "other", "groupingThumb"),
-    }),
-  );
+  const prepared: PromiseSettledResult<PreparedGroupingPhoto>[] = [];
+  for (const batch of inBatches(uris, GROUPING_PREPARE_BATCH)) {
+    prepared.push(
+      ...(await Promise.allSettled(
+        batch.map(
+          async (uri): Promise<PreparedGroupingPhoto> => ({
+            photoId: state.photoIdByUri?.[uri] ?? "",
+            contentBase64: await readPreparedPhotoBase64(uri, "other", "groupingThumb"),
+          }),
+        ),
+      )),
+    );
+  }
   return splitPreparedPhotos(uris, prepared);
 }
 
@@ -197,7 +216,10 @@ export function useConfirmGrouping({
           return;
         }
 
-        const nextJobId = await startVisionGroupingSuggest(accessToken, request);
+        const nextJobId = await withinTimeout(
+          startVisionGroupingSuggest(accessToken, request),
+          GROUPING_START_TIMEOUT_MS,
+        );
         if (mountedRef.current) {
           setJobId(nextJobId);
         }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   completeOverviewDraft,
   firstUnsavedDraftId,
+  inBatches,
   inboxRow,
   nextUnsavedDraftId,
   overviewCaption,
@@ -13,7 +14,6 @@ import {
   parkedRow,
   pendingSkeletonRows,
   pendingUploadFailures,
-  settleWithConcurrency,
   shouldOpenBulkOverview,
   shouldOpenUnassigned,
   splitPreparedPhotos,
@@ -438,28 +438,15 @@ describe("upload failure row", () => {
     });
   });
 
-  it("prepares a big pile a few photos at a time, keeps the order and lets one failure through", async () => {
-    let running = 0;
-    let peak = 0;
-    const results = await settleWithConcurrency(
+  it("cuts a big pile into batches that keep the order", () => {
+    const batches = inBatches(
       Array.from({ length: 16 }, (_, index) => index),
       4,
-      async (index) => {
-        running += 1;
-        peak = Math.max(peak, running);
-        await new Promise((resolve) => setTimeout(resolve, 1));
-        running -= 1;
-        if (index === 5) {
-          throw new Error("heic");
-        }
-        return index * 2;
-      },
     );
-    expect(peak).toBe(4);
-    expect(results).toHaveLength(16);
-    expect(results[4]).toEqual({ status: "fulfilled", value: 8 });
-    expect(results[5]?.status).toBe("rejected");
-    expect(results[15]).toEqual({ status: "fulfilled", value: 30 });
+    expect(batches.map((batch) => batch.length)).toEqual([4, 4, 4, 4]);
+    expect(batches.flat()).toEqual(Array.from({ length: 16 }, (_, index) => index));
+    expect(inBatches([1, 2, 3], 2)).toEqual([[1, 2], [3]]);
+    expect(inBatches([], 4)).toEqual([]);
   });
 
   it("only counts failed photos that are still loose in the session", () => {
