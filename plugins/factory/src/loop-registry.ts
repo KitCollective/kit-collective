@@ -48,6 +48,15 @@ const loopSchema = z
 const registrySchema = z
   .object({
     loops: z.array(loopSchema).min(1),
+    github: z
+      .object({
+        ownerRepo: z
+          .string()
+          .regex(/^[\w.-]+\/[\w.-]+$/)
+          .optional(),
+      })
+      .passthrough()
+      .optional(),
     flow: z
       .object({ maxRunsPerDay: z.number().int().min(1).optional() })
       .passthrough()
@@ -92,6 +101,8 @@ export interface Registry {
   loops: Loop[];
   /** `flow.maxRunsPerDay`: starts of one issue in 24 h, or null when the config sets none. */
   maxRunsPerDay: number | null;
+  /** `github.ownerRepo` (`owner/name`), which a run's PR number links into; null when unset. */
+  repo: string | null;
 }
 
 export type ParsedRegistry = { ok: true; registry: Registry } | { ok: false; error: string };
@@ -121,6 +132,7 @@ export function parseRegistry(text: string): ParsedRegistry {
     registry: {
       loops: result.data.loops,
       maxRunsPerDay: result.data.flow?.maxRunsPerDay ?? null,
+      repo: result.data.github?.ownerRepo ?? null,
     },
   };
 }

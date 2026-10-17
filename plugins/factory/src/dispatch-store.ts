@@ -22,6 +22,12 @@ export interface Dispatch {
   outcome: string | null;
   startedAt: number;
   endedAt: number | null;
+  /** The workflow run the launcher started, once the board has seen it. */
+  workflowRunId: string | null;
+  /** The workflow's current phase, or the last one it reached. */
+  step: string | null;
+  /** The run's pull request, once the workflow or the issue names one. */
+  prNumber: number | null;
 }
 
 /** Appended to the run ledger's migrations; never reorder. */
@@ -41,8 +47,9 @@ export const DISPATCH_MIGRATIONS = [
 ];
 
 /**
- * Appended after every other migration list, because the lists run as one
- * sequence and an insert in the middle would move the ones after it.
+ * Appended after the run, dispatch and agent migrations (the gate and run
+ * migrations follow it), because the lists run as one sequence and an insert
+ * in the middle would move the ones after it.
  */
 export const LOOP_MIGRATIONS = [
   `ALTER TABLE dispatches ADD COLUMN loop TEXT`,
@@ -58,6 +65,17 @@ export const LOOP_MIGRATIONS = [
   `CREATE INDEX decisions_subject ON decisions (loop, issue, id)`,
 ];
 
+/**
+ * Appended after the gate migrations (`GATE_MIGRATIONS` in gate-store.ts,
+ * which development already ships right after the Loop ones), for the runs
+ * page: what the board has seen of a run's workflow.
+ */
+export const RUN_MIGRATIONS = [
+  `ALTER TABLE dispatches ADD COLUMN workflow_run_id TEXT`,
+  `ALTER TABLE dispatches ADD COLUMN step TEXT`,
+  `ALTER TABLE dispatches ADD COLUMN pr_number INTEGER`,
+];
+
 /** What the Board decided about an issue (or, for a refusal, about the whole registry). */
 export type DecisionKind = "start" | "skip" | "refusal";
 
@@ -70,6 +88,24 @@ export interface Decision {
   issue: string | null;
   kind: DecisionKind;
   reason: string;
+}
+
+/** A gate Optio ran for a run: its exit code, its verdict line and the commit it judged. */
+export interface GateVerdict {
+  at: number;
+  gate: string;
+  exitCode: number;
+  verdict: string;
+  commit: string | null;
+  threadId: string | null;
+}
+
+/** The runs page's states: a stall that was released is still a run that stopped. */
+export type RunState = "running" | "stopped" | "handed-over";
+
+export interface Run extends Dispatch {
+  state: RunState;
+  gates: GateVerdict[];
 }
 
 interface DecisionRow {
@@ -93,7 +129,29 @@ interface Row {
   outcome: string | null;
   started_at: number;
   ended_at: number | null;
+  workflow_run_id: string | null;
+  step: string | null;
+  pr_number: number | null;
 }
+
+/** A row of `gate_runs`, the table `optio_gate` writes (gate-store.ts). */
+interface GateRow {
+  at: number;
+  gate: string;
+  exit_code: number;
+  verdict_line: string | null;
+  sha: string | null;
+  thread_id: string;
+}
+
+const runState = (status: DispatchStatus): RunState =>
+  status === "active" ? "running" : status === "handed-over" ? "handed-over" : "stopped";
+
+const STATUSES: Record<RunState, DispatchStatus[]> = {
+  running: ["active"],
+  stopped: ["stalled", "released"],
+  "handed-over": ["handed-over"],
+};
 
 const toDispatch = (row: Row): Dispatch => ({
   id: row.id,
@@ -106,6 +164,9 @@ const toDispatch = (row: Row): Dispatch => ({
   outcome: row.outcome,
   startedAt: row.started_at,
   endedAt: row.ended_at,
+  workflowRunId: row.workflow_run_id,
+  step: row.step,
+  prNumber: row.pr_number,
 });
 
 export function createDispatchStore(db: Database) {
@@ -140,7 +201,73 @@ export function createDispatchStore(db: Database) {
         outcome: null,
         startedAt: input.now,
         endedAt: null,
+        workflowRunId: null,
+        step: null,
+        prNumber: null,
       };
+    },
+    /**
+     * Keeps what the board has seen of a run's workflow; a value it did not see leaves the last one.
+     * Returns whether the look showed something new: a run, a step or a PR the record did not hold.
+     */
+    observe(
+      id: string,
+      seen: { workflowRunId: string | null; step: string | null; prNumber: number | null },
+    ): boolean {
+      return (
+        db
+          .prepare(
+            `UPDATE dispatches SET workflow_run_id = COALESCE(@run, workflow_run_id), step = COALESCE(@step, step), pr_number = COALESCE(@pr, pr_number)
+             WHERE id = @id AND ((@run IS NOT NULL AND workflow_run_id IS NOT @run) OR (@step IS NOT NULL AND step IS NOT @step) OR (@pr IS NOT NULL AND pr_number IS NOT @pr))`,
+          )
+          .run({ run: seen.workflowRunId, step: seen.step, pr: seen.prNumber, id }).changes > 0
+      );
+    },
+    /**
+     * The runs page's list, newest first: every run of every Loop, optionally
+     * of one Loop and one state, each with the gate verdicts recorded for it.
+     */
+    runs(filter: { loop: string | null; state: RunState | null; limit: number }): Run[] {
+      const where: string[] = [];
+      const params: (string | number)[] = [];
+      if (filter.loop !== null) {
+        where.push(`loop = ?`);
+        params.push(filter.loop);
+      }
+      if (filter.state !== null) {
+        const statuses = STATUSES[filter.state];
+        where.push(`status IN (${statuses.map(() => "?").join(", ")})`);
+        params.push(...statuses);
+      }
+      // SAFETY: the query reads a table this store's own migrations create; the row type mirrors its columns.
+      const rows = db
+        .prepare(
+          `SELECT * FROM dispatches${where.length === 0 ? "" : ` WHERE ${where.join(" AND ")}`} ORDER BY started_at DESC, rowid DESC LIMIT ?`,
+        )
+        .all(...params, filter.limit) as Row[];
+      // The gates `optio_gate` ran for the run's issue while the run lasted. The
+      // tool records the calling thread, which is the workflow's, not the launcher's.
+      const gates = db.prepare(
+        `SELECT at, gate, exit_code, verdict_line, sha, thread_id FROM gate_runs
+         WHERE issue = ? AND outcome = 'ran' AND exit_code IS NOT NULL AND at >= ? AND (? IS NULL OR at <= ?)
+         ORDER BY id ASC`,
+      );
+      return rows.map((row) => ({
+        ...toDispatch(row),
+        state: runState(row.status),
+        // SAFETY: the query reads `gate_runs`, which GATE_MIGRATIONS (gate-store.ts) creates and server.ts
+        // applies before RUN_MIGRATIONS; GateRow mirrors the columns it selects.
+        gates: (gates.all(row.issue, row.started_at, row.ended_at, row.ended_at) as GateRow[]).map(
+          (gate) => ({
+            at: gate.at,
+            gate: gate.gate,
+            exitCode: gate.exit_code,
+            verdict: gate.verdict_line ?? "",
+            commit: gate.sha,
+            threadId: gate.thread_id,
+          }),
+        ),
+      }));
     },
     attach(id: string, threadId: string): void {
       db.prepare(`UPDATE dispatches SET thread_id = ? WHERE id = ?`).run(threadId, id);

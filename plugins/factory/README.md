@@ -55,6 +55,24 @@ records what it would do and starts nothing. The page's "Record of runs" lists
 every start, skip and refusal with its reason; a wait is written again only
 when its reason changes.
 
+## The runs page
+
+**Runs** (a button on the Agents list and on the Board) lists every run the
+Board started, per Loop and newest first: its issue, machine, current step, how
+long it has run, the gates Optio recorded for it, and why it stopped. It
+filters by Loop and by state: *running*, *stopped* (a stall, released or not)
+and *handed over* (with where the issue went).
+
+Each tick the Board notes, for every active run, the workflow run's id and
+phase and the PR the workflow reported, or else the newest `…/pull/<n>`
+attachment on the Linear issue; the last look before a run ends is kept. A run
+links to its launcher thread (the thread that started the workflow), copies
+`bb workflows status <run id>` for its workflow run, and opens its PR on GitHub
+when `github.ownerRepo` is set in `factory.config.json`. A stopped run's reason
+is the workflow's closing note plus the status the issue is in. Its gate
+verdicts are the gates `optio_gate` recorded (`gate_runs`) for the run's issue
+while the run lasted; a run with none shows none.
+
 ## Install
 
 The plugin is the workspace package `@kit/bb-plugin-optio` in `plugins/factory`.
