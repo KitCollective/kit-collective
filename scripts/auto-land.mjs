@@ -408,17 +408,18 @@ async function start() {
   const capped = dailyCap(events(), cap);
   if (capped) await refused(capped, head);
 
+  // `--slurp` wraps every page in one array; gh refuses it together with `--jq`, so the pages are
+  // flattened here (2026-10-17: KIT-392's start ended UNKNOWN on that refusal).
+  const pages = JSON.parse(
+    await gh([
+      "api",
+      "--paginate",
+      "--slurp",
+      `repos/${repo}/commits/${head}/check-runs?per_page=100`,
+    ]),
+  );
   const checks = latestCheckRuns(
-    JSON.parse(
-      await gh([
-        "api",
-        "--paginate",
-        "--slurp",
-        `repos/${repo}/commits/${head}/check-runs?per_page=100`,
-        "--jq",
-        "[.[].check_runs[] | {name, conclusion, started_at, id}]",
-      ]),
-    ),
+    (Array.isArray(pages) ? pages : [pages]).flatMap((page) => page?.check_runs ?? []),
   );
   // A check still running is not a refusal: run start again, as for the gate (exit 3).
   if (checks.some((check) => check.conclusion === null)) {
