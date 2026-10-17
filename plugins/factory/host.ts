@@ -16,7 +16,18 @@ const GATE_TIMEOUT_MS = 20 * 60_000;
 export const runProbe = ({ cwd }: { cwd: string }, context: { signal: AbortSignal }) =>
   runNodeScript({ cwd, script: PROBE_SCRIPT, timeoutMs: PROBE_TIMEOUT_MS, signal: context.signal });
 
+/** The gate's own wait ends this long before the host would kill it, so it answers with its waiting verdict. */
+const GATE_WAIT_MARGIN_MS = 60_000;
+
 type GateInput = (typeof hostContract.run_gate.input)["_output"];
+
+/**
+ * The `--timeout` (seconds) handed to `gate.mjs` for a host timeout. The gate treats it as the
+ * total budget of its call and prints a waiting verdict (exit 3) when CI is still pending, so a
+ * slow CI run is a verdict and not a kill. Only the gates that wait for checks take it.
+ */
+export const gateWaitSeconds = (hostTimeoutMs: number) =>
+  Math.max(1, Math.floor((hostTimeoutMs - GATE_WAIT_MARGIN_MS) / 1000));
 
 /**
  * Runs the fixed gate script in the given worktree. The commit SHA is read here, from the
@@ -24,11 +35,18 @@ type GateInput = (typeof hostContract.run_gate.input)["_output"];
  */
 export const runGate = async (input: GateInput, context: { signal: AbortSignal }) => {
   const { cwd, gate, pr, issue, timeoutMs } = input;
+  const hostTimeoutMs = timeoutMs ?? GATE_TIMEOUT_MS;
   const result = await runNodeScript({
     cwd,
     script: GATE_SCRIPT,
-    args: [gate, String(pr), "--issue", issue],
-    timeoutMs: timeoutMs ?? GATE_TIMEOUT_MS,
+    args: [
+      gate,
+      String(pr),
+      "--issue",
+      issue,
+      ...(gate === "land" ? [] : ["--timeout", String(gateWaitSeconds(hostTimeoutMs))]),
+    ],
+    timeoutMs: hostTimeoutMs,
     signal: context.signal,
   });
   const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], { cwd });

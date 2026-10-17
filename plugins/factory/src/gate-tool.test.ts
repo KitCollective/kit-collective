@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { afterEach, describe, expect, it } from "vitest";
-import { runGate } from "../host.js";
+import { gateWaitSeconds, runGate } from "../host.js";
 import plugin from "../server.js";
 import type { GateRun } from "./gate-store.js";
 import { validateGateCall } from "./gate-tool.js";
@@ -215,10 +215,22 @@ describe("the host entry's run_gate", () => {
     const result = await runGate({ cwd: dir, gate: "review", pr: 12, issue: "ABC-3" }, signal());
     expect(result).toMatchObject({
       exitCode: 0,
-      lastLine: "argv review 12 --issue ABC-3",
+      lastLine: "argv review 12 --issue ABC-3 --timeout 1140",
       sha,
       cwd: dir,
     });
+  });
+
+  it("hands the gate a wait budget below the host's timeout, so CI that is still pending is the gate's own verdict", async () => {
+    const { dir } = stubRepo('console.log("argv " + process.argv.slice(2).join(" "));\n');
+    const input = { cwd: dir, pr: 4, issue: "ABC-3" } as const;
+    expect(
+      await runGate({ ...input, gate: "pre-review", timeoutMs: 600_000 }, signal()),
+    ).toMatchObject({ lastLine: "argv pre-review 4 --issue ABC-3 --timeout 540" });
+    expect(await runGate({ ...input, gate: "land" }, signal())).toMatchObject({
+      lastLine: "argv land 4 --issue ABC-3",
+    });
+    expect(gateWaitSeconds(200)).toBe(1);
   });
 
   it("reports a closed gate's exit code", async () => {
