@@ -384,3 +384,88 @@ export async function createProjectComment(gql, { project, body }) {
   );
   return commentCreate.comment;
 }
+
+/** The heading the single workpad comment starts with (`agent.workpadHeading` in factory.config.json). */
+const WORKPAD_HEADING = "## Agent Workpad";
+
+/**
+ * Replaces the body of one `### <section>` of a workpad comment, leaving every other byte as it
+ * is. A section ends at the next heading of level 1 to 3. Returns null when the workpad has no
+ * such section.
+ * @param {string} workpad
+ * @param {string} section the heading text without the `###`, e.g. `Waiting`
+ * @param {string[]} lines
+ */
+export function replaceWorkpadSection(workpad, section, lines) {
+  const all = workpad.split("\n");
+  const start = all.findIndex((line) => line.trimEnd() === `### ${section}`);
+  if (start === -1) {
+    return null;
+  }
+  const after = all.slice(start + 1);
+  const next = after.findIndex((line) => /^#{1,3}\s/.test(line));
+  const head = all.slice(0, start + 1);
+  if (next === -1) {
+    return [...head, "", ...lines].join("\n") + (workpad.endsWith("\n") ? "\n" : "");
+  }
+  return [...head, "", ...lines, "", ...after.slice(next)].join("\n");
+}
+
+/**
+ * @param {string[]} argv arguments after `waiting`
+ * @returns {{ issue: string, stage: string, ask: string }}
+ */
+export function parseWaitingArgs(argv) {
+  const usage = "waiting <KIT-n> --stage <text> --ask <text>";
+  const issue = issueIdentifier(argv[0]);
+  if (!issue) {
+    throw new LinearUsageError(usage);
+  }
+  const [stage, ask] = ["--stage", "--ask"].map((flag) => optionValue(argv, flag)?.trim());
+  if (!stage || !ask) {
+    throw new LinearUsageError(`--stage and --ask are required: ${usage}`);
+  }
+  if (/[\r\n]/.test(stage + ask)) {
+    throw new LinearUsageError(`--stage and --ask are one line each: ${usage}`);
+  }
+  return { issue, stage, ask };
+}
+
+/**
+ * Fills `### Waiting` in the issue's single workpad comment (updated in place, never a new
+ * comment). Returns the comment id.
+ * @param {(query: string, variables?: object) => Promise<any>} gql
+ * @param {{ issue: string, stage: string, ask: string, date: string }} input date is YYYY-MM-DD
+ */
+export async function fillWaiting(gql, { issue, stage, ask, date }) {
+  const { issue: found } = await gql(
+    "query($id: String!) { issue(id: $id) { comments(first: 250) { nodes { id body } } } }",
+    { id: issue },
+  );
+  if (!found) {
+    throw new LinearUsageError(`${issue} not found in this workspace`);
+  }
+  const pads = found.comments.nodes.filter((comment) =>
+    comment.body.trimStart().startsWith(WORKPAD_HEADING),
+  );
+  if (pads.length !== 1) {
+    throw new LinearUsageError(
+      pads.length === 0
+        ? `${issue} has no workpad comment`
+        : `${issue} has ${pads.length} workpad comments, expected one`,
+    );
+  }
+  const [pad] = pads;
+  const body = replaceWorkpadSection(pad.body, "Waiting", [
+    `- ${ask}`,
+    `- Stage: ${stage}. Asked: ${date}`,
+  ]);
+  if (body === null) {
+    throw new LinearUsageError(`the workpad of ${issue} has no ### Waiting section`);
+  }
+  await gql(
+    "mutation($id: String!, $input: CommentUpdateInput!) { commentUpdate(id: $id, input: $input) { success } }",
+    { id: pad.id, input: { body } },
+  );
+  return pad.id;
+}

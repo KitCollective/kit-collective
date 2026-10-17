@@ -28,7 +28,6 @@ const SHA = "a".repeat(40);
  * @param {(round: number) => any} [opts.engineer] returns the engineer result (or null / throws)
  * @param {(round: number) => any} [opts.reviewer]
  * @param {any} [opts.lead]
- * @param {(prompt: string) => any} [opts.waiting] the `### Waiting` writer of a gate-detected stop
  */
 async function run({
   args = { issue: "KIT-9" },
@@ -37,7 +36,6 @@ async function run({
   reviewer,
   lead,
   startDecision,
-  waiting,
 } = {}) {
   const commands = [];
   const spawns = [];
@@ -77,9 +75,6 @@ async function run({
         if (result.code !== 0 && !prompt.includes("Run every command even when one fails.")) break;
       }
       return { results };
-    }
-    if (options.label.startsWith("waiting:")) {
-      return waiting ? waiting(prompt) : { written: true };
     }
     if (options.label.startsWith("lead:")) {
       return lead ?? { outcome: "plan", sentence: "planned", threadId: "thr_lead0001" };
@@ -364,6 +359,11 @@ test("a red review loops once to a fix pass, logs the red audit, and stops at th
   const second = agentSpawns(spawns).filter((s) => s.options.label.startsWith("engineer:"))[1];
   assert.match(second.prompt, /AC 2 is not met/);
   assert.ok(!commands.some((c) => c.includes("audit-receipt")));
+  // The round-cap stop fills ### Waiting with fixed text: the Reviewer's sentence never enters the command.
+  assert.deepEqual(waitingCmds(commands), [
+    'node scripts/linear.mjs waiting KIT-9 --stage "review gate" --ask "needs-human: round cap reached after a red review, the findings are under ### Review feedback"',
+  ]);
+  assert.equal(commands.at(-1), waitingCmds(commands)[0]);
 });
 
 test("red then green: the second round reaches Approval", async () => {
@@ -902,45 +902,53 @@ test("the Device flows request rides in front of every pre-review slice, not onl
   });
 });
 
-test("a gate-detected needs-human stop fills ### Waiting through the writer, once, and survives a failed write", async () => {
+const waitingCmds = (commands) => commands.filter((c) => c.includes("linear.mjs waiting"));
+const WAITING_DEVICE_FLOWS =
+  'node scripts/linear.mjs waiting KIT-9 --stage "pre-review gate" --ask "needs-human: run device-run.sh on the Mac on abc1234"';
+
+test("a gate-detected needs-human stop fills ### Waiting with linear.mjs waiting, once, after the move, with no agent", async () => {
   const noVerdict = await run({
     shell: (c) => (isPre(c) ? { code: 1, line: NO_VERDICT_LINE } : undefined),
   });
-  const writers = agentSpawns(noVerdict.spawns).filter((s) =>
-    s.options.label.startsWith("waiting:"),
+  assert.deepEqual(waitingCmds(noVerdict.commands), [WAITING_DEVICE_FLOWS]);
+  assert.equal(noVerdict.commands.at(-1), WAITING_DEVICE_FLOWS);
+  assert.equal(lastState(noVerdict.commands), "Approval");
+  assert.ok(
+    noVerdict.commands.findIndex((c) => c.includes('state KIT-9 "Approval"')) <
+      noVerdict.commands.indexOf(WAITING_DEVICE_FLOWS),
   );
-  assert.equal(writers.length, 1);
-  const prompt = writers[0].prompt;
-  assert.match(prompt, /### Waiting/);
-  assert.match(prompt, /needs-human: run device-run\.sh on the Mac on abc1234/);
-  assert.match(prompt, /Stage: pre-review gate/);
-  assert.match(prompt, /comment-update/);
-  assert.equal(writers[0].options.model, "claude-haiku-5-5");
-  // The stop is made before the writer runs, so a writer that fails or throws changes nothing.
+  assert.ok(!agentSpawns(noVerdict.spawns).some((s) => s.options.label.startsWith("waiting:")));
+
+  // A write that fails leaves the stop standing: the state was set before it.
   const failing = await run({
-    shell: (c) => (isPre(c) ? { code: 1, line: NO_VERDICT_LINE } : undefined),
-    waiting: () => {
-      throw new Error("no result");
-    },
+    shell: (c) =>
+      isPre(c)
+        ? { code: 1, line: NO_VERDICT_LINE }
+        : c.includes("linear.mjs waiting")
+          ? { code: 1, line: "linear: the workpad of KIT-9 has no ### Waiting section" }
+          : undefined,
   });
   assert.equal(failing.result.status, "Approval");
   assert.equal(lastState(failing.commands), "Approval");
 
-  // The exhausted-pending ending writes it too; an ordinary ci-pending stop and a red gate do not.
+  // The exhausted-pending ending writes it too; an ordinary ci-pending stop does not.
   const pending = await run({
     shell: (c) => (isPre(c) ? { code: 3, line: PENDING_LINE("") } : undefined),
   });
-  assert.equal(
-    agentSpawns(pending.spawns).filter((s) => s.options.label.startsWith("waiting:")).length,
-    1,
-  );
+  assert.deepEqual(waitingCmds(pending.commands), [WAITING_DEVICE_FLOWS]);
   const plain = await run({
     shell: (c) => (isPre(c) ? { code: 3, line: "WAITING: checks pending" } : undefined),
   });
-  assert.equal(
-    agentSpawns(plain.spawns).filter((s) => s.options.label.startsWith("waiting:")).length,
-    0,
-  );
+  assert.equal(waitingCmds(plain.commands).length, 0);
+});
+
+test("a resume whose gate has no Device flows verdict fills ### Waiting the same way", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(0, (c) => (isPre(c) ? { code: 1, line: NO_VERDICT_LINE } : undefined)),
+  });
+  assert.equal(result.status, "Approval");
+  assert.deepEqual(waitingCmds(commands), [WAITING_DEVICE_FLOWS]);
 });
 
 test("an Engineer without a simulator returns blocked needs-human for the Mac run: Approval, no Reviewer", async () => {
