@@ -56,10 +56,9 @@ name: kit-290
 - takeScreenshot: kc__kit-290__01-photo-and-title-block
 # AC 5, 6: the fact rows (Størrelse, Stand; no Badge row), then the owner last: Ejer, the Avatar,
 # the Handle, city · n trøjer (no city when Vis by is off) and a chevron.
-- scrollUntilVisible:
-    element:
-      id: foreign-jersey-owner-row
-    centerElement: false
+# The owner row sits in the screen's bounds before it is scrolled clear of the dock, so
+# scrollUntilVisible would stop at once: scroll the column down the one step it has.
+- scroll
 - runFlow: ../subflows/settle.yaml
 - takeScreenshot: kc__kit-290__02-fact-rows-and-owner
 # AC 10: the dock shows Button primary Send bud at the bottom with a hairline above it.
@@ -86,18 +85,14 @@ name: kit-290
       id: foreign-jersey-report
     timeout: 10000
 # AC 6: the owner row opens Peer Profil.
-- scrollUntilVisible:
-    element:
-      id: foreign-jersey-owner-row
-    centerElement: false
+- scroll
+- runFlow: ../subflows/settle.yaml
 - tapOn:
     id: foreign-jersey-owner-row
+# Peer Profil lists the owner's one jersey (OB), the tile the detail does not have.
 - extendedWaitUntil:
-    notVisible:
-      id: foreign-jersey-owner-row
-    timeout: 15000
-- extendedWaitUntil:
-    visible: "e2e_peer"
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000
