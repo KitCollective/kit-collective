@@ -43,28 +43,26 @@ const schedulerSchema = z
     mode: z.enum(["off", "dry-run", "live"]).default("dry-run"),
     projectId: z.string().min(1),
     teamKey: z.string().regex(/^[A-Z][A-Z0-9]*$/),
-    /** The named workflow one issue runs through; it gets `{ issue, resume?, machine }`. */
-    workflow: z
-      .string()
-      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
-      .max(64),
-    /** The state a ready issue waits in; the board starts issues from here. */
-    dispatchState: z.string().min(1),
-    /** The label that marks an issue in the dispatch state as ready to start. */
-    readyLabel: z.string().min(1),
+    /**
+     * `workflow`, `dispatchState`, `readyLabel`, `skipLabels` and `priorityOrder` moved
+     * to the Loop registry in the project's `factory.config.json`. Kept so a config stored
+     * before that still parses; nothing reads them.
+     */
+    workflow: z.string().optional(),
+    dispatchState: z.string().optional(),
+    readyLabel: z.string().optional(),
+    skipLabels: z.array(z.string()).optional(),
+    priorityOrder: z.array(z.number().int().min(0).max(4)).optional(),
     /** Where unstarted work waits before the orchestrator promotes it. */
     backlogState: z.string().min(1),
     /** Ask the orchestrator to promote from the backlog when the ready queue has room. */
     autoPromote: z.boolean().default(false),
     /** The least time between two such requests. */
     refillMinutes: z.number().int().min(5).max(1440).default(30),
-    skipLabels: z.array(z.string().min(1)).default([]),
     /** States in which an issue is being worked on and holds its write scope. */
     activeStates: z.array(z.string().min(1)).min(1),
-    /** Issues here go back to `dispatchState` once every blocker is completed or canceled. */
-    /** Null when the team has no such state. */
+    /** Issues here go back to the first issue Loop's state once every blocker is completed or canceled. Null when the team has no such state. */
     blockedState: z.string().min(1).nullable(),
-    priorityOrder: z.array(z.number().int().min(0).max(4)).default([1, 2, 3, 4, 0]),
     /** Consecutive runs that may end without a hand-over before only a person can restart the issue. */
     maxAttempts: z.number().int().min(1).max(5).default(2),
     /** How long a started run may take to show its workflow before it counts as ended. */

@@ -24,6 +24,31 @@
     "requireUnblocked": true,
     "priorityOrder": [1, 2, 3, 4, 0]
   },
+  "loops": [
+    {
+      "name": "AFK developer",
+      "enabled": true,
+      "workflow": "afk-developer",
+      "trigger": {
+        "kind": "issue",
+        "state": "To-do",
+        "label": "ready-for-agent",
+        "unblocked": true,
+        "skipLabels": ["signal-up", "needs-info", "ready-for-human", "wontfix"],
+        "priorityOrder": [1, 2, 3, 4, 0]
+      },
+      "machines": ["harness", "mac"],
+      "maxLive": 3
+    },
+    {
+      "name": "Milestone scenarios",
+      "enabled": false,
+      "workflow": "milestone-scenarios",
+      "trigger": { "kind": "milestone-done", "states": ["Done", "Canceled"] },
+      "machines": ["harness"],
+      "maxLive": 1
+    }
+  ],
   "states": [
     { "name": "Backlog", "type": "backlog", "color": "#bec2c8" },
     { "name": "To-do", "type": "unstarted", "color": "#e2e2e2" },

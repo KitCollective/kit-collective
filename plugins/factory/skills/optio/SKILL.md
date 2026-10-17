@@ -86,33 +86,39 @@ starts the agent in a new thread with the issue attached as data.
 The board is the orchestrator's standing half. In `live` mode, every minute, it
 reads the team's issues from Linear and:
 
-- starts the configured workflow for each issue that is in the dispatch state,
-  carries the ready label and no skip label, has no open blocker, does not
-  overlap the write scope of work in progress, and fits a machine with a free
-  slot and the capabilities the issue needs. Order: focus milestone, then
-  priority, then age. An issue it started before is started with `resume`;
+- reads the Loop registry (the `loops` block of `factory.config.json` in the
+  project checkout) first, on every tick. A registry that does not parse is
+  refused: nothing starts and the reason is recorded;
+- starts the Loop's workflow for each issue that is in the Loop's state,
+  carries its ready label and none of its skip labels, has no open blocker,
+  does not overlap the write scope of work in progress, belongs to a Loop
+  with a free live-run slot, has not been started `flow.maxRunsPerDay` times in
+  24 hours, and fits one of the Loop's machines with a free slot and the
+  capabilities the issue needs. Order: focus milestone, then the Loop's
+  priority order, then age. An issue it started before is started with
+  `resume`. Every start, skip and refusal is written to the record of runs;
 - when "refill the queue from the backlog" is on and the ready queue has room, asks the
   orchestrator agent, at most once per half hour, to choose backlog issues to
   promote. The orchestrator promotes with `bb optio promote`; the workflow
   the board then starts is what moves the issue on to an active state;
-- moves a blocked issue back to the dispatch state once every blocker is
-  completed or canceled;
+- moves a blocked issue back to the first enabled issue Loop's state once every
+  blocker is completed or canceled;
 - closes its runs that ended. A run whose issue is still in the dispatch state
   or a working state **stalled**: it stopped at a gate. The board never restarts
   a stalled issue by itself and never merges; it reports the stall to the
   orchestrator agent's thread in an `[optio]` message.
 
-The dispatch, backlog, active and blocked states and the ready label are the
-board's configuration, set when it is set up; the plugin names none itself.
-Mode, focus, machines, capacity and routing rules are edited on the Agents
-page under Board.
+The Loops' states, labels and workflows come from the registry; the backlog,
+active and blocked states are the board's configuration, set when it is set up.
+The plugin names none itself. Mode, focus, machines, capacity and routing rules
+are edited on the Agents page under Board.
 
 | Command | Effect |
 | --- | --- |
-| `bb optio board [--json]` | Open issues per state and milestone, what runs, what starts next, and why each other ready issue waits. Reads Linear; writes nothing. |
+| `bb optio board [--json]` | The Loops, open issues per state and milestone, what runs, what starts next, why each other ready issue waits, and the newest entries of the record of runs. Says why and exits 1 when the registry is refused. Reads Linear; writes nothing. |
 | `bb optio focus set "<milestone>"` | That milestone's issues go first; others fill the capacity left. |
 | `bb optio focus clear` | Back to priority order. |
-| `bb optio promote <issue> --reason "<why now>"` | Move a backlog issue to the dispatch state with the ready label and the reason as a comment. Refused when the issue is not in the backlog, is blocked, carries a skip label, or the queue (running plus ready) already equals the machines' capacity. Live mode only. |
+| `bb optio promote <issue> --reason "<why now>"` | Move a backlog issue to the first enabled issue Loop's state with its ready label and the reason as a comment. Refused when the registry is refused, the issue is not in the backlog, is blocked, carries a skip label, or the queue (running plus ready) already equals the machines' capacity. Live mode only. |
 | `bb optio resume <issue> [--machine <id>]` | Start a stalled issue's workflow again with `resume`. Refused at the attempt cap or when the machine is full. |
 | `bb optio release <issue>` | Clear a stall after the issue was parked or fixed by hand. |
 | `bb optio dispatches [--limit <n>]` | The workflow runs the board started. |

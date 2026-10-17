@@ -18,6 +18,8 @@ type Rpc = <M extends keyof Contract & string>(
 
 async function load(settings: Record<string, unknown> = {}) {
   let threads = 0;
+  /** What the project checkout holds: the registry the board reads every tick. */
+  const checkout = { registry: "", encoding: "utf8" as "utf8" | "base64" };
   const host = createFakePluginHost({
     pluginId: "optio",
     settings: { linearWebhookSecret: "whsec", ...settings },
@@ -30,7 +32,18 @@ async function load(settings: Record<string, unknown> = {}) {
         },
         get: async () => ({ status: "active", archivedAt: null }),
       },
-      projects: { list: async () => [{ id: "proj_1", name: "acme" }] },
+      projects: {
+        list: async () => [{ id: "proj_1", name: "acme" }],
+        fileContent: async () => ({
+          content:
+            checkout.encoding === "base64"
+              ? Buffer.from(checkout.registry).toString("base64")
+              : checkout.registry,
+          contentEncoding: checkout.encoding,
+          mimeType: "application/json",
+          sizeBytes: checkout.registry.length,
+        }),
+      },
       hosts: { list: async () => [{ id: "host_1", name: "Mac" }] },
     },
   });
@@ -46,7 +59,7 @@ async function load(settings: Record<string, unknown> = {}) {
     enabled: true,
     httpTrigger: true,
   });
-  return { harness: host.harness, rpc, agent };
+  return { harness: host.harness, rpc, agent, checkout };
 }
 
 type Loaded = Awaited<ReturnType<typeof load>>;
@@ -183,18 +196,13 @@ describe("session instructions", () => {
 
 describe("the board", () => {
   it("is set up from the page in dry-run and edited without JSON", async () => {
-    const { rpc } = await load();
+    const { rpc, checkout } = await load();
     expect(await rpc("board_get", null)).toMatchObject({ configured: false, mode: "off" });
-    await expect(
-      rpc("board_setup", { projectId: "proj_1", teamKey: "ENG", workflow: "issue-run" }),
-    ).rejects.toThrow();
+    await expect(rpc("board_setup", { projectId: "proj_1", teamKey: "ENG" })).rejects.toThrow();
     expect(await rpc("board_get", null)).toMatchObject({ configured: false });
     await rpc("board_setup", {
       projectId: "proj_1",
       teamKey: "ENG",
-      workflow: "issue-run",
-      dispatchState: "Ready",
-      readyLabel: "agent-ready",
       backlogState: "Icebox",
       activeStates: ["Doing", "Reviewing"],
       blockedState: null,
@@ -217,11 +225,179 @@ describe("the board", () => {
       machines: [{ id: "mac", cap: 1 }],
       requirements: [{ capability: "postgres" }],
     });
-    // No Linear key in this host: the plan cannot be read, and the page is told why.
-    expect(board.error).toContain("no Linear API key");
+    // The checkout holds no registry yet: the board refuses before it asks Linear anything.
+    expect(board.registryError).toContain("factory.config.json is not valid JSON");
+    expect(board.error).toBeNull();
+    // With one, but no Linear key in this host, the plan cannot be read, and the page is told why.
+    checkout.registry = JSON.stringify({
+      loops: [
+        {
+          name: "Issue run",
+          enabled: true,
+          workflow: "issue-run",
+          trigger: { kind: "issue", state: "Ready", label: "agent-ready", unblocked: true },
+          machines: ["mac"],
+          maxLive: 1,
+        },
+      ],
+    });
+    expect((await rpc("board_get", null)).error).toContain("no Linear API key");
     await rpc("board_update", { focus: null });
     expect((await rpc("board_get", null)).focus).toBeNull();
     expect((await rpc("hosts_list", null)).hosts).toEqual([{ id: "host_1", name: "Mac" }]);
+  });
+});
+
+describe("the board reads the Loop registry", () => {
+  const registry = (loops: unknown[] = [loop]) =>
+    JSON.stringify({ loops, flow: { maxRunsPerDay: 3 } });
+  const loop = {
+    name: "Issue run",
+    enabled: true,
+    workflow: "issue-run",
+    trigger: {
+      kind: "issue",
+      state: "Ready",
+      label: "agent-ready",
+      unblocked: true,
+      skipLabels: ["on-hold"],
+      priorityOrder: [1, 2, 3, 4, 0],
+    },
+    machines: ["mac"],
+    maxLive: 2,
+  };
+  const linearBoard = () =>
+    vi.fn(async () => {
+      const node = (identifier: string, labels: string[]) => ({
+        id: `id-${identifier}`,
+        identifier,
+        title: `Title of ${identifier}`,
+        priority: 2,
+        createdAt: "2026-10-01T00:00:00Z",
+        description: "",
+        state: { name: "Ready" },
+        labels: { nodes: labels.map((name) => ({ name })) },
+        projectMilestone: null,
+        project: null,
+        inverseRelations: { nodes: [] },
+      });
+      return new Response(
+        JSON.stringify({
+          data: {
+            teams: { nodes: [{ states: { nodes: [{ id: "s1", name: "Ready" }] } }] },
+            issues: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              nodes: [node("ENG-1", ["agent-ready"]), node("ENG-2", ["agent-ready", "on-hold"])],
+            },
+          },
+        }),
+      );
+    });
+
+  async function boardOn(mode: "dry-run" | "live") {
+    const loaded = await load({ linearApiKey: "lin_key" });
+    const { rpc } = loaded;
+    await rpc("board_setup", {
+      projectId: "proj_1",
+      teamKey: "ENG",
+      backlogState: "Icebox",
+      activeStates: ["Doing"],
+      blockedState: null,
+    });
+    await rpc("board_update", {
+      mode,
+      machines: [{ id: "mac", hostId: "host_1", branch: "origin/main", cap: 2, capabilities: [] }],
+    });
+    return loaded;
+  }
+
+  it("shows the plan in dry-run from the registry, records it and starts nothing", async () => {
+    vi.stubGlobal("fetch", linearBoard());
+    try {
+      const loaded = await boardOn("dry-run");
+      const { rpc, checkout, harness } = loaded;
+      checkout.registry = registry();
+      const board = await rpc("board_get", null);
+      expect(board.registryError).toBeNull();
+      expect(board.loops).toEqual([
+        {
+          name: "Issue run",
+          workflow: "issue-run",
+          kind: "issue",
+          enabled: true,
+          machines: ["mac"],
+          maxLive: 2,
+          running: 0,
+        },
+      ]);
+      expect(board.start).toMatchObject([
+        { identifier: "ENG-1", loop: "Issue run", machineId: "mac" },
+      ]);
+      expect(board.waiting).toEqual([
+        { identifier: "ENG-2", loop: "Issue run", reason: "labelled on-hold" },
+      ]);
+      // Reading the page records nothing; the scheduled tick does, and applies nothing.
+      expect(board.decisions).toEqual([]);
+      await harness.behavior.runSchedule("orchestrator-tick");
+      expect(spawns(loaded)).toHaveLength(0);
+      expect((await rpc("board_get", null)).decisions).toMatchObject(
+        [
+          { kind: "skip", issue: "ENG-2", mode: "dry-run", reason: "labelled on-hold" },
+          { kind: "start", issue: "ENG-1", mode: "dry-run", reason: "would start on mac" },
+        ].reverse(),
+      );
+      const cli = await harness.behavior.runCli(["board", "--json"], { threadId: "thr_x" });
+      expect(cli.exitCode).toBe(0);
+      expect(JSON.parse(cli.stdout)).toMatchObject({
+        loops: [{ name: "Issue run", workflow: "issue-run" }],
+        start: [{ identifier: "ENG-1", loop: "Issue run" }],
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("starts the Loop's workflow in live, and reads the file whatever its encoding", async () => {
+    vi.stubGlobal("fetch", linearBoard());
+    try {
+      const loaded = await boardOn("live");
+      loaded.checkout.registry = registry([{ ...loop, workflow: "other-run" }]);
+      loaded.checkout.encoding = "base64";
+      await loaded.harness.behavior.runSchedule("orchestrator-tick");
+      const [spawned] = spawns(loaded);
+      expect(JSON.stringify(spawned)).toContain("--name other-run ");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("a registry that does not parse starts nothing and says why", async () => {
+    const fetchMock = linearBoard();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const loaded = await boardOn("live");
+      const { rpc, checkout, harness } = loaded;
+      checkout.registry = registry([{ ...loop, maxLive: -1 }]);
+      await harness.behavior.runSchedule("orchestrator-tick");
+      expect(spawns(loaded)).toHaveLength(0);
+      expect(fetchMock).not.toHaveBeenCalled();
+      const board = await rpc("board_get", null);
+      expect(board.registryError).toContain("factory.config.json.loops.0.maxLive");
+      expect(board.loops).toEqual([]);
+      expect(board.start).toEqual([]);
+      expect(board.decisions).toMatchObject([
+        { kind: "refusal", loop: null, issue: null, mode: "live" },
+      ]);
+      const cli = await harness.behavior.runCli(["board"], { threadId: "thr_x" });
+      expect(cli.exitCode).toBe(1);
+      expect(cli.stdout).toContain("nothing is planned or started");
+      // Fixed in the checkout, the next tick starts without a reload.
+      checkout.registry = registry();
+      await harness.behavior.runSchedule("orchestrator-tick");
+      expect(spawns(loaded)).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
