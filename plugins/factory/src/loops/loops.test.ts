@@ -214,7 +214,8 @@ describe("the Loops page", () => {
 
   it("refuses an unknown Loop, an unknown setting and a value out of range, and logs nothing", async () => {
     const { rpc } = await load();
-    const set = (input: object) => rpc("loops_set", { by: "Dana", ...input });
+    const set = (input: { loop: string; key: string; value: unknown; by?: string }) =>
+      rpc("loops_set", { by: "Dana", ...input });
     await expect(set({ loop: "No such", key: "enabled", value: false })).rejects.toThrow(
       /no Loop "No such"/,
     );

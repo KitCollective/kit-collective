@@ -20,11 +20,11 @@ import {
 import { createSettingsStore, type Override } from "../settings/store.js";
 import { json } from "../shared/cli.js";
 import type { LoopChangeDto, LoopDto, LoopsDto } from "./contract.js";
+import { formatSetting } from "./format.js";
 
 const SUBJECT = "loop:";
 const LOG_LIMIT = 100;
 
-const isKey = (key: string): key is SettingKey => (SETTING_KEYS as readonly string[]).includes(key);
 const iso = (ms: number) => new Date(ms).toISOString();
 
 function triggerSummary(loop: Loop): LoopDto["trigger"] {
@@ -40,53 +40,55 @@ function triggerSummary(loop: Loop): LoopDto["trigger"] {
       };
 }
 
+/** The overrides that hold a value the setting still accepts; one that no longer parses is ignored. */
+function parseOverrides(own: Map<string, Override> | undefined): Partial<SettingValues> {
+  const values: Partial<SettingValues> = {};
+  const enabled = settingSchemas.enabled.safeParse(own?.get("enabled")?.value);
+  if (enabled.success) values.enabled = enabled.data;
+  const maxLive = settingSchemas.maxLive.safeParse(own?.get("maxLive")?.value);
+  if (maxLive.success) values.maxLive = maxLive.data;
+  const startsPerDay = settingSchemas.startsPerDay.safeParse(own?.get("startsPerDay")?.value);
+  if (startsPerDay.success) values.startsPerDay = startsPerDay.data;
+  const schedule = settingSchemas.schedule.safeParse(own?.get("schedule")?.value);
+  if (schedule.success) values.schedule = schedule.data;
+  return values;
+}
+
+const setting = <T>(file: T, value: T | undefined, override: Override | undefined) => ({
+  value: value === undefined ? file : value,
+  file,
+  override:
+    value === undefined || override === undefined
+      ? null
+      : { by: override.by, at: iso(override.at) },
+});
+
 function loopDto(registry: Registry, loop: Loop, own: Map<string, Override> | undefined): LoopDto {
   const file = fileSettings(registry, loop);
-  const one = <K extends SettingKey>(key: K): LoopDto["settings"][K] => {
-    const override = own?.get(key);
-    return {
-      value: override === undefined ? file[key] : (override.value as SettingValues[K]),
-      file: file[key],
-      override: override === undefined ? null : { by: override.by, at: iso(override.at) },
-    } as LoopDto["settings"][K];
-  };
+  const values = parseOverrides(own);
   return {
     name: loop.name,
     workflow: loop.workflow,
     trigger: triggerSummary(loop),
     settings: {
-      enabled: one("enabled"),
-      maxLive: one("maxLive"),
-      startsPerDay: one("startsPerDay"),
-      schedule: one("schedule"),
+      enabled: setting(file.enabled, values.enabled, own?.get("enabled")),
+      maxLive: setting(file.maxLive, values.maxLive, own?.get("maxLive")),
+      startsPerDay: setting(file.startsPerDay, values.startsPerDay, own?.get("startsPerDay")),
+      schedule: setting(file.schedule, values.schedule, own?.get("schedule")),
     },
   };
-}
-
-const onOff = (on: boolean) => (on ? "on" : "off");
-function show<K extends SettingKey>(key: K, value: SettingValues[K]): string {
-  if (key === "enabled") return onOff(value as boolean);
-  if (key === "schedule") {
-    const window = value as SettingValues["schedule"];
-    return window === null ? "any time" : `${window.from}–${window.to} UTC`;
-  }
-  return value === null ? "no cap" : String(value);
 }
 
 function describe(loops: LoopDto[]): string {
   return loops
     .map((loop) => {
       const lines = SETTING_KEYS.map((key) => {
-        const { value, file, override } = loop.settings[key] as {
-          value: never;
-          file: never;
-          override: { by: string; at: string } | null;
-        };
+        const { value, file, override } = loop.settings[key];
         const tail =
           override === null
             ? ""
-            : ` (file: ${show(key, file)}; set by ${override.by} at ${override.at})`;
-        return `  ${key}: ${show(key, value)}${tail}`;
+            : ` (file: ${formatSetting(key, file)}; set by ${override.by} at ${override.at})`;
+        return `  ${key}: ${formatSetting(key, value)}${tail}`;
       });
       return [
         `${loop.name} (${loop.workflow}; starts from ${loop.trigger.summary})`,
@@ -103,9 +105,7 @@ export function createLoops(core: Core) {
   function overrides(): LoopOverrides {
     const result: LoopOverrides = {};
     for (const [subject, own] of store.overrides(SUBJECT)) {
-      const values: Record<string, unknown> = {};
-      for (const [key, override] of own) if (isKey(key)) values[key] = override.value;
-      result[subject.slice(SUBJECT.length)] = values as Partial<SettingValues>;
+      result[subject.slice(SUBJECT.length)] = parseOverrides(own);
     }
     return result;
   }
@@ -145,9 +145,12 @@ export function createLoops(core: Core) {
   }
 
   /** The Loop and the setting a request names, or why the request is refused. */
-  async function target(loopName: string, key: string): Promise<{ loop: Loop; key: SettingKey }> {
-    if (!isKey(key)) {
-      throw new Error(`"${key}" is not an Operating setting of a Loop: ${SETTING_KEYS.join(", ")}`);
+  async function target(loopName: string, name: string): Promise<{ loop: Loop; key: SettingKey }> {
+    const key = SETTING_KEYS.find((known) => known === name);
+    if (key === undefined) {
+      throw new Error(
+        `"${name}" is not an Operating setting of a Loop: ${SETTING_KEYS.join(", ")}`,
+      );
     }
     const registry = await fileRegistry();
     const loop = registry.loops.find((candidate) => candidate.name === loopName);

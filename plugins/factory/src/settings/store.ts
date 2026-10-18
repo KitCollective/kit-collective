@@ -85,6 +85,7 @@ export function createSettingsStore(db: Database.Database) {
   /** Writes the new override (or clears it) and logs the change; false when nothing changes. */
   const change = db.transaction(
     (subject: string, key: string, next: unknown | undefined, by: string, at: number): boolean => {
+      // SAFETY: `read` selects every column of operating_settings, which OverrideRow mirrors.
       const before = read.get(subject, key) as OverrideRow | undefined;
       const to = next === undefined ? null : JSON.stringify(next);
       if ((before?.value_json ?? null) === to) return false;
@@ -98,6 +99,7 @@ export function createSettingsStore(db: Database.Database) {
   return {
     /** The overrides of every subject whose name starts with `prefix`, by subject then key. */
     overrides(prefix: string): Map<string, Map<string, Override>> {
+      // SAFETY: the query selects every column of operating_settings, which OverrideRow mirrors.
       const rows = db
         .prepare("SELECT * FROM operating_settings WHERE substr(subject, 1, ?) = ?")
         .all(prefix.length, prefix) as OverrideRow[];
@@ -119,6 +121,7 @@ export function createSettingsStore(db: Database.Database) {
       change(subject, key, undefined, by, at),
     /** The newest changes of the subjects starting with `prefix`, newest first. */
     log(prefix: string, limit: number): Change[] {
+      // SAFETY: the query selects every column of operating_setting_log, which LogRow mirrors.
       const rows = db
         .prepare(
           "SELECT * FROM operating_setting_log WHERE substr(subject, 1, ?) = ? ORDER BY id DESC LIMIT ?",

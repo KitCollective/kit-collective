@@ -19,7 +19,10 @@ const loop = {
   machines: ["mac"],
   maxLive: 2,
 };
-const registryOf = (extra: object = {}, flow: object | null = { maxRunsPerDay: 3 }): Registry => {
+const registryOf = (
+  extra: { schedule?: { from: string; to: string } } = {},
+  flow: { maxRunsPerDay: number } | null = { maxRunsPerDay: 3 },
+): Registry => {
   const parsed = parseRegistry(
     JSON.stringify({ loops: [{ ...loop, ...extra }], ...(flow === null ? {} : { flow }) }),
   );

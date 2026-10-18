@@ -6,12 +6,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { LoopChangeDto, LoopDto } from "../../src/loops/contract";
+import { formatSetting } from "../../src/loops/format";
 import { when } from "../shared/common";
 import { Empty, Labeled, Page, Problem, Section } from "../shared/layout";
 import { useLoaded } from "../shared/use-loaded";
 
 type Settings = LoopDto["settings"];
-type Window = Settings["schedule"]["value"];
 
 const NAME_KEY = "optio.loops.by";
 
@@ -24,14 +24,6 @@ function useName() {
   };
   return [name, save] as const;
 }
-
-const showWindow = (window: Window) =>
-  window === null ? "any time" : `${window.from}–${window.to} UTC`;
-const showValue = (key: keyof Settings, value: unknown): string => {
-  if (key === "enabled") return value === true ? "on" : "off";
-  if (key === "schedule") return showWindow(value as Window);
-  return value === null ? "no cap" : String(value);
-};
 
 function SettingRow({
   label,
@@ -91,8 +83,8 @@ function LoopCard({
   const [to, setTo] = useState(schedule.value?.to ?? "18:00");
   const noName = by.trim() === "";
   const row = <K extends keyof Settings>(key: K) => ({
-    value: showValue(key, loop.settings[key].value),
-    file: showValue(key, loop.settings[key].file),
+    value: formatSetting(key, loop.settings[key].value),
+    file: formatSetting(key, loop.settings[key].file),
     override: loop.settings[key].override,
     onClear: () => void write(key, undefined),
     disabled: noName,
@@ -205,7 +197,7 @@ function LoopCard({
 
 function Log({ log }: { log: LoopChangeDto[] }) {
   const show = (key: string, change: LoopChangeDto["from"]) =>
-    change === null ? "file" : showValue(key as keyof Settings, change.value);
+    change === null ? "file" : formatSetting(key, change.value);
   return log.length === 0 ? (
     <Empty>No setting has been changed yet.</Empty>
   ) : (
