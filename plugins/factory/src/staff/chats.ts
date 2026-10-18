@@ -34,17 +34,11 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&
 
 /** Whether bb's answer to a thread read says the thread does not exist. */
 function isNotFound(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) return false;
-  const { code, status, message } = error as {
-    code?: unknown;
-    status?: unknown;
-    message?: unknown;
-  };
-  return (
-    status === 404 ||
-    (typeof code === "string" && /not.?found/i.test(code)) ||
-    (typeof message === "string" && /not.?found/i.test(message))
-  );
+  const text = (key: string) =>
+    typeof error === "object" && error !== null && key in error
+      ? String(Reflect.get(error, key))
+      : "";
+  return text("status") === "404" || /not.?found/i.test(`${text("code")} ${text("message")}`);
 }
 
 const userRow = z.object({
