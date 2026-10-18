@@ -70,7 +70,7 @@ async function run({
           (command.includes("start-decision.mjs")
             ? { code: 0, line: JSON.stringify(decision) }
             : command.startsWith("bb optio reviewer-served")
-              ? { code: 0, line: "SERVED thr_rev as z-ai/glm-5.3 (3 calls)" }
+              ? { code: 0, line: `SERVED ${REVIEWER_THREAD} as z-ai/glm-5.3 (3 calls)` }
               : { code: 0, line: "OPEN: fine" });
         // A `shell` answer with its own `exit` plays a runner that did not relay the printed marker.
         results.push({ exit: result.exit ?? `KIT-EXIT:${result.code}`, line: result.line });
@@ -1419,7 +1419,7 @@ test("a fresh run, and a resume without a PR, never ask for the resume point", a
 const runners = (spawns) => spawns.filter((s) => s.options.schema?.required?.includes("results"));
 const labels = (spawns) => runners(spawns).map((s) => s.options.label);
 
-test("a green run spends eight runners: the log lines ride with the gates", async () => {
+test("a green run spends nine runners: the log lines ride with the gates, and the proxied Reviewer's thread is looked up by title", async () => {
   const { result, commands, spawns } = await run();
   assert.equal(result.status, "Approval");
   assert.deepEqual(labels(spawns), [
@@ -1428,6 +1428,7 @@ test("a green run spends eight runners: the log lines ride with the gates", asyn
     "gate:pre-review",
     "head-changed",
     "linear:In Review",
+    "reviewer-served",
     "gate:review",
     "receipt:dry-run",
     "linear:Approval",
@@ -1537,6 +1538,7 @@ test("a resume that reviews the head as it is writes both skip lines on runners 
     "resume-point",
     "gate:pre-review",
     "linear:In Review",
+    "reviewer-served",
     "gate:review",
     "receipt:dry-run",
     "linear:Approval",
@@ -1865,7 +1867,11 @@ test("the Reviewer is GLM 5.3 through Optio's proxy on a catalog carrier, for ev
       /--step reviewer .*--provider claude-code --model z-ai\/glm-5.3/.test(c),
     ),
   );
-  assert.ok(sonnet.commands.some((c) => /^bb optio reviewer-served --thread thr_/.test(c)));
+  assert.ok(
+    sonnet.commands.some(
+      (c) => c === "bb optio reviewer-served --title reviewer:KIT-9:r1:openrouter",
+    ),
+  );
   const opus = await run({ startDecision: { engineerModel: "opus" } });
   const r2 = agentSpawns(opus.spawns).find((s) => s.options.label.startsWith("reviewer:"));
   assert.equal(r2.options.model, "claude-haiku-5-5");
@@ -1875,7 +1881,7 @@ test("a green review the proxy never served ran on the carrier: it holds In Revi
   const { result, commands } = await run({
     shell: (c) =>
       c.startsWith("bb optio reviewer-served")
-        ? { code: 1, line: "NOT SERVED thr_rev: the proxy forwarded no call of this thread" }
+        ? { code: 1, line: "NOT SERVED thr_reviewer01: the proxy forwarded no call of this thread" }
         : undefined,
   });
   assert.equal(result.status, "In Review");
@@ -1883,6 +1889,54 @@ test("a green review the proxy never served ran on the carrier: it holds In Revi
   assert.match(result.note, /did not serve/);
   assert.ok(commands.some((c) => c.includes("--code evidence-gap")));
   assert.ok(!commands.some((c) => c.includes("auto-land.mjs start")));
+});
+
+test("a Reviewer that reports the Issue thread's id is still found by its title, and the served review auto-lands (KIT-400, 2026-10-18)", async () => {
+  const ISSUE_THREAD = "thr_7jfxi558dt";
+  const SERVED_THREAD = "thr_2ktb6maqxm";
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    reviewer: () => ({ verdict: "green", sha: SHA, sentence: "clean", threadId: ISSUE_THREAD }),
+    shell: (c) =>
+      c === "bb optio reviewer-served --title reviewer:KIT-9:r1:openrouter"
+        ? { code: 0, line: `SERVED ${SERVED_THREAD} as z-ai/glm-5.3 (41 calls)` }
+        : autoLandShell()(c),
+  });
+  assert.equal(result.status, "Done");
+  assert.equal(result.stoppedAt, "done");
+  const at = (needle) => commands.findIndex((c) => c.includes(needle));
+  assert.ok(at("bb optio reviewer-served --title") < at("--step reviewer --outcome green"));
+  assert.match(
+    commands.find((c) => c.includes("spawn") && c.includes("--step reviewer")),
+    new RegExp(`--thread ${SERVED_THREAD} .*--model z-ai/glm-5.3`),
+  );
+  assert.match(
+    commands.find((c) => c.includes("--step reviewer --outcome green")),
+    new RegExp(`--usage-thread ${SERVED_THREAD}$`),
+  );
+  assert.match(
+    commands.find((c) => c.includes("audit-receipt.mjs")),
+    new RegExp(`--thread ${SERVED_THREAD} `),
+  );
+  assert.ok(!commands.some((c) => c.includes(ISSUE_THREAD)), "the model's id enters no command");
+  assert.ok(!commands.some((c) => c.includes("reviewer-served --thread")));
+});
+
+test("no thread with the Reviewer's title, or a runner that cannot ask, stops a green review as evidence-gap", async () => {
+  for (const answer of [
+    { code: 1, line: "NOT FOUND: no thread titled reviewer:KIT-9:r1:openrouter" },
+    null,
+  ]) {
+    const { result, commands } = await run({
+      args: { issue: "KIT-9", autoLand: true },
+      shell: (c) => (c.startsWith("bb optio reviewer-served") ? answer : autoLandShell()(c)),
+    });
+    assert.equal(result.status, "In Review");
+    assert.equal(result.stoppedAt, "receipt");
+    assert.ok(commands.some((c) => c.includes("--code evidence-gap")));
+    assert.ok(!commands.some((c) => c.includes("audit-receipt.mjs")));
+    assert.ok(!commands.some((c) => c.includes("auto-land.mjs start")));
+  }
 });
 
 test("every agent() call names provider, model and reasoningLevel together, as bb workflows validate demands (2026-10-18)", () => {
