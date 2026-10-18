@@ -392,20 +392,35 @@ if (!session || session.code !== 0) {
 // enters it. Its answer is one JSON line (a runner relays only the last line) and is guidance, not a
 // gate: it can fail without stopping the run, so it is read apart from the start steps.
 const startSteps = resume ? 2 : 3;
+const decisionCmd = `node scripts/start-decision.mjs --issue ${issue}`;
 const begun = await sh("start", "Session", [
   logCmd("start", `--issue ${issue}`),
-  `node scripts/start-decision.mjs --issue ${issue}`,
+  decisionCmd,
   ...(resume ? [] : [`node scripts/linear.mjs state ${issue} "In Progress"`]),
   `node scripts/scenarios.mjs titles --issue ${issue}`,
 ]);
 if (begun.length < startSteps || begun.slice(0, startSteps).some((r) => r.code !== 0)) {
   return stopped("start", "stopped", { note: begun.slice(0, startSteps).find((r) => r.code !== 0)?.line ?? "start step incomplete" });
 }
-let decision;
-try {
-  decision = JSON.parse(begun[1].line);
-} catch (error) {
-  return stopped("start-decision", "stopped", { note: `start-decision printed no JSON: ${begun[1].line}` });
+// A runner sometimes relays the exit line where the command's answer belongs (KIT-409 on 2026-10-18:
+// start-decision answered only `KIT-EXIT:0`, the run stopped at its first step and nobody restarted
+// it for three hours). start-decision only reads, so it gets one more runner of its own before that
+// is a stop.
+const parseDecision = (result) => {
+  try {
+    const parsed = JSON.parse(result?.line ?? "");
+    return parsed !== null && typeof parsed === "object" ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+};
+let decision = parseDecision(begun[1]);
+if (decision === null) {
+  const again = (await sh("start-decision", "Session", [decisionCmd]))[0];
+  decision = again.code === 0 ? parseDecision(again) : null;
+  if (decision === null) {
+    return stopped("start-decision", "stopped", { note: `start-decision printed no JSON twice: ${again.line}` });
+  }
 }
 const engineerAlias = decision.engineerModel === "opus" ? "opus" : "sonnet";
 
@@ -413,9 +428,12 @@ const engineerAlias = decision.engineerModel === "opus" ? "opus" : "sonnet";
 // answer is digits or nothing, so it can enter the Engineer prompt.
 let resumePr = null;
 if (resume) {
-  const found = await sh("pr-lookup", "Session", [
-    `gh pr list --state open --search "${issue} in:title" --json number,title --jq '[.[] | select(.title | startswith("${issue}:")) | .number] | join(",")'`,
-  ], false, true);
+  const lookup = `gh pr list --state open --search "${issue} in:title" --json number,title --jq '[.[] | select(.title | startswith("${issue}:")) | .number] | join(",")'`;
+  let found = await sh("pr-lookup", "Session", [lookup], false, true);
+  // The exit line in place of the answer is the runner's slip, not two PRs: one more runner (KIT-409).
+  if (found[0].code === 0 && EXIT_MARK.test(String(found[0].line ?? "").trim())) {
+    found = await sh("pr-lookup", "Session", [lookup]);
+  }
   const answer = String(found[0]?.line ?? "").trim();
   if (found[0].code !== 0) {
     return stopped("resume", "stopped", { note: found[0].line });
