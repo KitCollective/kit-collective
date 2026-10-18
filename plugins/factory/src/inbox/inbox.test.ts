@@ -343,6 +343,7 @@ function linearWithWrites(rows: Entry[], fail: { move?: boolean; comment?: boole
   const read = linear(() => rows.filter((entry) => !moved.has(entry.identifier)));
   const respond = (data: unknown) => new Response(JSON.stringify({ data }));
   const mock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+    // SAFETY: the plugin sends `{ query, variables }` as the body of every Linear call.
     const { query, variables } = JSON.parse(String(init?.body)) as {
       query: string;
       variables: Record<string, unknown>;

@@ -157,10 +157,13 @@ async function call(
     headers: { "content-type": "application/json", authorization: apiKey },
     body: JSON.stringify({ query, variables }),
   });
-  const body = (await response.json().catch(() => null)) as {
-    data?: unknown;
-    errors?: { message?: string }[];
-  } | null;
+  const parsed = z
+    .object({
+      data: z.unknown().optional(),
+      errors: z.array(z.object({ message: z.string().optional() })).optional(),
+    })
+    .safeParse(await response.json().catch(() => null));
+  const body = parsed.success ? parsed.data : null;
   if (!response.ok || body?.data === undefined || body.data === null || body.errors !== undefined) {
     throw new Error(
       `Linear answered ${response.status}: ${body?.errors?.[0]?.message ?? "no usable body"}`,
