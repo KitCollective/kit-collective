@@ -22,6 +22,7 @@ import { createCore } from "./src/core.js";
 import { createInbox } from "./src/inbox/index.js";
 import { createRuns } from "./src/runs/index.js";
 import { createStaff } from "./src/staff/index.js";
+import { createThreads } from "./src/threads/index.js";
 
 export default async function plugin(bb: BbPluginApi) {
   const core = createCore(bb);
@@ -29,11 +30,13 @@ export default async function plugin(bb: BbPluginApi) {
   const board = createBoard(core);
   const runs = createRuns(core);
   const inbox = createInbox(core);
+  const threads = createThreads(core);
 
   bb.rpc.register(rpcContract, {
     ...staff.rpc,
     ...board.rpc,
     ...runs.rpc,
+    ...threads.rpc,
     inbox_list: inbox.list,
   });
 

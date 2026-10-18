@@ -5,12 +5,14 @@ import { boardContract } from "./board/contract.js";
 import { inboxContract } from "./inbox/contract.js";
 import { runsContract } from "./runs/contract.js";
 import { staffContract } from "./staff/contract.js";
+import { threadsContract } from "./threads/contract.js";
 
 export const rpcContract = defineRpcContract({
   ...staffContract,
   ...boardContract,
   ...runsContract,
   ...inboxContract,
+  ...threadsContract,
 });
 
 /** Realtime channel: any agent, memory, automation or board change. */
