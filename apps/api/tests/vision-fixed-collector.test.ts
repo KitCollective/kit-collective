@@ -19,7 +19,7 @@ import { FIXED_VISION_SUGGESTION, TEST_COLLECTOR_ID } from "../dist/e2e/test-dat
 import { applyTestData } from "../dist/e2e/test-data.js";
 import { CollectorScopedVisionAdapter } from "../dist/vision/collector-scoped-vision.adapter.js";
 import { createVisionAdapter } from "../dist/vision/create-vision.adapter.js";
-import { FixedVisionAdapter } from "../dist/vision/fixed-vision.adapter.js";
+import { FixedVisionAdapter, setFixedVisionCase } from "../dist/vision/fixed-vision.adapter.js";
 import { NoopVisionAdapter } from "../dist/vision/noop-vision.adapter.js";
 import { ReadyIdentityAndGroupingAdapter } from "../dist/vision/test-vision.adapters.js";
 import { VISION_ADAPTER } from "../dist/vision/vision.adapter.js";
@@ -92,7 +92,11 @@ async function identitySuggestion(app: NestFastifyApplication, accessToken: stri
     });
     const job = visionJobResponseSchema.parse(JSON.parse(response.body));
     if (job.status !== "pending") {
-      return { status: job.status, suggestions: job.suggestions };
+      return {
+        status: job.status,
+        suggestions: job.suggestions,
+        fieldPreselect: job.fieldPreselect,
+      };
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
@@ -173,6 +177,27 @@ describe("fixed Vision for the test Collector", () => {
     expect(second).toEqual(first);
   });
 
+  it("hands the app a suggestion with nothing preselected after a reset to low-confidence", async () => {
+    await applyTestData({
+      db,
+      objectStore: createMemoryObjectStore(),
+      credentials: CREDENTIALS,
+      vision: "low-confidence",
+    });
+    const login = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: CREDENTIALS.collector,
+    });
+    const { accessToken } = identitySessionSchema.parse(JSON.parse(login.body));
+    const fixed = await resolveCatalogSide(db, FIXED_VISION_SUGGESTION.side);
+
+    const job = await identitySuggestion(app, accessToken);
+
+    expect(job.status).toBe("ready");
+    expect(job.suggestions).toMatchObject({ clubId: fixed?.clubId, seasonId: fixed?.seasonId });
+    expect(job.fieldPreselect ?? {}).toEqual({});
+  });
   it("groups the test Collector's photos the same way on two consecutive runs", async () => {
     const login = await app.inject({
       method: "POST",
@@ -248,5 +273,82 @@ describe("Vision adapter selection", () => {
     const { db, pool } = createDb(DATABASE_URL);
     expect(createVisionAdapter(db)).toBeInstanceOf(CollectorScopedVisionAdapter);
     void pool.end();
+  });
+});
+
+describe("fixed Vision cases", () => {
+  const objectStore = createMemoryObjectStore();
+  const photos = PHOTO_IDS.concat(PHOTO_IDS.slice(0, 2)).map((photoId) => ({
+    photoId,
+    bytes: Buffer.from(JPEG_BASE64, "base64"),
+  }));
+  let db: Db;
+  let closePool: () => Promise<void>;
+  let adapter: FixedVisionAdapter;
+
+  beforeAll(async () => {
+    await resetDatabase(DATABASE_URL, migrationsFolder);
+    const created = createDb(DATABASE_URL);
+    db = created.db;
+    closePool = () => created.pool.end();
+    await insertLocalFixtureCatalog(db);
+    adapter = new FixedVisionAdapter(db);
+  });
+
+  afterAll(async () => {
+    setFixedVisionCase("resolved");
+    await closePool();
+  });
+
+  it("answers the AaB home at confidence 90 after a reset with no case", async () => {
+    setFixedVisionCase("failure");
+    await applyTestData({ db, objectStore, credentials: CREDENTIALS });
+
+    const aab = await resolveCatalogSide(db, FIXED_VISION_SUGGESTION.side);
+    const result = await adapter.infer([
+      { role: "front", bytes: Buffer.from(JPEG_BASE64, "base64") },
+    ]);
+
+    expect(result).toMatchObject({
+      clubId: aab!.clubId,
+      seasonId: aab!.seasonId,
+      type: FIXED_VISION_SUGGESTION.type,
+      confidences: { overall: 90 },
+    });
+  });
+
+  it("keeps the same AaB suggestion in low-confidence, at a confidence that asks the Collector", async () => {
+    await applyTestData({ db, objectStore, credentials: CREDENTIALS, vision: "low-confidence" });
+
+    const aab = await resolveCatalogSide(db, FIXED_VISION_SUGGESTION.side);
+    const result = await adapter.infer([
+      { role: "front", bytes: Buffer.from(JPEG_BASE64, "base64") },
+    ]);
+
+    expect(result?.clubId).toBe(aab?.clubId);
+    expect(result?.confidences?.overall).toBeGreaterThanOrEqual(50);
+    expect(result?.confidences?.overall).toBeLessThan(70);
+  });
+
+  it("returns three groups at 90, 60 and 30 in mixed-grouping", async () => {
+    await applyTestData({ db, objectStore, credentials: CREDENTIALS, vision: "mixed-grouping" });
+
+    const result = await adapter.inferGrouping(photos);
+
+    expect(result?.groups.map((group) => group.confidence)).toEqual([90, 60, 30]);
+    expect(result?.groups.map((group) => group.photoIds)).toEqual([
+      PHOTO_IDS.slice(0, 2),
+      PHOTO_IDS.slice(2, 4),
+      PHOTO_IDS.slice(0, 2),
+    ]);
+  });
+
+  it("rejects both identity and grouping in failure", async () => {
+    await applyTestData({ db, objectStore, credentials: CREDENTIALS, vision: "failure" });
+
+    await expect(
+      adapter.infer([{ role: "front", bytes: Buffer.from(JPEG_BASE64, "base64") }]),
+    ).rejects.toThrow();
+    await expect(adapter.inferGrouping(photos)).rejects.toThrow();
   });
 });

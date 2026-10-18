@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { type Db, verification } from "@kit/db";
 import {
+  BadRequestException,
+  Body,
   Controller,
   ForbiddenException,
   Get,
@@ -18,6 +20,7 @@ import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { isProductionProcess } from "../config/production-process.js";
 import { DB } from "../db/db.module.js";
 import { recordedMails } from "../notify/recording-mailer.adapter.js";
+import { VISION_CASES, type VisionCase } from "./test-data.fixture.js";
 import { applyTestData } from "./test-data.js";
 import { readTestDataConfig, type TestDataConfig } from "./test-data-config.js";
 
@@ -48,6 +51,25 @@ function requireTestDataToken(authorization: string | undefined): void {
   }
 }
 
+/** The optional `{ "vision": "<case>" }` body of the reset; absent means the default case. */
+function readVisionCase(body: unknown): VisionCase | undefined {
+  if (body === undefined || body === null) {
+    return undefined;
+  }
+  if (typeof body !== "object" || Array.isArray(body)) {
+    throw new BadRequestException("The body must be a JSON object");
+  }
+  const vision: unknown = Reflect.get(body, "vision");
+  if (vision === undefined) {
+    return undefined;
+  }
+  const match = VISION_CASES.find((visionCase) => visionCase === vision);
+  if (!match) {
+    throw new BadRequestException(`vision must be one of: ${VISION_CASES.join(", ")}`);
+  }
+  return match;
+}
+
 /**
  * Device-flow support (KIT-267): the reset of the test Collectors. Answers
  * 404 unless `E2E_TEST_DATA_TOKEN` switches it on, and always on a production
@@ -62,8 +84,12 @@ export class E2eController {
 
   @Post("test-data")
   @HttpCode(204)
-  async resetTestData(@Headers("authorization") authorization?: string): Promise<void> {
+  async resetTestData(
+    @Headers("authorization") authorization?: string,
+    @Body() body?: unknown,
+  ): Promise<void> {
     requireTestDataToken(authorization);
+    const vision = readVisionCase(body);
     let config: TestDataConfig;
     try {
       config = readTestDataConfig(process.env);
@@ -74,6 +100,7 @@ export class E2eController {
       db: this.db,
       objectStore: this.objectStore,
       credentials: config.credentials,
+      vision,
     });
   }
 
