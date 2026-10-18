@@ -89,14 +89,23 @@ describe("foreign jersey route presentation (KIT-290)", () => {
   it("hides the Tab bar by presenting the jersey route as a full-screen modal", () => {
     const source = read("app/(tabs)/search/_layout.tsx");
 
-    expect(source).toContain('"[jerseyId]"');
+    expect(source).toContain("name={FOREIGN_JERSEY_ROUTE}");
     expect(source).toContain('presentation: "fullScreenModal"');
+  });
+
+  it("names a full-screen presentation for routes above the jersey route", () => {
+    const source = read("app/(tabs)/search/_layout.tsx");
+
+    expect(source).toContain("sitsAboveForeignJersey");
+    expect(source).toContain("navigation.getState()");
   });
 
   it("declares the index screen before the jersey route so Søg stays the initial route", () => {
     const source = read("app/(tabs)/search/_layout.tsx");
 
     expect(source.indexOf('name="index"')).toBeGreaterThan(-1);
-    expect(source.indexOf('name="index"')).toBeLessThan(source.indexOf('name="[jerseyId]"'));
+    expect(source.indexOf('name="index"')).toBeLessThan(
+      source.indexOf("name={FOREIGN_JERSEY_ROUTE}"),
+    );
   });
 });
