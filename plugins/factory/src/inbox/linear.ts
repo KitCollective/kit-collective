@@ -115,7 +115,9 @@ export async function fetchWaiting(
     if (!hasNextPage) return issues;
     after = endCursor;
   }
-  throw new Error(`team ${teamKey} has more than ${PAGE_SIZE * MAX_PAGES} issues in ${stateName}`);
+  throw new Error(
+    `team ${teamKey} has more than ${PAGE_SIZE * MAX_PAGES} issues in ${stateName}, so no waiting issue is shown`,
+  );
 }
 
 const SETTLE_QUERY = `

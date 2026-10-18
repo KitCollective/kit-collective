@@ -722,17 +722,23 @@ describe("mentions and watchdog alarms in the Inbox", () => {
     }
   });
 
-  it("names the cap instead of hiding older mentions when the list is longer than it reads", async () => {
+  it("says no mention is shown when the list is longer than it reads", async () => {
     const extras: Extras = {
-      notifications: Array.from({ length: 10_001 }, (_, index) =>
-        mention(`n-${index}`, { type: "issueAssignedToYou" }),
-      ),
+      notifications: [
+        mention("n-new"),
+        ...Array.from({ length: 10_000 }, (_, index) =>
+          mention(`n-${index}`, { type: "issueAssignedToYou" }),
+        ),
+      ],
     };
     try {
       const { rpc } = await inboxOn(() => [], registry, extras);
-      const { error } = await rpc("inbox_list", null);
-      expect(error).toContain("mentions");
-      expect(error).toContain("more than 10000 notifications");
+      const { cards, error } = await rpc("inbox_list", null);
+      // Even the newest mention, found on the first page, is not shown: the error says so.
+      expect(cards).toEqual([]);
+      expect(error).toBe(
+        "mentions: Linear has more than 10000 notifications, so no mention card is shown",
+      );
     } finally {
       vi.unstubAllGlobals();
     }

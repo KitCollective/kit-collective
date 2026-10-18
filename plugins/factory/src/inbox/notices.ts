@@ -6,7 +6,7 @@ import { call } from "./linear.js";
 /** Notification types Linear sends when someone mentions the key owner. */
 const MENTION_TYPES = new Set(["issueMention", "issueCommentMention"]);
 const NOTIFICATION_PAGE = 100;
-/** An unread mention can be as old as the inbox, so the read goes to the end and says so when it cannot. */
+/** An unread mention can be as old as the inbox, so the read goes to the end; past the cap it shows none and says so. */
 const NOTIFICATION_PAGES = 100;
 const COMMENT_PAGE = 50;
 const COMMENT_PAGES = 20;
@@ -89,7 +89,7 @@ export async function fetchMentions(
     after = pageInfo.endCursor;
   }
   throw new Error(
-    `Linear has more than ${NOTIFICATION_PAGE * NOTIFICATION_PAGES} notifications; older unread mentions are not shown`,
+    `Linear has more than ${NOTIFICATION_PAGE * NOTIFICATION_PAGES} notifications, so no mention card is shown`,
   );
 }
 
@@ -194,6 +194,6 @@ export async function fetchAlarmThread(
     after = issue.comments.pageInfo.endCursor;
   }
   throw new Error(
-    `alarm issue ${alarmIssue} has more than ${COMMENT_PAGE * COMMENT_PAGES} comments`,
+    `alarm issue ${alarmIssue} has more than ${COMMENT_PAGE * COMMENT_PAGES} comments, so no alarm card is shown`,
   );
 }
