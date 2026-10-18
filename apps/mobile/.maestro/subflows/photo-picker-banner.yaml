@@ -1,0 +1,26 @@
+# Leaves the system photo picker with its grid in a known place: waits for the picker, pauses so a
+# cold simulator has loaded its cells, and closes the iOS "Private Access to Photos" banner when it
+# shows. The banner is optional (iOS shows it on some runs only) and pushes the grid down by about
+# 162px, so every cell point in a flow is only right once this has run. The Close button is found by
+# its accessibility text and the banner by its container id, because the system picker has no
+# testID. English and Danish text: the hosted simulator's locale is fixed, a local one may not be.
+appId: app.kitcollective.mobile
+---
+- extendedWaitUntil:
+    visible:
+      id: photos_layout
+    timeout: 15000
+# A cold simulator shows the picker before its cells (and the banner) have loaded, so pause before
+# looking for the banner.
+- runFlow: settle.yaml
+- runFlow:
+    when:
+      visible: "Private Access to Photos.*|Privat adgang til fotos.*"
+    commands:
+      - tapOn: Close
+      - extendedWaitUntil:
+          notVisible:
+            id: PXGSingleViewContainerView_AX
+          timeout: 10000
+      - waitForAnimationToEnd:
+          timeout: 3000

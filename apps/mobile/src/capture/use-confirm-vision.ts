@@ -1,7 +1,10 @@
-import type { VisionFieldPreselect, VisionJobResponse, VisionSuggestions } from "@kit/api-contract";
+import type {
+  VisionFieldPreselect,
+  VisionJobResponse,
+  VisionSuggestions,
+  VisionSuggestRequest,
+} from "@kit/api-contract";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchClubSeasons } from "@/api/catalog";
-import { fetchVisionJob, startVisionSuggest, VisionPremiumRequiredError } from "@/api/vision";
 import {
   catalogSideId,
   selectDraftKitType,
@@ -17,6 +20,7 @@ import {
   setConfirmManualEditsDraft,
 } from "@/capture/confirmManualEdits";
 import {
+  IDENTITY_TIMEOUT_ERROR,
   identityQueueFingerprint,
   identityRunKey,
   identitySettledSnapshot,
@@ -44,8 +48,123 @@ type IdentityFieldSnapshot = {
 
 /** Must outlast Gemini's 15s abort plus poll jitter — a timeout is not a catalog miss. */
 const VISION_TIMEOUT_MS = 45_000;
+/** Photo prepare gets its own bound, so a slow cold prepare cannot eat the job's budget. */
+const IDENTITY_BUILD_BUDGET_MS = 45_000;
 const VISION_POLL_INTERVAL_MS = 2_000;
 const VISION_IDENTITY_DEBOUNCE_MS = 500;
+
+/**
+ * The API clients load on first use, as identitySuggestRequest does with photoBytes: their config
+ * pulls in expo-constants, which vitest cannot load, and `runIdentityRead` is tested on its own.
+ */
+const loadVisionApi = () => import("@/api/vision");
+const loadCatalogApi = () => import("@/api/catalog");
+
+const fetchClubSeasons: typeof import("@/api/catalog").fetchClubSeasons = async (...args) =>
+  (await loadCatalogApi()).fetchClubSeasons(...args);
+
+/** Release builds keep only error-level JS logs in the simulator os_log. */
+export type IdentityRunLog = { info(line: string): void; error(line: string): void };
+
+const defaultIdentityRunLog: IdentityRunLog = {
+  info: (line) => console.warn(line),
+  error: (line) => console.error(line),
+};
+
+export type IdentityReadDeps = {
+  draftId: string;
+  buildRequest: () => Promise<VisionSuggestRequest>;
+  /** Null when the collector declined Premium. */
+  startJob: (payload: VisionSuggestRequest) => Promise<string | null>;
+  fetchJob: (jobId: string) => Promise<VisionJobResponse>;
+  onJobStarted: (jobId: string) => void;
+  applyReady: (job: VisionJobResponse) => Promise<void>;
+  settleIdle: () => void;
+  log: IdentityRunLog;
+  buildBudgetMs?: number;
+  jobBudgetMs?: number;
+  pollIntervalMs?: number;
+};
+
+function identityErrorCode(error: unknown): string {
+  // A VisionRequestError, matched by shape so the run never loads the API client.
+  if (error instanceof Error && "status" in error && typeof error.status === "number") {
+    return `HTTP ${error.status}`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * One jersey's identity read: build the request, start the job, poll it, land it. Every way it
+ * ends leaves one `[identity]` line; a lost read names its stage before it settles idle.
+ */
+export async function runIdentityRead({
+  draftId,
+  buildRequest,
+  startJob,
+  fetchJob,
+  onJobStarted,
+  applyReady,
+  settleIdle,
+  log,
+  buildBudgetMs = IDENTITY_BUILD_BUDGET_MS,
+  jobBudgetMs = VISION_TIMEOUT_MS,
+  pollIntervalMs = VISION_POLL_INTERVAL_MS,
+}: IdentityReadDeps): Promise<void> {
+  const prefix = `[identity] ${draftId}:`;
+  let stage: "build" | "start" | "poll" | "apply" = "build";
+  let stageStartedAt = Date.now();
+  let jobId: string | null = null;
+  try {
+    const payload = await raceWithTimeout(buildRequest(), buildBudgetMs);
+    log.info(
+      `${prefix} request built, ${payload.photos.length} photo(s) in ${Date.now() - stageStartedAt} ms`,
+    );
+    stage = "start";
+    const jobStartedAt = Date.now();
+    stageStartedAt = jobStartedAt;
+    const remaining = () => remainingIdentityBudget(jobStartedAt, jobBudgetMs);
+    jobId = await raceWithTimeout(startJob(payload), remaining());
+    if (!jobId) {
+      log.info(`${prefix} Premium declined, no job`);
+      settleIdle();
+      return;
+    }
+    log.info(`${prefix} job ${jobId} started`);
+    onJobStarted(jobId);
+    stage = "poll";
+    for (;;) {
+      if (remaining() <= 0) {
+        throw new Error(IDENTITY_TIMEOUT_ERROR);
+      }
+      const job = await raceWithTimeout(fetchJob(jobId), remaining());
+      if (job.status === "pending") {
+        await raceWithTimeout(
+          new Promise<void>((resolve) => {
+            setTimeout(resolve, pollIntervalMs);
+          }),
+          remaining(),
+        ).catch(() => undefined);
+        continue;
+      }
+      if (job.status !== "ready") {
+        log.error(`${prefix} job ${jobId} ${job.status}`);
+        settleIdle();
+        return;
+      }
+      log.info(`${prefix} job ${jobId} ready`);
+      stage = "apply";
+      await applyReady(job);
+      return;
+    }
+  } catch (error) {
+    const pendingJob = stage === "poll" && jobId ? ` (job ${jobId} still pending)` : "";
+    log.error(
+      `${prefix} lost at ${stage} after ${Date.now() - stageStartedAt} ms: ${identityErrorCode(error)}${pendingJob}`,
+    );
+    settleIdle();
+  }
+}
 
 type UseConfirmVisionOptions = {
   accessToken: string | null;
@@ -177,7 +296,8 @@ export function useConfirmVision({
       return;
     }
 
-    const startJob = async (payload: Awaited<ReturnType<typeof buildIdentitySuggestRequest>>) => {
+    const startJob = async (payload: VisionSuggestRequest) => {
+      const { startVisionSuggest, VisionPremiumRequiredError } = await loadVisionApi();
       return startVisionSuggest(accessToken, payload).catch(async (error) => {
         if (!(error instanceof VisionPremiumRequiredError)) {
           throw error;
@@ -215,43 +335,26 @@ export function useConfirmVision({
         const snapshot = identitySettledSnapshot();
         snapshotsByDraftRef.current.set(next.id, snapshot);
       };
-      const startedAt = Date.now();
-      const remaining = () => remainingIdentityBudget(startedAt, VISION_TIMEOUT_MS);
       try {
-        const live = sessionDraftsRef.current.find((entry) => entry.id === next.id) ?? next;
-        const payload = await raceWithTimeout(buildIdentitySuggestRequest(live), remaining());
-        const nextJobId = await raceWithTimeout(startJob(payload), remaining());
-        if (!nextJobId) {
-          settleIdle();
-          return true;
-        }
-        if (syncChrome()) {
-          setJobId(nextJobId);
-          setPolling(true);
-        }
-        let settled = false;
-        while (remaining() > 0) {
-          const job = await raceWithTimeout(fetchVisionJob(accessToken, nextJobId), remaining());
-          if (job.status === "pending") {
-            await raceWithTimeout(
-              new Promise<void>((resolve) => {
-                setTimeout(resolve, VISION_POLL_INTERVAL_MS);
-              }),
-              remaining(),
-            ).catch(() => undefined);
-            continue;
-          }
-          if (job.status === "ready") {
-            await applySuggestionsRef.current(job, next.id);
-            settled = true;
-          }
-          break;
-        }
-        if (!settled) {
-          settleIdle();
-        }
-      } catch {
-        settleIdle();
+        await runIdentityRead({
+          draftId: next.id,
+          buildRequest: () =>
+            buildIdentitySuggestRequest(
+              sessionDraftsRef.current.find((entry) => entry.id === next.id) ?? next,
+            ),
+          startJob,
+          fetchJob: async (nextJobId) =>
+            (await loadVisionApi()).fetchVisionJob(accessToken, nextJobId),
+          onJobStarted: (nextJobId) => {
+            if (syncChrome()) {
+              setJobId(nextJobId);
+              setPolling(true);
+            }
+          },
+          applyReady: (job) => applySuggestionsRef.current(job, next.id),
+          settleIdle,
+          log: defaultIdentityRunLog,
+        });
       } finally {
         setSettledDraftIds((current) => new Set(current).add(next.id));
         setInFlightDraftId((current) => (current === next.id ? null : current));
@@ -329,6 +432,7 @@ export function useConfirmVision({
       }
 
       try {
+        const { fetchVisionJob } = await loadVisionApi();
         const job = await fetchVisionJob(accessToken, jobId);
         if (cancelled || job.status === "pending") {
           return;

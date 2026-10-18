@@ -30,7 +30,7 @@ checker:    In Review → complete review → Approval
             or In Progress + full ### Review feedback (no drip-feed)
 implement:  In Progress (PR exists) → same branch, fix the class → In Review
 blocked:     queue build moves Blocked → To-do when all blockers are Done or Canceled
-needs-human: result `needs-human:` → Approval + needs-info / ready-for-human + ### Waiting (human answers, moves to To-do)
+needs-human: result `needs-human:` → Approval + needs-info / ready-for-human + ### Waiting (human answers and swaps the label to ready-for-agent; it resumes in its thread, ADR-0066)
 auto-merge: Approval → Merging when MERGEABLE, checks green, loop cap clear
 approver:   Approval → Merging (still allowed)
 land:       merge to lanes.integration → Post-Merge → Done (only after gate.mjs land is open)
