@@ -158,6 +158,7 @@ export default function SendBidScreen() {
         // Send nyt bud: pop Send bud off the Søg stack, then show the thread it was tapped in. The
         // thread has no detail waiting for the Toast, so nothing is remembered.
         router.back();
+        // SAFETY: sendBidExit only returns a single-slash in-app path, which Href accepts as a string.
         router.navigate(exit.href as Href);
       }
     } catch (caught) {
