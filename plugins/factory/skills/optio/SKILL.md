@@ -165,7 +165,8 @@ ticked. The payload reaches the agent as data, not as instructions.
   brief. A thread that skips step 1 works without its instructions and memory.
 - Write scope is read from the `write-scope:` line of the issue description
   only, and overlap is judged by the part of each glob before its first
-  wildcard.
+  wildcard. Test globs under `apps/` and `packages/` and Optio's own three
+  registration files (`app.tsx`, `server.ts`, `src/contract.ts`) never count.
 - Capacity counts only runs the board started.
 - The `paused` setting stops the board, the automations and the HTTP trigger.
   Chats still work.
