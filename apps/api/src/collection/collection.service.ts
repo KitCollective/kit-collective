@@ -1953,6 +1953,11 @@ export class CollectionService {
         type: userJersey.type,
         seasonLabel: season.label,
         ownerHandle: user.handle,
+        size: userJersey.size,
+        condition: userJersey.condition,
+        playerId: userJersey.playerId,
+        ownerCity: user.city,
+        ownerShowCity: user.showCity,
         biddingEnabled: userJersey.biddingEnabled,
         private: userJersey.private,
       })
@@ -1983,14 +1988,15 @@ export class CollectionService {
       throw new NotFoundException("Photos missing");
     }
 
-    const [latestBid] = await this.db
-      .select({ amount: conversationMessage.bidAmountDkk })
-      .from(conversationMessage)
-      .where(
-        and(eq(conversationMessage.userJerseyId, jerseyId), eq(conversationMessage.kind, "bid")),
-      )
-      .orderBy(desc(conversationMessage.createdAt))
-      .limit(1);
+    const [playerFieldsByJersey, patchesByJersey, [ownerJerseyCountRow]] = await Promise.all([
+      this.loadPlayerFieldsForJerseys([row], locale),
+      this.loadPatchesForJerseys([row.id], locale),
+      this.db
+        .select({ count: count() })
+        .from(userJersey)
+        .where(and(eq(userJersey.userId, row.userId), eq(userJersey.private, false))),
+    ]);
+    const playerFields = playerFieldsByJersey.get(row.id);
 
     return collectionPeerJerseySchema.parse({
       id: row.id,
@@ -2002,7 +2008,13 @@ export class CollectionService {
       ownerId: row.userId,
       ownerInitial: handleInitial(row.ownerHandle),
       biddingEnabled: row.biddingEnabled,
-      latestBidAmountDkk: latestBid?.amount ?? null,
+      size: row.size,
+      condition: row.condition,
+      playerLabel: playerFields?.label ?? null,
+      playerNumber: playerFields?.number ?? null,
+      patches: patchesByJersey.get(row.id) ?? [],
+      ownerCity: row.ownerShowCity && row.ownerCity ? row.ownerCity : null,
+      ownerJerseyCount: Number(ownerJerseyCountRow?.count ?? 0),
       photos,
     });
   }
