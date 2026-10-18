@@ -24,6 +24,9 @@
   const lookbackDays = Number(process.env.LOOKBACK_DAYS ?? 3);
   const bb = process.env.BB_CLI ?? "bb";
   const NICKLAS = "https://linear.app/kitcollective/profiles/nicklas";
+  /** A verdict line that means the bb server could not be reached, not that the check failed. */
+  const UNREACHABLE = /ECONNREFUSED|ECONNRESET|ETIMEDOUT|fetch failed/;
+  const RETRY_AFTER_MS = 60_000;
   const statePath = path.join(path.dirname(process.argv[1]), "max-live-checks.state");
   const run = (cmd, args, options = {}) =>
     execFileSync(cmd, args, {
@@ -128,7 +131,7 @@
 
   const out = [];
   for (const { issue, names, merge } of todo) {
-    const results = names.map((name) => {
+    const attempt = (name) => {
       const args = ["scripts/live-check.mjs", "run", name, ...(thread ? ["--thread", thread] : [])];
       const result = spawnSync("node", args, { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
       const line =
@@ -137,6 +140,14 @@
           .split("\n")
           .at(-1) || `LIVE-CHECK ${name} fail no verdict line`;
       return { name, pass: result.status === 0, line };
+    };
+    const results = names.map((name) => {
+      const first = attempt(name);
+      // A check that could not reach the bb server says nothing about what merged (KIT-412 went
+      // back to Approval on ECONNREFUSED minutes after another reload): wait once and run it again.
+      if (first.pass || !UNREACHABLE.test(first.line)) return first;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, RETRY_AFTER_MS);
+      return attempt(name);
     });
     const failed = results.filter((r) => !r.pass);
     const body = [
