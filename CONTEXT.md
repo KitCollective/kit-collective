@@ -170,11 +170,11 @@ One of `development`, `staging`, `production` — git branch, GitHub Environment
 _Avoid_: environment as a synonym without saying which object
 
 **Device flow**:
-A Maestro flow that drives the iOS Simulator build and takes a named screenshot at every meaningful step, plus one recording. Each mobile slice has its own, `apps/mobile/.maestro/slices/<KEY>.yaml`, with one step per Acceptance criterion a screen can show. Five **regression flows** (first session, Tilføj trøje, Samling, Søg and bud, Ønske and paywall) sit under `regression/` and run on request. They run on the approver's Mac against a local API, one run at a time in a queue, and a red Device flow blocks a PR through the `Device flows` commit status.
+A Maestro flow that drives the iOS Simulator build and takes a named screenshot at every meaningful step, plus one recording. Each mobile slice has its own, `apps/mobile/.maestro/slices/<KEY>.yaml`, with one step per Acceptance criterion a screen can show. Eight **regression flows** (first session, Tilføj trøje and three of its identity-block states, Samling, Søg and bud, Ønske and paywall) sit under `regression/` and run on request. They run on the approver's Mac against a local API, one run at a time in a queue, and a red Device flow blocks a PR through the `Device flows` commit status.
 _Avoid_: e2e test as a synonym for an API integration test; worker browser screenshots as evidence for a mobile slice; a flow that needs a manual step
 
 **Test Collector**:
-The Collector four of the five regression flows, and a slice flow by default, sign in as, with a Comp Entitlement and fixed Vision. A second test Collector owns the åben-for-bud UserJersey and signs in for the Ønske and paywall flow. Both have fixed ids and are reset before every flow; the reset writes only rows they own, and removes other Collectors' rows only where those point at a test Collector (a favourite, a conversation, a report or a block).
+The Collector six of the eight regression flows, and a slice flow by default, sign in as (the first-session flow starts signed out and stops at the code screen with its e-mail), with a Comp Entitlement and fixed Vision. A second test Collector owns the åben-for-bud UserJersey and signs in for the Ønske and paywall flow. Both have fixed ids and are reset before every flow; the reset writes only rows they own, and removes other Collectors' rows only where those point at a test Collector (a favourite, a conversation, a report or a block).
 _Avoid_: a real Collector's account in a flow; a lane-wide Vision switch; a fourth lane for tests
 
 **Evidence run**:
