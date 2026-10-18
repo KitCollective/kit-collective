@@ -6,6 +6,12 @@ export const collectionConversationPeerSchema = z
     handle: z.string().min(1),
     jerseyCount: z.number().int().min(0),
     city: z.string().min(1).optional(),
+    avatarUrl: z.string().min(1).nullable(),
+    /**
+     * The pair's Conversation. On a peer lookup it is null when none exists yet, or when the viewer hid it
+     * (it returns on send).
+     */
+    conversationId: z.string().uuid().nullable(),
   })
   .strict();
 

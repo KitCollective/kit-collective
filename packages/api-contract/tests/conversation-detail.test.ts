@@ -116,6 +116,17 @@ describe("collectionConversationDetailSchema", () => {
 });
 
 describe("collectionSendMessageRequestSchema", () => {
+  it("accepts a userJerseyId and rejects one that is not a uuid", () => {
+    const userJerseyId = "00000000-0000-0000-0000-000000000004";
+    expect(collectionSendMessageRequestSchema.parse({ text: "Hej", userJerseyId })).toEqual({
+      text: "Hej",
+      userJerseyId,
+    });
+    expect(() =>
+      collectionSendMessageRequestSchema.parse({ text: "Hej", userJerseyId: "nope" }),
+    ).toThrow();
+  });
+
   it("requires text or contentBase64", () => {
     expect(() => collectionSendMessageRequestSchema.parse({})).toThrow();
   });

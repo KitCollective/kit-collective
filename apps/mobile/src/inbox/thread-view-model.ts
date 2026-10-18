@@ -2,6 +2,7 @@ import type {
   CollectionConversationDetail,
   CollectionConversationMessage,
   CollectionConversationPeer,
+  CollectionSendMessageRequest,
 } from "@kit/api-contract";
 import { JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
 
@@ -21,6 +22,8 @@ type MessageJersey = NonNullable<Message["jersey"]>;
 const JERSEY_UNAVAILABLE_LABEL = "Trøjen er ikke længere tilgængelig";
 const JERSEY_GONE_LINE = "Trøjen er gået til en anden samler.";
 const PENDING_LABEL = "Afventer svar";
+const REFERENCE_CAPTION = "Om trøjen";
+const REFERENCE_DISMISS_NAME = "Fjern trøjen";
 
 export type BidCardStatus =
   | { kind: "pending-sender"; label: string }
@@ -57,9 +60,17 @@ export type BidCardState = {
   };
 };
 
+/** The jersey a text or image message is about, shown read-only above the bubble. */
+export type BubbleReference = {
+  caption: string;
+  label: string;
+  /** Relative /v1 path of the jersey's first showcase photo; null once the jersey is gone or private. */
+  thumbPath: string | null;
+};
+
 export type ThreadItem =
   | { type: "date"; id: string; label: string }
-  | { type: "bubble"; id: string; message: Message }
+  | { type: "bubble"; id: string; message: Message; reference: BubbleReference | null }
   | { type: "bid"; id: string; card: BidCardState }
   | { type: "system"; id: string; text: string };
 
@@ -77,6 +88,14 @@ function formatDateLabel(iso: string): string {
 
 function jerseyTitle(jersey: MessageJersey): string {
   return `${jersey.clubLabel} ${jersey.seasonLabel}`;
+}
+
+function bubbleReference(jersey: MessageJersey): BubbleReference {
+  return {
+    caption: REFERENCE_CAPTION,
+    label: jerseyTitle(jersey),
+    thumbPath: jersey.userJerseyId ? jersey.thumbUrl : null,
+  };
 }
 
 function bidCardJersey(jersey: MessageJersey, role: Message["role"]): BidCardJersey {
@@ -179,7 +198,12 @@ export function threadItems(detail: CollectionConversationDetail): ThreadItem[] 
     } else if (message.kind === "bid") {
       item = { type: "bid", id: message.id, card: bidCardState(message, detail.peerHandle) };
     } else {
-      item = { type: "bubble", id: message.id, message };
+      item = {
+        type: "bubble",
+        id: message.id,
+        message,
+        reference: message.jersey ? bubbleReference(message.jersey) : null,
+      };
     }
 
     if (!item) {
@@ -272,4 +296,92 @@ export function conversationMore(peer: CollectionConversationPeer): Conversation
     },
     reportedToast: "Samtalen er rapporteret",
   };
+}
+
+function jerseyCountLabel(count: number): string {
+  return count === 1 ? "1 trøje" : `${count} trøjer`;
+}
+
+export type ThreadStart = {
+  handle: string;
+  initial: string;
+  /** Relative /v1 path of the Collector's photo; null shows the initial. */
+  avatarPath: string | null;
+  /** City per Vis by · n trøjer; the city is left out when the Collector shows none. */
+  meta: string;
+};
+
+/**
+ * Conversation → Thread start (composition 5, no messages yet): the Handle, the initial or
+ * Avatar photo and city · n trøjer of the Collector the thread is with.
+ */
+export function threadStart(peer: CollectionConversationPeer): ThreadStart {
+  return {
+    handle: peer.handle,
+    initial: headerInitial(peer.handle),
+    avatarPath: peer.avatarUrl,
+    meta: [peer.city, jerseyCountLabel(peer.jerseyCount)].filter(Boolean).join(" · "),
+  };
+}
+
+export type JerseyReference = {
+  userJerseyId: string;
+  /** Relative /v1 path of the jersey's first showcase photo. */
+  thumbPath: string | null;
+  caption: string;
+  /** Club and season. */
+  label: string;
+  dismissName: string;
+  accessibilityLabel: string;
+};
+
+/**
+ * Message composer → jersey reference (Revision 2026-10-10): the foreign jersey the thread was
+ * opened from, shown above the field until it is dismissed or the first message is sent.
+ */
+export function jerseyReference(jersey: {
+  id: string;
+  clubLabel: string;
+  seasonLabel: string;
+  photos: ReadonlyArray<{ photoUrl: string }>;
+}): JerseyReference {
+  const label = `${jersey.clubLabel} ${jersey.seasonLabel}`;
+  return {
+    userJerseyId: jersey.id,
+    thumbPath: jersey.photos[0]?.photoUrl ?? null,
+    caption: REFERENCE_CAPTION,
+    label,
+    dismissName: REFERENCE_DISMISS_NAME,
+    accessibilityLabel: `${REFERENCE_CAPTION}, ${label}`,
+  };
+}
+
+/**
+ * The send body. `userJerseyId` rides along only while the jersey reference is still shown, so a
+ * dismissed reference (or one cleared after the first send) is never sent.
+ */
+export function sendMessageBody(input: {
+  text: string;
+  imageBase64?: string | null;
+  replyToMessageId?: string;
+  reference: JerseyReference | null;
+}): CollectionSendMessageRequest {
+  const text = input.text.trim();
+  return {
+    ...(text ? { text } : {}),
+    ...(input.imageBase64 ? { contentBase64: input.imageBase64 } : {}),
+    ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
+    ...(input.reference ? { userJerseyId: input.reference.userJerseyId } : {}),
+  };
+}
+
+/** The thread with a Collector: the one Conversation if any, else the empty thread. */
+export function peerThreadHref(peerId: string, aboutJerseyId?: string): string {
+  const base = `/(tabs)/inbox/peer/${peerId}`;
+  return aboutJerseyId ? `${base}?jerseyId=${aboutJerseyId}` : base;
+}
+
+/** Name and label of the foreign jersey's dock control: Skriv til <handle>. */
+export function writeToPeerLabel(handle: string): string {
+  return `Skriv til ${handle}`;
 }

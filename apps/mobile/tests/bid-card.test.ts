@@ -77,7 +77,8 @@ describe("ConversationView (Revision 2026-10-10, KIT-297)", () => {
     const source = readFileSync(conversationViewPath, "utf8");
 
     expect(source).toMatch(/HEADER_INITIAL_SIZE = 32/);
-    expect(source).toMatch(/headerInitial\(detail\.peerHandle\)/);
+    expect(source).toMatch(/headerInitial\(handle\)/);
+    expect(source).toMatch(/<ConversationHeader[\s\S]*?handle=\{detail\.peerHandle\}/);
     expect(source).not.toMatch(/@\/components\/avatar/);
     expect(source).toMatch(/useFocusEffect/);
   });
