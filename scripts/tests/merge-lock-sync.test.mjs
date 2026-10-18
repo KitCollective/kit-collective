@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -81,6 +81,98 @@ test("merge lock: a lost race is HELD, not an error", () => {
   const b = clone("b");
   assert.equal(take({ cwd: a, pr: "1", now: 5000 }).code, 0);
   assert.equal(take({ cwd: b, pr: "2", now: 5000 }).code, 3);
+});
+
+test("merge lock: a push that fails for another reason is CLOSED with git's line, not HELD", () => {
+  const { clone, origin } = fixture();
+  const a = clone("a");
+  // The read works, the write cannot (no credentials, no permission, the network all look like this to git).
+  git(a, "remote", "set-url", "--push", "origin", join(origin, "no-such-remote.git"));
+  const taken = take({ cwd: a, pr: "1", now: 5000 });
+  assert.equal(taken.code, 1);
+  assert.match(taken.line, /^CLOSED \(merge-lock\): fatal: /);
+  assert.doesNotMatch(taken.line, /HELD|Command failed/);
+  assert.equal(status({ cwd: a, now: 5000 }).code, 3, "status still reads the real remote: free");
+});
+
+test("merge lock: a lease rejection in the push itself (race after the read) is HELD, not CLOSED", () => {
+  const { clone } = fixture();
+  const a = clone("a");
+  const rival = clone("rival");
+  // The rival's lock commit, built ahead of time, so the shim only has to push it.
+  const rivalCommit = git(
+    rival,
+    "commit-tree",
+    "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+    "-m",
+    "merge-lock pr=2 at=5000",
+  );
+  // A `git` shim that lets the rival take the lock just before a's own push: after a's read saw it free.
+  const shimDir = dir("shim");
+  const realGit = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+  const shim = join(shimDir, "git");
+  writeFileSync(
+    shim,
+    `#!/bin/sh
+if [ "$1" = push ] && [ ! -e "${shimDir}/raced" ]; then
+  : > "${shimDir}/raced"
+  "${realGit}" -C "${rival}" push --quiet origin "${rivalCommit}:${LOCK_REF}" || exit 99
+fi
+exec "${realGit}" "$@"
+`,
+  );
+  chmodSync(shim, 0o755);
+  const path = process.env.PATH;
+  process.env.PATH = `${shimDir}:${path}`;
+  try {
+    const result = take({ cwd: a, pr: "1", now: 5000 });
+    assert.equal(result.code, 3);
+    assert.equal(result.line, "HELD (merge-lock): another PR took it first");
+  } finally {
+    process.env.PATH = path;
+  }
+  assert.match(
+    git(a, "ls-remote", "origin", LOCK_REF),
+    new RegExp(`^${rivalCommit}\\s`),
+    "the rival holds it",
+  );
+});
+
+test("merge lock: a server-side push rejection with no remote output is CLOSED with an error line, not git's To line", () => {
+  const { clone, origin } = fixture();
+  const a = clone("a");
+  // The server declines the ref update without printing anything: git then shows `To <url>` first.
+  const hook = join(origin, "hooks", "pre-receive");
+  writeFileSync(hook, "#!/bin/sh\nexit 1\n");
+  chmodSync(hook, 0o755);
+  const taken = take({ cwd: a, pr: "1", now: 5000 });
+  assert.equal(taken.code, 1);
+  assert.match(taken.line, /^CLOSED \(merge-lock\): error: failed to push some refs/);
+  assert.doesNotMatch(taken.line, /HELD|Command failed|CLOSED \(merge-lock\): To /);
+});
+
+test("merge lock wait: stops at once on a CLOSED verdict instead of polling", async () => {
+  const { clone, origin } = fixture();
+  const a = clone("a");
+  git(a, "remote", "set-url", "--push", "origin", join(origin, "no-such-remote.git"));
+  let sleeps = 0;
+  const result = await waitFor(
+    { cwd: a, pr: "1" },
+    { waitSeconds: 3600, pollSeconds: 30, sleep: async () => (sleeps += 1) },
+  );
+  assert.equal(result.code, 1);
+  assert.match(result.line, /^CLOSED \(merge-lock\): fatal: /);
+  assert.equal(sleeps, 0);
+});
+
+test("merge lock: status and release keep their verdicts when the remote cannot be read", () => {
+  const { clone } = fixture();
+  const a = clone("a");
+  git(a, "remote", "set-url", "origin", join(a, "missing.git"));
+  for (const result of [status({ cwd: a }), release({ cwd: a, pr: "1" })]) {
+    assert.equal(result.code, 1);
+    assert.match(result.line, /^CLOSED \(merge-lock\): fatal: /);
+  }
 });
 
 test("merge lock wait: retries until the holder releases", async () => {
