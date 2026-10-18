@@ -4,7 +4,7 @@
 import { type BbPluginApi, cliCommand, PluginCliError } from "@get-bb/plugin-sdk";
 import { CHANGED } from "../contract.js";
 import type { Core } from "../core.js";
-import { GATE_CALL_TIMEOUT_MS } from "../host-contract.js";
+import { GATE_CALL_TIMEOUT_MS, LAND_HOST_TIMEOUT_MS } from "../host-contract.js";
 import { parseRegistry } from "../loop-registry.js";
 import { buildCards, pullRequestOf } from "./cards.js";
 import { type InboxCardDto, type InboxConfig, inboxConfig } from "./contract.js";
@@ -30,8 +30,6 @@ export interface InboxDeps<Board extends { teamKey: string; projectId: string }>
 const SETUP = "bb optio inbox --state <state> --labels <question labels> --project <bb project id>";
 const LANDING_SETUP =
   "bb optio inbox --approve-to <merge state> --land-host <runs machine host id> --land-checkout <its main checkout>";
-/** The host call outlives the script's own slice, which answers with its waiting verdict first. */
-const LAND_HOST_TIMEOUT_MS = 28 * 60_000;
 
 function describe(cards: InboxCardDto[]): string {
   if (cards.length === 0) return "The Inbox is empty";
@@ -43,7 +41,9 @@ function describe(cards: InboxCardDto[]): string {
       const detail =
         card.kind === "question"
           ? `${card.label ?? "question"}: ${card.waiting?.ask ?? "no question in the workpad"}`
-          : `review: ${card.review?.verdict ?? "no verdict recorded"}`;
+          : card.kind === "landing"
+            ? `approved: ${card.landing?.line ?? "not started yet"}`
+            : `review: ${card.review?.verdict ?? "no verdict recorded"}`;
       return `${card.identifier}${pull} ${card.title} (${detail})${landing}`;
     }),
   ].join("\n");
@@ -107,9 +107,10 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
 
   /**
    * The cards, read from Linear now, and the landings approved here. A landing whose issue is in the
-   * Inbox again (a stop hands it to a person) rides on that issue's card; any other shows as a card of
-   * its own until it is done, and a done one shows once. A landing without a driver (after a plugin
-   * reload) gets one again.
+   * Inbox state rides on that issue's card, which keeps its own actions. A landing still on its way
+   * shows as a card of its own (kind `landing`, no Inbox action), and a done one shows once. A stopped
+   * landing whose issue is not in the Inbox state any more was taken up elsewhere, so it is dropped. A
+   * landing without a driver (after a plugin reload, or a failed slice) gets one again.
    */
   async function list() {
     try {
@@ -125,10 +126,13 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
       const own: InboxCardDto[] = [];
       for (const record of records) {
         const card = cards.find((one) => one.identifier === record.identifier);
-        const landing = { phase: record.phase, line: record.line, at: record.at };
-        if (card === undefined) own.push(landingCard(record, verdictOf(record.identifier)));
-        else card.landing = landing;
-        if (record.phase === "done") await landings.remove(record.identifier);
+        if (card !== undefined) {
+          card.landing = { phase: record.phase, line: record.line, at: record.at };
+        } else if (record.phase !== "stopped") {
+          own.push(landingCard(record, verdictOf(record.identifier)));
+        }
+        const over = record.phase === "done" || (record.phase === "stopped" && card === undefined);
+        if (over) await landings.remove(record.identifier);
       }
       own.sort((a, b) => Date.parse(a.since) - Date.parse(b.since));
       return { error: null, cards: [...own, ...cards] };

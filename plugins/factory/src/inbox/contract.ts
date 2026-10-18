@@ -29,7 +29,7 @@ export type LandingPhase = (typeof LANDING_PHASES)[number];
 
 const landing = z.object({
   phase: z.enum(LANDING_PHASES),
-  /** The landing script's last verdict line; null before its first answer. */
+  /** What the last slice said (the verdict without its tag, or why Optio could not run it); null before its first answer. */
   line: z.string().nullable(),
   /** When the phase was last written (ISO). */
   at: z.string(),
@@ -40,8 +40,11 @@ const inboxCard = z.object({
   title: z.string(),
   url: z.string(),
   pullRequest: z.object({ number: z.number(), url: z.string() }).nullable(),
-  /** A review waits for the merge; a question waits for an answer. */
-  kind: z.enum(["review", "question"]),
+  /**
+   * A review waits for the merge; a question waits for an answer; a landing is an approved issue on
+   * its way to done, out of the Inbox state, with nothing to answer.
+   */
+  kind: z.enum(["review", "question", "landing"]),
   /** The question label the issue carries; null on a review. */
   label: z.string().nullable(),
   /** The lettered choices (A, B, …) the ask offers, in order; empty when it offers none or on a review. */
@@ -54,7 +57,7 @@ const inboxCard = z.object({
   review: z.object({ verdict: z.string().nullable(), change: z.string().nullable() }).nullable(),
   /** When the issue entered the state (ISO); for a landing card, when it was approved. */
   since: z.string(),
-  /** The landing after an approval, until the issue is done; null when nobody approved it here. */
+  /** The landing after an approval, until the issue is done; information only, never an action. Null when nobody approved it here. */
   landing: landing.nullable(),
 });
 

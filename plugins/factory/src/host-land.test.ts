@@ -38,6 +38,24 @@ describe("run_land", () => {
     });
   });
 
+  it("passes the reason of a stop to the script as one argument", async () => {
+    const cwd = checkout();
+    const result = await runLand(
+      {
+        cwd,
+        step: "stop",
+        pr: 12,
+        issue: "ABC-9",
+        reason: "the host --did not answer; rm -rf /",
+        timeoutMs: 9 * 60_000,
+      },
+      { signal: new AbortController().signal },
+    );
+    expect(result.lastLine).toBe(
+      `WAITING (land-approved): queued: stop 12 --issue ABC-9 --timeout ${gateWaitSeconds(9 * 60_000)} --reason the host --did not answer; rm -rf /`,
+    );
+  });
+
   it("refuses a script, an unknown step or a malformed issue from the caller", async () => {
     const input = hostContract.run_land.input["~standard"];
     const good = { cwd: "/x", step: "start", pr: 1, issue: "ABC-1" };
@@ -45,5 +63,11 @@ describe("run_land", () => {
     expect(await input.validate({ ...good, script: "other.mjs" })).toHaveProperty("issues");
     expect(await input.validate({ ...good, step: "merge" })).toHaveProperty("issues");
     expect(await input.validate({ ...good, issue: "ABC-1 --x" })).toHaveProperty("issues");
+    // A reason goes with a stop and only with a stop.
+    expect(await input.validate({ ...good, step: "stop", reason: "why" })).not.toHaveProperty(
+      "issues",
+    );
+    expect(await input.validate({ ...good, step: "stop" })).toHaveProperty("issues");
+    expect(await input.validate({ ...good, reason: "why" })).toHaveProperty("issues");
   });
 });

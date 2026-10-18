@@ -566,15 +566,26 @@ describe("answering and rejecting from the Inbox", () => {
 function steppedHost() {
   const calls: { method: string; input: unknown }[] = [];
   const answers: ((result: unknown) => void)[] = [];
+  const failures: ((error: Error) => void)[] = [];
   const callHost = (call: HostCall) => {
     calls.push({ method: call.method, input: call.input });
-    return new Promise<unknown>((resolve) => answers.push(resolve));
+    return new Promise<unknown>((resolve, reject) => {
+      answers.push(resolve);
+      failures.push(reject);
+    });
   };
   async function answer(exitCode: number, lastLine: string) {
     await vi.waitFor(() => expect(answers.length).toBeGreaterThan(0));
+    failures.shift();
     answers.shift()?.({ exitCode, lastLine, hostname: "runs", cwd: "/srv/main", durationMs: 1 });
   }
-  return { calls, callHost, answer };
+  /** The host call throws, as when the runs machine is offline. */
+  async function fail(message: string) {
+    await vi.waitFor(() => expect(failures.length).toBeGreaterThan(0));
+    answers.shift();
+    failures.shift()?.(new Error(message));
+  }
+  return { calls, callHost, answer, fail };
 }
 
 const LANDING = [
@@ -613,9 +624,9 @@ describe("approving from the Inbox", () => {
         id: "id-ENG-1",
         stateId: "s-merge",
       });
-      // The issue left the Inbox state; its card now comes from the landing.
+      // The issue left the Inbox state; its card now comes from the landing, with no Inbox action.
       expect(await cardOf(rpc, "ENG-1")).toMatchObject({
-        kind: "review",
+        kind: "landing",
         pullRequest: { number: 7 },
         review: { verdict: "review: open (0 findings)", change: "ENG-1: Add the thing" },
         landing: { phase: "approved", line: null },
@@ -682,14 +693,14 @@ describe("approving from the Inbox", () => {
       await rpc("inbox_approve", { identifier: "ENG-1" });
       await machine.answer(0, "QUEUED (land-approved): PR 7 is in the merge queue");
       await phaseIs(rpc, "ENG-1", "queued");
+      // The script hands the issue to a person: back in the Inbox state as a question.
+      moved.delete("ENG-1");
+      row.labels = ["decide"];
       await machine.answer(
         1,
         "STOPPED (land-approved): queue-ejected: the merge queue dropped the PR",
       );
       await phaseIs(rpc, "ENG-1", "stopped");
-      // The script handed the issue to a person: back in the Inbox state as a question.
-      moved.delete("ENG-1");
-      row.labels = ["decide"];
       const card = await cardOf(rpc, "ENG-1");
       expect(card).toMatchObject({ kind: "question", label: "decide" });
       expect(card?.landing?.line).toContain("queue-ejected");
@@ -706,21 +717,138 @@ describe("approving from the Inbox", () => {
     }
   });
 
-  it("stops the landing with the reason when the runs machine does not answer", async () => {
-    const fake = linearWithWrites([reviewed]);
-    vi.stubGlobal("fetch", fake.mock);
+  it("hands the issue to a person through the script's stop when the runs machine does not answer", async () => {
+    const row: Entry = { ...reviewed };
     try {
-      const { rpc, cli } = await load(registry, {
-        callHost: async () => {
-          throw new Error("host host_runs is offline");
+      const { rpc, moved, machine } = await approving([row]);
+      await rpc("inbox_approve", { identifier: "ENG-1" });
+      await machine.fail("host host_runs is offline");
+      await vi.waitFor(() => expect(machine.calls).toHaveLength(2));
+      expect(machine.calls[1]).toEqual({
+        method: "run_land",
+        input: {
+          cwd: "/srv/main",
+          step: "stop",
+          pr: 7,
+          issue: "ENG-1",
+          reason: "the runs machine did not answer: host host_runs is offline",
+          timeoutMs: GATE_CALL_TIMEOUT_MS,
         },
       });
-      await cli(["inbox", "--state", "Waiting", "--labels", "asks", ...LANDING]);
-      await rpc("inbox_approve", { identifier: "ENG-1" });
-      await phaseIs(rpc, "ENG-1", "stopped");
-      expect((await cardOf(rpc, "ENG-1"))?.landing?.line).toBe(
-        "the runs machine did not answer: host host_runs is offline",
+      moved.delete("ENG-1");
+      row.labels = ["decide"];
+      await machine.answer(
+        1,
+        "STOPPED (land-approved): optio: the runs machine did not answer: host host_runs is offline; issue in Approval with ready-for-human",
       );
+      await phaseIs(rpc, "ENG-1", "stopped");
+      expect(await cardOf(rpc, "ENG-1")).toMatchObject({ kind: "question", label: "decide" });
+      expect((await cardOf(rpc, "ENG-1"))?.landing?.line).toContain("host host_runs is offline");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("hands over a slice that answers UNKNOWN, or a line it cannot read, with what it said", async () => {
+    for (const [exitCode, line] of [
+      [4, "UNKNOWN (land-approved): PR 7 merged as fffffff; ENG-1 NOT moved to Done (refused)"],
+      [2, "usage: land-approved.mjs start|finish <pr> --issue ABC-n [--timeout s]"],
+      [0, "something else entirely"],
+    ] as const) {
+      try {
+        const { rpc, machine } = await approving([reviewed]);
+        await rpc("inbox_approve", { identifier: "ENG-1" });
+        await machine.answer(exitCode, line);
+        await vi.waitFor(() => expect(machine.calls).toHaveLength(2));
+        expect(machine.calls[1]?.input).toMatchObject({
+          step: "stop",
+          reason: expect.stringContaining(line.replace(/^UNKNOWN \(land-approved\): /, "")),
+        });
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  });
+
+  it("says so on the card when the hand-over fails too, and tries the slice again on the next read", async () => {
+    try {
+      const { rpc, machine } = await approving([reviewed]);
+      await rpc("inbox_approve", { identifier: "ENG-1" });
+      await machine.fail("host host_runs is offline");
+      await machine.fail("host host_runs is offline");
+      await vi.waitFor(async () =>
+        expect((await cardOf(rpc, "ENG-1"))?.landing?.line).toContain("hand-over failed"),
+      );
+      const card = await cardOf(rpc, "ENG-1");
+      expect(card).toMatchObject({ kind: "landing", landing: { phase: "approved" } });
+      // The read started the landing again from the phase it had.
+      await vi.waitFor(() => expect(machine.calls).toHaveLength(3));
+      expect(machine.calls.map((call) => (call.input as { step: string }).step)).toEqual([
+        "start",
+        "stop",
+        "start",
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("ends the landing on a REFUSED slice: the issue was moved on elsewhere, so nothing is handed over", async () => {
+    try {
+      const { rpc, host, machine } = await approving([reviewed]);
+      await rpc("inbox_approve", { identifier: "ENG-1" });
+      await machine.answer(0, "QUEUED (land-approved): PR 7 is in the merge queue");
+      await phaseIs(rpc, "ENG-1", "queued");
+      await machine.answer(1, "REFUSED (land-approved): issue-not-merging: ENG-1 is Canceled");
+      await vi.waitFor(async () => expect(await cardOf(rpc, "ENG-1")).toBeUndefined());
+      expect(await host.bb.storage.kv.get("landing:ENG-1")).toBeUndefined();
+      expect(machine.calls).toHaveLength(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("drops a stopped landing whose issue moved on outside the Inbox on the next read", async () => {
+    const row: Entry = { ...reviewed };
+    try {
+      const { rpc, host, moved, machine } = await approving([row]);
+      await rpc("inbox_approve", { identifier: "ENG-1" });
+      moved.delete("ENG-1");
+      row.labels = ["decide"];
+      await machine.answer(1, "STOPPED (land-approved): conflict: the PR conflicts with the lane");
+      await phaseIs(rpc, "ENG-1", "stopped");
+      // Someone answers it in Linear and moves it on: it is not waiting in the Inbox any more.
+      moved.add("ENG-1");
+      expect(await cardOf(rpc, "ENG-1")).toBeUndefined();
+      expect(await host.bb.storage.kv.get("landing:ENG-1")).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps a review in the Inbox state a review with a stale stopped landing: Approve starts a new one", async () => {
+    try {
+      const { rpc, host, machine } = await approving([reviewed]);
+      await host.bb.storage.kv.set("landing:ENG-1", {
+        identifier: "ENG-1",
+        title: "Title of ENG-1",
+        url: "https://linear.app/acme/issue/ENG-1",
+        pullRequest: { number: 7, url: "https://github.com/acme/app/pull/7" },
+        change: null,
+        hostId: "host_runs",
+        checkout: "/srv/main",
+        phase: "stopped",
+        line: "conflict: the PR conflicts with the lane",
+        approvedAt: "2026-10-18T00:00:00.000Z",
+        at: "2026-10-18T00:00:00.000Z",
+      });
+      expect(await cardOf(rpc, "ENG-1")).toMatchObject({
+        kind: "review",
+        landing: { phase: "stopped" },
+      });
+      expect(await rpc("inbox_approve", { identifier: "ENG-1" })).toEqual({ error: null });
+      await vi.waitFor(() => expect(machine.calls).toHaveLength(1));
+      expect((await cardOf(rpc, "ENG-1"))?.landing?.phase).toBe("approved");
     } finally {
       vi.unstubAllGlobals();
     }

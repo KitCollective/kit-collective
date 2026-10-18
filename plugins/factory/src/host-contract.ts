@@ -13,8 +13,12 @@ export const GATE_SCRIPT = "scripts/gate.mjs";
 /** The one landing script the Inbox runs after an approval, relative to the checkout. Fixed here, never sent by a caller. */
 export const LAND_SCRIPT = "scripts/land-approved.mjs";
 
-/** The landing script's subcommands: enqueue the approved PR, then wait for the merge and the land gate. */
-export const LAND_STEPS = ["start", "finish"] as const;
+/**
+ * The landing script's subcommands: enqueue the approved PR, wait for the merge and the land gate,
+ * and hand a landing that failed outside the script to a person (`stop`, with the reason).
+ */
+export const LAND_STEPS = ["start", "finish", "stop"] as const;
+export type LandStep = (typeof LAND_STEPS)[number];
 
 /** The gates the tool will run: the flow gates of `gate.mjs`. Its `result` subcommand reads a file and is not a gate. */
 export const GATE_NAMES = ["pre-review", "review", "land"] as const;
@@ -32,6 +36,9 @@ export const GATE_CALL_TIMEOUT_MS = 9 * 60_000;
 
 /** The SDK caps one host call at 30 minutes. */
 export const GATE_TIMEOUT_MAX_MS = 25 * 60_000;
+
+/** The client's wait for one slice: above the script's own slice, which answers with its waiting verdict first. */
+export const LAND_HOST_TIMEOUT_MS = 28 * 60_000;
 
 /** A GitHub repository as `owner/name`. No flag can match. */
 export const REPO_SLUG = /^[\w.-]+\/[\w.-]+$/;
@@ -78,10 +85,15 @@ export const hostContract = defineRpcContract({
         step: z.enum(LAND_STEPS),
         pr: gatePr,
         issue: gateIssue,
+        /** Why the landing is handed to a person; goes with `stop` and only with it. */
+        reason: z.string().trim().min(1).max(1000).optional(),
         /** Below the client's own timeout, so a slow slice comes back as its waiting verdict, not a thrown call. */
         timeoutMs: z.number().int().positive().max(GATE_TIMEOUT_MAX_MS).optional(),
       })
-      .strict(),
+      .strict()
+      .refine((input) => (input.step === "stop") === (input.reason !== undefined), {
+        message: "a reason goes with the stop step and only with it",
+      }),
     output: scriptResult,
   },
   /** The head commit of a pull request right now, read with a fixed `gh pr view`. */

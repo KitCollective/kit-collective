@@ -14,9 +14,15 @@
  *       Waits one slice for the merge. Merged: Post-Merge, then the land gate. Open: one comment with
  *       the merge SHA, then Done. A land gate still waiting at the end of the slice leaves the issue
  *       in Post-Merge (WAITING). A PR the queue ejects (closed, or not queued on two polls) or a
- *       closed land gate (a red integration check) is a stop.
+ *       closed land gate (a red integration check) is a stop. A land gate that cannot decide, or a
+ *       Post-Merge write that fails, is UNKNOWN.
+ *   node scripts/land-approved.mjs stop <pr> --issue KIT-n --reason <text>
+ *       The hand-over for a landing that failed outside this script (Optio's host call did not
+ *       answer, or a slice answered UNKNOWN): a landing issue (Merging or Post-Merge) is stopped with
+ *       the reason; any other is refused and nothing is written, since a person moved it on.
  *
- * A stop hands the issue to a person: Approval, ready-for-human and one comment with the reason.
+ * A stop hands the issue to a person: Approval, ready-for-human and one comment with the reason. A
+ * hand-over whose Linear writes fail is UNKNOWN, so the caller knows nobody was told.
  *
  * One verdict line on every path:
  *   QUEUED (land-approved): …                exit 0, start enqueued it (or found it queued)
@@ -24,8 +30,8 @@
  *   WAITING (land-approved): <phase>: …      exit 3, run the same command again; phase is
  *                                            approved (not enqueued yet), queued or merged
  *   STOPPED (land-approved): <code>: …       exit 1, handed to a person
- *   REFUSED (land-approved): <code>: …       exit 1, nothing was written
- *   UNKNOWN (land-approved): …               exit 4, a source could not be read
+ *   REFUSED (land-approved): <code>: …       exit 1, nothing was written (the issue is not landing)
+ *   UNKNOWN (land-approved): …               exit 4, a source could not be read or a write failed
  * Exit 2 is usage. Env for tests only: KC_LINEAR_CLI (a fake Linear CLI), KC_GATE_CLI (a fake gate),
  * LAND_APPROVED_POLL_SECONDS.
  */
@@ -60,6 +66,7 @@ const opt = (name) => {
   return at === -1 ? undefined : rest[at + 1];
 };
 const issue = opt("--issue");
+const reason = opt("--reason")?.trim() ?? "";
 const timeout = opt("--timeout") ?? "480";
 const startedAt = Date.now();
 const cwd = process.cwd();
@@ -69,12 +76,16 @@ const out = (code, line) => {
   process.exit(code);
 };
 if (
-  !["start", "finish"].includes(sub) ||
+  !["start", "finish", "stop"].includes(sub) ||
   !/^\d+$/.test(pr ?? "") ||
   !/^[A-Z][A-Z0-9]*-\d+$/.test(issue ?? "") ||
-  !/^\d+$/.test(timeout)
+  !/^\d+$/.test(timeout) ||
+  (sub === "stop" && reason === "")
 ) {
-  process.stderr.write("usage: land-approved.mjs start|finish <pr> --issue KIT-n [--timeout s]\n");
+  process.stderr.write(
+    "usage: land-approved.mjs start|finish <pr> --issue KIT-n [--timeout s]\n" +
+      "       land-approved.mjs stop <pr> --issue KIT-n --reason <text>\n",
+  );
   process.exit(2);
 }
 
@@ -103,8 +114,9 @@ function config() {
     return repoConfig();
   }
 }
-const repo = config().github.ownerRepo;
-const lane = config().lanes.integration;
+const factory = config();
+const repo = factory.github.ownerRepo;
+const lane = factory.lanes.integration;
 
 const deadline = startedAt + Number(timeout) * 1000;
 const poll = Number(process.env.LAND_APPROVED_POLL_SECONDS ?? 30);
@@ -118,7 +130,10 @@ function bodyFile(text) {
   return file;
 }
 
-/** Hands the issue to a person: ready-for-human, Approval and one comment with the reason. Exit 1. */
+/**
+ * Hands the issue to a person: ready-for-human, Approval and one comment with the reason. Exit 1;
+ * exit 4 (UNKNOWN) when a write failed, so the caller knows the hand-over did not happen.
+ */
 async function stop(code, detail, labels) {
   const swap = handOverLabel(labels);
   const label = swap === null ? { code: 0 } : await linear("label", issue, ...swap);
@@ -129,13 +144,15 @@ async function stop(code, detail, labels) {
     "--body-file",
     bodyFile(stoppedComment(code, detail, pr)),
   );
-  const done = [
-    label.code === 0 && state.code === 0
-      ? "issue in Approval with ready-for-human"
-      : "Linear NOT fully updated",
-    ...(comment.code === 0 ? [] : ["comment NOT posted"]),
+  const failed = [
+    ...(state.code === 0 ? [] : [`NOT moved to Approval (${state.line})`]),
+    ...(label.code === 0 ? [] : [`ready-for-human NOT set (${label.line})`]),
+    ...(comment.code === 0 ? [] : [`the comment NOT posted (${comment.line})`]),
   ];
-  out(1, verdict("STOPPED", `${code}: ${detail}; ${done.join("; ")}`));
+  if (failed.length > 0) {
+    out(4, verdict("UNKNOWN", `${code}: ${detail}; the hand-over failed: ${failed.join("; ")}`));
+  }
+  out(1, verdict("STOPPED", `${code}: ${detail}; issue in Approval with ready-for-human`));
 }
 
 const viewPr = async (fields) =>
@@ -177,6 +194,7 @@ async function checksOn(head) {
 
 async function start() {
   const data = await linearIssue(issue);
+  const labels = data.labels ?? [];
   if (data.state !== MERGE_PERMISSION_STATUS) {
     out(
       1,
@@ -188,13 +206,14 @@ async function start() {
   }
   for (;;) {
     const view = await viewPr("state,mergeable,baseRefName,headRefOid,autoMergeRequest");
+    if (view.state === "OPEN") view.isInMergeQueue = await inMergeQueue();
     const checks = view.state === "OPEN" ? await checksOn(view.headRefOid) : [];
     const decision = startDecision(view, checks);
     if (decision.act === "queued") {
       out(0, verdict("QUEUED", `PR ${pr} ${decision.detail}; run finish to land it`));
     }
     if (decision.act === "stop") {
-      await stop(decision.code, decision.detail, data.labels ?? []);
+      await stop(decision.code, decision.detail, labels);
     }
     if (decision.act === "enqueue") {
       const result = landAtMergeGate({
@@ -235,7 +254,7 @@ async function start() {
           ),
         );
       }
-      await stop("enqueue-failed", result.reason, data.labels ?? []);
+      await stop("enqueue-failed", result.reason, labels);
     }
     if (!timeLeft()) {
       out(
@@ -252,6 +271,7 @@ async function start() {
 
 async function finish() {
   const data = await linearIssue(issue);
+  const labels = data.labels ?? [];
   if (data.state === MERGED_STATUS) {
     const view = await viewPr("state,mergeCommit");
     if (view.state === "MERGED") {
@@ -282,22 +302,31 @@ async function finish() {
     };
     const where = queueState(view);
     if (where === "closed") {
-      await stop("queue-ejected", "the PR was closed without being merged", data.labels ?? []);
+      await stop("queue-ejected", "the PR was closed without being merged", labels);
     }
     notQueued = where === "not-queued" ? notQueued + 1 : 0;
     if (notQueued >= 2) {
       await stop(
         "queue-ejected",
         "the merge queue dropped the PR (auto-merge is off and it is not in the queue): a red queue run or a conflict",
-        data.labels ?? [],
+        labels,
       );
     }
     let gateLine = "";
     const merge = view.mergeCommit?.oid ?? "";
     if (where === "merged") {
       if (!markedMerged) {
+        const marked = await linear("state", issue, POST_MERGE_STATUS);
+        if (marked.code !== 0) {
+          out(
+            4,
+            verdict(
+              "UNKNOWN",
+              `PR ${pr} merged as ${merge.slice(0, 7)}; ${issue} NOT moved to ${POST_MERGE_STATUS} (${marked.line})`,
+            ),
+          );
+        }
         markedMerged = true;
-        await linear("state", issue, POST_MERGE_STATUS);
       }
       const land = await sh("node", [
         process.env.KC_GATE_CLI || join(ROOT, "scripts", "gate.mjs"),
@@ -324,7 +353,16 @@ async function finish() {
         );
       }
       if (land.code === 1) {
-        await stop("integration-red", land.line, data.labels ?? []);
+        await stop("integration-red", land.line, labels);
+      }
+      if (land.code !== 3) {
+        out(
+          4,
+          verdict(
+            "UNKNOWN",
+            `PR ${pr} merged as ${merge.slice(0, 7)}; the land gate answered ${land.code}: ${land.line}`,
+          ),
+        );
       }
     }
     if (!timeLeft()) {
@@ -342,8 +380,23 @@ async function finish() {
   }
 }
 
+/** The hand-over for a landing that failed outside this script; only a landing issue is stopped. */
+async function handOver() {
+  const data = await linearIssue(issue);
+  if (![MERGE_PERMISSION_STATUS, POST_MERGE_STATUS].includes(data.state)) {
+    out(
+      1,
+      verdict(
+        "REFUSED",
+        `issue-not-landing: ${issue} is ${data.state}; only a landing issue (${MERGE_PERMISSION_STATUS} or ${POST_MERGE_STATUS}) is handed over`,
+      ),
+    );
+  }
+  await stop("optio", reason, data.labels ?? []);
+}
+
 try {
-  await (sub === "start" ? start() : finish());
+  await { start, finish, stop: handOver }[sub]();
 } catch (error) {
   out(4, verdict("UNKNOWN", String(error.message).split("\n")[0]));
 }

@@ -19,12 +19,6 @@ import { handOverLabel, startDecision, verdict } from "../lib/land-approved.mjs"
  * on PATH, a fake Linear CLI and a fake land gate named by env, as auto-land.test.mjs does.
  */
 const CLI = fileURLToPath(new URL("../land-approved.mjs", import.meta.url));
-const IDENT = {
-  GIT_AUTHOR_NAME: "t",
-  GIT_AUTHOR_EMAIL: "t@t",
-  GIT_COMMITTER_NAME: "t",
-  GIT_COMMITTER_EMAIL: "t@t",
-};
 const script = (dir, name, body) => {
   writeFileSync(join(dir, name), body);
   chmodSync(join(dir, name), 0o755);
@@ -44,7 +38,7 @@ if (args[0] === "pr" && args[1] === "view") {
     console.error('Unknown JSON field: "isInMergeQueue"');
     process.exit(1);
   }
-  console.log(JSON.stringify(s.pr));
+  console.log(JSON.stringify(Object.fromEntries(fields.map((field) => [field, s.pr[field] ?? null]))));
 } else if (args[0] === "api" && args[1] === "graphql" && /isInMergeQueue/.test(joined)) {
   console.log(JSON.stringify({ data: { repository: { pullRequest: { isInMergeQueue: s.pr.isInMergeQueue === true } } } }));
 } else if (args[0] === "pr" && args[1] === "merge") {
@@ -69,6 +63,10 @@ if (cmd === "issue") {
 } else {
   let line = [cmd, issue, ...rest].join(" ");
   if (cmd === "comment") line += " :: " + fs.readFileSync(rest[1], "utf8").replace(/\\n/g, " / ");
+  if ((process.env.FAKE_LINEAR_FAIL ?? "").split(",").includes(cmd)) {
+    console.error("fake linear: " + cmd + " failed");
+    process.exit(1);
+  }
   fs.appendFileSync(dir + "/linear-writes.log", line + "\\n");
   if (cmd === "state") { data.state = rest[0]; fs.writeFileSync(file, JSON.stringify(data)); }
 }
@@ -106,7 +104,6 @@ function world({ state = "Merging", labels = ["ready-for-agent"] } = {}) {
       pr: {
         state: "OPEN",
         headRefOid: HEAD,
-        headRefName: "kit-9-x",
         baseRefName: "development",
         mergeable: "MERGEABLE",
         autoMergeRequest: null,
@@ -117,7 +114,7 @@ function world({ state = "Merging", labels = ["ready-for-agent"] } = {}) {
   );
   writeFileSync(
     join(dir, "linear-issue.json"),
-    JSON.stringify({ identifier: "KIT-9", state, labels, comments: [] }),
+    JSON.stringify({ identifier: "KIT-9", state, labels }),
   );
   const w = {
     dir,
@@ -133,7 +130,6 @@ function world({ state = "Merging", labels = ["ready-for-agent"] } = {}) {
         encoding: "utf8",
         env: {
           ...process.env,
-          ...IDENT,
           PATH: `${bin}:${process.env.PATH}`,
           WORLD: dir,
           KC_LINEAR_CLI: join(dir, "linear.js"),
@@ -144,6 +140,7 @@ function world({ state = "Merging", labels = ["ready-for-agent"] } = {}) {
       }),
     start: (env) => w.run(["start", "12", "--issue", "KIT-9"], env),
     finish: (extra = [], env = {}) => w.run(["finish", "12", "--issue", "KIT-9", ...extra], env),
+    stop: (reason, env = {}) => w.run(["stop", "12", "--issue", "KIT-9", "--reason", reason], env),
   };
   return w;
 }
@@ -186,6 +183,15 @@ test("start on a PR that is already queued or merged says queued and enqueues no
     assert.match(result.stdout, /^QUEUED \(land-approved\)/);
     assert.doesNotMatch(w.read("gh-calls.log"), /pr merge/);
   }
+});
+
+test("start finds a PR the merge queue already holds without an auto-merge request, and enqueues nothing", () => {
+  const w = world();
+  w.setGh((s) => Object.assign(s.pr, { autoMergeRequest: null, isInMergeQueue: true }));
+  const result = w.start();
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /^QUEUED \(land-approved\): PR 12 is already in the merge queue/);
+  assert.doesNotMatch(w.read("gh-calls.log"), /pr merge/);
 });
 
 test("start waits (exit 3) while checks run on the head, and writes nothing", () => {
@@ -308,11 +314,74 @@ test("finish refuses an issue that is not landing, and answers LANDED again for 
   assert.equal(done.read("linear-writes.log"), "");
 });
 
+test("finish: a land gate that cannot decide (exit 4) is UNKNOWN (exit 4), never waiting", () => {
+  const w = world();
+  w.setGh((s) => Object.assign(s.pr, { state: "MERGED", mergeCommit: { oid: MERGE_SHA } }));
+  const result = w.finish(["--timeout", "2"], {
+    FAKE_GATE_LAND: "4",
+    LAND_APPROVED_POLL_SECONDS: "1",
+  });
+  assert.equal(result.status, 4, result.stdout + result.stderr);
+  assert.match(result.stdout, /^UNKNOWN \(land-approved\): .*the land gate answered 4/);
+  assert.doesNotMatch(w.read("linear-writes.log"), /Approval|Done/);
+});
+
+test("finish: a Post-Merge write that fails is UNKNOWN (exit 4), and the land gate is not run", () => {
+  const w = world();
+  w.setGh((s) => Object.assign(s.pr, { state: "MERGED", mergeCommit: { oid: MERGE_SHA } }));
+  const result = w.finish([], { FAKE_LINEAR_FAIL: "state" });
+  assert.equal(result.status, 4, result.stdout + result.stderr);
+  assert.match(result.stdout, /^UNKNOWN \(land-approved\): .*NOT moved to Post-Merge/);
+  assert.equal(w.read("gate-calls.log"), "");
+});
+
+test("a hand-over whose Linear writes fail is UNKNOWN (exit 4), not STOPPED", () => {
+  const w = world();
+  w.setGh((s) => (s.mergeFails = true));
+  const result = w.start({ FAKE_LINEAR_FAIL: "state" });
+  assert.equal(result.status, 4, result.stdout + result.stderr);
+  assert.match(
+    result.stdout,
+    /^UNKNOWN \(land-approved\): enqueue-failed: .*NOT moved to Approval/,
+  );
+});
+
+// ---- stop ----------------------------------------------------------------------------------------------
+
+test("stop hands a landing issue (Merging or Post-Merge) to a person with the reason it is given", () => {
+  for (const state of ["Merging", "Post-Merge"]) {
+    const w = world({ state });
+    const result = w.stop("the runs machine did not answer: timeout");
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(
+      result.stdout,
+      /^STOPPED \(land-approved\): optio: the runs machine did not answer/,
+    );
+    handedOver(w, "optio");
+    assert.match(
+      w.read("linear-writes.log"),
+      /comment KIT-9 .*the runs machine did not answer: timeout/,
+    );
+    assert.equal(w.read("gh-calls.log"), "", "stop asks GitHub nothing");
+  }
+});
+
+test("stop refuses an issue that left the landing states, and writes nothing", () => {
+  for (const state of ["Approval", "In Progress", "Done", "Canceled"]) {
+    const w = world({ state });
+    const result = w.stop("the runs machine did not answer");
+    assert.equal(result.status, 1, result.stdout);
+    assert.match(result.stdout, /^REFUSED \(land-approved\): issue-not-landing: /);
+    assert.equal(w.read("linear-writes.log"), "");
+  }
+});
+
 test("a bad command line is usage (exit 2)", () => {
   const w = world();
   assert.equal(w.run(["start", "x", "--issue", "KIT-9"]).status, 2);
   assert.equal(w.run(["land", "12", "--issue", "KIT-9"]).status, 2);
   assert.equal(w.run(["finish", "12", "--issue", "kit-9"]).status, 2);
+  assert.equal(w.run(["stop", "12", "--issue", "KIT-9"]).status, 2, "stop needs a reason");
 });
 
 // ---- the pure decisions --------------------------------------------------------------------------------

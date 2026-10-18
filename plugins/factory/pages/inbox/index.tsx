@@ -19,7 +19,7 @@ const PATH = "inbox";
 
 function kindLabel(card: InboxCardDto): string {
   if (card.kind === "question") return card.label ?? "question";
-  return card.landing === null ? "green review" : "approved";
+  return card.kind === "landing" ? "approved" : "green review";
 }
 
 const PHASE_TEXT: Record<LandingDto["phase"], string> = {
@@ -30,16 +30,8 @@ const PHASE_TEXT: Record<LandingDto["phase"], string> = {
   stopped: "Landing stopped",
 };
 
-/** The landing as one line: the phase, and the script's reason when it stopped. */
-function landingText(landing: LandingDto): string {
-  const reason = landing.line?.replace(/^[A-Z]+ \(land-approved\): /, "") ?? "";
-  return landing.phase === "stopped" && reason !== ""
-    ? `${PHASE_TEXT.stopped}: ${reason}`
-    : PHASE_TEXT[landing.phase];
-}
-
 function preview(card: InboxCardDto): string {
-  if (card.landing !== null) return landingText(card.landing);
+  if (card.landing !== null) return PHASE_TEXT[card.landing.phase];
   if (card.kind === "question") return card.waiting?.ask ?? "The workpad holds no question.";
   return card.review?.verdict ?? "No review verdict recorded.";
 }
@@ -69,9 +61,9 @@ function Row({ card, open, onOpen }: { card: InboxCardDto; open: boolean; onOpen
               "size-2 shrink-0 rounded-full",
               card.kind === "question" || card.landing?.phase === "stopped"
                 ? "bg-amber-500"
-                : card.landing === null
-                  ? "bg-emerald-500"
-                  : "bg-sky-500",
+                : card.kind === "landing"
+                  ? "bg-sky-500"
+                  : "bg-emerald-500",
             )}
             aria-hidden
           />
@@ -202,6 +194,7 @@ function Approve({ card }: { card: InboxCardDto }) {
   );
 }
 
+/** How far the landing got and what its last slice said. Information only: the card's kind decides its actions. */
 function Landing({ landing }: { landing: LandingDto }) {
   return (
     <section
@@ -210,7 +203,7 @@ function Landing({ landing }: { landing: LandingDto }) {
     >
       <h3 className="text-xs text-muted-foreground">Landing</h3>
       <p className={cn(landing.phase === "stopped" && "text-destructive")}>
-        {landingText(landing)}
+        {PHASE_TEXT[landing.phase]}
       </p>
       {landing.line === null ? null : (
         <p className="text-xs text-muted-foreground">{landing.line}</p>
@@ -286,11 +279,9 @@ function Detail({
         </section>
       )}
       {card.landing === null ? null : <Landing landing={card.landing} />}
-      {!question && card.landing === null ? <Approve key={card.identifier} card={card} /> : null}
-      {/* An approved review has left the Inbox state: there is nothing to reject any more. */}
-      {!question && card.landing !== null ? null : (
-        <Reply key={card.identifier} card={card} onSent={onSent} />
-      )}
+      {card.kind === "review" ? <Approve key={card.identifier} card={card} /> : null}
+      {/* A landing card's issue has left the Inbox state: there is nothing to answer or reject. */}
+      {card.kind === "landing" ? null : <Reply key={card.identifier} card={card} onSent={onSent} />}
     </article>
   );
 }

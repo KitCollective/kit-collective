@@ -58,14 +58,23 @@ type LandInput = (typeof hostContract.run_land.input)["_output"];
 /**
  * Runs one slice of the fixed landing script in the given checkout. The script's own wait ends
  * before the host would kill it, so a slow merge queue answers with its waiting verdict (exit 3).
+ * A stop's reason is one argument (no shell), so its text cannot add a flag or a command.
  */
 export const runLand = async (input: LandInput, context: { signal: AbortSignal }) => {
-  const { cwd, step, pr, issue, timeoutMs } = input;
+  const { cwd, step, pr, issue, reason, timeoutMs } = input;
   const hostTimeoutMs = timeoutMs ?? GATE_TIMEOUT_MS;
   return runNodeScript({
     cwd,
     script: LAND_SCRIPT,
-    args: [step, String(pr), "--issue", issue, "--timeout", String(gateWaitSeconds(hostTimeoutMs))],
+    args: [
+      step,
+      String(pr),
+      "--issue",
+      issue,
+      "--timeout",
+      String(gateWaitSeconds(hostTimeoutMs)),
+      ...(reason === undefined ? [] : ["--reason", reason]),
+    ],
     timeoutMs: hostTimeoutMs,
     signal: context.signal,
   });
