@@ -1,5 +1,6 @@
 import { centerCrop4x5Rect, STRIP_VARIANT_WIDTH, UNIVERSAL_PHOTO_ROLES } from "@kit/domain";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { CaptureJerseyDraft } from "../src/capture/captureSessionTypes";
 import {
   clearDevicePhotoPrepareCacheForTests,
   DISPLAY_MAX_EDGE_OTHER,
@@ -10,9 +11,11 @@ import {
   type PhotoManipulatorAdapter,
   prepareDevicePhoto,
   readPreparedDevicePhotoBase64,
+  readPreparedDevicePhotoUri,
   resizeActionForMaxLongEdge,
   scheduleDevicePhotoPrepare,
   VISION_IDENTITY_MAX_EDGE,
+  warmDevicePrepareForDraft,
 } from "../src/capture/photoPrepare";
 
 function createFakeAdapter(
@@ -270,5 +273,55 @@ describe("scheduleDevicePhotoPrepare", () => {
     );
 
     expect(adapter.calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("warmDevicePrepareForDraft", () => {
+  beforeEach(() => {
+    clearDevicePhotoPrepareCacheForTests();
+  });
+
+  it("leaves the identity prepare to the identity read, one per Confirm open", async () => {
+    const uri = "file:///photos/front.jpg";
+    const draft: CaptureJerseyDraft = {
+      id: "draft-1",
+      clubId: null,
+      clubLabel: null,
+      nationalTeamId: null,
+      nationalTeamLabel: null,
+      seasonId: null,
+      kitType: null,
+      size: null,
+      condition: null,
+      kitTypeSelected: false,
+      sizeSelected: false,
+      conditionSelected: false,
+      notes: "",
+      playerName: "",
+      playerId: null,
+      playerNumber: "",
+      seasonLabel: null,
+      badgeEnabled: false,
+      badgeId: null,
+      badgeLabel: null,
+      photos: [{ uri, role: "front", source: "gallery" }],
+    };
+    const adapter = createFakeAdapter({ width: 4000, height: 3000 });
+
+    warmDevicePrepareForDraft(draft, adapter);
+    for (const purpose of ["display", "strip", "lightbox"] as const) {
+      await readPreparedDevicePhotoUri(uri, "front", purpose, adapter);
+    }
+    await readPreparedDevicePhotoBase64(uri, "front", "visionIdentity", adapter);
+
+    const resizedTo = (width: number) =>
+      adapter.calls.filter(
+        (call) =>
+          call.actions.length === 1 &&
+          JSON.stringify(call.actions[0]) === JSON.stringify({ resize: { width } }),
+      );
+    expect(resizedTo(VISION_IDENTITY_MAX_EDGE)).toHaveLength(1);
+    // display and lightbox share the 1600 edge; both warms still run
+    expect(resizedTo(DISPLAY_MAX_EDGE_UNIVERSAL)).toHaveLength(2);
   });
 });
