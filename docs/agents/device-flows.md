@@ -67,7 +67,7 @@ Flows tap by `testID`, so a copy change does not break a flow. The exceptions, e
 
 - the native tab bar: `Søg` and `Ønsker` are tapped by label;
 - the app's own upload source sheet option `Fotos` (a system action sheet), by label;
-- the system photo picker: the first cell and its confirm button, by screen point, on a simulator whose library holds exactly one photo; a flow with several photos taps the cells by screen point too, three to a row, newest first;
+- the system photo picker: the first cell and its confirm button, by screen point, on a simulator whose library holds the iOS sample photos and the fixture, which is the newest and so the first cell; a flow with several photos taps the cells by screen point too, three to a row, newest first;
 - iOS's "save password" prompt: `Ikke nu` / `Not Now`, by text, when it shows;
 - two waits for text: the Saved sheet's count line (`Trøje nr. n i din samling`, which fills in after the sheet opens) and the first row of the Data drill; they assert, they never tap.
 
@@ -136,7 +136,7 @@ apps/mobile/.maestro/run-evidence.sh                   # the slice flow, plus pu
 
 `local-api.sh` drops and recreates `E2E_LOCAL_DATABASE_URL` (default `postgresql://kit:kit@localhost:5432/kit_e2e_test`) and adds the fixture catalog. It never reads a lane `DATABASE_URL`. The values in `local.env.sh` are local-only test values.
 
-The flows own a simulator, "KitCollective Device Flows", created on first use with exactly one photo in its library. A slice flow that needs other photos names them in its header (`# simulator-photos: fck-white-home-front, fck-white-home-back`), from the 131 real shirt photos in `apps/mobile/.maestro/fixtures/photos/` (`catalog.json`, `README.md` there); it then runs on a simulator of its own with exactly those photos, named after the list.
+The flows own a simulator, "KitCollective Device Flows", created on first use with the fixture shirt added to the iOS sample photos in its library; the fixture is the newest, so it is the picker's first cell. A slice flow that needs other photos names them in its header (`# simulator-photos: fck-white-home-front, fck-white-home-back`), from the 131 real shirt photos in `apps/mobile/.maestro/fixtures/photos/` (`catalog.json`, `README.md` there); it then runs on a simulator of its own with exactly those photos, named after the list.
 
 `run-evidence.sh` refuses uncommitted changes under the app, API and package sources, the flows (`apps/mobile/.maestro`) and the evidence scripts (`scripts/e2e`), refuses a branch with no slice flow (unless `E2E_FLOWS=regression`), and refuses when the installed app or the running API was not built from this commit's sources. Evidence is keyed by commit. Then:
 

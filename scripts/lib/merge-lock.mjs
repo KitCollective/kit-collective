@@ -17,14 +17,35 @@ const IDENTITY = {
   GIT_COMMITTER_EMAIL: "merge-lock@kitcollective.invalid",
 };
 
+/**
+ * git's own first error line (`fatal: ...`, `error: ...`, or a `remote: ...` line from the server),
+ * not node's "Command failed: git ..." header and not the "To <url>" line a rejected push starts with.
+ */
+function firstErrorLine(error) {
+  const lines = `${error?.stderr ?? ""}\n${error?.message ?? ""}`
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("Command failed"));
+  return (
+    lines.find((line) => /^(fatal|error|remote):/.test(line)) ??
+    lines.find((line) => !line.startsWith("To ")) ??
+    "git failed without output"
+  );
+}
+
 function git(cwd, args, { input, ...extraEnv } = {}) {
-  return execFileSync("git", args, {
-    cwd,
-    input,
-    encoding: "utf8",
-    stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
-    env: { ...process.env, ...IDENTITY, ...extraEnv },
-  }).trim();
+  try {
+    return execFileSync("git", args, {
+      cwd,
+      input,
+      encoding: "utf8",
+      stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+      // LC_ALL=C: the lease rejection is recognised by git's English "(stale info)".
+      env: { ...process.env, ...IDENTITY, LC_ALL: "C", ...extraEnv },
+    }).trim();
+  } catch (error) {
+    throw Object.assign(new Error(firstErrorLine(error)), { stderr: error.stderr });
+  }
 }
 
 /** @returns {{ sha: string, pr: string, at: number } | null} the current holder */
@@ -40,7 +61,11 @@ function holder(cwd, remote) {
   return { sha, pr: m?.[1] ?? "", at: Number(m?.[2] ?? 0) };
 }
 
-/** Pushes a new lock commit over `expected` (a sha, or "" for "must not exist"). */
+/**
+ * Pushes a new lock commit over `expected` (a sha, or "" for "must not exist").
+ * Returns false only when git refused on the lease (another PR moved the ref); any other
+ * push failure (credentials, permission, network) throws with git's first error line.
+ */
 function swap(cwd, remote, pr, now, expected) {
   git(cwd, ["hash-object", "-t", "tree", "-w", "--stdin"], { input: "" });
   const commit = git(cwd, ["commit-tree", EMPTY_TREE, "-m", `merge-lock pr=${pr} at=${now}`]);
@@ -53,8 +78,11 @@ function swap(cwd, remote, pr, now, expected) {
       `${commit}:${LOCK_REF}`,
     ]);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (/\(stale info\)/.test(String(error.stderr))) {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -88,7 +116,7 @@ export function take({
     }
     return { code: 3, line: "HELD (merge-lock): another PR took it first" };
   } catch (error) {
-    return { code: 1, line: `CLOSED (merge-lock): ${String(error.message).split("\n")[0]}` };
+    return { code: 1, line: `CLOSED (merge-lock): ${error.message}` };
   }
 }
 
@@ -117,7 +145,7 @@ export function release({ cwd, remote = "origin", pr, force = false }) {
           : `RELEASED (merge-lock): PR ${pr} gave the lock back`,
     };
   } catch (error) {
-    return { code: 1, line: `CLOSED (merge-lock): ${String(error.message).split("\n")[0]}` };
+    return { code: 1, line: `CLOSED (merge-lock): ${error.message}` };
   }
 }
 
@@ -134,7 +162,7 @@ export function status({ cwd, remote = "origin", now = Math.floor(Date.now() / 1
     const minutes = Math.round((now - current.at) / 60);
     return { code: 0, line: `HELD (merge-lock): PR ${current.pr} for ${minutes} min` };
   } catch (error) {
-    return { code: 1, line: `CLOSED (merge-lock): ${String(error.message).split("\n")[0]}` };
+    return { code: 1, line: `CLOSED (merge-lock): ${error.message}` };
   }
 }
 
