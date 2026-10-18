@@ -2,7 +2,6 @@ import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  collectionActivitySchema,
   collectionBlockConversationResponseSchema,
   collectionBlockPeerResponseSchema,
   collectionConversationPeerSchema,
@@ -143,6 +142,18 @@ async function saveJerseyForUser(
   return collectionSaveResponseSchema.parse(JSON.parse(response.body)).jersey;
 }
 
+async function getInbox(
+  app: NestFastifyApplication,
+  session: Awaited<ReturnType<typeof registerSession>>,
+) {
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/collection/conversations",
+    headers: { authorization: `Bearer ${session.accessToken}` },
+  });
+  return collectionConversationsSchema.parse(JSON.parse(response.body));
+}
+
 async function createBidConversation(
   app: NestFastifyApplication,
   owner: Awaited<ReturnType<typeof registerSession>>,
@@ -260,6 +271,8 @@ describe("Conversation moderation /v1", () => {
     });
     const ownerBody = collectionConversationsSchema.parse(JSON.parse(ownerInbox.body));
     expect(ownerBody.conversations).toHaveLength(0);
+    expect(ownerBody.waiting).toHaveLength(0);
+    expect(ownerBody.unreadCount).toBe(0);
 
     const bidderInbox = await app.inject({
       method: "GET",
@@ -389,18 +402,10 @@ describe("Conversation moderation /v1", () => {
       jersey.id,
     );
 
-    for (const session of [owner, bidder]) {
-      const activityBefore = await app.inject({
-        method: "GET",
-        url: "/v1/collection/activity",
-        headers: {
-          authorization: `Bearer ${session.accessToken}`,
-          "accept-language": "da",
-        },
-      });
-      const activityBeforeBody = collectionActivitySchema.parse(JSON.parse(activityBefore.body));
-      expect(activityBeforeBody.items.length).toBeGreaterThan(0);
-    }
+    const ownerBefore = await getInbox(app, owner);
+    expect(ownerBefore.waiting.map((row) => row.messageId)).toEqual([messageId]);
+    expect(ownerBefore.conversations).toHaveLength(1);
+    expect((await getInbox(app, bidder)).conversations).toHaveLength(1);
 
     const blockResponse = await app.inject({
       method: "POST",
@@ -418,17 +423,8 @@ describe("Conversation moderation /v1", () => {
       });
       const body = collectionConversationsSchema.parse(JSON.parse(inbox.body));
       expect(body.conversations).toHaveLength(0);
-
-      const activity = await app.inject({
-        method: "GET",
-        url: "/v1/collection/activity",
-        headers: {
-          authorization: `Bearer ${session.accessToken}`,
-          "accept-language": "da",
-        },
-      });
-      const activityBody = collectionActivitySchema.parse(JSON.parse(activity.body));
-      expect(activityBody.items).toHaveLength(0);
+      expect(body.waiting).toHaveLength(0);
+      expect(body.unreadCount).toBe(0);
 
       const messageResponse = await app.inject({
         method: "POST",

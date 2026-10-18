@@ -1,6 +1,5 @@
 import type {
-  CollectionActivityItem,
-  CollectionConversation,
+  CollectionConversations,
   CollectionDiscoverHome,
   CollectionJersey,
   CollectionShortcut,
@@ -15,10 +14,8 @@ export type PlaceOverviewSnapshot = {
     totalJerseyCount: number;
     shortcuts: CollectionShortcut[];
   };
-  inbox: {
-    conversations: CollectionConversation[];
-    activityItems: CollectionActivityItem[];
-  };
+  /** The Indbakke response: waiting Buds and Conversations in one. */
+  inbox: CollectionConversations;
   search: {
     home: CollectionDiscoverHome;
   };

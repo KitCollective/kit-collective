@@ -4,7 +4,10 @@ import { ConversationView } from "@/components/conversation-view";
 import { useInboxChrome } from "@/inbox/inbox-chrome";
 
 export default function ConversationScreen() {
-  const { conversationId } = useLocalSearchParams<{ conversationId: string }>();
+  const { conversationId, messageId } = useLocalSearchParams<{
+    conversationId: string;
+    messageId?: string;
+  }>();
   const router = useRouter();
   const { refreshUnreadCount } = useInboxChrome();
 
@@ -20,6 +23,7 @@ export default function ConversationScreen() {
   return (
     <ConversationView
       conversationId={conversationId}
+      focusMessageId={messageId ?? null}
       onBack={() => router.back()}
       onConversationOpened={() => void handleConversationOpened()}
       onConversationHidden={() => router.replace("/(tabs)/inbox")}
