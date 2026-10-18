@@ -79,6 +79,10 @@ Optio's code is cut by area so tickets for different areas run side by side. The
 
 `app.tsx`, `server.ts` and `src/contract.ts` only register areas, no logic: `server.ts` takes an import, a `create<Area>(core)` call and an entry in the RPC and CLI registers; `src/contract.ts` takes an import and a spread; `app.tsx` takes an import and, for a new nav panel, a `navPanel({...})` call (or an entry in the views the Agents panel is handed). The stores, the scheduler, the Linear adapter and the host code stay in `src/` and are reached through `core`. The Board's write-scope overlap ignores those three registration files, as it ignores test globs under `apps/` and `packages/`, so two areas' tickets can declare `plugins/factory/src/<area>/**` and `plugins/factory/pages/<area>/**` and run together. A ticket that puts logic in a registration file, or more than those registration lines, is a sign the code belongs in an area.
 
+## The reviewer proxy (ADR-0067)
+
+A reviewer thread whose title ends in `:openrouter` runs Claude Code on an OpenRouter model. Optio gives that thread, and no other, `ANTHROPIC_BASE_URL` pointing at its route `/api/v1/plugins/optio/http/reviewer` and a token for that thread (`bb.providers.experimental_contributeEnv`); the route checks the token, refuses a model id that is not `vendor/model`, and forwards the call to OpenRouter with `OPENROUTER_API_KEY` from the key file named in Optio's settings (`linearApiKeyFile`), asking for endpoints that do not train on the data. The key never reaches the thread. The code is `plugins/factory/src/reviewer-proxy/`.
+
 ## After a merge that touches `plugins/factory/`
 
 ```bash

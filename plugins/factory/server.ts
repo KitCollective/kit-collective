@@ -20,6 +20,7 @@ import { createBoard } from "./src/board/index.js";
 import { rpcContract } from "./src/contract.js";
 import { createCore } from "./src/core.js";
 import { createInbox } from "./src/inbox/index.js";
+import { createReviewerProxy } from "./src/reviewer-proxy/index.js";
 import { createRuns } from "./src/runs/index.js";
 import { createStaff } from "./src/staff/index.js";
 import { createThreads } from "./src/threads/index.js";
@@ -31,6 +32,10 @@ export default async function plugin(bb: BbPluginApi) {
   const runs = createRuns(core);
   const inbox = createInbox(core);
   const threads = createThreads(core);
+  createReviewerProxy({
+    bb: core.bb,
+    keyFile: async () => (await core.settings.get()).linearApiKeyFile,
+  }).register();
 
   bb.rpc.register(rpcContract, {
     ...staff.rpc,
