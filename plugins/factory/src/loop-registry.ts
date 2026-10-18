@@ -30,6 +30,20 @@ const milestoneDoneTriggerSchema = z
   })
   .strict();
 
+const clock = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "a time of day as HH:MM, 00:00 to 23:59");
+
+/**
+ * A daily window, in UTC, in which a Loop may start runs: from `from` up to, not including, `to`.
+ * A window whose `to` is before its `from` runs past midnight.
+ */
+export const scheduleSchema = z
+  .object({ from: clock, to: clock })
+  .strict()
+  .refine((window) => window.from !== window.to, "from and to must differ");
+export type Schedule = z.infer<typeof scheduleSchema>;
+
 const loopSchema = z
   .object({
     name: z.string().trim().min(1).max(64),
@@ -43,6 +57,8 @@ const loopSchema = z
     machines: z.array(machineId).min(1),
     /** How many runs of this Loop may be live at once. */
     maxLive: z.number().int().min(0).max(16),
+    /** When the Loop may start runs; null or absent means at any time. */
+    schedule: scheduleSchema.nullable().optional(),
   })
   .strict();
 
@@ -101,7 +117,10 @@ const registrySchema = z
     });
   });
 
-export type Loop = z.infer<typeof loopSchema>;
+export type Loop = z.infer<typeof loopSchema> & {
+  /** Starts of one issue in 24 h for this Loop; set only by an Operating setting override. */
+  startsPerDay?: number | null;
+};
 export type IssueTrigger = z.infer<typeof issueTriggerSchema>;
 /** A Loop whose trigger is an issue in a state with a label. */
 export type IssueLoop = Loop & { trigger: IssueTrigger };
@@ -157,3 +176,59 @@ export const isIssueLoop = (loop: Loop): loop is IssueLoop => loop.trigger.kind 
 /** The enabled Loops that start from an issue, in registry order. */
 export const issueLoops = (registry: Registry): IssueLoop[] =>
   registry.loops.filter(isIssueLoop).filter((loop) => loop.enabled);
+
+// ---- Operating settings: the file's value, or an override stored in Optio -------------------
+
+export const SETTING_KEYS = ["enabled", "maxLive", "startsPerDay", "schedule"] as const;
+export type SettingKey = (typeof SETTING_KEYS)[number];
+
+/** What each setting accepts. `startsPerDay` null lifts the cap; `schedule` null means any time. */
+export const settingSchemas = {
+  enabled: z.boolean(),
+  maxLive: z.number().int().min(0).max(16),
+  startsPerDay: z.number().int().min(1).max(1000).nullable(),
+  schedule: scheduleSchema.nullable(),
+} as const;
+
+export interface SettingValues {
+  enabled: boolean;
+  maxLive: number;
+  startsPerDay: number | null;
+  schedule: Schedule | null;
+}
+
+/** The overrides to apply, by Loop name. */
+export type LoopOverrides = Record<string, Partial<SettingValues>>;
+
+/** The file's value of each setting for a Loop. `startsPerDay` is `flow.maxRunsPerDay`. */
+export const fileSettings = (registry: Registry, loop: Loop): SettingValues => ({
+  enabled: loop.enabled,
+  maxLive: loop.maxLive,
+  startsPerDay: registry.maxRunsPerDay,
+  schedule: loop.schedule ?? null,
+});
+
+/** The registry with each Loop's override-or-file settings in place, so everything reading it sees them. */
+export function applyOverrides(registry: Registry, overrides: LoopOverrides): Registry {
+  return {
+    ...registry,
+    loops: registry.loops.map((loop) => {
+      const own = overrides[loop.name];
+      return own === undefined ? loop : { ...loop, ...own };
+    }),
+  };
+}
+
+const minutes = (clockTime: string) => {
+  const [hours = "0", mins = "0"] = clockTime.split(":");
+  return Number(hours) * 60 + Number(mins);
+};
+
+/** Whether `nowMs` falls inside the window (UTC); no window means any time. */
+export function inSchedule(schedule: Schedule | null | undefined, nowMs: number): boolean {
+  if (schedule === null || schedule === undefined) return true;
+  const date = new Date(nowMs);
+  const now = date.getUTCHours() * 60 + date.getUTCMinutes();
+  const [from, to] = [minutes(schedule.from), minutes(schedule.to)];
+  return from < to ? now >= from && now < to : now >= from || now < to;
+}

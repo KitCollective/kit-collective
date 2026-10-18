@@ -20,6 +20,7 @@ import { createBoard } from "./src/board/index.js";
 import { rpcContract } from "./src/contract.js";
 import { createCore } from "./src/core.js";
 import { createInbox } from "./src/inbox/index.js";
+import { createLoops } from "./src/loops/index.js";
 import { createRuns } from "./src/runs/index.js";
 import { createStaff } from "./src/staff/index.js";
 import { createThreads } from "./src/threads/index.js";
@@ -30,6 +31,7 @@ export default async function plugin(bb: BbPluginApi) {
   const board = createBoard(core);
   const runs = createRuns(core);
   const inbox = createInbox(core);
+  const loops = createLoops(core);
   const threads = createThreads(core);
 
   bb.rpc.register(rpcContract, {
@@ -38,13 +40,14 @@ export default async function plugin(bb: BbPluginApi) {
     ...runs.rpc,
     ...threads.rpc,
     inbox_list: inbox.list,
+    ...loops.rpc,
   });
 
   bb.cli.register(
     defineCli({
       name: "optio",
       summary: "Standing agents: their brief and memory, their runs, and the orchestrator's board",
-      commands: { ...staff.cli, ...board.cli, inbox: inbox.command },
+      commands: { ...staff.cli, ...board.cli, inbox: inbox.command, loops: loops.command },
     }),
   );
 }
