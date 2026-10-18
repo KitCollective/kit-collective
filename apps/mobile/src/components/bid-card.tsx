@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
+import { usePathname } from "expo-router";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/ui";
 import type { BidCardState } from "@/inbox/thread-view-model";
+import { sendBidHrefReturningTo } from "@/search/send-bid-return";
 import { useBrandFontsEnabled, useTypography } from "@/theme/brand-fonts";
 import { fontFamily, radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -46,6 +48,7 @@ export function BidCard({
   onDecline,
   onNavigate,
 }: BidCardProps) {
+  const pathname = usePathname();
   const theme = useTheme();
   const typography = useTypography();
   const brandFontsEnabled = useBrandFontsEnabled();
@@ -202,7 +205,8 @@ export function BidCard({
           accessibilityLabel={card.accessibility.sendNewBid}
           variant="secondary"
           width="fill"
-          onPress={() => onNavigate(sendNewBidHref)}
+          // Send bud returns to this thread after the send, not to Søg (KIT-413).
+          onPress={() => onNavigate(sendBidHrefReturningTo(sendNewBidHref, pathname))}
         />
       ) : null}
     </View>
