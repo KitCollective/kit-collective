@@ -1219,7 +1219,11 @@ test("autoLand must be a boolean in the input schema, and never changes how the 
   });
   for (const spawn of agentSpawns(spawns)) {
     assert.equal(spawn.options.provider, "claude-code");
-    assert.match(spawn.options.model, /^claude-/);
+    // The Reviewer runs on an OpenRouter model through Optio's proxy (ADR-0067); everyone else on Claude.
+    assert.match(
+      spawn.options.model,
+      spawn.options.label.startsWith("reviewer:") ? /^z-ai\// : /^claude-/,
+    );
   }
 });
 
@@ -1233,7 +1237,7 @@ test("a resume whose head is ready goes straight to the Reviewer: no Engineer, a
   assert.equal(result.prNumber, 55);
   assert.equal(result.rounds, 0);
   const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:"));
-  assert.equal(reviewer.options.label, "reviewer:KIT-9:r0");
+  assert.equal(reviewer.options.label, "reviewer:KIT-9:r0:openrouter");
   assert.equal(commands.filter((c) => c.includes('state KIT-9 "In Progress"')).length, 1);
   assert.ok(commands.some((c) => c.includes("--code engineer-skipped")));
   assert.equal(
@@ -1757,4 +1761,19 @@ test("the Reviewer marks each finding gating or nit and says what green looks li
   const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:"));
   assert.match(reviewer.prompt, /`gating` or `nit`/);
   assert.match(reviewer.prompt, /what green looks like/);
+});
+
+test("the Reviewer is GLM 5.3 through Optio's proxy, for a Sonnet and an Opus Engineer alike (ADR-0067)", async () => {
+  const sonnet = await run();
+  const r1 = agentSpawns(sonnet.spawns).find((s) => s.options.label.startsWith("reviewer:"));
+  assert.equal(r1.options.label, "reviewer:KIT-9:r1:openrouter");
+  assert.equal(r1.options.model, "z-ai/glm-5.3");
+  assert.ok(
+    sonnet.commands.some((c) =>
+      /--step reviewer .*--provider claude-code --model z-ai\/glm-5.3/.test(c),
+    ),
+  );
+  const opus = await run({ startDecision: { engineerModel: "opus" } });
+  const r2 = agentSpawns(opus.spawns).find((s) => s.options.label.startsWith("reviewer:"));
+  assert.equal(r2.options.model, "z-ai/glm-5.3");
 });
