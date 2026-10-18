@@ -1,17 +1,18 @@
 // The Home area's part of the RPC contract.
 import { z } from "zod";
+import { inboxCard } from "../shared/contract.js";
 
 /** How many of the newest Inbox cards bb's Home lists. */
 export const HOME_CARDS = 3;
 
-const homeCard = z.object({
+const homeCard = inboxCard.pick({
   /** The card's id in the Inbox: what the Inbox panel's `subPath` opens. */
-  id: z.string(),
-  identifier: z.string(),
-  title: z.string(),
-  kind: z.enum(["review", "question", "mention", "alarm"]),
+  id: true,
+  identifier: true,
+  title: true,
+  kind: true,
   /** When the card began to wait (ISO). */
-  since: z.string(),
+  since: true,
 });
 
 export const homeContract = {

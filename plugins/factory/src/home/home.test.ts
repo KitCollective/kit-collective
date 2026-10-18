@@ -51,10 +51,11 @@ const mentioned = (id: string, createdAt: string) => ({
 });
 
 /** A fake Linear: every issue is in `Waiting` since the given time; `mentions` are the unread notifications. */
-const linear = (rows: () => Entry[], mentions: () => unknown[]) =>
+const linear = (rows: () => Entry[], mentions: () => unknown[], refuseMentions: boolean) =>
   vi.fn(async (_url: unknown, init?: { body?: unknown }) => {
     const { query } = z.object({ query: z.string() }).parse(JSON.parse(String(init?.body)));
     if (/query Mentions/.test(query)) {
+      if (refuseMentions) return new Response("Mentions refused", { status: 500 });
       return new Response(
         JSON.stringify({
           data: {
@@ -83,8 +84,11 @@ const linear = (rows: () => Entry[], mentions: () => unknown[]) =>
     );
   });
 
-async function homeOn(rows: () => Entry[], { inbox = true, mentions = (): unknown[] => [] } = {}) {
-  vi.stubGlobal("fetch", linear(rows, mentions));
+async function homeOn(
+  rows: () => Entry[],
+  { inbox = true, mentions = (): unknown[] => [], refuseMentions = false } = {},
+) {
+  vi.stubGlobal("fetch", linear(rows, mentions, refuseMentions));
   const host = createFakePluginHost({
     pluginId: "optio",
     settings: { linearWebhookSecret: "whsec", linearApiKey: "lin_key" },
@@ -173,6 +177,22 @@ describe("Venter på dig on bb's Home", () => {
     expect(one.newest.map((card) => card.identifier)).toEqual(["ENG-1"]);
     rows = [];
     expect(await rpc("home_waiting", null)).toEqual({ error: null, count: 0, newest: [] });
+  });
+
+  it("names a read that failed and still counts and lists the cards the others found", async () => {
+    const rpc = await homeOn(() => [issue("ENG-1", 2), issue("ENG-2", 9, ["asks"])], {
+      refuseMentions: true,
+    });
+    const home = await rpc("home_waiting", null);
+    expect(home.error).toContain("mentions");
+    expect(home.count).toBe(2);
+    expect(home.newest.map((card) => card.id)).toEqual(["ENG-2", "ENG-1"]);
+  });
+
+  it("orders cards that began to wait together by id, as the Inbox does", async () => {
+    const rpc = await homeOn(() => [issue("ENG-2", 3), issue("ENG-1", 3), issue("ENG-3", 3)]);
+    const home = await rpc("home_waiting", null);
+    expect(home.newest.map((card) => card.id)).toEqual(["ENG-1", "ENG-2", "ENG-3"]);
   });
 
   it("says why it cannot count when the Inbox is not set up", async () => {

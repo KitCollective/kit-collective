@@ -16,10 +16,7 @@ export function createHome({ inbox }: HomeDeps) {
   async function waiting(): Promise<HomeDto> {
     const { error, cards } = await inbox.list();
     const newest = [...cards]
-      .sort(
-        (a, b) =>
-          Date.parse(b.since) - Date.parse(a.since) || a.identifier.localeCompare(b.identifier),
-      )
+      .sort((a, b) => Date.parse(b.since) - Date.parse(a.since) || a.id.localeCompare(b.id))
       .slice(0, HOME_CARDS)
       .map(({ id, identifier, title, kind, since }) => ({ id, identifier, title, kind, since }));
     return { error, count: cards.length, newest };

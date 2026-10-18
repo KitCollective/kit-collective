@@ -5,9 +5,7 @@ import { useBbNavigate, useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
 import { useCallback, useEffect, useState } from "react";
 import type { rpcContract } from "../../src/contract";
 import type { HomeDto } from "../../src/home/contract";
-import { DOT } from "../inbox";
-
-const INBOX = "inbox";
+import { DOT, INBOX } from "../shared/common";
 
 export function Waiting() {
   const rpc = useRpc<typeof rpcContract>();
@@ -26,26 +24,29 @@ export function Waiting() {
   useEffect(refetch, [refetch]);
   useRealtime("changed", refetch);
 
+  // A partial read names its error and still lists the cards it found, as the Inbox page does.
   const problem = failure ?? home?.error ?? null;
-  if (problem !== null) {
-    return (
+  const alert =
+    problem === null ? null : (
       <p role="alert" className="text-sm text-destructive">
         {problem}
       </p>
     );
-  }
   if (home === null) {
     return (
-      <p role="status" className="text-sm text-muted-foreground">
-        Reading Linear…
-      </p>
+      alert ?? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Reading Linear…
+        </p>
+      )
     );
   }
   if (home.count === 0) {
-    return <p className="text-sm text-muted-foreground">Nothing waits for you.</p>;
+    return alert ?? <p className="text-sm text-muted-foreground">Nothing waits for you.</p>;
   }
   return (
     <div className="flex flex-col gap-2">
+      {alert}
       <button
         type="button"
         className="self-start text-sm font-medium hover:underline"
