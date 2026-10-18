@@ -81,11 +81,11 @@ The args are the `meta.inputSchema` of `.bb/workflows/afk-developer.js`:
 | Arg | Meaning |
 | --- | --- |
 | `issue` | Required. The issue key, `KIT-n`. |
-| `resume` | `true` to continue an issue that already has a branch and a PR. When the last Engineer result was `ready`, no findings are open on the head and the pre-review gate is open, the run goes straight to the Reviewer (round 0) and spends no Engineer round. |
+| `resume` | `true` to continue an issue that already has a branch and a PR. When the last Engineer result was `ready`, no findings are open on the head and the pre-review gate is open, the run goes straight to the Reviewer (round 0) and spends no Engineer round. A PR that conflicts with development is never reviewed as it is: see `mergeFirst`. |
 | `skipLead` | `true` to skip the Lead, for a small issue. |
 | `maxRounds` | Total Engineer rounds, 1 to 3, default 2: the first build plus one fix round after a red review. A red review at the cap whose findings the Reviewer marks all `light` (wording of a comment, doc line, name or message; nothing in behaviour, tests, acceptance criteria, the design lock or the write-scope) gets one round more, once per run, logged as `light-extra-round`. That round is reviewed like any other. |
 | `machine` | Only written to the run log; it routes nothing. |
-
+| `mergeFirst` | With `resume`, `true` when the PR conflicts with development (Max's tick sets it when its own merge of `origin/development` into the PR branch conflicted; it then aborts and leaves the worktree detached at `origin/development`, so the harness check passes). The first Engineer round opens with the merge: check out the PR branch, `git merge origin/development`, resolve every conflict so both sides' features survive (never one side whole), get the tests green, commit and push, never rebase or force-push; then the round goes on to the pre-review gate and the Reviewer as usual, logged as reason `conflict`. The run does the same without the flag when `resume-point.mjs` reads the PR as `CONFLICTING` (its line starts `CLOSED: conflicting:`), or when a pre-review gate closes on `PR is CONFLICTING` (development moved during the run): the next round is a merge round. Before 2026-10-18 the tick aborted and reported, and KIT-404 (PR #431) and KIT-400 (PR #436) sat in To-do after KIT-403 landed. |
 | `autoLand` | `true` to hand a green issue to `scripts/auto-land.mjs` (ADR-0061) instead of stopping at `Approval`. Default false; without it the workflow only asks whether `flow.autoLand.enabled` is on. |
 
 By default the run goes from the session check to `Approval` and stops there (ADR-0058). `Approval` is not merge permission: a person moves the issue to `Merging` and starts the land step. That human path is unchanged.
