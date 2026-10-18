@@ -66,7 +66,7 @@ const linearBoard = () =>
     );
   });
 
-async function load(registryText = registry()) {
+async function load(registryText = registry(), { board = true } = {}) {
   let threads = 0;
   const host = createFakePluginHost({
     pluginId: "optio",
@@ -96,6 +96,14 @@ async function load(registryText = registry()) {
   // SAFETY: the fake host's callRpc parses every result with the method's output schema in rpcContract;
   // the input stays unknown so a test can send what the contract refuses.
   const rpc = host.harness.behavior.callRpc as Rpc;
+  if (board) await setUpBoard(rpc);
+  const spawns = () => host.harness.inspection.sdk.callsTo("threads.spawn");
+  const tick = () => host.harness.behavior.runSchedule("orchestrator-tick");
+  const cli = host.harness.behavior.runCli;
+  return { rpc, spawns, tick, cli };
+}
+
+async function setUpBoard(rpc: Rpc) {
   await rpc("board_setup", {
     projectId: "proj_1",
     teamKey: "ENG",
@@ -107,10 +115,6 @@ async function load(registryText = registry()) {
     mode: "live",
     machines: [{ id: "mac", hostId: "host_1", branch: "origin/main", cap: 2, capabilities: [] }],
   });
-  const spawns = () => host.harness.inspection.sdk.callsTo("threads.spawn");
-  const tick = () => host.harness.behavior.runSchedule("orchestrator-tick");
-  const cli = host.harness.behavior.runCli;
-  return { rpc, spawns, tick, cli };
 }
 
 const issueRun = async (rpc: Rpc) =>
@@ -329,5 +333,36 @@ describe("the Board and the tick read override-or-file", () => {
     const printed = await cli(["loops", "--json"], { threadId: "thr_x" });
     expect(printed.exitCode).toBe(1);
     expect(JSON.parse(printed.stdout).error).toContain("factory.config.json");
+  });
+
+  it("needs no Board: the Inbox's project, or --project, is enough", async () => {
+    const { rpc, cli } = await load(registry(), { board: false });
+    const unset = await rpc("loops_list", null);
+    expect(unset.loops).toEqual([]);
+    expect(unset.error).toContain("bb optio inbox --project");
+    await expect(
+      rpc("loops_set", { loop: "Issue run", key: "enabled", value: false, by: "Dana" }),
+    ).rejects.toThrow("bb optio inbox --project");
+
+    const named = await cli(["loops", "--json", "--project", "proj_1"], { threadId: "thr_x" });
+    expect(named.exitCode).toBe(0);
+    expect(JSON.parse(named.stdout).loops).toHaveLength(2);
+
+    await cli(["inbox", "--state", "Approval", "--labels", "question", "--project", "proj_1"], {
+      threadId: "thr_x",
+    });
+    expect((await rpc("loops_list", null)).loops).toHaveLength(2);
+    await rpc("loops_set", { loop: "Issue run", key: "maxLive", value: 1, by: "Dana" });
+    const printed = await cli(["loops", "--json"], { threadId: "thr_x" });
+    expect(JSON.parse(printed.stdout).loops[0].settings.maxLive).toMatchObject({
+      value: 1,
+      file: 3,
+    });
+  });
+
+  it("says where a starts-per-day override stops applying", async () => {
+    const { cli } = await load();
+    const text = await cli(["loops"], { threadId: "thr_x" });
+    expect(text.stdout).toContain("scripts/session-check.mjs reads flow.maxRunsPerDay");
   });
 });

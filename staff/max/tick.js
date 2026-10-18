@@ -56,7 +56,10 @@
   let startHold = null;
   try {
     const printed = JSON.parse(
-      execFileSync(bb, ["optio", "loops", "--json"], { encoding: "utf8", timeout: 60000 }),
+      execFileSync(bb, ["optio", "loops", "--json", "--project", project], {
+        encoding: "utf8",
+        timeout: 60000,
+      }),
     );
     const afk = (printed.loops ?? []).find((loop) => loop.workflow === AFK_WORKFLOW);
     if (!afk) throw new Error(`no Loop runs the ${AFK_WORKFLOW} workflow`);

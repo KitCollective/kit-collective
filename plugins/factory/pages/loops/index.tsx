@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { LoopChangeDto, LoopDto } from "../../src/loops/contract";
-import { formatSetting } from "../../src/loops/format";
+import { formatSetting, STARTS_PER_DAY_NOTE } from "../../src/loops/format";
 import { when } from "../shared/common";
 import { Empty, Labeled, Page, Problem, Section } from "../shared/layout";
 import { useLoaded } from "../shared/use-loaded";
@@ -134,7 +134,7 @@ function LoopCard({
       </SettingRow>
       <SettingRow
         label="Starts per day"
-        hint="How many times one issue may be started in 24 hours; empty is no cap."
+        hint={`How many times one issue may be started in 24 hours; empty is no cap. Note: ${STARTS_PER_DAY_NOTE}`}
         {...row("startsPerDay")}
       >
         <Input

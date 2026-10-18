@@ -6,6 +6,7 @@
 import { cliCommand } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
 import type { Core } from "../core.js";
+import { inboxConfig } from "../inbox/contract.js";
 import {
   fileSettings,
   type Loop,
@@ -20,9 +21,10 @@ import {
 import { createSettingsStore, type Override } from "../settings/store.js";
 import { json } from "../shared/cli.js";
 import type { LoopChangeDto, LoopDto, LoopsDto } from "./contract.js";
-import { formatSetting } from "./format.js";
+import { formatSetting, STARTS_PER_DAY_NOTE } from "./format.js";
 
 const SUBJECT = "loop:";
+const INBOX_KEY = "inbox"; // where `bb optio inbox` keeps its config (src/inbox/index.ts)
 const LOG_LIMIT = 100;
 
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -80,7 +82,7 @@ function loopDto(registry: Registry, loop: Loop, own: Map<string, Override> | un
 }
 
 function describe(loops: LoopDto[]): string {
-  return loops
+  const text = loops
     .map((loop) => {
       const lines = SETTING_KEYS.map((key) => {
         const { value, file, override } = loop.settings[key];
@@ -96,6 +98,7 @@ function describe(loops: LoopDto[]): string {
       ].join("\n");
     })
     .join("\n");
+  return `${text}\n\nstartsPerDay: ${STARTS_PER_DAY_NOTE}`;
 }
 
 export function createLoops(core: Core) {
@@ -111,16 +114,31 @@ export function createLoops(core: Core) {
   }
   core.scheduler.useLoopOverrides(overrides);
 
+  /**
+   * The bb project whose `factory.config.json` holds the Loops: the one named, else the Board's,
+   * else the Inbox's. The Loops never need the Board, as the Inbox never does.
+   */
+  async function project(named: string | undefined): Promise<string> {
+    if (named !== undefined) return named;
+    const board = await core.storedScheduler();
+    if (board !== null) return board.projectId;
+    const inbox = inboxConfig.safeParse(await core.bb.storage.kv.get<unknown>(INBOX_KEY));
+    if (inbox.success && inbox.data.projectId !== undefined) return inbox.data.projectId;
+    throw new Error(
+      "no bb project to read factory.config.json from: set up the Board, run `bb optio inbox --project <bb project id>`, or pass --project (docs/agents/optio.md)",
+    );
+  }
+
   /** The registry as the project checkout holds it now, without any override. */
-  async function fileRegistry(): Promise<Registry> {
-    const parsed = parseRegistry(await core.registryText(await core.requireScheduler()));
+  async function fileRegistry(named?: string): Promise<Registry> {
+    const parsed = parseRegistry(await core.projectConfigText(await project(named)));
     if (!parsed.ok) throw new Error(parsed.error);
     return parsed.registry;
   }
 
-  async function list(): Promise<LoopsDto> {
+  async function list(named?: string): Promise<LoopsDto> {
     try {
-      const registry = await fileRegistry();
+      const registry = await fileRegistry(named);
       const own = store.overrides(SUBJECT);
       const log = store.log(SUBJECT, LOG_LIMIT).map(
         (change): LoopChangeDto => ({
@@ -167,7 +185,7 @@ export function createLoops(core: Core) {
   }
 
   const rpc = {
-    loops_list: list,
+    loops_list: () => list(),
     async loops_set(input: { loop: string; key: string; value: unknown; by: string }) {
       const { loop, key } = await target(input.loop, input.key);
       const value = check(settingSchemas[key], key, input.value);
@@ -190,9 +208,16 @@ export function createLoops(core: Core) {
     summary: "Show every Loop with its Operating settings: the file's value or an override",
     description:
       "Prints each Loop's trigger and workflow, and whether it is on, its live-run cap, its starts per day and its schedule. A value changed on the Loops page shows with the file's value beside it. With --json it prints what the page reads, which Max's dispatch tick uses. Exits 1 with the reason when the Loops cannot be read.",
-    options: { json },
+    options: {
+      json,
+      project: {
+        type: "string",
+        description:
+          "The bb project whose factory.config.json to read; default the Board's or the Inbox's",
+      },
+    },
     async run({ options }) {
-      const listed = await list();
+      const listed = await list(options.project);
       if (listed.error !== null) {
         return {
           exitCode: 1,
@@ -206,5 +231,5 @@ export function createLoops(core: Core) {
     },
   });
 
-  return { rpc, command };
+  return { rpc, cli: { loops: command } };
 }

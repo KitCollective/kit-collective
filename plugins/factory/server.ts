@@ -47,7 +47,7 @@ export default async function plugin(bb: BbPluginApi) {
     defineCli({
       name: "optio",
       summary: "Standing agents: their brief and memory, their runs, and the orchestrator's board",
-      commands: { ...staff.cli, ...board.cli, inbox: inbox.command, loops: loops.command },
+      commands: { ...staff.cli, ...board.cli, inbox: inbox.command, ...loops.cli },
     }),
   );
 }
