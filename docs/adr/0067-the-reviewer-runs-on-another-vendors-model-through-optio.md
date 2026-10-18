@@ -21,3 +21,4 @@ The Reviewer must run on another model than every Engineer round of the issue (`
 
 - The model is hard-coded in the workflow until Optio's Operating settings can choose them (ADR-0065).
 - A review that misses what Opus would have caught lands as green: the first reviews run beside the old ones before the switch is trusted.
+- The carrier must support Claude Code's auto mode, or the reviewer stops at a permission prompt before each command (Haiku 4.5 did on KIT-425, 2026-10-18). Its newer carriers send `role: "system"` messages inside `messages`, which GLM refuses, so the proxy lifts them into the system prompt and `tools`.

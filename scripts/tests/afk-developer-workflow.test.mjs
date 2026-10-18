@@ -1764,7 +1764,7 @@ test("the Reviewer is GLM 5.3 through Optio's proxy on a catalog carrier, for ev
   const sonnet = await run();
   const r1 = agentSpawns(sonnet.spawns).find((s) => s.options.label.startsWith("reviewer:"));
   assert.equal(r1.options.label, "reviewer:KIT-9:r1:openrouter");
-  assert.equal(r1.options.model, "claude-haiku-4-5-20251001");
+  assert.equal(r1.options.model, "claude-haiku-5-5");
   assert.equal(r1.options.reasoningLevel, "low");
   assert.ok(
     sonnet.commands.some((c) =>
@@ -1774,7 +1774,7 @@ test("the Reviewer is GLM 5.3 through Optio's proxy on a catalog carrier, for ev
   assert.ok(sonnet.commands.some((c) => /^bb optio reviewer-served --thread thr_/.test(c)));
   const opus = await run({ startDecision: { engineerModel: "opus" } });
   const r2 = agentSpawns(opus.spawns).find((s) => s.options.label.startsWith("reviewer:"));
-  assert.equal(r2.options.model, "claude-haiku-4-5-20251001");
+  assert.equal(r2.options.model, "claude-haiku-5-5");
 });
 
 test("a green review the proxy never served ran on the carrier: it holds In Review and is not green", async () => {
