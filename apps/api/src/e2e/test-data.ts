@@ -176,6 +176,7 @@ export async function applyTestData(input: {
   // SAFETY: fixture players and badges are typed from TEST_DATA_CATALOG, and
   // resolveFixtureCatalog resolved every one of those or threw.
   const playerOf = (label: string) => players.get(label) as string;
+  // SAFETY: same invariant as playerOf: every fixture badge label was resolved or the run threw.
   const badgeOf = (label: string) => badges.get(label) as string;
 
   const accounts = [
