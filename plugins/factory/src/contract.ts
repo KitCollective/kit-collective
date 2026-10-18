@@ -2,6 +2,7 @@
 // adding an area adds one import and one spread here. Both schemas of a method run at the wire boundary.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { boardContract } from "./board/contract.js";
+import { homeContract } from "./home/contract.js";
 import { inboxContract } from "./inbox/contract.js";
 import { runsContract } from "./runs/contract.js";
 import { staffContract } from "./staff/contract.js";
@@ -12,6 +13,7 @@ export const rpcContract = defineRpcContract({
   ...boardContract,
   ...runsContract,
   ...inboxContract,
+  ...homeContract,
   ...threadsContract,
 });
 
