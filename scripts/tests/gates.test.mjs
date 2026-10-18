@@ -539,6 +539,24 @@ test("resume point: review as it is only after a ready Engineer result with no f
   assert.equal(resumePoint({ ...base, head: "", events: [ready] }).code, GATE_EXIT.closed);
 });
 
+test("resume point: a PR GitHub calls CONFLICTING is never reviewed as it is, whatever the run log says", () => {
+  // 2026-10-18: KIT-404 and KIT-400 conflicted with development after KIT-403 landed.
+  const ready = { event: "result", issue: "KIT-1", step: "engineer", outcome: "ready" };
+  const base = { head: HEAD, issue: "KIT-1", events: [ready] };
+  const conflicting = resumePoint({ ...base, mergeable: "CONFLICTING" });
+  assert.equal(conflicting.code, GATE_EXIT.closed);
+  // The workflow reads this prefix as the merge round.
+  assert.match(conflicting.line, /^CLOSED: conflicting: /);
+  assert.match(
+    resumePoint({ ...base, events: [], mergeable: "CONFLICTING" }).line,
+    /^CLOSED: conflicting: /,
+  );
+  for (const mergeable of ["MERGEABLE", "UNKNOWN", undefined]) {
+    assert.equal(resumePoint({ ...base, mergeable }).code, GATE_EXIT.open);
+  }
+  assert.doesNotMatch(resumePoint({ ...base, events: [] }).line, /conflicting/);
+});
+
 test("device flows request: only a head with a slice flow and no status asks for a run", () => {
   const status = (state, context = "Device flows") => ({ context, state });
   assert.equal(deviceFlowsRequest({ hasSliceFlow: false, statuses: [] }).request, false);

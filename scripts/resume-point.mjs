@@ -2,7 +2,8 @@
 /**
  * Gate: may a resumed run go straight to the Reviewer (ADR-0058)? A resume used to spend a full
  * Engineer round on a PR that was already built. This reads the run log's last Engineer result and
- * the same head facts as head-changed.mjs.
+ * the same head facts as head-changed.mjs. A PR that conflicts with development prints a line that
+ * starts `CLOSED: conflicting:`, so the run's first Engineer round merges development in.
  *
  * Usage: node scripts/resume-point.mjs <KIT-n> --pr <number>
  * Prints one line. Exit: 0 review the head as it is (OPEN), 1 the Engineer has work or a source
@@ -25,9 +26,9 @@ if (
 }
 let result;
 try {
-  const head = (await prView(args[prAt + 1])).headRefOid;
+  const { headRefOid: head, mergeable } = await prView(args[prAt + 1]);
   const workpad = workpadOf(await linearIssue(issue));
-  result = resumePoint({ head, issue, events: events(), workpad });
+  result = resumePoint({ head, issue, events: events(), workpad, mergeable });
 } catch (error) {
   result = { code: 1, line: `CLOSED: ${String(error.message).split("\n")[0]}` };
 }

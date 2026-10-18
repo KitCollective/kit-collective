@@ -207,6 +207,17 @@ export const collectionPeerJerseySchema = z
     /** The owner's non-private UserJerseys. */
     ownerJerseyCount: z.number().int().nonnegative(),
     photos: z.array(collectionJerseyPhotoSchema).min(1),
+    /**
+     * The requester's own pending Bud on this UserJersey, or null. Never another Collector's Bud;
+     * an accepted or declined Bud is not pending.
+     */
+    myPendingBid: z
+      .object({
+        amountDkk: z.number().int().min(1),
+        conversationId: z.string().uuid(),
+      })
+      .strict()
+      .nullable(),
   })
   .strict()
   .superRefine((jersey, ctx) => {

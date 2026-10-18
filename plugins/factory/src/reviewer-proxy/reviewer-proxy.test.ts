@@ -99,7 +99,7 @@ describe("the reviewer proxy (ADR-0067)", () => {
     for (let i = 0; i < 2; i += 1) {
       await behavior.fetchHttp("POST", "/reviewer/v1/messages", {
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", messages: [] }),
+        body: JSON.stringify({ model: "claude-haiku-5-5", messages: [] }),
       });
     }
     const [, init] = upstream.mock.calls[0] ?? [];
@@ -107,6 +107,46 @@ describe("the reviewer proxy (ADR-0067)", () => {
     const after = await behavior.cli(["reviewer-served", "--thread", "thr_review1"]);
     expect(after.exitCode).toBe(0);
     expect(after.stdout).toBe("SERVED thr_review1 as z-ai/glm-5.3 (2 calls)");
+  });
+
+  it("lifts a mid-conversation system message into the system prompt and its tools into tools", async () => {
+    const upstream = vi.fn(
+      async (_url: string, _init: RequestInit) =>
+        new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", upstream);
+    const behavior = await load();
+    const token = await tokenFor(behavior, "thr_review1");
+    const definition = { name: "late_tool", description: "d", input_schema: { type: "object" } };
+    await behavior.fetchHttp("POST", "/reviewer/v1/messages", {
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-haiku-5-5",
+        system: "base",
+        tools: [{ name: "Bash" }],
+        output_config: { effort: "low" },
+        messages: [
+          { role: "user", content: [{ type: "text", text: "review" }] },
+          {
+            role: "system",
+            output_config: { effort: "low" },
+            content: [
+              { type: "text", text: "late note" },
+              { type: "tool_addition", tool: { type: "tool_definition", definition } },
+            ],
+          },
+        ],
+      }),
+    });
+    const [, init] = upstream.mock.calls[0] ?? [];
+    const sent = JSON.parse(String(init?.body));
+    expect(sent.messages).toEqual([{ role: "user", content: [{ type: "text", text: "review" }] }]);
+    expect(sent.system).toEqual([
+      { type: "text", text: "base" },
+      { type: "text", text: "late note" },
+    ]);
+    expect(sent.tools).toEqual([{ name: "Bash" }, definition]);
+    expect(sent.output_config).toEqual({ effort: "low" });
   });
 
   it("does not count a failed upstream call as served", async () => {
@@ -118,7 +158,7 @@ describe("the reviewer proxy (ADR-0067)", () => {
     const token = await tokenFor(behavior, "thr_review1");
     await behavior.fetchHttp("POST", "/reviewer/v1/messages", {
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", messages: [] }),
+      body: JSON.stringify({ model: "claude-haiku-5-5", messages: [] }),
     });
     expect((await behavior.cli(["reviewer-served", "--thread", "thr_review1"])).exitCode).toBe(1);
   });
