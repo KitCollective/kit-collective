@@ -9,15 +9,15 @@ export type MyPendingBid = { amountDkk: number; conversationId: string };
 /** What the foreign UserJersey detail dock holds. */
 export type PeerJerseyDockState =
   | { kind: "send" }
-  | { kind: "none" }
+  | { kind: "message-only" }
   | { kind: "own-pending"; amountDkk: number; conversationId: string };
 
 /**
  * Button dock of the foreign UserJersey detail. A pending bid of this Collector wins: the button is
  * replaced by the own bid row, even when the owner has since closed the jersey for bid (one pending
  * bid per Collector per jersey, no way to bid again while it waits). Otherwise a jersey that is
- * åben for bud docks Send bud; one that is not has no dock for now (the later Skriv til handle
- * control is KIT-298), and Send bud is never offered on it.
+ * åben for bud docks Send bud. One that is not åben for bud docks Button secondary Skriv til
+ * handle alone (docs/design-system.md l.1526), and Send bud is never offered on it.
  */
 export function peerJerseyDockState(input: {
   biddingEnabled: boolean;
@@ -30,7 +30,7 @@ export function peerJerseyDockState(input: {
       conversationId: input.myPendingBid.conversationId,
     };
   }
-  return input.biddingEnabled ? { kind: "send" } : { kind: "none" };
+  return input.biddingEnabled ? { kind: "send" } : { kind: "message-only" };
 }
 
 /** Whole kroner only: digits, no decimals (a separator is dropped), no leading zero. */

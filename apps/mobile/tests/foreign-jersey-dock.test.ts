@@ -10,9 +10,9 @@ describe("peer jersey dock state (KIT-290, KIT-291)", () => {
     });
   });
 
-  it("shows no dock on a jersey that is not open for bid, with no pending bid", () => {
+  it("docks Skriv til handle alone on a jersey that is not open for bid, with no pending bid", () => {
     expect(peerJerseyDockState({ biddingEnabled: false, myPendingBid: null })).toEqual({
-      kind: "none",
+      kind: "message-only",
     });
   });
 
