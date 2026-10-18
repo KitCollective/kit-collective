@@ -143,9 +143,10 @@ name: kit-287
     direction: UP
 - tapOn:
     id: jersey-detail-add-photo
-# The system photo picker has no stable ids: the simulator holds exactly one photo, the first cell.
-- waitForAnimationToEnd:
-    timeout: 8000
+# The system photo picker has no stable ids: the simulator holds exactly one photo, the first cell by
+# point. The banner subflow first closes iOS's Private Access banner, which moves the grid. This
+# picker closes on the cell tap, so there is no Done to tap.
+- runFlow: ../subflows/photo-picker-banner.yaml
 - tapOn:
     point: 16%,25%
 - extendedWaitUntil:

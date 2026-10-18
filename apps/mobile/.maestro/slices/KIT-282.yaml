@@ -26,9 +26,9 @@ name: kit-282
 - tapOn:
     id: capture-source-gallery
 - tapOn: Fotos
-# The system photo picker has no stable ids: four cells, then confirm.
-- waitForAnimationToEnd:
-    timeout: 8000
+# The system photo picker has no stable ids: four cells by point, then Done by its text. The banner
+# subflow first closes iOS's Private Access banner, which moves the grid.
+- runFlow: ../subflows/photo-picker-banner.yaml
 - tapOn:
     point: 16%,25%
 - tapOn:
@@ -37,22 +37,9 @@ name: kit-282
     point: 83%,25%
 - tapOn:
     point: 16%,40%
-# Wait for the picker's selected footer, tap confirm, and tap again while the footer
-# shows (the reason is in regression/add-jersey.yaml).
-- extendedWaitUntil:
-    visible: 4 Photos
-    timeout: 15000
-    optional: true
-- tapOn:
-    point: 90%,12%
-- repeat:
-    while:
-      visible: 4 Photos
-    times: 3
-    commands:
-      - runFlow: ../subflows/settle.yaml
-      - tapOn:
-          point: 90%,12%
+# Tap the picker's Done once it is enabled, and again while it still shows (the reason is in
+# regression/add-jersey.yaml).
+- runFlow: ../subflows/photo-picker-done.yaml
 # AC 3, 4: four or more photos with Vision on open the overview. While grouping runs the title
 # reads Sorterer n fotos, with a progress bar. The fixed Vision answers at once, so this frame
 # is taken only when the bar is still on screen.
@@ -172,30 +159,16 @@ name: kit-282
 - tapOn:
     id: capture-source-gallery
 - tapOn: Fotos
-- waitForAnimationToEnd:
-    timeout: 8000
+- runFlow: ../subflows/photo-picker-banner.yaml
 - tapOn:
     point: 16%,25%
 - tapOn:
     point: 50%,25%
 - tapOn:
     point: 83%,25%
-# Wait for the picker's selected footer, tap confirm, and tap again while the footer
-# shows (the reason is in regression/add-jersey.yaml).
-- extendedWaitUntil:
-    visible: 3 Photos
-    timeout: 15000
-    optional: true
-- tapOn:
-    point: 90%,12%
-- repeat:
-    while:
-      visible: 3 Photos
-    times: 3
-    commands:
-      - runFlow: ../subflows/settle.yaml
-      - tapOn:
-          point: 90%,12%
+# Tap the picker's Done once it is enabled, and again while it still shows (the reason is in
+# regression/add-jersey.yaml).
+- runFlow: ../subflows/photo-picker-done.yaml
 - extendedWaitUntil:
     visible:
       id: confirm-save

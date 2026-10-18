@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import { bidCardAmountTypography } from "../src/components/bid-card-amount";
 
 const bidCardPath = join(__dirname, "../src/components/bid-card.tsx");
-const activityCardPath = join(__dirname, "../src/components/activity-card.tsx");
 const conversationViewPath = join(__dirname, "../src/components/conversation-view.tsx");
 
 describe("bidCardAmountTypography", () => {
@@ -48,16 +47,6 @@ describe("BidCard (Revision 2026-10-10, KIT-297)", () => {
     expect(source).toMatch(/JERSEY_THUMB_WIDTH = 40/);
     expect(source).toMatch(/JERSEY_THUMB_HEIGHT = 50/);
     expect(source).toMatch(/card\.align === "end" \? "flex-end" : "flex-start"/);
-  });
-});
-
-describe("ActivityCard (KIT-120)", () => {
-  it("maps unread fill and read surface per design lock", () => {
-    const source = readFileSync(activityCardPath, "utf8");
-
-    expect(source).toMatch(/item\.unread \? theme\.fillSecondary : theme\.surface/);
-    expect(source).toMatch(/bidCardAmountTypography/);
-    expect(source).toMatch(/chevron-forward/);
   });
 });
 

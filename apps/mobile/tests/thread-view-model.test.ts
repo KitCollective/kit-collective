@@ -9,6 +9,7 @@ import {
   conversationMore,
   headerInitial,
   type ThreadItem,
+  threadItemIndex,
   threadItems,
 } from "../src/inbox/thread-view-model";
 
@@ -340,5 +341,31 @@ describe("conversationMore (Conversation → More Sheet)", () => {
 
   it("words the Rapportér Toast", () => {
     expect(conversationMore(peer).reportedToast).toBe("Samtalen er rapporteret");
+  });
+});
+
+describe("threadItemIndex (a waiting Indbakke row opens the thread at that Bud)", () => {
+  const first: CollectionConversationMessage = {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    kind: "text",
+    role: "incoming",
+    text: "Hej",
+    createdAt: "2026-10-16T09:00:00.000Z",
+  };
+
+  it("finds the item of the message, past the date lines before it", () => {
+    const items = threadItems(detail([first, bid()]));
+
+    const index = threadItemIndex(items, bid().id);
+
+    expect(index).toBe(3);
+    expect(items[index ?? -1]?.id).toBe(bid().id);
+  });
+
+  it("is null without a message id or when the thread has no such message", () => {
+    const items = threadItems(detail([first, bid()]));
+
+    expect(threadItemIndex(items, null)).toBeNull();
+    expect(threadItemIndex(items, "99999999-9999-4999-8999-999999999999")).toBeNull();
   });
 });

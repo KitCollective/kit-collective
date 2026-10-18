@@ -52,7 +52,7 @@ Not covered: Android, physical devices, the camera branch of Tilføj trøje, sho
 | --- | --- |
 | `apps/mobile/.maestro/slices/` | one flow per issue, plus `TEMPLATE.yaml.example` |
 | `apps/mobile/.maestro/regression/` | the eight regression flows |
-| `apps/mobile/.maestro/subflows/` | `sign-in.yaml` (reset, cold start, sign in), `settle.yaml` (a fixed pause for motion Maestro cannot see) |
+| `apps/mobile/.maestro/subflows/` | `sign-in.yaml` (reset, cold start, sign in), `settle.yaml` (a fixed pause for motion Maestro cannot see), `photo-picker-banner.yaml` (waits for the system photo picker, pauses, closes the iOS Private Access banner when it shows), `photo-picker-done.yaml` (taps the picker's `Done` once it is enabled, and again while an enabled `Done` shows) |
 | `apps/mobile/.maestro/scripts/` | `reset-test-data.js`, the reset call the flows run first (sends `VISION`, the fixed Vision case, when a flow defines it) |
 | `apps/mobile/.maestro/fixtures/` | one drawn shirt photo for the simulator gallery; `photos/` holds the real shirt photos a slice flow can ask for |
 | `apps/mobile/.maestro/design-sections.json` | which `docs/design-system.md` sections the review reads per flow |
@@ -67,7 +67,7 @@ Flows tap by `testID`, so a copy change does not break a flow. The exceptions, e
 
 - the native tab bar: `Søg` and `Ønsker` are tapped by label;
 - the app's own upload source sheet option `Fotos` (a system action sheet), by label;
-- the system photo picker: the first cell and its confirm button, by screen point, on a simulator whose library holds the iOS sample photos and the fixture, which is the newest and so the first cell; a flow with several photos taps the cells by screen point too, three to a row, newest first;
+- the system photo picker: the cells by screen point, its iOS "Private Access to Photos" banner by its `Close` button, and its confirm by its `Done` once that is enabled, the last two by accessibility text because the system picker has no `testID` (the banner shows on some runs only and moves the grid down about 162px, so a flow runs `subflows/photo-picker-banner.yaml` before the first cell tap and `subflows/photo-picker-done.yaml` to confirm), on a simulator whose library holds the iOS sample photos and the fixture, which is the newest and so the first cell; a flow with several photos taps the cells by screen point too, three to a row, newest first;
 - iOS's "save password" prompt: `Ikke nu` / `Not Now`, by text, when it shows;
 - two waits for text: the Saved sheet's count line (`Trøje nr. n i din samling`, which fills in after the sheet opens) and the first row of the Data drill; they assert, they never tap;
 - the Data drill's picks (club, season, type) and its `Gem`, which `add-jersey-vision-failure` taps by a pattern on their copy until the drill has testIDs.

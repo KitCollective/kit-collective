@@ -37,6 +37,7 @@ import {
   CONVERSATION_MORE_FAILURE,
   conversationMore,
   headerInitial,
+  threadItemIndex,
   threadItems,
 } from "@/inbox/thread-view-model";
 import { useTypography } from "@/theme/brand-fonts";
@@ -51,6 +52,8 @@ type ConversationViewProps = {
   onConversationOpened?: () => void;
   /** After Blokér or Slet samtale ran; the Collector goes back to Indbakke. Defaults to `onBack`. */
   onConversationHidden?: () => void;
+  /** A message to open the thread at (a waiting Indbakke row passes its Bud); without it the thread opens at its top. */
+  focusMessageId?: string | null;
 };
 
 type MoreAction = "profile" | "report" | "block" | "delete";
@@ -66,6 +69,7 @@ export function ConversationView({
   onBack,
   onConversationOpened,
   onConversationHidden,
+  focusMessageId = null,
 }: ConversationViewProps) {
   const { accessToken } = useAuth();
   const theme = useTheme();
@@ -88,6 +92,9 @@ export function ConversationView({
   const [confirming, setConfirming] = useState(false);
   const [moreError, setMoreError] = useState<string | null>(null);
   const pendingMoreAction = useRef<MoreAction | null>(null);
+  const listRef = useRef<FlatList>(null);
+  // The thread scrolls to the focused message once per (conversation, message), not on every reload.
+  const focusRequest = useRef<{ key: string; scrolled: boolean }>({ key: "", scrolled: false });
 
   const imageHeaders = useMemo(
     () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined),
@@ -121,6 +128,20 @@ export function ConversationView({
 
   const items = useMemo(() => (detail ? threadItems(detail) : []), [detail]);
   const more = useMemo(() => (peer ? conversationMore(peer) : null), [peer]);
+
+  useEffect(() => {
+    const key = `${conversationId}:${focusMessageId}`;
+    // A mounted view whose conversationId or focusMessageId prop changes starts over and scrolls to the new message.
+    if (focusRequest.current.key !== key) {
+      focusRequest.current = { key, scrolled: false };
+    }
+    const index = threadItemIndex(items, focusMessageId);
+    if (index === null || focusRequest.current.scrolled) {
+      return;
+    }
+    focusRequest.current.scrolled = true;
+    listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.3 });
+  }, [items, focusMessageId, conversationId]);
 
   // The peer is fetched once; a failure here only matters when More is tapped.
   useEffect(() => {
@@ -355,7 +376,15 @@ export function ConversationView({
       ) : null}
 
       <FlatList
+        ref={listRef}
         data={items}
+        // Rows differ in height; when the target is not measured yet, jump near it and try again.
+        onScrollToIndexFailed={({ index, averageItemLength }) => {
+          listRef.current?.scrollToOffset({ offset: index * averageItemLength, animated: false });
+          setTimeout(() => {
+            listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.3 });
+          }, 100);
+        }}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => {

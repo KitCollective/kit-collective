@@ -1,32 +1,33 @@
-import type { CollectionActivityItem, CollectionConversation } from "@kit/api-contract";
+import type { CollectionConversation, CollectionWaitingBid } from "@kit/api-contract";
 
 export type InboxJerseyFilterResult = {
+  waiting: CollectionWaitingBid[];
   conversations: CollectionConversation[];
-  activityItems: CollectionActivityItem[];
-  /** Kit line of the first matching activity item; null when no filter or no match. */
+  /** Club and season of the first matching Bud; null when no filter or no match. */
   kitLine: string | null;
 };
 
 /**
  * Indbakke filtered to one UserJersey (the own jersey detail's bid row with several bidders).
- * Conversations carry no jersey id, so a conversation belongs to the jersey when one of its
- * activity items does. With no jersey id the lists pass through untouched.
+ * Conversations carry no jersey id, so a Conversation belongs to the jersey when a waiting Bud
+ * on it does; the filter therefore shows the jersey's pending Buds, which is what that bid row
+ * counts. With no jersey id the lists pass through untouched.
  */
 export function filterInboxByJersey(
-  conversations: CollectionConversation[],
-  activityItems: CollectionActivityItem[],
+  inbox: { waiting: CollectionWaitingBid[]; conversations: CollectionConversation[] },
   jerseyId: string | null | undefined,
 ): InboxJerseyFilterResult {
   if (!jerseyId) {
-    return { conversations, activityItems, kitLine: null };
+    return { waiting: inbox.waiting, conversations: inbox.conversations, kitLine: null };
   }
 
-  const matching = activityItems.filter((item) => item.userJerseyId === jerseyId);
-  const conversationIds = new Set(matching.map((item) => item.conversationId));
+  const matching = inbox.waiting.filter((bid) => bid.userJerseyId === jerseyId);
+  const conversationIds = new Set(matching.map((bid) => bid.conversationId));
+  const first = matching[0];
 
   return {
-    conversations: conversations.filter((item) => conversationIds.has(item.id)),
-    activityItems: matching,
-    kitLine: matching[0]?.kitLine ?? null,
+    waiting: matching,
+    conversations: inbox.conversations.filter((item) => conversationIds.has(item.id)),
+    kitLine: first ? `${first.jersey.clubLabel} ${first.jersey.seasonLabel}` : null,
   };
 }

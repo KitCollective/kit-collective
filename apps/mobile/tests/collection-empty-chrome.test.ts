@@ -90,7 +90,7 @@ describe("Native tab bar chrome", () => {
     expect(pager).not.toContain("blocksExternalGesture");
     expect(pager).toContain("requireExternalGestureToFail");
     expect(pager).toContain("inboxInnerConsumesSwipe");
-    expect(inbox).toContain("InboxInnerPager");
+    expect(inbox).not.toContain("InboxInnerPager");
     expect(inbox).not.toContain("inboxPagerNative");
     expect(inbox).not.toContain("react-native-pager-view");
     const innerPager = readFileSync(

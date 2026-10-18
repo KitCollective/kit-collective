@@ -201,6 +201,15 @@ export function threadItems(detail: CollectionConversationDetail): ThreadItem[] 
   return items;
 }
 
+/** Index of the item for a message id, or null: where a waiting Indbakke row opens the thread. */
+export function threadItemIndex(items: ThreadItem[], messageId: string | null): number | null {
+  if (!messageId) {
+    return null;
+  }
+  const index = items.findIndex((item) => item.id === messageId);
+  return index === -1 ? null : index;
+}
+
 export type ConversationConfirmCopy = {
   title: string;
   consequence: string;
