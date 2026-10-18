@@ -24,7 +24,7 @@ Regression flows (`E2E_FLOWS=regression`): run them at a milestone, before a pro
 | `add-jersey-vision-off` | Test Collector | `01-sheet-vision-off`, `02-empty-identity-block` (Vision er slået fra, Vælg), `03-data-drill` (stops there: see below) |
 | `add-jersey-vision-failure` | Test Collector, Vision `failure` | `01-empty-identity-block` (Vision fandt ikke trøjen, no reading state left), `02-data-drill`, `03-picked-by-hand` (AaB, 2023/24, Hjemme), `04-ready-to-save`, `05-saved` (Save works by hand) |
 | `collection` | Test Collector | `01-collection`, `02-shortcut-filter`, `03-own-detail` |
-| `search-bid` | Test Collector | `01-typeahead`, `02-catalog-drill`, `03-foreign-detail`, `04-send-bid`, `05-amount-entered`, `06-bid-sent` |
+| `search-bid` | Test Collector | `01-search-home`, `02-typeahead-hits`, `03-not-open-for-bid-no-dock`, `04-foreign-detail-open-for-bid`, `05-send-bid-empty`, `06-send-bid-amount`, `07-bid-sent-toast-and-own-bid-row`, `08-thread-from-own-bid-row` (e2e_peer's two OB jerseys: `...0106` is public but not åben for bud, `...0105` is åben for bud with a player and a Badge; `slices/KIT-294.yaml` copies these steps as `kc__kit-294__NN`) |
 | `wishlist-paywall` | second test Collector | `01-wishlist`, `02-paywall` |
 
 The three `add-jersey-*` flows beyond `add-jersey` pick the fixture photo, the newest in the simulator's library. The Data drill that Vælg opens has no `testID` on its club, season and type controls (and the club picker's rows), so `add-jersey-vision-failure` taps them by a pattern on their copy (`.*AaB.*`, `.*2023/24.*`, `.*Hjemme.*`, the drill's `Gem`) and goes on to Save by hand; `add-jersey-vision-off` stops at the opened drill and asserts it by the copy of its first row. Add the testIDs to the drill to replace the copy taps.
@@ -172,6 +172,8 @@ GitHub: `development` has the `lane-development` ruleset (pull request required,
 Not used today, and not possible through a deployed API: the API image runs with `NODE_ENV=production` on staging and production alike, and such a process answers 404 on `POST /v1/e2e/test-data` and ignores `VISION_FIXED_FOR_TEST_COLLECTOR`. A hosted runner would need a way to tell staging from production first.
 
 What does work is the command, from a shell with database access and without `NODE_ENV=production`: `pnpm --filter @kit/api e2e:test-data` with `E2E_TEST_DATA_TARGET` (`staging` or `development`; `production` is refused) and the four test Collector credentials. It also refuses a `DATABASE_URL` that names production, or that equals `PRODUCTION_DATABASE_URL` when the shell already has that variable; do not copy a production URL into a lane's environment for this. The catalog must have these sides with a linked season, by label or alias: clubs FC København, Brøndby IF, AGF, OB, FC Midtjylland, AaB; national team Danmark. The command names any that are missing and writes nothing.
+
+The second test Collector's jersey `...0105` (OB, åben for bud) also carries a player and a Badge (KIT-294), so the catalog must hold them too, by label: a player labelled `Mads Vestergaard` (with a squad number on OB's latest season) and a Badge (patch) labelled `Pokalfinale 2023`. The command names any that are missing and writes nothing.
 
 ## Building the app
 
