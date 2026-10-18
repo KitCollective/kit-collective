@@ -1,6 +1,7 @@
 import {
   authEvent,
   authThrottleHit,
+  catalogLabel,
   collectionShortcut,
   conversation,
   conversationMessage,
@@ -21,7 +22,7 @@ import {
 } from "@kit/db";
 import { gridPhotoObjectKey, photoPrefixFromStoredObjectKey } from "@kit/domain";
 import bcrypt from "bcryptjs";
-import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { writeStripAndLightboxVariants } from "../collection/photo-derivatives.js";
 import { setFixedVisionCase } from "../vision/fixed-vision.adapter.js";
@@ -59,7 +60,35 @@ function sideKey(side: FixtureSide): string {
   return `${side.kind}:${side.label}`;
 }
 
-async function resolveFixtureCatalog(db: Db): Promise<Map<string, ResolvedSide>> {
+type FixtureCatalog = {
+  sides: Map<string, ResolvedSide>;
+  /** Player id by fixture label. */
+  players: Map<string, string>;
+  /** Patch id by fixture label. */
+  badges: Map<string, string>;
+};
+
+/** The entity of this type carrying the label (or alias): a `label` row first, then lowest id. */
+async function resolveEntityIdByLabel(
+  db: Db,
+  entityType: "player" | "patch",
+  label: string,
+): Promise<string | null> {
+  const [match] = await db
+    .select({ entityId: catalogLabel.entityId })
+    .from(catalogLabel)
+    .where(
+      and(
+        eq(catalogLabel.entityType, entityType),
+        sql`lower(${catalogLabel.text}) = ${label.toLowerCase()}`,
+      ),
+    )
+    .orderBy(desc(sql`${catalogLabel.kind} = 'label'`), asc(catalogLabel.entityId))
+    .limit(1);
+  return match?.entityId ?? null;
+}
+
+async function resolveFixtureCatalog(db: Db): Promise<FixtureCatalog> {
   const sides: FixtureSide[] = [
     ...TEST_DATA_CATALOG.clubs.map((label) => ({ kind: "club" as const, label })),
     ...TEST_DATA_CATALOG.nationalTeams.map((label) => ({ kind: "national_team" as const, label })),
@@ -74,12 +103,26 @@ async function resolveFixtureCatalog(db: Db): Promise<Map<string, ResolvedSide>>
       missing.push(side.label);
     }
   }
+  const resolveAll = async (entityType: "player" | "patch", labels: readonly string[]) => {
+    const ids = new Map<string, string>();
+    for (const label of labels) {
+      const id = await resolveEntityIdByLabel(db, entityType, label);
+      if (id) {
+        ids.set(label, id);
+      } else {
+        missing.push(label);
+      }
+    }
+    return ids;
+  };
+  const players = await resolveAll("player", TEST_DATA_CATALOG.players);
+  const badges = await resolveAll("patch", TEST_DATA_CATALOG.badges);
   if (missing.length > 0) {
     throw new Error(
-      `Device-flow test data needs these catalog sides with at least one linked season, and this catalog has none: ${missing.join(", ")}. Nothing was written.`,
+      `Device-flow test data needs these catalog sides with at least one linked season, players and badges, and this catalog has none: ${missing.join(", ")}. Nothing was written.`,
     );
   }
-  return resolved;
+  return { sides: resolved, players, badges };
 }
 
 async function assertIdentityFree(db: Db, credentials: TestDataCredentials): Promise<void> {
@@ -125,11 +168,15 @@ export async function applyTestData(input: {
   vision?: VisionCase;
 }): Promise<void> {
   const { db, objectStore, credentials, vision = DEFAULT_VISION_CASE } = input;
-  const catalog = await resolveFixtureCatalog(db);
+  const { sides: catalog, players, badges } = await resolveFixtureCatalog(db);
   await assertIdentityFree(db, credentials);
   // SAFETY: fixture sides are typed from TEST_DATA_CATALOG, and resolveFixtureCatalog
   // resolved every one of those or threw.
   const sideOf = (side: FixtureSide) => catalog.get(sideKey(side)) as ResolvedSide;
+  // SAFETY: fixture players and badges are typed from TEST_DATA_CATALOG, and
+  // resolveFixtureCatalog resolved every one of those or threw.
+  const playerOf = (label: string) => players.get(label) as string;
+  const badgeOf = (label: string) => badges.get(label) as string;
 
   const accounts = [
     { id: TEST_COLLECTOR_ID, handle: TEST_COLLECTOR_HANDLE, ...credentials.collector },
@@ -252,12 +299,20 @@ export async function applyTestData(input: {
         clubId: side.clubId,
         nationalTeamId: side.nationalTeamId,
         seasonId: side.seasonId,
+        playerId: jersey.player ? playerOf(jersey.player) : null,
         type: jersey.type,
         size: jersey.size,
         condition: jersey.condition,
         private: jersey.private,
         biddingEnabled: jersey.biddingEnabled,
       });
+      if (jersey.patches?.length) {
+        await tx
+          .insert(userJerseyPatch)
+          .values(
+            jersey.patches.map((label) => ({ userJerseyId: jersey.id, patchId: badgeOf(label) })),
+          );
+      }
       await tx.insert(userJerseyPhoto).values(
         jersey.photos.map((photo) => ({
           id: photo.id,
