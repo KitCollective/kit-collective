@@ -91,7 +91,6 @@ export function buildCards(issues: WaitingIssue[], context: InboxContext): Inbox
       mention: null,
       alarm: null,
       since: sinceOf(issue, config.state),
-      landing: null,
     };
     const label = config.questionLabels.find((name) => issue.labels.includes(name)) ?? null;
     if (label !== null) {
@@ -176,7 +175,6 @@ export function alarmCards(thread: AlarmThread): InboxCardDto[] {
             mention: null,
             alarm: { problems: alarmProblems(comment.body) },
             since: new Date(Date.parse(comment.createdAt)).toISOString(),
-            landing: null,
           },
         ]
       : [],
@@ -203,17 +201,13 @@ export function mentionCards(mentions: Mention[]): InboxCardDto[] {
       },
       alarm: null,
       since: new Date(Date.parse(mention.createdAt)).toISOString(),
-      landing: null,
     }),
   );
 }
 
-/**
- * The landings first (an approved issue on its way to done), then approval and question cards as they
- * are, then the mentions, then the alarms; oldest first inside each kind.
- */
+/** Approval and question cards as they are, then the mentions, then the alarms; oldest first inside each kind. */
 export function withNotices(cards: InboxCardDto[], notices: InboxCardDto[]): InboxCardDto[] {
-  const rank = { landing: -1, review: 0, question: 1, mention: 2, alarm: 3 } as const;
+  const rank = { review: 0, question: 1, mention: 2, alarm: 3 } as const;
   return [...cards, ...notices].sort(
     (a, b) =>
       rank[a.kind] - rank[b.kind] ||

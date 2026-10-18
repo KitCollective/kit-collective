@@ -34,7 +34,7 @@ export default async function plugin(bb: BbPluginApi) {
   const runs = createRuns(core);
   const inbox = createInbox(core);
   const loops = createLoops(core);
-  const home = createHome({ inbox });
+  const home = createHome({ inbox: { list: inbox.waiting } });
   const threads = createThreads(core);
   const reviewerProxy = createReviewerProxy({
     bb: core.bb,

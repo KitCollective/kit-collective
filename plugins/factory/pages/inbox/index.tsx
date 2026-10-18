@@ -13,7 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../../src/contract";
-import type { InboxCardDto, InboxDto, LandingDto } from "../../src/inbox/contract";
+import type {
+  InboxListCardDto as InboxCardDto,
+  InboxListDto,
+  LandingDto,
+} from "../../src/inbox/contract";
 import { DOT, INBOX } from "../shared/common";
 
 function kindLabel(card: InboxCardDto): string {
@@ -30,6 +34,9 @@ function kindLabel(card: InboxCardDto): string {
       return "approved";
   }
 }
+
+/** The colour of a landing card; Home lists no landing, so it is not one of the shared kinds. */
+const LANDING_DOT = "bg-sky-500";
 
 const PHASE_TEXT: Record<LandingDto["phase"], string> = {
   approved: "Approved, not in the merge queue yet",
@@ -77,7 +84,11 @@ function Row({ card, open, onOpen }: { card: InboxCardDto; open: boolean; onOpen
           <span
             className={cn(
               "size-2 shrink-0 rounded-full",
-              card.landing?.phase === "stopped" ? DOT.question : DOT[card.kind],
+              card.landing?.phase === "stopped"
+                ? DOT.question
+                : card.kind === "landing"
+                  ? LANDING_DOT
+                  : DOT[card.kind],
             )}
             aria-hidden
           />
@@ -381,7 +392,7 @@ function Message({ role, children }: { role: "alert" | "status"; children: strin
 export function Inbox({ subPath }: PluginNavPanelProps) {
   const rpc = useRpc<typeof rpcContract>();
   const navigate = useBbNavigate();
-  const [inbox, setInbox] = useState<InboxDto | null>(null);
+  const [inbox, setInbox] = useState<InboxListDto | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const refetch = useCallback(() => {
     rpc.call("inbox_list").then(

@@ -14,9 +14,7 @@ export interface HomeDeps {
 
 export function createHome({ inbox }: HomeDeps) {
   async function waiting(): Promise<HomeDto> {
-    const { error, cards: all } = await inbox.list();
-    // A landing card is an approved issue on its way to done: nothing waits for a person on it.
-    const cards = all.filter((card) => card.kind !== "landing");
+    const { error, cards } = await inbox.list();
     const newest = [...cards]
       .sort((a, b) => Date.parse(b.since) - Date.parse(a.since) || a.id.localeCompare(b.id))
       .slice(0, HOME_CARDS)

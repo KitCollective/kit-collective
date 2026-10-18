@@ -881,6 +881,31 @@ describe("approving from the Inbox", () => {
     }
   });
 
+  it("keeps the landings off Home, which never takes the one show of a done landing from the Inbox", async () => {
+    try {
+      const { rpc, host, machine } = await approving([reviewed]);
+      await rpc("inbox_approve", { identifier: "ENG-1" });
+      // The issue left the Inbox state: the Inbox shows its landing, Home has nothing waiting.
+      expect((await cardOf(rpc, "ENG-1"))?.kind).toBe("landing");
+      expect(await rpc("home_waiting", null)).toEqual({ error: null, count: 0, newest: [] });
+      await machine.answer(0, "QUEUED (land-approved): PR 7 is in the merge queue");
+      await vi.waitFor(async () =>
+        expect(await host.bb.storage.kv.get("landing:ENG-1")).toMatchObject({ phase: "queued" }),
+      );
+      await rpc("home_waiting", null);
+      await machine.answer(0, "LANDED (land-approved): PR 7 merged as fffffff; ENG-1 Done");
+      await vi.waitFor(async () =>
+        expect(await host.bb.storage.kv.get("landing:ENG-1")).toMatchObject({ phase: "done" }),
+      );
+      expect((await rpc("home_waiting", null)).count).toBe(0);
+      expect(await host.bb.storage.kv.get("landing:ENG-1")).toMatchObject({ phase: "done" });
+      expect((await cardOf(rpc, "ENG-1"))?.landing?.phase).toBe("done");
+      expect(await cardOf(rpc, "ENG-1")).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("ends the landing on a REFUSED slice: the issue was moved on elsewhere, so nothing is handed over", async () => {
     try {
       const { rpc, host, machine } = await approving([reviewed]);

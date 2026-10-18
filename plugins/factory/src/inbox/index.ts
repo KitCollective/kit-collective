@@ -7,7 +7,13 @@ import type { Core } from "../core.js";
 import { GATE_CALL_TIMEOUT_MS, LAND_HOST_TIMEOUT_MS } from "../host-contract.js";
 import { parseRegistry } from "../loop-registry.js";
 import { alarmCards, buildCards, mentionCards, pullRequestOf, withNotices } from "./cards.js";
-import { type InboxCardDto, type InboxConfig, inboxConfig } from "./contract.js";
+import {
+  type InboxConfig,
+  type InboxDto,
+  type InboxListCardDto,
+  type InboxListDto,
+  inboxConfig,
+} from "./contract.js";
 import { createLandings, landingCard } from "./landing.js";
 import { approveIssue, fetchWaiting, settleIssue } from "./linear.js";
 import { fetchAlarmThread, fetchMentions, markMentionRead } from "./notices.js";
@@ -32,7 +38,7 @@ const SETUP = "bb optio inbox --state <state> --labels <question labels> --proje
 const LANDING_SETUP =
   "bb optio inbox --approve-to <merge state> --land-host <runs machine host id> --land-checkout <its main checkout>";
 
-function describe(cards: InboxCardDto[]): string {
+function describe(cards: InboxListCardDto[]): string {
   if (cards.length === 0) return "The Inbox is empty";
   return [
     `${cards.length} waiting in the Inbox`,
@@ -110,8 +116,65 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     deps.gateRuns.latestReview(identifier, 0)?.verdictLine ?? null;
 
   /**
-   * The cards, read from Linear now, and the landings approved here. The waiting issues, the mentions
-   * and the alarms are three reads: one that fails is named in `error` and the others still show.
+   * The cards, read from Linear now. The waiting issues, the mentions and the alarms are three reads:
+   * one that fails is named in `error` and the others still show. `waitingRead` says whether the
+   * waiting issues were read.
+   */
+  async function readCards() {
+    const { setting, registry, teamKey } = await resolve();
+    const key = await deps.linearApiKey();
+    const [waiting, mentions, alarm] = await Promise.allSettled([
+      fetchWaiting(key, teamKey, setting.state),
+      fetchMentions(key),
+      setting.alarmIssue === undefined
+        ? Promise.resolve(null)
+        : fetchAlarmThread(key, setting.alarmIssue),
+    ]);
+    const errors: string[] = [];
+    const failed = (what: string, outcome: PromiseSettledResult<unknown>) => {
+      if (outcome.status === "rejected") {
+        const reason: unknown = outcome.reason;
+        errors.push(`${what}: ${reason instanceof Error ? reason.message : String(reason)}`);
+      }
+    };
+    failed("waiting issues", waiting);
+    failed("mentions", mentions);
+    failed("alarms", alarm);
+    const issueCards =
+      waiting.status === "fulfilled"
+        ? buildCards(waiting.value, {
+            config: setting,
+            workpadHeading: registry.workpadHeading,
+            verdictOf,
+          })
+        : [];
+    const notices = [
+      ...(mentions.status === "fulfilled" ? mentionCards(mentions.value) : []),
+      ...(alarm.status === "fulfilled" && alarm.value !== null ? alarmCards(alarm.value) : []),
+    ];
+    return {
+      error: errors.length === 0 ? null : errors.join("; "),
+      issueCards,
+      notices,
+      waitingRead: waiting.status === "fulfilled",
+    };
+  }
+
+  const failure = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+  /** What waits for a person, as Home lists it: the cards without the landings, which it leaves alone. */
+  async function waiting(): Promise<InboxDto> {
+    try {
+      const { error, issueCards, notices } = await readCards();
+      return { error, cards: withNotices(issueCards, notices) };
+    } catch (error) {
+      return { error: failure(error), cards: [] };
+    }
+  }
+
+  /**
+   * The cards and the landings approved here, as the Inbox page shows them: the landings of their own
+   * first, oldest first, then the cards in their order.
    *
    * A landing whose issue is in the Inbox state rides on that issue's card, which keeps its own
    * actions. A landing still on its way shows as a card of its own (kind `landing`, no Inbox action),
@@ -120,40 +183,23 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
    * failed slice) gets one again. When the waiting issues cannot be read, the landings are shown and
    * driven but none is dropped, since nothing says where their issues are.
    */
-  async function list() {
+  async function list(): Promise<InboxListDto> {
     try {
-      const { setting, registry, teamKey } = await resolve();
-      const key = await deps.linearApiKey();
-      const [waiting, mentions, alarm] = await Promise.allSettled([
-        fetchWaiting(key, teamKey, setting.state),
-        fetchMentions(key),
-        setting.alarmIssue === undefined
-          ? Promise.resolve(null)
-          : fetchAlarmThread(key, setting.alarmIssue),
-      ]);
-      const errors: string[] = [];
-      const failed = (what: string, outcome: PromiseSettledResult<unknown>) => {
-        if (outcome.status === "rejected") {
-          const reason: unknown = outcome.reason;
-          errors.push(`${what}: ${reason instanceof Error ? reason.message : String(reason)}`);
-        }
-      };
-      failed("waiting issues", waiting);
-      failed("mentions", mentions);
-      failed("alarms", alarm);
-      const issueCards =
-        waiting.status === "fulfilled"
-          ? buildCards(waiting.value, {
-              config: setting,
-              workpadHeading: registry.workpadHeading,
-              verdictOf,
-            })
-          : [];
+      const { error, issueCards, notices, waitingRead } = await readCards();
       const records = await landings.all();
       landings.resume(records);
-      const own: InboxCardDto[] = [];
+      const cards: InboxListCardDto[] = withNotices(issueCards, notices).map((card) => ({
+        ...card,
+        landing: null,
+      }));
+      const own: InboxListCardDto[] = [];
       for (const record of records) {
-        const card = issueCards.find((one) => one.identifier === record.identifier);
+        // Only a waiting issue's card: a mention or an alarm on the issue is not the issue.
+        const card = cards.find(
+          (one) =>
+            (one.kind === "review" || one.kind === "question") &&
+            one.identifier === record.identifier,
+        );
         if (card !== undefined) {
           card.landing = { phase: record.phase, line: record.line, at: record.at };
         } else if (record.phase !== "stopped") {
@@ -161,19 +207,13 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
         }
         const over =
           record.phase === "done" ||
-          (record.phase === "stopped" && card === undefined && waiting.status === "fulfilled");
+          (record.phase === "stopped" && card === undefined && waitingRead);
         if (over) await landings.remove(record.identifier);
       }
-      const notices = [
-        ...(mentions.status === "fulfilled" ? mentionCards(mentions.value) : []),
-        ...(alarm.status === "fulfilled" && alarm.value !== null ? alarmCards(alarm.value) : []),
-      ];
-      return {
-        error: errors.length === 0 ? null : errors.join("; "),
-        cards: withNotices(issueCards, [...own, ...notices]),
-      };
+      own.sort((a, b) => Date.parse(a.since) - Date.parse(b.since) || a.id.localeCompare(b.id));
+      return { error, cards: [...own, ...cards] };
     } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error), cards: [] };
+      return { error: failure(error), cards: [] };
     }
   }
 
@@ -377,5 +417,5 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     },
   });
 
-  return { list, answer, reject, read, approve, command };
+  return { list, waiting, answer, reject, read, approve, command };
 }

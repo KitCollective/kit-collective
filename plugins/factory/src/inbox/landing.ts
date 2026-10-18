@@ -3,7 +3,7 @@
 // and writes the phase each verdict says. The phase comes from the exit code and the verdict line,
 // never from a model.
 import type { LandStep, ScriptResult } from "../host-contract.js";
-import type { InboxCardDto, LandingPhase } from "./contract.js";
+import type { InboxListCardDto, LandingPhase } from "./contract.js";
 
 const PREFIX = "landing:";
 /** The longest reason a stop hands to the script. */
@@ -80,7 +80,7 @@ export function outcomeOf(
 }
 
 /** A landing record as its own card, for an issue that is not in the Inbox state: no Inbox action. */
-export function landingCard(record: LandingRecord, verdict: string | null): InboxCardDto {
+export function landingCard(record: LandingRecord, verdict: string | null): InboxListCardDto {
   return {
     // The issue's own id, as on its review card: an open card stays open once it is approved.
     id: record.identifier,

@@ -3,21 +3,6 @@ import { z } from "zod";
 
 export const ok = z.object({ ok: z.literal(true) });
 
-/**
- * How far the landing of an approved issue got: `approved` (not in the merge queue yet), `queued`,
- * `merged` (the land gate is waiting), `done`, or `stopped` (the line says why).
- */
-const LANDING_PHASES = ["approved", "queued", "merged", "done", "stopped"] as const;
-export type LandingPhase = (typeof LANDING_PHASES)[number];
-
-const landing = z.object({
-  phase: z.enum(LANDING_PHASES),
-  /** What the last slice said (the verdict without its tag, or why Optio could not run it); null before its first answer. */
-  line: z.string().nullable(),
-  /** When the phase was last written (ISO). */
-  at: z.string(),
-});
-
 /** One card of the Inbox. Home lists the same cards, so both areas read this shape. */
 export const inboxCard = z.object({
   /** Unique among the cards and stable between reads: the identifier, or `kind:` and the source's id. */
@@ -26,11 +11,8 @@ export const inboxCard = z.object({
   title: z.string(),
   url: z.string(),
   pullRequest: z.object({ number: z.number(), url: z.string() }).nullable(),
-  /**
-   * A review waits for the merge; a question waits for an answer; a mention and an alarm wait to be
-   * seen; a landing is an approved issue on its way to done, out of the Inbox state, with nothing to answer.
-   */
-  kind: z.enum(["review", "question", "mention", "alarm", "landing"]),
+  /** A review waits for the merge; a question waits for an answer; a mention and an alarm wait to be seen. */
+  kind: z.enum(["review", "question", "mention", "alarm"]),
   /** The question label the issue carries; null on a review. */
   label: z.string().nullable(),
   /** The lettered choices (A, B, …) the ask offers, in order; empty when it offers none or on a review. */
@@ -47,11 +29,8 @@ export const inboxCard = z.object({
     .nullable(),
   /** The problems an open watchdog alarm lists; null on any other kind. */
   alarm: z.object({ problems: z.array(z.string()) }).nullable(),
-  /** When the issue entered the state, or the mention or alarm was raised (ISO); for a landing card, when it was approved. */
+  /** When the issue entered the state, or the mention or alarm was raised (ISO). */
   since: z.string(),
-  /** The landing after an approval, until the issue is done; information only, never an action. Null when nobody approved it here. */
-  landing: landing.nullable(),
 });
 
 export type InboxCardDto = z.infer<typeof inboxCard>;
-export type LandingDto = z.infer<typeof landing>;

@@ -10,7 +10,6 @@ export const DOT: Record<InboxCardDto["kind"], string> = {
   question: "bg-amber-500",
   mention: "bg-sky-500",
   alarm: "bg-red-500",
-  landing: "bg-sky-500",
 };
 
 /** The nav panel path of the Agents page; its Board and Runs views are sub-paths of it. */
