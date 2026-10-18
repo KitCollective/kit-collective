@@ -146,7 +146,7 @@ const settleData = z.object({
   }),
 });
 
-async function call(
+export async function call(
   apiKey: string,
   fetchImpl: typeof fetch,
   query: string,

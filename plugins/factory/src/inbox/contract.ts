@@ -4,23 +4,27 @@ import { z } from "zod";
 /**
  * Where the Inbox looks: `state` is where issues wait for a person, a label of `questionLabels`
  * marks a question. `projectId` is the bb project whose `factory.config.json` names the Linear team
- * and the workpad heading; without it the Inbox uses the Board's project.
+ * and the workpad heading; without it the Inbox uses the Board's project. `alarmIssue` is the issue
+ * the watchdog comments on; without it the Inbox shows no alarm cards.
  */
 export const inboxConfig = z
   .object({
     state: z.string().trim().min(1),
     questionLabels: z.array(z.string().trim().min(1)),
     projectId: z.string().trim().min(1).optional(),
+    alarmIssue: z.string().trim().min(1).optional(),
   })
   .strict();
 
 const inboxCard = z.object({
+  /** Unique among the cards and stable between reads: the identifier, or `kind:` and the source's id. */
+  id: z.string(),
   identifier: z.string(),
   title: z.string(),
   url: z.string(),
   pullRequest: z.object({ number: z.number(), url: z.string() }).nullable(),
-  /** A review waits for the merge; a question waits for an answer. */
-  kind: z.enum(["review", "question"]),
+  /** A review waits for the merge; a question waits for an answer; a mention and an alarm wait to be seen. */
+  kind: z.enum(["review", "question", "mention", "alarm"]),
   /** The question label the issue carries; null on a review. */
   label: z.string().nullable(),
   /** The lettered choices (A, B, …) the ask offers, in order; empty when it offers none or on a review. */
@@ -31,7 +35,13 @@ const inboxCard = z.object({
     .nullable(),
   /** The recorded review verdict and the pull request's title; null on a question. */
   review: z.object({ verdict: z.string().nullable(), change: z.string().nullable() }).nullable(),
-  /** When the issue entered the state (ISO). */
+  /** The unread Linear notification that mentions the key owner; null on any other kind. */
+  mention: z
+    .object({ notificationId: z.string(), comment: z.string(), author: z.string().nullable() })
+    .nullable(),
+  /** The problems an open watchdog alarm lists; null on any other kind. */
+  alarm: z.object({ problems: z.array(z.string()) }).nullable(),
+  /** When the issue entered the state, or the mention or alarm was raised (ISO). */
   since: z.string(),
 });
 
@@ -50,6 +60,11 @@ export const inboxContract = {
   /** Writes `answer` as a comment, swaps the question label for the Loop's ready label and moves the issue to the Loop's state. */
   inbox_answer: {
     input: z.object({ identifier: z.string().min(1), answer: z.string() }),
+    output: settled,
+  },
+  /** Marks a mention's notification read in Linear, as the key owner. */
+  inbox_read: {
+    input: z.object({ notificationId: z.string().min(1) }),
     output: settled,
   },
   /** The same for a green review, whose comment is the reason it goes back. */
