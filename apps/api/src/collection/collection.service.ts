@@ -1997,14 +1997,31 @@ export class CollectionService {
       throw new NotFoundException("Photos missing");
     }
 
-    const [playerFieldsByJersey, patchesByJersey, [ownerJerseyCountRow]] = await Promise.all([
-      this.loadPlayerFieldsForJerseys([row], locale),
-      this.loadPatchesForJerseys([row.id], locale),
-      this.db
-        .select({ count: count() })
-        .from(userJersey)
-        .where(and(eq(userJersey.userId, row.userId), eq(userJersey.private, false))),
-    ]);
+    const [playerFieldsByJersey, patchesByJersey, [ownerJerseyCountRow], [myPendingBid]] =
+      await Promise.all([
+        this.loadPlayerFieldsForJerseys([row], locale),
+        this.loadPatchesForJerseys([row.id], locale),
+        this.db
+          .select({ count: count() })
+          .from(userJersey)
+          .where(and(eq(userJersey.userId, row.userId), eq(userJersey.private, false))),
+        // The requester's own pending Bud only, the same predicate sendBid refuses a second one on.
+        this.db
+          .select({
+            amountDkk: conversationMessage.bidAmountDkk,
+            conversationId: conversationMessage.conversationId,
+          })
+          .from(conversationMessage)
+          .where(
+            and(
+              eq(conversationMessage.senderId, userId),
+              eq(conversationMessage.userJerseyId, jerseyId),
+              eq(conversationMessage.kind, "bid"),
+              eq(conversationMessage.bidStatus, "pending"),
+            ),
+          )
+          .limit(1),
+      ]);
     const playerFields = playerFieldsByJersey.get(row.id);
 
     return collectionPeerJerseySchema.parse({
@@ -2025,6 +2042,7 @@ export class CollectionService {
       ownerCity: row.ownerShowCity && row.ownerCity ? row.ownerCity : null,
       ownerJerseyCount: Number(ownerJerseyCountRow?.count ?? 0),
       photos,
+      myPendingBid: myPendingBid ?? null,
     });
   }
 
