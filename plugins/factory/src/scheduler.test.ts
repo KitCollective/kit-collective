@@ -149,6 +149,25 @@ describe("write scope", () => {
         ["apps/mobile/tests/**"],
       ),
     ).toBe(false);
+    // Optio's three registration files take one line per area: two areas' slices run side by side.
+    expect(
+      scopesOverlap(
+        [
+          "plugins/factory/src/staff/**",
+          "plugins/factory/app.tsx",
+          "plugins/factory/server.ts",
+          "plugins/factory/src/contract.ts",
+        ],
+        [
+          "plugins/factory/src/board/**",
+          "plugins/factory/app.tsx",
+          "plugins/factory/server.ts",
+          "plugins/factory/src/contract.ts",
+        ],
+      ),
+    ).toBe(false);
+    expect(scopesOverlap(["plugins/factory/server.ts"], ["plugins/factory/server.ts"])).toBe(false);
+    expect(scopesOverlap(["plugins/factory/src/staff/**"], ["plugins/factory/src/**"])).toBe(true);
     expect(scopesOverlap(["apps/mobile/src/search/**"], ["apps/mobile/src/**"])).toBe(true);
     expect(scopesOverlap(["apps/mobile/.maestro/**"], ["apps/mobile/.maestro/flows/a.yaml"])).toBe(
       true,
