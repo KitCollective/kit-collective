@@ -23,6 +23,40 @@
 // that finds it on; one that cannot be read starts nothing either (a pause must not leak through an outage).
 // Written without static imports or import.meta so it runs whether bb stores it as CJS or ESM.
 
+// A run that ended In Progress or In Review short of a landing: its issue's last run-log event is
+// older than runStuckMinutes (a live run logs as it goes) and it is not a landing. It stopped
+// whether or not it opened a PR: 2026-10-18 KIT-409's run stopped at its first step with no PR, and
+// because only issues with a PR were listed the issue sat In Progress for three hours, holding its
+// reserved write-scope over KIT-404. With an open PR the entry resumes it; without one it restarts
+// (mode "restart"). More than maxStartsPerDay starts in 24 h is a loop: listed in loops, never started.
+// Pure and self-contained, so scripts/tests/max-tick.test.mjs runs this very source.
+function stoppedRuns({ board, events, prOf, skip, now, runStuckMinutes, maxStartsPerDay }) {
+  const resume = [];
+  const loops = [];
+  for (const issue of board) {
+    if (!["In Progress", "In Review"].includes(issue.state) || skip.has(issue.key)) continue;
+    const own = events.filter((e) => e.issue === issue.key);
+    const last = own.at(-1);
+    if (!last || now - Date.parse(last.at) < runStuckMinutes * 60000) continue;
+    const starts = own.filter(
+      (e) => e.event === "start" && now - Date.parse(e.at) < 24 * 60 * 60000,
+    ).length;
+    if (starts >= maxStartsPerDay) {
+      loops.push(issue.key);
+      continue;
+    }
+    const pr = prOf(issue.key);
+    resume.push({
+      issue: issue.key,
+      mode: pr ? "resume" : "restart",
+      pr: pr?.number ?? null,
+      quietMinutes: Math.round((now - Date.parse(last.at)) / 60000),
+    });
+  }
+  return { resume, loops };
+}
+// end stoppedRuns
+
 (async () => {
   const fs = await import("node:fs");
   const path = await import("node:path");
@@ -178,10 +212,7 @@
     .map((issue) => issue.key);
 
   // What a dispatcher can act on, and nothing else:
-  // - startable: eligible issues, but only while there is room. An issue in In Progress or In Review
-  //   that Linear saw change inside the live window stands in for a live run (a run writes its
-  //   workpad, comments and state as it goes). One that has been quiet for longer is a dead run and
-  //   holds no slot, so a stalled issue cannot starve the queue.
+  // - startable: eligible issues, but only while there is room (live, below the run-log read).
   // - inProgress: only while something is startable, because a write-scope overlap is judged
   //   against the issues in In Progress and clears when one of them leaves.
   // - unblock: Blocked issues whose blockers are all Done or Canceled.
@@ -205,13 +236,6 @@
         issue.blockedBy.length === 0,
     )
     .map((issue) => issue.key);
-  const live = board.filter(
-    (issue) =>
-      ["In Progress", "In Review"].includes(issue.state) &&
-      issue.touchedMinutesAgo < liveWindowMinutes,
-  ).length;
-  const startable = startHold === null && live < maxLiveRuns ? eligible : [];
-
   const threads = JSON.parse(
     execFileSync(bb, ["thread", "list", "--project", project, "--json"], { encoding: "utf8" }),
   );
@@ -227,11 +251,10 @@
   const landing = [];
   // A run that ended In Progress or In Review short of a green review (2026-10-17: KIT-284's
   // Reviewer returned no result at 07:00 and the issue sat In Review for seven hours, since only
-  // To-do is claimed and only a green review counts as a stopped landing). Listed when the issue's
-  // last run-log event is older than runStuckMinutes, it has an open PR, and it is not a landing;
-  // Max starts a resume run for it. More than maxStartsPerDay starts in 24 h is a loop: reported only.
-  const resume = [];
-  const resumeLoops = [];
+  // To-do is claimed and only a green review counts as a stopped landing). stoppedRuns above says
+  // which; Max resumes or restarts each one before any new start (ADR-0066 resume order).
+  let resume = [];
+  let resumeLoops = [];
   const landingStates = { start: ["In Review"], finish: ["Merging", "Post-Merge"] };
   const runStates = ["In Progress", "In Review"];
   if (
@@ -339,25 +362,29 @@
         ...(receipt ? { receipt } : {}),
       });
     }
-    for (const issue of board) {
-      if (!runStates.includes(issue.state) || landingKeys.has(issue.key)) continue;
-      const own = events.filter((e) => e.issue === issue.key);
-      const last = own.at(-1);
-      if (!last || Date.now() - Date.parse(last.at) < runStuckMinutes * 60000) continue;
-      const pr = prOf(issue.key);
-      if (!pr) continue;
-      const starts = own.filter(
-        (e) => e.event === "start" && Date.now() - Date.parse(e.at) < 24 * 60 * 60000,
-      ).length;
-      if (starts >= maxStartsPerDay) resumeLoops.push(issue.key);
-      else
-        resume.push({
-          issue: issue.key,
-          pr: pr.number,
-          quietMinutes: Math.round((Date.now() - Date.parse(last.at)) / 60000),
-        });
-    }
+    ({ resume, loops: resumeLoops } = stoppedRuns({
+      board,
+      events,
+      prOf,
+      skip: landingKeys,
+      now: Date.now(),
+      runStuckMinutes,
+      maxStartsPerDay,
+    }));
   }
+
+  // An issue in In Progress or In Review that Linear saw change inside the live window stands in for
+  // a live run (a run writes its workpad, comments and state as it goes); one that has been quiet for
+  // longer is a dead run and holds no slot, so a stalled issue cannot starve the queue. A stopped run
+  // holds no slot either, even inside the window: it would otherwise block its own restart.
+  const stoppedKeys = new Set([...resume.map((r) => r.issue), ...resumeLoops]);
+  const live = board.filter(
+    (issue) =>
+      ["In Progress", "In Review"].includes(issue.state) &&
+      issue.touchedMinutesAgo < liveWindowMinutes &&
+      !stoppedKeys.has(issue.key),
+  ).length;
+  const startable = startHold === null && live < maxLiveRuns ? eligible : [];
 
   const actionable = {
     startable,
@@ -415,7 +442,7 @@
   if (fingerprint === previous && !dryRun) return;
   if (dryRun)
     process.stdout.write(
-      `DRY RUN resume: ${JSON.stringify(actionable.resume)} loops: ${JSON.stringify(resumeLoops)}\n`,
+      `DRY RUN resume: ${JSON.stringify(actionable.resume)} (stopped, before the slot check: ${JSON.stringify(resume)}) loops: ${JSON.stringify(resumeLoops)}\n`,
     );
   if (nothingToDo) {
     // Remember the empty state, so the same work appearing again later wakes a thread again.
@@ -460,7 +487,7 @@ Order (ADR-0066): with a free slot, finish before you start: step 7 (landings), 
    Auto-land is the only route to a merge: never \`gh pr merge\`, never Merging or Done by hand, never a second run. Write no comment of your own: auto-land writes its own. If a call fails on its own tooling (git, gh, the lock), report the verdict line and leave the issue as it is.
 6c. Widen a write-scope, for each issue in approval. Read its workpad comment (the one starting \`## Agent Workpad\`) with \`LINEAR_ACTOR=max node scripts/linear.mjs issue <KIT-n>\`. Act only when \`### Waiting\` asks for nothing but a wider write-scope by named paths (files or globs), and every one of them: (a) sits under an app, package or plugin the issue's write-scope already names (apps/mobile, apps/api, apps/web, apps/admin, packages/<name>, plugins/<name>: Optio is plugins/factory); (b) is not schema, auth, billing or a workflow (packages/db/**, apps/api/src/identity/**, apps/api/src/billing/**, .github/**) and not a factory path (.bb/**, .factory/**, factory.config.json, scripts/**, staff/**); (c) does not overlap the write-scope of an issue In Progress, test globs aside; (d) there are at most five of them. Then: append them to the issue's \`write-scope:\` line (\`LINEAR_ACTOR=max node scripts/linear.mjs description <KIT-n> --body-file <file>\`, the description otherwise unchanged; plain globs, no backticks); append them the same way to the \`write-scope:\` line of the PR body (\`gh pr edit <pr> --body-file <file>\`); comment once "Max: widened the write-scope by <paths> (same area as <glob>, no overlap with In Progress)"; then \`LINEAR_ACTOR=max node scripts/linear.mjs label <KIT-n> swap ready-for-human ready-for-agent\`, leaving it in Approval: it is then an answered Approval, and you resume it as step 7a says, in this tick when a slot is free. If any condition fails, or the ask is anything else (a design call, an acceptance criterion, a live check, a factory path), change nothing and list the issue and its ask in your report: it is Nicklas's.
 7a. Resume answered Approvals, for each entry in answered, after step 7 and before 7b, 3 and 4, and only while a live slot is free (step 2 counts them). The person answered in a comment and swapped the help label to ready-for-agent; the issue stays in Approval until its run moves it. Skip it if \`bb workflows list\` shows an afk-developer run still running for the issue. Start it exactly as step 4 starts an issue with an open PR, in its own thread (args \`{"issue":"<KIT-n>","resume":true,"autoLand":true}\`; with no open PR, \`{"issue":"<KIT-n>","resume":true,"autoLand":true}\` too, since the branch exists), and comment once "Max: resumed <KIT-n> in its thread after Nicklas's answer". The run moves it to In Progress.
-7b. Resume stalled runs, for each entry in resume, before steps 3 and 4 (finishing a run comes before starting one) and only while a live slot is free (step 2 counts them). Skip it if \`bb workflows list\` shows an afk-developer run still running for the issue, or if \`LINEAR_ACTOR=max node scripts/linear.mjs issue <KIT-n>\` is no longer In Progress or In Review. Otherwise start it exactly as step 4 starts an issue with an open PR (args \`{"issue":"<KIT-n>","resume":true,"autoLand":true}\`), and comment: resumed, the PR, how long the run log had been quiet, the run id. For each entry in resumeLoops (three or more starts in 24 hours), start nothing: comment once that the issue keeps stopping and needs Nicklas, and list it in your report.
+7b. Resume stalled runs, for each entry in resume (a run that stopped In Progress or In Review, with or without a PR), before steps 3 and 4 (finishing a run comes before starting one) and only while a live slot is free (step 2 counts them). Skip it if \`bb workflows list\` shows an afk-developer run still running for the issue, or if \`LINEAR_ACTOR=max node scripts/linear.mjs issue <KIT-n>\` is no longer In Progress or In Review. Otherwise start it in its own thread as step 4 says, always with the args \`{"issue":"<KIT-n>","resume":true,"autoLand":true}\`: mode resume (an open PR) brings the worktree onto the PR branch first, mode restart (no open PR: the run stopped before it opened one, KIT-409 on 2026-10-18) brings it up to date with origin/development as step 4 does without a PR, and still passes \`"resume":true\`, because the session check refuses a fresh run on an issue that is already In Progress; with no PR the run's Engineer opens exactly one. Comment: resumed or restarted, the PR (or none), how long the run log had been quiet, the run id. For each entry in resumeLoops (three or more starts in 24 hours), start nothing: comment once that the issue keeps stopping and needs Nicklas, and list it in your report.
 8. Mentions. Mention Nicklas in a comment only for a question that is his to answer or for something that has waited on him for more than a day, by pasting his Linear profile URL https://linear.app/kitcollective/profiles/nicklas on its own in the comment, so it reaches his Linear inbox. Never mention him in a claim, a triage verdict, a hygiene move or the daily status.
 9. Every comment you write starts with "Max:" and is written once: if the issue already has a Max comment saying the same thing, do not repeat it.
 
