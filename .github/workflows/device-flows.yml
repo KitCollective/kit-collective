@@ -19,7 +19,7 @@ name: Device flows
 # and the approver's logins; a local `device-run.sh` still produces them.
 #
 # Triggers:
-#   - nightly: the five regression flows against `development` (no status)
+#   - nightly: the eight regression flows against `development` (no status)
 #   - label `run-device-flows` on a PR: that issue's slice flow (issue key from the
 #     branch name, e.g. claude/kit-279-59e33d). `node scripts/request-device-flows.mjs`
 #     sets the label; a new head needs the label set again.
