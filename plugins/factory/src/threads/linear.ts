@@ -37,8 +37,8 @@ const answer = z.object({
 });
 
 /**
- * The issues of `numbers` that are completed now. An issue that came back from Done has no
- * completion date any more, and a canceled one is not completed: neither is returned.
+ * The issues of `numbers` that are completed now, by their state type. A completion date can
+ * linger on an issue that came back from Done, and a canceled one is not completed: neither is returned.
  */
 export async function fetchDone(
   apiKey: string,
