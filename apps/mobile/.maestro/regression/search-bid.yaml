@@ -1,4 +1,8 @@
-# Søg, a catalog drill, another Collector's UserJersey, and Send bud.
+# Søg, the typeahead, another Collector's UserJersey (open for bid or not), Send bud and the thread.
+#
+# The fixed test data holds TWO foreign jerseys, both OB and both e2e_peer's: ...0105 is åben for
+# bud (size, condition, a player and a Badge), ...0106 is public but NOT åben for bud, so it has no
+# dock. Both match "OB" in the typeahead. The flow ends with the Bud on ...0105 pending.
 appId: app.kitcollective.mobile
 name: search-bid
 ---
@@ -7,32 +11,83 @@ name: search-bid
     env:
       EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
 - startRecording: kc__search-bid
+# The first tab press right after sign-in can be swallowed while Samling is still settling on the
+# hosted simulator (run 39149973670 stayed on Samling): press once, then again if Søg is not up.
+- waitForAnimationToEnd:
+    timeout: 5000
 - tapOn: Søg
 - extendedWaitUntil:
     visible:
       id: search-input
+    timeout: 8000
+    optional: true
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: magazine-shelf-open-for-bid
     timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+# Step 1: the Søg home with the Åbne for bud shelf.
+- takeScreenshot: kc__search-bid__01-search-home
 - tapOn:
     id: search-input
-# The second test Collector's jersey is on this catalog side.
+# The second test Collector's jerseys are on this catalog side.
 - inputText: OB
 - extendedWaitUntil:
     visible:
       id: typeahead-list
     timeout: 15000
-- hideKeyboard
-- waitForAnimationToEnd:
-    timeout: 5000
-- takeScreenshot: kc__search-bid__01-typeahead
-- tapOn:
-    id: typeahead-hit-club-.*
 - extendedWaitUntil:
     visible:
       id: jersey-tile-e2e00000-0000-4000-8000-000000000105
     timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000106
+    timeout: 15000
+- hideKeyboard
 - waitForAnimationToEnd:
     timeout: 5000
-- takeScreenshot: kc__search-bid__02-catalog-drill
+# Step 2: the typeahead lists the club and both of e2e_peer's OB jerseys as Jersey tiles.
+- takeScreenshot: kc__search-bid__02-typeahead-hits
+# The jersey that is not åben for bud first: Back pops to the typeahead, where the query is kept
+# (the Søg home stays mounted under the pushed detail), and ...0105 is opened from there.
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000106
+- extendedWaitUntil:
+    visible:
+      id: foreign-jersey-detail
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertNotVisible:
+    id: send-bid-open
+- assertNotVisible:
+    id: own-bid-row
+# Step 3: a public jersey that is not åben for bud shows no Button dock.
+- takeScreenshot: kc__search-bid__03-not-open-for-bid-no-dock
+- tapOn:
+    id: jersey-detail-back
+- extendedWaitUntil:
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    timeout: 8000
+    optional: true
+# Fallback if the typeahead did not keep its query: type it again.
+- runFlow:
+    when:
+      notVisible:
+        id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    commands:
+      - tapOn:
+          id: search-input
+      - inputText: OB
+      - extendedWaitUntil:
+          visible:
+            id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+          timeout: 15000
+      - hideKeyboard
 - tapOn:
     id: jersey-tile-e2e00000-0000-4000-8000-000000000105
 - extendedWaitUntil:
@@ -41,7 +96,18 @@ name: search-bid
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000
-- takeScreenshot: kc__search-bid__03-foreign-detail
+# The size, condition and Badge fact rows and the player row sit below the photo: centre the Badge
+# row so the player row above it stays on screen.
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-fact-badge
+    direction: DOWN
+    centerElement: true
+- assertVisible:
+    id: jersey-detail-player-row
+- runFlow: ../subflows/settle.yaml
+# Step 4: an open-for-bid foreign jersey: player row, size, condition and Badge, and the Send bud dock.
+- takeScreenshot: kc__search-bid__04-foreign-detail-open-for-bid
 - tapOn:
     id: send-bid-open
 - extendedWaitUntil:
@@ -49,23 +115,37 @@ name: search-bid
       id: bid-amount
     timeout: 15000
 - runFlow: ../subflows/settle.yaml
-- takeScreenshot: kc__search-bid__04-send-bid
-- tapOn:
-    id: bid-amount
+# Step 5: Send bud opens with an empty amount and the number pad up.
+- takeScreenshot: kc__search-bid__05-send-bid-empty
 - inputText: "250"
+- waitForAnimationToEnd:
+    timeout: 5000
+# Step 6: a whole-kroner amount, and the button carrying it.
+- takeScreenshot: kc__search-bid__06-send-bid-amount
 # The number pad has no return key; the keyboard accessory's Færdig dismisses it.
 - tapOn:
     id: bid-keyboard-done
 - waitForAnimationToEnd:
     timeout: 5000
-- takeScreenshot: kc__search-bid__05-amount-entered
 - tapOn:
     id: bid-submit
 - extendedWaitUntil:
     visible:
-      id: send-bid-open
+      id: bid-sent-toast
     timeout: 15000
-- waitForAnimationToEnd:
-    timeout: 5000
-- takeScreenshot: kc__search-bid__06-bid-sent
+- extendedWaitUntil:
+    visible:
+      id: own-bid-row
+    timeout: 15000
+# Step 7: back on the detail with the Toast, and Dit bud, the amount and Afventer svar in the dock.
+- takeScreenshot: kc__search-bid__07-bid-sent-toast-and-own-bid-row
+- tapOn:
+    id: own-bid-row
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+# Step 8: the own bid row opens the thread for that Bud.
+- takeScreenshot: kc__search-bid__08-thread-from-own-bid-row
 - stopRecording
