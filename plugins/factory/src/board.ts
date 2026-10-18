@@ -53,9 +53,21 @@ export function isTestGlob(glob: string): boolean {
   return /^(apps|packages)\//.test(glob) && (/\/tests\//.test(glob) || /\.test\.[^/]*$/.test(glob));
 }
 
-/** Two globs may match a common path when one static prefix contains the other. Test globs never clash. */
+/**
+ * Optio's three registration files: each area adds a few registration lines to them and nothing
+ * else, so no slice holds a write scope on them. Two slices editing lines apart meet as a merge
+ * conflict instead.
+ */
+const REGISTRATION_FILES = [
+  "plugins/factory/app.tsx",
+  "plugins/factory/server.ts",
+  "plugins/factory/src/contract.ts",
+];
+
+/** Two globs may match a common path when one static prefix contains the other. Test globs and registration files never clash. */
 export function scopesOverlap(a: string[], b: string[]): boolean {
-  const held = (globs: string[]) => globs.filter((glob) => !isTestGlob(glob));
+  const held = (globs: string[]) =>
+    globs.filter((glob) => !isTestGlob(glob) && !REGISTRATION_FILES.includes(glob));
   return held(a).some((left) =>
     held(b).some((right) => {
       const [x, y] = [staticPrefix(left), staticPrefix(right)];
