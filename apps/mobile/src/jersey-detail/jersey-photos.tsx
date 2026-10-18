@@ -31,7 +31,7 @@ const COUNT_PILL_PADDING_VERTICAL = 4;
 
 type RoundButtonProps = {
   name: string;
-  icon: "arrow-back" | "ellipsis-horizontal";
+  icon: "arrow-back" | "ellipsis-horizontal" | "heart" | "heart-outline";
   onPress: () => void;
   testID?: string;
 };
@@ -55,6 +55,12 @@ function RoundButton({ name, icon, onPress, testID }: RoundButtonProps) {
   );
 }
 
+/** Favorit on a foreign jersey: the round button between Back and More. */
+export type JerseyPhotoFavorite = {
+  active: boolean;
+  onPress: () => void;
+};
+
 type JerseyPhotoPagerProps = {
   pagerRef: RefObject<ScrollView | null>;
   photos: Photos;
@@ -66,9 +72,14 @@ type JerseyPhotoPagerProps = {
   onIndexChange: (index: number) => void;
   onBack: () => void;
   onMore: () => void;
+  /** Foreign jersey only: adds a round Favorit button between Back and More. */
+  favorite?: JerseyPhotoFavorite;
 };
 
-/** 4:5 photo at full width, swipe between photos, Back and More over it, count pill, no dots. */
+/**
+ * 4:5 photo at full width, swipe between photos, Back and More over it (Favorit between them on a
+ * foreign jersey), count pill, no dots.
+ */
 export function JerseyPhotoPager({
   pagerRef,
   photos,
@@ -79,6 +90,7 @@ export function JerseyPhotoPager({
   onIndexChange,
   onBack,
   onMore,
+  favorite,
 }: JerseyPhotoPagerProps) {
   const theme = useTheme();
   const typography = useTypography();
@@ -122,12 +134,22 @@ export function JerseyPhotoPager({
           onPress={onBack}
           testID="jersey-detail-back"
         />
-        <RoundButton
-          name="Mere"
-          icon="ellipsis-horizontal"
-          onPress={onMore}
-          testID="jersey-detail-more"
-        />
+        <View pointerEvents="box-none" style={styles.chromeTrailing}>
+          {favorite ? (
+            <RoundButton
+              name={favorite.active ? "Fjern favorit" : "Gem favorit"}
+              icon={favorite.active ? "heart" : "heart-outline"}
+              onPress={favorite.onPress}
+              testID="jersey-detail-favorite"
+            />
+          ) : null}
+          <RoundButton
+            name="Mere"
+            icon="ellipsis-horizontal"
+            onPress={onMore}
+            testID="jersey-detail-more"
+          />
+        </View>
       </View>
 
       <View
@@ -240,6 +262,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: space.insetMd,
+  },
+  chromeTrailing: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.gapSm,
   },
   roundButton: {
     width: CHROME_BUTTON,

@@ -39,7 +39,7 @@
   const issueSection = process.env.ISSUE_SECTION ?? "sec_qzij88jqc5";
   const landingStuckMinutes = Number(process.env.LANDING_STUCK_MINUTES ?? 30);
   const runStuckMinutes = Number(process.env.RUN_STUCK_MINUTES ?? 120);
-  const maxStartsPerDay = Number(process.env.MAX_STARTS_PER_DAY ?? 3);
+  const maxStartsPerDay = Number(process.env.MAX_STARTS_PER_DAY ?? 5); // factory.config.json flow.maxRunsPerDay
   const runCheckout = process.env.RUN_CHECKOUT ?? "/home/node/work/kit-collective";
   const dryRun = process.env.DRY_RUN === "1";
   const project = process.env.BB_PROJECT_ID ?? "proj_ywcvj7w835";
@@ -267,6 +267,14 @@
       if (!pr || (step === "start" && pr.headRefOid !== sha)) continue;
       const thread = /thr_[a-z0-9]+/.exec(pr.headRefName)?.[0] ?? null;
       const environmentId = threadList.find((t) => t.id === thread)?.environmentId ?? null;
+      // A green review whose receipt was never posted (the run stopped on evidence-gap: the Reviewer
+      // gave its AUDIT-RESULT line too late, KIT-290 on 2026-10-18) lands once the receipt is posted.
+      const spawned = (role) =>
+        own.findLast((e) => e.event === "spawn" && e.step === role)?.thread ?? null;
+      const receipt =
+        step === "start" && own.some((e) => e.event === "reason" && e.code === "evidence-gap")
+          ? { reviewer: spawned("reviewer"), implementer: spawned("engineer") }
+          : null;
       landingKeys.add(issue.key);
       landing.push({
         issue: issue.key,
@@ -275,6 +283,7 @@
         sha: sha?.slice(0, 7),
         thread,
         environmentId,
+        ...(receipt ? { receipt } : {}),
       });
     }
     for (const issue of board) {
@@ -389,6 +398,7 @@ ${JSON.stringify({ counts, eligibleInClaimOrder: eligible, triage: actionable.tr
 5. Triage, for each issue in triage (oldest first), after reading it in full with \`LINEAR_ACTOR=max node scripts/linear.mjs issue <KIT-n>\` and its comments: give one verdict as your charter says (shape and promote a clear signal-up, at most 10 per day counted from your own "Max: promoted" comments of the last 24 hours; move a proposal to Backlog with your recommendation; cancel a duplicate or non-issue with wontfix and the reason; move anything unclear to Backlog with needs-info and one question). Check for duplicates among the other triage issues and the open board before you shape anything. A promoted ticket gets the issue template (What to build, Acceptance criteria with one checkbox per clause, Blocked by, a write-scope line of plain comma-separated globs with no backticks) and the project of the issue it came from (\`LINEAR_ACTOR=max node scripts/linear.mjs project <KIT-n> <source KIT-m>\`).
 6. Board hygiene. An issue in Blocked whose blockedBy list is empty while hasBlockerRelation is true: move it to To-do with one comment naming the resolved blockers. An issue that is To-do + ready-for-agent with the Agent field set: comment that the factory will not claim it until Agent is "No agent". Report, without changing anything: To-do issues carrying needs-info or ready-for-human; issues in Approval or Merging; issues in In Progress, In Review or Post-Merge not updated for 3 days or more.
 7. Resume landing, for each entry in landing (read from the run log and GitHub by this tick). Skip it if \`bb workflows list\` shows an afk-developer run still running for the issue, or if \`LINEAR_ACTOR=max node scripts/linear.mjs issue <KIT-n>\` no longer shows the state the entry's step expects (start: In Review; finish: Merging or Post-Merge). Find the run's worktree: \`bb environment show <environmentId>\` prints its Path (no environmentId: report it and skip). In that worktree, on this machine:
+   - an entry with receipt: first, in that worktree, \`node scripts/audit-receipt.mjs post <pr> --thread <receipt.reviewer> --implementer-thread <receipt.implementer> --require-different-model\`. POSTED goes on to step start; anything else goes in the report with the verdict line and stops there.
    - step start: \`node ${runCheckout}/scripts/auto-land.mjs start <pr> --issue <KIT-n> --force-enabled --handoff\`. Exit 0 (enqueued) goes on to finish; exit 3 (waiting) run it again, at most 5 times; exit 1 (refused: --handoff has already moved the issue to Approval with the reason) and exit 4 (UNKNOWN) stop here and go in the report with the verdict line.
    - step finish, or after an enqueue: \`node ${runCheckout}/scripts/auto-land.mjs finish <pr> --issue <KIT-n>\`, again while it exits 3 (each call waits up to 8 minutes), at most 6 calls. Exit 0 is landed; exit 1 is the alarm (auto-land has already moved the issue to Approval); exit 4 or still 3 after 6 calls goes in the report.
    Auto-land is the only route to a merge: never \`gh pr merge\`, never Merging or Done by hand, never a second run. Write no comment of your own: auto-land writes its own. If a call fails on its own tooling (git, gh, the lock), report the verdict line and leave the issue as it is.
