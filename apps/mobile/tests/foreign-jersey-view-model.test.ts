@@ -23,6 +23,7 @@ function peerJersey(overrides: Partial<CollectionPeerJersey> = {}): CollectionPe
     patches: [],
     ownerCity: "Odense",
     ownerJerseyCount: 3,
+    myPendingBid: null,
     photos: [
       {
         id: "00000000-0000-4000-8000-0000000000f1",

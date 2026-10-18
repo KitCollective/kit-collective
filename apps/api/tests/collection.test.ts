@@ -917,16 +917,136 @@ describe("Collection /v1", () => {
         expect(response.statusCode).toBe(200);
         // SAFETY: the body is the JSON object the peer jersey route returns; the test only reads its keys.
         const raw = JSON.parse(response.body) as Record<string, unknown>;
-        expect(raw).not.toHaveProperty("latestBidAmountDkk");
-        expect(Object.keys(raw).filter((key) => /[Aa]mount|[Bb]id(?!ding)/.test(key))).toEqual([]);
+        // The requester's own pending Bud is the one amount a peer jersey may carry (KIT-291).
+        const { myPendingBid, ...rest } = raw;
+        expect(myPendingBid).toEqual(
+          viewer === bidder
+            ? { amountDkk: jersey === firstJersey ? 350 : 500, conversationId: expect.any(String) }
+            : null,
+        );
+        expect(rest).not.toHaveProperty("latestBidAmountDkk");
+        expect(Object.keys(rest).filter((key) => /[Aa]mount|[Bb]id(?!ding)/.test(key))).toEqual([]);
         // Compare parsed values, not body substrings: the body holds random hex ids that can contain "350".
-        expect(jsonValues(raw)).not.toContain(350);
-        expect(jsonValues(raw)).not.toContain(500);
-        expect(jsonValues(raw)).not.toContain("350");
-        expect(jsonValues(raw)).not.toContain("500");
+        expect(jsonValues(rest)).not.toContain(350);
+        expect(jsonValues(rest)).not.toContain(500);
+        expect(jsonValues(rest)).not.toContain("350");
+        expect(jsonValues(rest)).not.toContain("500");
         collectionPeerJerseySchema.parse(raw);
       }
     }
+  });
+
+  describe("the requester's own pending Bud on the peer UserJersey (KIT-291)", () => {
+    async function biddableJersey(ownerEmail: string) {
+      const fixture = await insertClubSeasonFixture();
+      const owner = await registerSession(app, ownerEmail);
+      const jersey = await saveJerseyForUser(app, owner, fixture);
+      await patchJerseyBidding(app, owner, jersey.id, true);
+      return { owner, jersey };
+    }
+
+    async function peerBodyFor(session: Session, jerseyId: string) {
+      const response = await getPeerJerseyRaw(app, session, jerseyId);
+      expect(response.statusCode).toBe(200);
+      return collectionPeerJerseySchema.parse(JSON.parse(response.body));
+    }
+
+    it("tells the bidder about their own pending Bud, and nobody else", async () => {
+      const { jersey } = await biddableJersey("owner-my-bid@example.com");
+      const bidder = await registerSession(app, "bidder-my-bid@example.com");
+      const otherCollector = await registerSession(app, "other-my-bid@example.com");
+
+      expect((await peerBodyFor(bidder, jersey.id)).myPendingBid).toBeNull();
+
+      const bidResponse = await app.inject({
+        method: "POST",
+        url: `/v1/collection/jerseys/${jersey.id}/bids`,
+        headers: { authorization: `Bearer ${bidder.accessToken}` },
+        payload: { amountDkk: 350 },
+      });
+      expect(bidResponse.statusCode).toBe(201);
+      const { conversationId } = collectionSendBidResponseSchema.parse(
+        JSON.parse(bidResponse.body),
+      );
+
+      expect((await peerBodyFor(bidder, jersey.id)).myPendingBid).toEqual({
+        amountDkk: 350,
+        conversationId,
+      });
+      expect((await peerBodyFor(otherCollector, jersey.id)).myPendingBid).toBeNull();
+    });
+
+    it("is null again once the owner declines the Bud", async () => {
+      const { owner, jersey } = await biddableJersey("owner-my-bid-decline@example.com");
+      const bidder = await registerSession(app, "bidder-my-bid-decline@example.com");
+
+      const bidResponse = await app.inject({
+        method: "POST",
+        url: `/v1/collection/jerseys/${jersey.id}/bids`,
+        headers: { authorization: `Bearer ${bidder.accessToken}` },
+        payload: { amountDkk: 350 },
+      });
+      expect(bidResponse.statusCode).toBe(201);
+      const { conversationId, messageId } = collectionSendBidResponseSchema.parse(
+        JSON.parse(bidResponse.body),
+      );
+      expect((await peerBodyFor(bidder, jersey.id)).myPendingBid).not.toBeNull();
+
+      const decline = await app.inject({
+        method: "PATCH",
+        url: `/v1/collection/conversations/${conversationId}/messages/${messageId}/bid`,
+        headers: { authorization: `Bearer ${owner.accessToken}` },
+        payload: { decision: "decline" },
+      });
+      expect(decline.statusCode).toBe(200);
+
+      expect((await peerBodyFor(bidder, jersey.id)).myPendingBid).toBeNull();
+    });
+
+    it("is null once the owner accepts the Bud", async () => {
+      const { owner, jersey } = await biddableJersey("owner-my-bid-accept@example.com");
+      const bidder = await registerSession(app, "bidder-my-bid-accept@example.com");
+
+      const bidResponse = await app.inject({
+        method: "POST",
+        url: `/v1/collection/jerseys/${jersey.id}/bids`,
+        headers: { authorization: `Bearer ${bidder.accessToken}` },
+        payload: { amountDkk: 350 },
+      });
+      const { conversationId, messageId } = collectionSendBidResponseSchema.parse(
+        JSON.parse(bidResponse.body),
+      );
+
+      const accept = await app.inject({
+        method: "PATCH",
+        url: `/v1/collection/conversations/${conversationId}/messages/${messageId}/bid`,
+        headers: { authorization: `Bearer ${owner.accessToken}` },
+        payload: { decision: "accept" },
+      });
+      expect(accept.statusCode).toBe(200);
+
+      expect((await peerBodyFor(bidder, jersey.id)).myPendingBid).toBeNull();
+    });
+
+    it("refuses a Bud from a Collector the owner has blocked with 403", async () => {
+      const { owner, jersey } = await biddableJersey("owner-bid-blocked@example.com");
+      const bidder = await registerSession(app, "bidder-bid-blocked@example.com");
+
+      const block = await app.inject({
+        method: "POST",
+        url: `/v1/moderation/peers/${bidder.user.id}/block`,
+        headers: { authorization: `Bearer ${owner.accessToken}` },
+      });
+      expect(block.statusCode).toBe(201);
+
+      const bid = await app.inject({
+        method: "POST",
+        url: `/v1/collection/jerseys/${jersey.id}/bids`,
+        headers: { authorization: `Bearer ${bidder.accessToken}` },
+        payload: { amountDkk: 350 },
+      });
+      expect(bid.statusCode).toBe(403);
+    });
   });
 
   describe("peer UserJersey facts (KIT-290)", () => {
