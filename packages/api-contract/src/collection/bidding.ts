@@ -1,6 +1,6 @@
-import { JERSEY_SIZES, KIT_TYPES } from "@kit/domain";
+import { JERSEY_CONDITIONS, JERSEY_SIZES, KIT_TYPES } from "@kit/domain";
 import { z } from "zod";
-import { collectionJerseyPhotoSchema } from "./save.js";
+import { collectionJerseyPatchSchema, collectionJerseyPhotoSchema } from "./save.js";
 
 export const collectionBiddingPatchSchema = z
   .object({
@@ -197,7 +197,15 @@ export const collectionPeerJerseySchema = z
     ownerId: z.string().uuid(),
     ownerInitial: z.string().min(1),
     biddingEnabled: z.boolean(),
-    latestBidAmountDkk: z.number().int().min(1).nullable(),
+    size: z.enum(JERSEY_SIZES),
+    condition: z.enum(JERSEY_CONDITIONS),
+    playerLabel: z.string().min(1).nullable(),
+    playerNumber: z.string().nullable(),
+    patches: z.array(collectionJerseyPatchSchema),
+    /** Null unless the owner has Vis by on and a city set. */
+    ownerCity: z.string().min(1).nullable(),
+    /** The owner's non-private UserJerseys. */
+    ownerJerseyCount: z.number().int().nonnegative(),
     photos: z.array(collectionJerseyPhotoSchema).min(1),
   })
   .strict()
