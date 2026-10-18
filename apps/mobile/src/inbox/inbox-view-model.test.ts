@@ -55,7 +55,7 @@ describe("buildInbox", () => {
       formatTime,
     );
 
-    expect(inbox.conversations[0]?.snippet).toBe("Ny besked");
+    expect(inbox.conversations.rows[0]?.snippet).toBe("Ny besked");
   });
 
   describe("Venter på dit svar", () => {
