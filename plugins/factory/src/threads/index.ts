@@ -70,16 +70,14 @@ export function createThreads(core: Core) {
       if (board === null) {
         throw new Error("the board is not set up: open the Agents page, Board");
       }
-      const own = new RegExp(`^${board.teamKey}-(\\d+)$`);
+      const own = new RegExp(`^(${board.teamKey}-(\\d+))$`);
       const candidates = (await roots(board.projectId)).flatMap((thread) => {
-        const number = own.exec(thread.title ?? "")?.[1];
-        return number === undefined ? [] : [{ thread, issue: thread.title ?? "" }];
+        const match = own.exec(thread.title ?? "");
+        return match === null ? [] : [{ thread, issue: match[1], number: Number(match[2]) }];
       });
       if (candidates.length === 0) return { error: null, archived: [] };
 
-      const numbers = candidates.map(({ issue }) =>
-        Number(issue.slice(issue.lastIndexOf("-") + 1)),
-      );
+      const numbers = candidates.map(({ number }) => number);
       const done = new Map(
         (await fetchDone(await linearApiKey(), board.teamKey, numbers)).map((issue) => [
           issue.identifier,

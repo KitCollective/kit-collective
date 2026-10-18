@@ -12,5 +12,3 @@ export const threadsContract = {
     }),
   },
 };
-
-export type ArchiveSweepDto = z.infer<typeof threadsContract.threads_archive_done.output>;

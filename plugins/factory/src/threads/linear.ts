@@ -59,7 +59,7 @@ export async function fetchDone(
     });
     const parsed = answer.safeParse(await response.json().catch(() => null));
     const body = parsed.success ? parsed.data : null;
-    if (!response.ok || body?.data === undefined) {
+    if (!response.ok || body?.data === undefined || body.errors !== undefined) {
       throw new Error(
         `Linear answered ${response.status}: ${body?.errors?.[0]?.message ?? "no usable body"}`,
       );

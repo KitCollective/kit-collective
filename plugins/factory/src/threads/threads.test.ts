@@ -69,13 +69,9 @@ async function load(threads: Thread[], issues: Issue[], settings: { paused?: boo
     const nodes = issues.map((issue) => ({
       identifier: issue.identifier,
       completedAt: issue.completedAt,
-      state: { name: issue.type === "completed" ? "Done" : "Other", type: issue.type },
+      state: { type: issue.type },
     }));
-    return new Response(
-      JSON.stringify({
-        data: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } },
-      }),
-    );
+    return new Response(JSON.stringify({ data: { issues: { nodes } } }));
   });
   vi.stubGlobal("fetch", fetchMock);
   const host = createFakePluginHost({
@@ -147,7 +143,8 @@ describe("archiving the Issue threads of Done issues", () => {
         open("ENG-1"),
         open("ENG-2", "canceled"),
         open("ENG-3", "unstarted"),
-        // The issue came back from Done: Linear clears the completion date.
+        // A completion date that lingers on an issue that is not completed (it came back from Done):
+        // only the state type says it is not Done.
         {
           identifier: "ENG-4",
           type: "started",
