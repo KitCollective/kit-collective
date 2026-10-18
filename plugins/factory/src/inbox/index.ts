@@ -21,6 +21,9 @@ import { fetchAlarmThread, fetchMentions, markMentionRead } from "./notices.js";
 
 const CONFIG_KEY = "inbox";
 
+/** A Staff question's card: the Inbox card plus the Staff chat it links to. */
+type StaffCard = InboxCardDto & { chat: { threadId: string } };
+
 /** What the Inbox reads from the rest of the plugin; `Board` is the stored board config. */
 export interface InboxDeps<Board extends { teamKey: string; projectId: string }> {
   bb: Pick<BbPluginApi, "storage" | "realtime" | "log" | "server">;
@@ -94,7 +97,7 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
   }
 
   /** One card per open Staff question, oldest first, linking to the chat it was asked in. */
-  async function staffCards(): Promise<InboxCardDto[]> {
+  async function staffCards(): Promise<StaffCard[]> {
     const base = (deps.bb.server.experimental_appUrl ?? deps.bb.server.loopbackBaseUrl).replace(
       /\/+$/,
       "",
@@ -102,7 +105,7 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     return (await deps.staffQuestions())
       .sort((a, b) => a.askedAt - b.askedAt)
       .map(
-        (question): InboxCardDto => ({
+        (question): StaffCard => ({
           // Unique per question: the page keys and opens a card by it.
           id: `question:${question.id}`,
           identifier: `${question.name}-${question.id}`,
@@ -210,7 +213,7 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
   const failure = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
   /** The Staff questions as cards; a read that fails is named in `error` and gives none. */
-  async function staffRead(): Promise<{ error: string | null; cards: InboxCardDto[] }> {
+  async function staffRead(): Promise<{ error: string | null; cards: StaffCard[] }> {
     try {
       return { error: null, cards: await staffCards() };
     } catch (error) {
@@ -225,11 +228,15 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
       const staff = await staffRead();
       return {
         error: read.error ?? staff.error,
-        cards: [...withNotices(read.issueCards, read.notices), ...staff.cards],
+        // Home takes the shared card: the chat stays on the Inbox page's.
+        cards: [
+          ...withNotices(read.issueCards, read.notices),
+          ...staff.cards.map(({ chat: _chat, ...card }) => card),
+        ],
       };
     } catch (error) {
       const staff = await staffRead();
-      return { error: failure(error), cards: staff.cards };
+      return { error: failure(error), cards: staff.cards.map(({ chat: _chat, ...card }) => card) };
     }
   }
 

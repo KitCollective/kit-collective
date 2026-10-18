@@ -29,13 +29,8 @@ export const inboxCard = z.object({
     .nullable(),
   /** The problems an open watchdog alarm lists; null on any other kind. */
   alarm: z.object({ problems: z.array(z.string()) }).nullable(),
-  /** When the issue entered the state, or the mention or alarm was raised, or a Staff question asked (ISO). */
+  /** When the issue entered the state, or the mention or alarm was raised (ISO). */
   since: z.string(),
-  /**
-   * Set on a Staff question only: the Staff chat it was asked in, which the person answers in. The
-   * card leaves the Inbox once they have.
-   */
-  chat: z.object({ threadId: z.string() }).optional(),
 });
 
 export type InboxCardDto = z.infer<typeof inboxCard>;
