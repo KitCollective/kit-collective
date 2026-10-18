@@ -55,7 +55,8 @@ export function parseChoices(ask: string): InboxCardDto["choices"] {
   }));
 }
 
-function pullRequestOf(issue: WaitingIssue) {
+/** The last pull request among an issue's attachments, or null. */
+export function pullRequestOf(issue: Pick<WaitingIssue, "attachments">) {
   const found = issue.attachments.flatMap((attachment) => {
     const match = /\/pull\/(\d+)(?:[/?#]|$)/.exec(attachment.url);
     return match === null
@@ -86,6 +87,7 @@ export function buildCards(issues: WaitingIssue[], context: InboxContext): Inbox
       url: issue.url,
       pullRequest: pull === null ? null : { number: pull.number, url: pull.url },
       since: sinceOf(issue, config.state),
+      landing: null,
     };
     const label = config.questionLabels.find((name) => issue.labels.includes(name)) ?? null;
     if (label !== null) {

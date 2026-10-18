@@ -40,6 +40,7 @@ export default async function plugin(bb: BbPluginApi) {
     inbox_list: inbox.list,
     inbox_answer: inbox.answer,
     inbox_reject: inbox.reject,
+    inbox_approve: inbox.approve,
   });
 
   bb.cli.register(

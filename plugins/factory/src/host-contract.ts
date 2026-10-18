@@ -10,6 +10,12 @@ export const PROBE_SCRIPT = "plugins/factory/scripts/host-probe.mjs";
 /** The one gate script the gate tool runs, relative to a worktree's root. Fixed here, never sent by a caller. */
 export const GATE_SCRIPT = "scripts/gate.mjs";
 
+/** The one landing script the Inbox runs after an approval, relative to the checkout. Fixed here, never sent by a caller. */
+export const LAND_SCRIPT = "scripts/land-approved.mjs";
+
+/** The landing script's subcommands: enqueue the approved PR, then wait for the merge and the land gate. */
+export const LAND_STEPS = ["start", "finish"] as const;
+
 /** The gates the tool will run: the flow gates of `gate.mjs`. Its `result` subcommand reads a file and is not a gate. */
 export const GATE_NAMES = ["pre-review", "review", "land"] as const;
 export type GateName = (typeof GATE_NAMES)[number];
@@ -63,6 +69,20 @@ export const hostContract = defineRpcContract({
       })
       .strict(),
     output: scriptResult.extend({ sha: z.string() }),
+  },
+  /** One slice of `land-approved.mjs` in a checkout on the runs machine; its verdict line says what happened. */
+  run_land: {
+    input: z
+      .object({
+        cwd: z.string().min(1),
+        step: z.enum(LAND_STEPS),
+        pr: gatePr,
+        issue: gateIssue,
+        /** Below the client's own timeout, so a slow slice comes back as its waiting verdict, not a thrown call. */
+        timeoutMs: z.number().int().positive().max(GATE_TIMEOUT_MAX_MS).optional(),
+      })
+      .strict(),
+    output: scriptResult,
   },
   /** The head commit of a pull request right now, read with a fixed `gh pr view`. */
   pr_head: {

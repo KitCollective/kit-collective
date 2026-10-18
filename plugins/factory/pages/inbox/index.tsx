@@ -13,15 +13,33 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../../src/contract";
-import type { InboxCardDto, InboxDto } from "../../src/inbox/contract";
+import type { InboxCardDto, InboxDto, LandingDto } from "../../src/inbox/contract";
 
 const PATH = "inbox";
 
 function kindLabel(card: InboxCardDto): string {
-  return card.kind === "question" ? (card.label ?? "question") : "green review";
+  if (card.kind === "question") return card.label ?? "question";
+  return card.landing === null ? "green review" : "approved";
+}
+
+const PHASE_TEXT: Record<LandingDto["phase"], string> = {
+  approved: "Approved, not in the merge queue yet",
+  queued: "In the merge queue",
+  merged: "Merged, waiting for the land gate",
+  done: "Done",
+  stopped: "Landing stopped",
+};
+
+/** The landing as one line: the phase, and the script's reason when it stopped. */
+function landingText(landing: LandingDto): string {
+  const reason = landing.line?.replace(/^[A-Z]+ \(land-approved\): /, "") ?? "";
+  return landing.phase === "stopped" && reason !== ""
+    ? `${PHASE_TEXT.stopped}: ${reason}`
+    : PHASE_TEXT[landing.phase];
 }
 
 function preview(card: InboxCardDto): string {
+  if (card.landing !== null) return landingText(card.landing);
   if (card.kind === "question") return card.waiting?.ask ?? "The workpad holds no question.";
   return card.review?.verdict ?? "No review verdict recorded.";
 }
@@ -49,7 +67,11 @@ function Row({ card, open, onOpen }: { card: InboxCardDto; open: boolean; onOpen
           <span
             className={cn(
               "size-2 shrink-0 rounded-full",
-              card.kind === "question" ? "bg-amber-500" : "bg-emerald-500",
+              card.kind === "question" || card.landing?.phase === "stopped"
+                ? "bg-amber-500"
+                : card.landing === null
+                  ? "bg-emerald-500"
+                  : "bg-sky-500",
             )}
             aria-hidden
           />
@@ -144,6 +166,59 @@ function Reply({ card, onSent }: { card: InboxCardDto; onSent: () => void }) {
   );
 }
 
+/**
+ * Approve on a green review: the approver's comment and the move to the merge-permission state, then
+ * Optio lands it on the runs machine and the card shows how far it got. A failure shows next to the button.
+ */
+function Approve({ card }: { card: InboxCardDto }) {
+  const rpc = useRpc<typeof rpcContract>();
+  const [sending, setSending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const approve = () => {
+    setSending(true);
+    setFailure(null);
+    rpc.call("inbox_approve", { identifier: card.identifier }).then(
+      (result) => {
+        setSending(false);
+        if (result.error !== null) setFailure(result.error);
+      },
+      (cause: unknown) => {
+        setSending(false);
+        setFailure(cause instanceof Error ? cause.message : String(cause));
+      },
+    );
+  };
+  return (
+    <div className="flex items-center gap-3">
+      <Button disabled={sending} onClick={approve}>
+        {sending ? "Approving…" : "Approve"}
+      </Button>
+      {failure === null ? null : (
+        <p role="alert" className="text-sm text-destructive">
+          {failure}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Landing({ landing }: { landing: LandingDto }) {
+  return (
+    <section
+      role="status"
+      className="flex flex-col gap-1 rounded-lg border border-border px-4 py-3 text-sm"
+    >
+      <h3 className="text-xs text-muted-foreground">Landing</h3>
+      <p className={cn(landing.phase === "stopped" && "text-destructive")}>
+        {landingText(landing)}
+      </p>
+      {landing.line === null ? null : (
+        <p className="text-xs text-muted-foreground">{landing.line}</p>
+      )}
+    </section>
+  );
+}
+
 function Detail({
   card,
   onBack,
@@ -210,7 +285,12 @@ function Detail({
           </p>
         </section>
       )}
-      <Reply key={card.identifier} card={card} onSent={onSent} />
+      {card.landing === null ? null : <Landing landing={card.landing} />}
+      {!question && card.landing === null ? <Approve key={card.identifier} card={card} /> : null}
+      {/* An approved review has left the Inbox state: there is nothing to reject any more. */}
+      {!question && card.landing !== null ? null : (
+        <Reply key={card.identifier} card={card} onSent={onSent} />
+      )}
     </article>
   );
 }
