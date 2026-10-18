@@ -17,6 +17,9 @@ import {
   Get,
   Headers,
   HttpCode,
+  HttpException,
+  HttpStatus,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -49,8 +52,38 @@ function resolveLocale(headerValue: string | undefined): LabelLocale {
   return "da";
 }
 
+const SUGGEST_FAILURE_DETAIL_MAX = 200;
+
+/** The paywall code of a refusal from BillingService, or null for any other error. */
+function paywallCode(error: unknown): string | null {
+  if (!(error instanceof HttpException) || error.getStatus() !== HttpStatus.PAYMENT_REQUIRED) {
+    return null;
+  }
+  const response = error.getResponse();
+  if (typeof response === "object" && response !== null && "code" in response) {
+    return typeof response.code === "string" ? response.code : null;
+  }
+  return null;
+}
+
+/** A short, byte-free name for why a suggest failed: never the body, photos or token. */
+function describeSuggestFailure(error: unknown): string {
+  if (error instanceof Error && error.name === "ZodError") {
+    return "invalid request";
+  }
+  if (error instanceof HttpException) {
+    return `${error.getStatus()} ${error.name}`;
+  }
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`.slice(0, SUGGEST_FAILURE_DETAIL_MAX);
+  }
+  return "unknown error";
+}
+
 @Controller()
 export class VisionController {
+  private readonly logger = new Logger(VisionController.name);
+
   constructor(
     private readonly visionService: VisionService,
     private readonly visionQueueService: VisionQueueService,
@@ -66,20 +99,40 @@ export class VisionController {
     @CurrentUser() user: JwtPayload,
     @Body() rawBody: unknown,
   ): Promise<VisionSuggestResponse> {
-    const body = visionSuggestRequestSchema.parse(rawBody);
-    await this.billingService.assertIdentityVisionAllowed(user.sub, body.draftId);
-    const identityPhotos = identityPhotosFromSuggestRequest(body.photos);
-    const jobId = await this.visionService.createJob(user.sub, { draftId: body.draftId });
+    // One line per outcome (KIT-421), so a run log tells a refusal or an error from a
+    // read that never arrived. Only ids, the photo count and an error name.
+    let draft = "unknown";
+    try {
+      const body = visionSuggestRequestSchema.parse(rawBody);
+      draft = body.draftId ?? "none";
+      this.logger.log(
+        `identity suggest received, draft ${draft}, user ${user.sub}, ${body.photos.length} photo(s)`,
+      );
+      await this.billingService.assertIdentityVisionAllowed(user.sub, body.draftId);
+      const identityPhotos = identityPhotosFromSuggestRequest(body.photos);
+      const jobId = await this.visionService.createJob(user.sub, { draftId: body.draftId });
 
-    this.visionQueueService.enqueue({
-      jobId,
-      userId: user.sub,
-      kind: "identity",
-      draftId: body.draftId,
-      identityPhotos,
-    });
+      this.visionQueueService.enqueue({
+        jobId,
+        userId: user.sub,
+        kind: "identity",
+        draftId: body.draftId,
+        identityPhotos,
+      });
 
-    return visionSuggestResponseSchema.parse({ jobId });
+      this.logger.log(`identity suggest job ${jobId} started, draft ${draft}`);
+      return visionSuggestResponseSchema.parse({ jobId });
+    } catch (error) {
+      const refusal = paywallCode(error);
+      if (refusal) {
+        this.logger.warn(`identity suggest refused ${refusal}, draft ${draft}, user ${user.sub}`);
+      } else {
+        this.logger.warn(
+          `identity suggest failed, draft ${draft}: ${describeSuggestFailure(error)}`,
+        );
+      }
+      throw error;
+    }
   }
 
   @Post("collection/vision/suggest/unsigned")
