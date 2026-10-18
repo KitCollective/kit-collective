@@ -1,7 +1,7 @@
-import type { CollectionConversationDetail } from "@kit/api-contract";
+import type { CollectionConversationDetail, CollectionConversationPeer } from "@kit/api-contract";
 import * as ImagePicker from "expo-image-picker";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -13,19 +13,31 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 import { respondBid } from "@/api/bidding";
 import { resolvePhotoUrl } from "@/api/collection";
 import {
+  blockConversation,
   fetchConversation,
+  fetchConversationPeer,
+  hideConversation,
+  reportConversation,
   resolveConversationPhotoUrl,
   sendConversationMessage,
 } from "@/api/conversations";
 import { useAuth } from "@/auth/AuthProvider";
 import { BidCard } from "@/components/bid-card";
+import { Banner } from "@/components/catalog-ui";
 import { ChatBubble } from "@/components/chat-bubble";
 import { MessageComposer } from "@/components/message-composer";
 import { IconButton } from "@/components/ui";
-import { headerInitial, threadItems } from "@/inbox/thread-view-model";
+import { ConversationConfirmSheet, ConversationMoreSheet } from "@/inbox/conversation-more-sheets";
+import {
+  CONVERSATION_MORE_FAILURE,
+  conversationMore,
+  headerInitial,
+  threadItems,
+} from "@/inbox/thread-view-model";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -33,9 +45,15 @@ import { useTheme } from "@/theme/use-theme";
 type ConversationViewProps = {
   conversationId: string;
   onBack: () => void;
+  /** Deprecated and ignored: More is a Sheet over the thread now, it no longer routes. The wide Indbakke (KIT-296) still passes it. */
   onOpenDetails?: () => void;
   onConversationOpened?: () => void;
+  /** After Blokér or Slet samtale ran; the Collector goes back to Indbakke. Defaults to `onBack`. */
+  onConversationHidden?: () => void;
 };
+
+type MoreAction = "profile" | "report" | "block" | "delete";
+type ConfirmKind = "block" | "delete";
 
 /** Conversation header: a 32px round initial. Not the Avatar primitive, which has no 32 size (lock contradiction, flagged in KIT-297). */
 const HEADER_INITIAL_SIZE = 32;
@@ -45,8 +63,8 @@ const SYSTEM_LINE_MAX_WIDTH = 300;
 export function ConversationView({
   conversationId,
   onBack,
-  onOpenDetails,
   onConversationOpened,
+  onConversationHidden,
 }: ConversationViewProps) {
   const { accessToken } = useAuth();
   const theme = useTheme();
@@ -61,6 +79,14 @@ export function ConversationView({
   const [replyTo, setReplyTo] = useState<{ id: string; text: string } | null>(null);
   const [respondingBidId, setRespondingBidId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [peer, setPeer] = useState<CollectionConversationPeer | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  // Kept while the confirm Sheet animates out, so its copy does not change under the collector.
+  const [confirmKind, setConfirmKind] = useState<ConfirmKind>("delete");
+  const [confirming, setConfirming] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+  const pendingMoreAction = useRef<MoreAction | null>(null);
 
   const imageHeaders = useMemo(
     () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined),
@@ -93,6 +119,102 @@ export function ConversationView({
   );
 
   const items = useMemo(() => (detail ? threadItems(detail) : []), [detail]);
+  const more = useMemo(() => (peer ? conversationMore(peer) : null), [peer]);
+
+  // The peer is fetched once; a failure here only matters when More is tapped.
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+    let cancelled = false;
+    fetchConversationPeer(accessToken, conversationId)
+      .then((response) => {
+        if (!cancelled) {
+          setPeer(response);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, conversationId]);
+
+  const handleOpenMore = async () => {
+    setMoreError(null);
+    if (peer) {
+      setMoreOpen(true);
+      return;
+    }
+    if (!accessToken) {
+      return;
+    }
+    try {
+      setPeer(await fetchConversationPeer(accessToken, conversationId));
+      setMoreOpen(true);
+    } catch {
+      setMoreError(CONVERSATION_MORE_FAILURE);
+    }
+  };
+
+  const hideThread = onConversationHidden ?? onBack;
+
+  const runConfirmed = async () => {
+    if (!accessToken) {
+      return;
+    }
+    setConfirming(true);
+    try {
+      if (confirmKind === "block") {
+        await blockConversation(accessToken, conversationId);
+      } else {
+        await hideConversation(accessToken, conversationId);
+      }
+      setConfirmOpen(false);
+      hideThread();
+    } catch {
+      setConfirmOpen(false);
+      setMoreError(CONVERSATION_MORE_FAILURE);
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const runReport = async () => {
+    if (!accessToken || !more) {
+      return;
+    }
+    try {
+      await reportConversation(accessToken, conversationId);
+      // Only an `error` Toast config exists, so this renders the library's default chrome (design gap).
+      Toast.show({ type: "success", position: "bottom", text1: more.reportedToast });
+    } catch {
+      setMoreError(CONVERSATION_MORE_FAILURE);
+    }
+  };
+
+  // The More Sheet closes first; on iOS the next surface (profile push, confirm Sheet, Toast)
+  // waits for Modal.onDismiss so Sheets never nest or layer over a closing Modal.
+  const runPendingMoreAction = () => {
+    const next = pendingMoreAction.current;
+    pendingMoreAction.current = null;
+    if (next === "profile" && more) {
+      // SAFETY: the view-model builds only routes that exist under app/(tabs).
+      router.push(more.profile.href as Href);
+    } else if (next === "report") {
+      void runReport();
+    } else if (next === "block" || next === "delete") {
+      setConfirmKind(next);
+      setConfirmOpen(true);
+    }
+  };
+
+  const chooseMoreAction = (action: MoreAction) => {
+    setMoreOpen(false);
+    pendingMoreAction.current = action;
+    if (Platform.OS !== "ios") {
+      runPendingMoreAction();
+    }
+  };
 
   const handleAttach = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -215,7 +337,7 @@ export function ConversationView({
           testID="conversation-more"
           name="Mere"
           icon="ellipsis-horizontal"
-          onPress={onOpenDetails ?? onBack}
+          onPress={() => void handleOpenMore()}
         />
       </View>
 
@@ -223,6 +345,12 @@ export function ConversationView({
         <Text style={[typography.caption, styles.error, { color: theme.contentSecondary }]}>
           {error}
         </Text>
+      ) : null}
+
+      {moreError ? (
+        <View testID="conversation-more-error" style={styles.moreError}>
+          <Banner tone="danger" message={moreError} />
+        </View>
       ) : null}
 
       <FlatList
@@ -303,6 +431,31 @@ export function ConversationView({
         disabledSend={sending || (!draft.trim() && !pendingImageBase64)}
         pendingImage={Boolean(pendingImageBase64)}
       />
+
+      {more ? (
+        <>
+          <ConversationMoreSheet
+            visible={moreOpen}
+            more={more}
+            onDismiss={() => {
+              pendingMoreAction.current = null;
+              setMoreOpen(false);
+            }}
+            onModalHide={runPendingMoreAction}
+            onOpenProfile={() => chooseMoreAction("profile")}
+            onReport={() => chooseMoreAction("report")}
+            onBlock={() => chooseMoreAction("block")}
+            onDelete={() => chooseMoreAction("delete")}
+          />
+          <ConversationConfirmSheet
+            visible={confirmOpen}
+            copy={more.confirm[confirmKind]}
+            loading={confirming}
+            onConfirm={() => void runConfirmed()}
+            onDismiss={() => setConfirmOpen(false)}
+          />
+        </>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -358,5 +511,9 @@ const styles = StyleSheet.create({
   },
   error: {
     paddingHorizontal: space.insetMd,
+  },
+  moreError: {
+    paddingHorizontal: space.insetMd,
+    paddingTop: space.insetSm,
   },
 });

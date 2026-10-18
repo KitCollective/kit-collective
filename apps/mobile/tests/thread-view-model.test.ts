@@ -1,10 +1,12 @@
 import type {
   CollectionConversationDetail,
   CollectionConversationMessage,
+  CollectionConversationPeer,
 } from "@kit/api-contract";
 import { describe, expect, it } from "vitest";
 import {
   bidCardState,
+  conversationMore,
   headerInitial,
   type ThreadItem,
   threadItems,
@@ -277,5 +279,78 @@ describe("threadItems (Conversation, Revision 2026-10-10)", () => {
 describe("headerInitial (Conversation header)", () => {
   it("is the first letter of the Handle, upper case", () => {
     expect(headerInitial("mikkel_fck")).toBe("M");
+  });
+});
+
+describe("conversationMore (Conversation → More Sheet)", () => {
+  const peer: CollectionConversationPeer = {
+    peerId: "66666666-6666-4666-8666-666666666666",
+    handle: PEER,
+    jerseyCount: 3,
+    city: "København",
+  };
+
+  it("builds the profile row: initial, Handle, city · n trøjer · Se profil, Peer Profil href", () => {
+    expect(conversationMore(peer).profile).toEqual({
+      initial: "M",
+      handle: PEER,
+      meta: "København · 3 trøjer · Se profil",
+      href: `/(tabs)/search/peer/${PEER}`,
+    });
+  });
+
+  it("omits the city when absent and says 1 trøje in the singular", () => {
+    const { city: _city, ...withoutCity } = peer;
+
+    expect(conversationMore({ ...withoutCity, jerseyCount: 1 }).profile.meta).toBe(
+      "1 trøje · Se profil",
+    );
+    expect(conversationMore({ ...peer, jerseyCount: 0 }).profile.meta).toBe(
+      "København · 0 trøjer · Se profil",
+    );
+  });
+
+  it("names Rapportér, Blokér <handle> and Slet samtale", () => {
+    const { rows } = conversationMore(peer);
+
+    expect(rows.report.title).toBe("Rapportér");
+    expect(rows.block.title).toBe(`Blokér ${PEER}`);
+    expect(rows.delete.title).toBe("Slet samtale");
+  });
+
+  it("says in words that Slet samtale deletes, so colour is not the only signal", () => {
+    expect(conversationMore(peer).rows.delete.accessibilityLabel).toBe(
+      "Slet samtale, fjerner samtalen kun for dig",
+    );
+  });
+
+  it("explains blocking and deleting in the caption", () => {
+    expect(conversationMore(peer).caption).toBe(
+      "Blokering skjuler samtalen for jer begge. Slet samtale fjerner den kun for dig — den anden kan stadig se tråden.",
+    );
+  });
+
+  it("asks before Blokér and before Slet samtale, each with a consequence and a way out", () => {
+    const { confirm } = conversationMore(peer);
+
+    expect(confirm.block).toEqual({
+      title: `Blokér ${PEER}?`,
+      consequence: `Samtalen med ${PEER} skjules for jer begge.`,
+      confirmLabel: "Blokér",
+      keepLabel: "Annuller",
+    });
+    expect(confirm.delete).toEqual({
+      title: "Slet samtalen?",
+      consequence: `Samtalen fjernes kun for dig. ${PEER} kan stadig se tråden.`,
+      confirmLabel: "Slet samtale",
+      keepLabel: "Annuller",
+    });
+  });
+
+  it("words the Rapportér Toast and the failure Banner", () => {
+    const more = conversationMore(peer);
+
+    expect(more.reportedToast).toBe("Samtalen er rapporteret");
+    expect(more.failureBanner).toBe("Noget gik galt. Prøv igen.");
   });
 });
