@@ -35,6 +35,7 @@ import {
   sessionInstructions,
   taskWithPayload,
 } from "./sessions.js";
+import { SETTINGS_MIGRATIONS } from "./settings/store.js";
 import { createRunStore, MIGRATIONS } from "./store.js";
 
 const httpTriggerBody = z
@@ -109,6 +110,7 @@ export function createCore(bb: BbPluginApi) {
     ...LOOP_MIGRATIONS,
     ...GATE_MIGRATIONS,
     ...RUN_MIGRATIONS,
+    ...SETTINGS_MIGRATIONS,
   ]);
   const runs = createRunStore(db);
   const dispatches = createDispatchStore(db);
