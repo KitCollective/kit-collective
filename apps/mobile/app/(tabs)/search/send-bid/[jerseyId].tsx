@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -27,13 +27,17 @@ import {
   sitsDirectlyAboveForeignJerseyOf,
 } from "@/search/foreign-jersey-route";
 import { sendBidDockBottomPadding } from "@/search/send-bid-layout";
+import { sendBidExit } from "@/search/send-bid-return";
 import { buildSendBidSummary } from "@/search/send-bid-summary";
 import { useBrandFontsEnabled, useTypography } from "@/theme/brand-fonts";
 import { fontFamily, radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 export default function SendBidScreen() {
-  const { jerseyId } = useLocalSearchParams<{ jerseyId: string }>();
+  const { jerseyId, returnTo } = useLocalSearchParams<{
+    jerseyId: string;
+    returnTo?: string | string[];
+  }>();
   const router = useRouter();
   const { accessToken } = useAuth();
   const theme = useTheme();
@@ -143,11 +147,19 @@ export default function SendBidScreen() {
     setError(null);
     try {
       await sendBid(accessToken, jerseyId, { amountDkk: parsedAmount });
-      // The detail under this screen shows the Toast once, when it regains focus.
-      if (peerJersey && landsOnJerseyDetail) {
-        rememberBidSent(jerseyId, peerJersey.ownerHandle);
+      const exit = sendBidExit(returnTo);
+      if (exit.kind === "back") {
+        // The detail under this screen shows the Toast once, when it regains focus.
+        if (peerJersey && landsOnJerseyDetail) {
+          rememberBidSent(jerseyId, peerJersey.ownerHandle);
+        }
+        router.back();
+      } else {
+        // Send nyt bud: pop Send bud off the Søg stack, then show the thread it was tapped in. The
+        // thread has no detail waiting for the Toast, so nothing is remembered.
+        router.back();
+        router.navigate(exit.href as Href);
       }
-      router.back();
     } catch (caught) {
       if (caught instanceof BiddingFetchError) {
         setError("Buddet kunne ikke sendes. Tjek at trøjen stadig er åben for bud.");
