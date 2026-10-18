@@ -393,6 +393,18 @@ export function sliceFlowPath(issue) {
 }
 
 /**
+ * Whether a gate waits for the `Device flows` status of a head. Only the full review gate does, and
+ * only for a head that holds the issue's slice flow: the pre-review gate waits for the ordinary
+ * checks alone, so the hosted run goes on while the Reviewer reviews (ADR-0059, amendment of
+ * 2026-10-18). A red flow then closes the review gate and is the Engineer's next round.
+ * @param {string} gate `pre-review` or `review`
+ * @param {boolean} hasSliceFlow
+ */
+export function waitsForDeviceFlows(gate, hasSliceFlow) {
+  return gate === "review" && hasSliceFlow === true;
+}
+
+/**
  * What the `Device flows` statuses of a head say, newest first. `error` is not a verdict (the run
  * stopped before the flow finished), so it is asked for again once; a head with a second `error`
  * (`no-verdict`) has had its re-request and still has no verdict (ADR-0059 "Not settled"): only a
@@ -477,7 +489,7 @@ export function deviceFlowsErrorWaiting(head) {
 
 /**
  * Waits for the re-requested run to leave a first `error`. `wait-for-checks` treats a status `error` as
- * red and returns at once, so without this a pre-review gate slice ends in seconds on a run that has
+ * red and returns at once, so without this a review gate slice ends in seconds on a run that has
  * only been asked for, and the next slice asks again, which cancels the run queued one slice earlier
  * (`cancel-in-progress` in device-flows.yml): the five slices burn in minutes. The status turns
  * `pending` when the hosted job starts, so the slice holds here, inside its own budget, until it does.
@@ -508,7 +520,7 @@ export async function settleDeviceFlowsError({
 }
 
 /**
- * Folds the Device flows statuses of the head into the `checks` step of a pre-review gate that
+ * Folds the Device flows statuses of the head into the `checks` step of a review gate that
  * waited for them (ADR-0059). `wait-for-checks` buckets a commit status `error` as red, which
  * would close the gate and spend a fix round on a run no Engineer can fix, and a status that is
  * still pending when the budget runs out looks like any other pending check. So, only when
