@@ -149,7 +149,7 @@ describe("write scope", () => {
         ["apps/mobile/tests/**"],
       ),
     ).toBe(false);
-    // Optio's three registration files take one line per area: two areas' slices run side by side.
+    // Optio's three registration files take only registration lines per area: two areas' slices run side by side.
     expect(
       scopesOverlap(
         [

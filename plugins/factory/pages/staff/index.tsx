@@ -1062,7 +1062,9 @@ export function Agents({
   const path = subPath.replace(/^\/+|\/+$/g, "");
   if (path === "") return <AgentList />;
   if (path === "new") return <NewAgent />;
-  const View = views[path];
-  if (View !== undefined) return <View />;
+  if (Object.hasOwn(views, path)) {
+    const View = views[path];
+    if (View !== undefined) return <View />;
+  }
   return <AgentDetail id={path} />;
 }

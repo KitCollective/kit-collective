@@ -54,8 +54,9 @@ export function isTestGlob(glob: string): boolean {
 }
 
 /**
- * Optio's three registration files: each area adds one line to them and nothing else, so no slice
- * holds a write scope on them. Two slices editing one line apart meet as a merge conflict instead.
+ * Optio's three registration files: each area adds a few registration lines to them and nothing
+ * else, so no slice holds a write scope on them. Two slices editing lines apart meet as a merge
+ * conflict instead.
  */
 const REGISTRATION_FILES = [
   "plugins/factory/app.tsx",

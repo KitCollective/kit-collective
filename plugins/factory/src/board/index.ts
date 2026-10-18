@@ -8,8 +8,15 @@ import type { Core } from "../core.js";
 import { probeThread, renderProbe } from "../host-probe.js";
 import { fetchBoard } from "../linear-api.js";
 import type { SchedulerConfig } from "../scheduler-config.js";
-import { cliFailure, json } from "../shared/cli.js";
+import { json } from "../shared/cli.js";
 import type { BoardDto, boardContract } from "./contract.js";
+
+/** Turns a rejected promise into a CLI failure with the error's own text. */
+const cliFailure =
+  (code: string) =>
+  (error: unknown): never => {
+    throw new PluginCliError(error instanceof Error ? error.message : String(error), { code });
+  };
 
 function describePlan(
   plan: Plan,

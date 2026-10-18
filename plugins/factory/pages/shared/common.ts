@@ -1,4 +1,4 @@
-// Constants and helpers every page uses.
+// Constants and helpers several pages use.
 
 /** The nav panel path of the Agents page; its Board and Runs views are sub-paths of it. */
 export const PANEL = "agents";
