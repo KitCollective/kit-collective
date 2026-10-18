@@ -46,11 +46,30 @@ describe("inbox conversation chrome (KIT-118)", () => {
     expect(composerSource).toMatch(/onBlur=\{\(\) => setFocused\(false\)\}/);
   });
 
-  it("loads activity projection on the Aktivitet tab (KIT-120)", () => {
+  it("is one list from one request, with no Beskeder | Aktivitet tabs (KIT-296)", () => {
     const inboxSource = readFileSync(inboxIndexPath, "utf8");
 
-    expect(inboxSource).toMatch(/fetchActivity/);
-    expect(inboxSource).toMatch(/ActivityCard/);
-    expect(inboxSource).toMatch(/activityItems/);
+    expect(inboxSource).toMatch(/fetchConversations/);
+    expect(inboxSource).not.toMatch(/fetchActivity/);
+    expect(inboxSource).not.toMatch(/ActivityCard/);
+    expect(inboxSource).not.toMatch(/TopTabs|InboxInnerPager|INBOX_TABS|setInboxTab/);
+    expect(inboxSource).not.toMatch(/inboxInnerConsumesSwipe/);
+    expect(inboxSource).toMatch(/buildInbox/);
+  });
+
+  it("passes the Bud's message id when a waiting row opens its thread (KIT-296)", () => {
+    const inboxSource = readFileSync(inboxIndexPath, "utf8");
+
+    expect(inboxSource).toMatch(/messageId=\$\{messageId\}/);
+  });
+
+  it("offers Find trøjer to Søg and Åbn for bud to Samling in the empty Indbakke (KIT-296)", () => {
+    const inboxSource = readFileSync(inboxIndexPath, "utf8");
+
+    expect(inboxSource).toMatch(/title="Ingen samtaler endnu"/);
+    expect(inboxSource).toMatch(/label="Find trøjer"[\s\S]*?variant="primary"/);
+    expect(inboxSource).toMatch(/router\.navigate\(PLACE_HREFS\.search\)/);
+    expect(inboxSource).toMatch(/label="Åbn for bud"[\s\S]*?variant="secondary"/);
+    expect(inboxSource).toMatch(/router\.navigate\(PLACE_HREFS\.collection\)/);
   });
 });

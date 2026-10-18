@@ -866,7 +866,12 @@ describe("Collection /v1", () => {
     expect(inboxBody.unreadCount).toBe(1);
     expect(inboxBody.conversations.length).toBe(1);
     expect(inboxBody.conversations[0]?.unread).toBe(true);
-    expect(inboxBody.conversations[0]?.snippet).toContain("350");
+    expect(inboxBody.conversations[0]?.latest).toEqual({
+      kind: "bid",
+      amountDkk: 350,
+      status: "pending",
+      role: "incoming",
+    });
   });
 
   it("shows the latest Bud amount of each UserJersey when one Conversation holds Buds on several", async () => {

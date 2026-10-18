@@ -1,0 +1,140 @@
+# KIT-296: Indbakke as one list (ADR-0049).
+#
+# design-sections: Inbox, Thread row, Empty state, Button, Tab bar
+#
+# FIXTURE THIS FLOW READS (apps/api/src/e2e/test-data.fixture.ts): the Test Collector holds three
+# incoming pending Buds, all unanswered: 250 kr on FC København (message ...0502) and 300 kr on
+# Brøndby IF (...0503), both from e2e_peer in Conversation ...0501, and 350 kr on Brøndby IF from
+# freja_e2e (...0505) in Conversation ...0504. So Venter på dit svar has three rows, Samtaler has
+# two (e2e_peer, freja_e2e), and both Conversations are unread (the last event is the peer's and
+# nothing is read yet). e2e_peer's newest Bud is the 250 kr one.
+#
+# Two Collectors sign in, in this order; sign-in.yaml resets the test data before each:
+# 1. The Test Collector: the list, the unread rows, and a waiting row that opens its thread.
+# 2. e2e_peer, the bidder: no Venter på dit svar, the Bud as the viewer's own sentence, and then
+#    the empty Indbakke. e2e_peer has one Conversation, so the flow empties Indbakke by hiding it
+#    (Slet samtale in the thread's Detaljer), which also shows that a hidden Conversation is not
+#    listed (criterion 8).
+#
+# Not on a screen here, proved by tests instead: that the response returns waiting and
+# conversations in one request, that blocked Collectors and hidden Conversations are left out,
+# that the tab badge counts unread Conversations (apps/api/tests/conversations.test.ts); every
+# row's text, unread state and accessible name (apps/mobile/src/inbox/inbox-view-model.test.ts).
+# Not reachable on a phone simulator: the wide layout with the list beside the open thread
+# (criterion 11, width >= 1024). The thread opens at the newest message, not scrolled to the
+# Bud: that belongs to the Conversation issues (KIT-297 to KIT-299).
+#
+# Taps are by testID (inbox-row-<message id or conversation id>, inbox-empty-*), except the
+# native tab bar (by label), the thread's Detaljer rows and the system alert (by copy).
+appId: app.kitcollective.mobile
+name: kit-296
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-296
+- tapOn: Indbakke
+- extendedWaitUntil:
+    visible:
+      id: inbox-section-waiting
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+# AC 1: the title and one list, no Beskeder | Aktivitet tabs.
+# AC 2: Venter på dit svar is there because Buds wait, with the count (3) in mono beside it.
+# AC 3: each waiting row is a bid row: 48 x 60 thumb, Handle, club season · type, Bud på n kr, time.
+# AC 4: Samtaler has one row per Collector (two), each with a 48px Avatar or initial.
+# AC 7: the Indbakke tab carries the badge for the two unread Conversations.
+# AC 12: a waiting row's accessible name is Handle, jersey line, snippet and time, and carries
+# no "ulæst" (a Bud waiting is an action, not an unread message).
+- assertVisible:
+    id: inbox-section-waiting-count
+    text: "3"
+- assertVisible: "e2e_peer, .* · .*, Bud på 250 kr, [^,]*"
+- assertVisible: "freja_e2e, .* · .*, Bud på 350 kr, [^,]*"
+- takeScreenshot: kc__kit-296__01-one-list-with-waiting-bids-and-samtaler
+# AC 5: a Bud as the latest event reads as a sentence with amount and status.
+# AC 6: an unread row has the 8px dot and snippet weight 500, with no row fill.
+# AC 12: its accessible name is Handle, snippet, time and "ulæst".
+- scrollUntilVisible:
+    element:
+      id: inbox-row-e2e00000-0000-4000-8000-000000000504
+- assertVisible: "freja_e2e, Bud på 350 kr · Afventer dit svar, [^,]*, ulæst"
+- assertVisible: "e2e_peer, Bud på 250 kr · Afventer dit svar, [^,]*, ulæst"
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-296__02-samtaler-rows-with-bud-sentence-and-unread-dot
+# AC 3: a waiting row opens the thread with that collector.
+- tapOn:
+    id: inbox-row-e2e00000-0000-4000-8000-000000000505
+- extendedWaitUntil:
+    visible:
+      id: bid-card
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-296__03-waiting-row-opens-the-thread
+# ---- e2e_peer, the bidder (the data is reset again) ----
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_PEER_EMAIL}
+- tapOn: Indbakke
+- extendedWaitUntil:
+    visible:
+      id: inbox-row-e2e00000-0000-4000-8000-000000000501
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+# AC 2: nothing waits on e2e_peer, so there is no Venter på dit svar.
+# AC 5: their own pending Bud reads from their side, with the status.
+- assertNotVisible:
+    id: inbox-section-waiting
+- assertVisible: "e2e_collector, Dit bud på 250 kr · Afventer svar, [^,]*"
+- takeScreenshot: kc__kit-296__04-no-waiting-section-and-own-bud-sentence
+# ---- Hide the one Conversation, so Indbakke is empty ----
+- tapOn:
+    id: inbox-row-e2e00000-0000-4000-8000-000000000501
+- extendedWaitUntil:
+    visible:
+      id: conversation-more
+    timeout: 15000
+- tapOn:
+    id: conversation-more
+- extendedWaitUntil:
+    visible: Slet samtale
+    timeout: 15000
+- tapOn: Slet samtale
+- extendedWaitUntil:
+    visible: OK
+    timeout: 15000
+- tapOn: OK
+# AC 8: the hidden Conversation is not listed; with none left Indbakke is empty.
+# AC 9: Ingen samtaler endnu, one line of explanation, primary Find trøjer and secondary Åbn for bud.
+- extendedWaitUntil:
+    visible:
+      id: inbox-empty-find
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-296__05-empty-indbakke
+# AC 9: Find trøjer opens Søg.
+- tapOn:
+    id: inbox-empty-find
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 15000
+# AC 9: Åbn for bud opens Samling.
+- tapOn: Indbakke
+- extendedWaitUntil:
+    visible:
+      id: inbox-empty-open-for-bid
+    timeout: 15000
+- tapOn:
+    id: inbox-empty-open-for-bid
+- extendedWaitUntil:
+    visible:
+      id: collection-add
+    timeout: 15000
+- stopRecording

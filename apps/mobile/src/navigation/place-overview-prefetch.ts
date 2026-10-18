@@ -1,4 +1,3 @@
-import { fetchActivity } from "@/api/activity";
 import { fetchDiscoverHome } from "@/api/bidding";
 import { fetchCollectionJerseys } from "@/api/collection";
 import { fetchConversations } from "@/api/conversations";
@@ -50,14 +49,7 @@ async function prefetchCollection(accessToken: string): Promise<void> {
 }
 
 async function prefetchInbox(accessToken: string): Promise<void> {
-  const [conversations, activity] = await Promise.all([
-    fetchConversations(accessToken),
-    fetchActivity(accessToken),
-  ]);
-  writePlaceOverview("inbox", {
-    conversations: conversations.conversations,
-    activityItems: activity.items,
-  });
+  writePlaceOverview("inbox", await fetchConversations(accessToken));
 }
 
 async function prefetchSearch(accessToken: string): Promise<void> {

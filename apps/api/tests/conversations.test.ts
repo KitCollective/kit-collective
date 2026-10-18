@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  collectionActivitySchema,
   collectionConversationDetailSchema,
   collectionConversationsSchema,
   collectionRespondBidResponseSchema,
@@ -22,6 +21,7 @@ import {
   resetDatabase,
   season,
   teamSeason,
+  user,
 } from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
@@ -145,11 +145,25 @@ async function saveJerseyForUser(
   return collectionSaveResponseSchema.parse(JSON.parse(response.body)).jersey;
 }
 
+async function getIndbakke(
+  app: NestFastifyApplication,
+  session: Awaited<ReturnType<typeof registerSession>>,
+) {
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/collection/conversations",
+    headers: { authorization: `Bearer ${session.accessToken}`, "accept-language": "da" },
+  });
+  expect(response.statusCode).toBe(200);
+  return collectionConversationsSchema.parse(JSON.parse(response.body));
+}
+
 async function createBidConversation(
   app: NestFastifyApplication,
   owner: Awaited<ReturnType<typeof registerSession>>,
   bidder: Awaited<ReturnType<typeof registerSession>>,
   jerseyId: string,
+  amountDkk = 350,
 ) {
   await app.inject({
     method: "PATCH",
@@ -162,7 +176,7 @@ async function createBidConversation(
     method: "POST",
     url: `/v1/collection/jerseys/${jerseyId}/bids`,
     headers: { authorization: `Bearer ${bidder.accessToken}` },
-    payload: { amountDkk: 350 },
+    payload: { amountDkk },
   });
   expect(bidResponse.statusCode).toBe(201);
   return collectionSendBidResponseSchema.parse(JSON.parse(bidResponse.body));
@@ -225,7 +239,7 @@ describe("Collection conversations /v1", () => {
 
     expect(response.statusCode).toBe(200);
     const body = collectionConversationsSchema.parse(JSON.parse(response.body));
-    expect(body).toEqual({ conversations: [], unreadCount: 0 });
+    expect(body).toEqual({ waiting: [], conversations: [], unreadCount: 0 });
   });
 
   it("rejects unauthenticated conversation detail with 401", async () => {
@@ -323,7 +337,10 @@ describe("Collection conversations /v1", () => {
       headers: { authorization: `Bearer ${owner.accessToken}` },
     });
     const textInboxBody = collectionConversationsSchema.parse(JSON.parse(textInboxResponse.body));
-    expect(textInboxBody.conversations[0]?.snippet).toBe("Tak for buddet");
+    expect(textInboxBody.conversations[0]?.latest).toEqual({
+      kind: "text",
+      text: "Tak for buddet",
+    });
 
     const imageResponse = await app.inject({
       method: "POST",
@@ -366,7 +383,7 @@ describe("Collection conversations /v1", () => {
       headers: { authorization: `Bearer ${owner.accessToken}` },
     });
     const inboxBody = collectionConversationsSchema.parse(JSON.parse(inboxResponse.body));
-    expect(inboxBody.conversations[0]?.snippet).toBe("Billede");
+    expect(inboxBody.conversations[0]?.latest).toEqual({ kind: "image" });
   });
 
   it("rejects message post from non-participant with 404", async () => {
@@ -386,36 +403,120 @@ describe("Collection conversations /v1", () => {
     expect(response.statusCode).toBe(404);
   });
 
-  it("lists bid events as activity projection without a separate table", async () => {
+  it("the Indbakke response separates waiting from conversations", async () => {
     const fixture = await insertClubSeasonFixture();
-    const owner = await registerSession(app, "owner-activity@example.com");
-    const bidder = await registerSession(app, "bidder-activity@example.com");
-    const jersey = await saveJerseyForUser(app, owner, fixture);
-    const { conversationId, messageId } = await createBidConversation(
-      app,
-      owner,
-      bidder,
-      jersey.id,
-    );
+    const owner = await registerSession(app, "owner-indbakke@example.com");
+    const bidder = await registerSession(app, "bidder-indbakke@example.com");
+    const homeJersey = await saveJerseyForUser(app, owner, fixture);
+    const awayJersey = await saveJerseyForUser(app, owner, fixture, { type: "away", size: "l" });
+    const homeBid = await createBidConversation(app, owner, bidder, homeJersey.id, 300);
+    const awayBid = await createBidConversation(app, owner, bidder, awayJersey.id, 450);
+    expect(awayBid.conversationId).toBe(homeBid.conversationId);
 
-    const response = await app.inject({
-      method: "GET",
-      url: "/v1/collection/activity",
-      headers: {
-        authorization: `Bearer ${owner.accessToken}`,
-        "accept-language": "da",
+    const ownerInbox = await getIndbakke(app, owner);
+
+    // One row per incoming pending Bud, newest first, each with its own jersey.
+    expect(ownerInbox.waiting).toEqual([
+      {
+        messageId: awayBid.messageId,
+        conversationId: homeBid.conversationId,
+        userJerseyId: awayJersey.id,
+        bidderHandle: bidder.user.handle,
+        amountDkk: 450,
+        createdAt: expect.any(String),
+        jersey: { clubLabel: "F.C. København", seasonLabel: "2023/24", type: "Ude" },
+        thumbUrl: expect.stringMatching(/^\/v1\/collection\/photos\/[0-9a-f-]{36}$/),
       },
-    });
+      {
+        messageId: homeBid.messageId,
+        conversationId: homeBid.conversationId,
+        userJerseyId: homeJersey.id,
+        bidderHandle: bidder.user.handle,
+        amountDkk: 300,
+        createdAt: expect.any(String),
+        jersey: { clubLabel: "F.C. København", seasonLabel: "2023/24", type: "Hjemme" },
+        thumbUrl: expect.stringMatching(/^\/v1\/collection\/photos\/[0-9a-f-]{36}$/),
+      },
+    ]);
 
-    expect(response.statusCode).toBe(200);
-    const body = collectionActivitySchema.parse(JSON.parse(response.body));
-    expect(body.items).toHaveLength(1);
-    expect(body.items[0]?.conversationId).toBe(conversationId);
-    expect(body.items[0]?.id).toBe(messageId);
-    expect(body.items[0]?.amountDkk).toBe(350);
-    expect(body.items[0]?.status).toBe("pending");
-    expect(body.items[0]?.fromHandle).toBe(bidder.user.handle);
-    expect(body.items[0]?.unread).toBe(true);
+    // Still one Conversation per Collector, whose latest event is the newest Bud.
+    expect(ownerInbox.conversations).toHaveLength(1);
+    expect(ownerInbox.conversations[0]).toMatchObject({
+      id: homeBid.conversationId,
+      peerHandle: bidder.user.handle,
+      peerAvatarUrl: null,
+      latest: { kind: "bid", amountDkk: 450, status: "pending", role: "incoming" },
+      unread: true,
+    });
+    // The count is of unread Conversation rows, not of Buds.
+    expect(ownerInbox.unreadCount).toBe(1);
+
+    // The bidder waits for an answer; nothing waits for the bidder.
+    const bidderInbox = await getIndbakke(app, bidder);
+    expect(bidderInbox.waiting).toEqual([]);
+    expect(bidderInbox.conversations).toHaveLength(1);
+    expect(bidderInbox.conversations[0]?.latest).toEqual({
+      kind: "bid",
+      amountDkk: 450,
+      status: "pending",
+      role: "outgoing",
+    });
+    expect(bidderInbox.conversations[0]?.unread).toBe(false);
+    expect(bidderInbox.unreadCount).toBe(0);
+  });
+
+  it("leaves waiting once a Bud is accepted or declined", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-answered@example.com");
+    const bidder = await registerSession(app, "bidder-answered@example.com");
+    const homeJersey = await saveJerseyForUser(app, owner, fixture);
+    const awayJersey = await saveJerseyForUser(app, owner, fixture, { type: "away", size: "l" });
+    const homeBid = await createBidConversation(app, owner, bidder, homeJersey.id);
+    const awayBid = await createBidConversation(app, owner, bidder, awayJersey.id);
+
+    const respond = (messageId: string, decision: "accept" | "decline") =>
+      app.inject({
+        method: "PATCH",
+        url: `/v1/collection/conversations/${homeBid.conversationId}/messages/${messageId}/bid`,
+        headers: { authorization: `Bearer ${owner.accessToken}` },
+        payload: { decision },
+      });
+
+    expect((await respond(homeBid.messageId, "decline")).statusCode).toBe(200);
+    expect((await getIndbakke(app, owner)).waiting.map((row) => row.messageId)).toEqual([
+      awayBid.messageId,
+    ]);
+
+    expect((await respond(awayBid.messageId, "accept")).statusCode).toBe(200);
+    const answered = await getIndbakke(app, owner);
+    expect(answered.waiting).toEqual([]);
+    expect(answered.conversations[0]?.latest).toEqual({
+      kind: "bid",
+      amountDkk: 350,
+      status: "accepted",
+      role: "incoming",
+    });
+  });
+
+  it("gives the peer Avatar URL only when the peer has a photo", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-avatar@example.com");
+    const bidder = await registerSession(app, "bidder-avatar@example.com");
+    const jersey = await saveJerseyForUser(app, owner, fixture);
+    await createBidConversation(app, owner, bidder, jersey.id);
+
+    expect((await getIndbakke(app, owner)).conversations[0]?.peerAvatarUrl).toBeNull();
+
+    const { db, pool } = createDb(DATABASE_URL);
+    await db
+      .update(user)
+      .set({ avatarObjectKey: `avatar/${bidder.user.id}.jpg` })
+      .where(eq(user.id, bidder.user.id));
+    await pool.end();
+
+    expect((await getIndbakke(app, owner)).conversations[0]?.peerAvatarUrl).toBe(
+      `/v1/identity/peers/${bidder.user.id}/avatar`,
+    );
   });
 
   it("lets the jersey owner accept a pending bid and blocks the sender", async () => {
@@ -459,35 +560,27 @@ describe("Collection conversations /v1", () => {
     const peerBody = collectionConversationDetailSchema.parse(JSON.parse(peerDetail.body));
     expect(peerBody.messages[0]?.bidStatus).toBe("accepted");
 
-    const activityResponse = await app.inject({
-      method: "GET",
-      url: "/v1/collection/activity",
-      headers: {
-        authorization: `Bearer ${owner.accessToken}`,
-        "accept-language": "da",
-      },
-    });
-    const activityBody = collectionActivitySchema.parse(JSON.parse(activityResponse.body));
-    expect(activityBody.items[0]?.status).toBe("accepted");
+    const ownerInbox = await getIndbakke(app, owner);
+    expect(ownerInbox.waiting).toEqual([]);
+    expect(ownerInbox.conversations[0]?.latest).toMatchObject({ kind: "bid", status: "accepted" });
   });
 
-  it("marks conversation read when opening from activity flow via detail", async () => {
+  it("marks the Conversation read when a waiting Bud opens its thread, and the Bud keeps waiting", async () => {
     const fixture = await insertClubSeasonFixture();
     const owner = await registerSession(app, "owner-actread@example.com");
     const bidder = await registerSession(app, "bidder-actread@example.com");
     const jersey = await saveJerseyForUser(app, owner, fixture);
-    const { conversationId } = await createBidConversation(app, owner, bidder, jersey.id);
+    const { conversationId, messageId } = await createBidConversation(
+      app,
+      owner,
+      bidder,
+      jersey.id,
+    );
 
-    const activityBefore = await app.inject({
-      method: "GET",
-      url: "/v1/collection/activity",
-      headers: {
-        authorization: `Bearer ${owner.accessToken}`,
-        "accept-language": "da",
-      },
-    });
-    const activityBeforeBody = collectionActivitySchema.parse(JSON.parse(activityBefore.body));
-    expect(activityBeforeBody.items[0]?.unread).toBe(true);
+    const before = await getIndbakke(app, owner);
+    expect(before.waiting.map((row) => row.messageId)).toEqual([messageId]);
+    expect(before.conversations[0]?.unread).toBe(true);
+    expect(before.unreadCount).toBe(1);
 
     await app.inject({
       method: "GET",
@@ -498,24 +591,11 @@ describe("Collection conversations /v1", () => {
       },
     });
 
-    const inboxAfter = await app.inject({
-      method: "GET",
-      url: "/v1/collection/conversations",
-      headers: { authorization: `Bearer ${owner.accessToken}` },
-    });
-    const inboxBody = collectionConversationsSchema.parse(JSON.parse(inboxAfter.body));
-    expect(inboxBody.unreadCount).toBe(0);
-
-    const activityAfter = await app.inject({
-      method: "GET",
-      url: "/v1/collection/activity",
-      headers: {
-        authorization: `Bearer ${owner.accessToken}`,
-        "accept-language": "da",
-      },
-    });
-    const activityAfterBody = collectionActivitySchema.parse(JSON.parse(activityAfter.body));
-    expect(activityAfterBody.items[0]?.unread).toBe(false);
+    const after = await getIndbakke(app, owner);
+    expect(after.unreadCount).toBe(0);
+    expect(after.conversations[0]?.unread).toBe(false);
+    // Reading does not answer the Bud.
+    expect(after.waiting.map((row) => row.messageId)).toEqual([messageId]);
   });
 
   it("lands a Bud on a second UserJersey of the same owner in the existing Conversation", async () => {
@@ -729,13 +809,9 @@ describe("Collection conversations /v1", () => {
     expect(deleteResponse.statusCode).toBe(204);
 
     for (const session of [owner, bidder]) {
-      const inbox = await app.inject({
-        method: "GET",
-        url: "/v1/collection/conversations",
-        headers: { authorization: `Bearer ${session.accessToken}` },
-      });
-      const inboxBody = collectionConversationsSchema.parse(JSON.parse(inbox.body));
+      const inboxBody = await getIndbakke(app, session);
       expect(inboxBody.conversations.map((item) => item.id)).toEqual([homeBid.conversationId]);
+      expect(inboxBody.conversations[0]?.latest).toEqual({ kind: "text", text: "Hej" });
     }
 
     const response = await app.inject({
@@ -792,7 +868,7 @@ describe("Collection conversations /v1", () => {
     expect(response.statusCode).toBe(400);
   });
 
-  it("lists every Bud of a thread in activity with its own jersey line", async () => {
+  it("lists every waiting Bud of a thread with its own jersey line and drops a deleted jersey", async () => {
     const fixture = await insertClubSeasonFixture();
     const owner = await registerSession(app, "owner-lines@example.com");
     const bidder = await registerSession(app, "bidder-lines@example.com");
@@ -801,41 +877,18 @@ describe("Collection conversations /v1", () => {
     const homeBid = await createBidConversation(app, owner, bidder, homeJersey.id);
     const awayBid = await createBidConversation(app, owner, bidder, awayJersey.id);
 
-    const listActivity = async (session: typeof owner) => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v1/collection/activity",
-        headers: { authorization: `Bearer ${session.accessToken}`, "accept-language": "da" },
-      });
-      expect(response.statusCode).toBe(200);
-      return collectionActivitySchema.parse(JSON.parse(response.body)).items;
-    };
-
-    const items = await listActivity(owner);
-    expect(items.map((item) => [item.id, item.kitLine, item.status, item.unread])).toEqual([
-      [awayBid.messageId, "F.C. København · 2023/24 · Ude", "pending", true],
-      [homeBid.messageId, "F.C. København · 2023/24 · Hjemme", "pending", true],
+    const before = await getIndbakke(app, owner);
+    expect(
+      before.waiting.map((row) => [
+        row.messageId,
+        `${row.jersey.clubLabel} · ${row.jersey.seasonLabel} · ${row.jersey.type}`,
+        row.userJerseyId,
+      ]),
+    ).toEqual([
+      [awayBid.messageId, "F.C. København · 2023/24 · Ude", awayJersey.id],
+      [homeBid.messageId, "F.C. København · 2023/24 · Hjemme", homeJersey.id],
     ]);
-    expect(items.map((item) => item.userJerseyId)).toEqual([awayJersey.id, homeJersey.id]);
-    expect(items.map((item) => item.title)).toEqual([
-      "Nyt bud på din trøje",
-      "Nyt bud på din trøje",
-    ]);
-    expect((await listActivity(bidder)).map((item) => item.userJerseyId)).toEqual([
-      awayJersey.id,
-      homeJersey.id,
-    ]);
-    expect((await listActivity(bidder)).map((item) => item.title)).toEqual([
-      "Dit bud afventer",
-      "Dit bud afventer",
-    ]);
-
-    const inbox = await app.inject({
-      method: "GET",
-      url: "/v1/collection/conversations",
-      headers: { authorization: `Bearer ${owner.accessToken}` },
-    });
-    expect(collectionConversationsSchema.parse(JSON.parse(inbox.body)).unreadCount).toBe(1);
+    expect(before.unreadCount).toBe(1);
 
     await app.inject({
       method: "DELETE",
@@ -843,12 +896,29 @@ describe("Collection conversations /v1", () => {
       headers: { authorization: `Bearer ${owner.accessToken}` },
     });
 
-    const afterDelete = await listActivity(owner);
-    expect(afterDelete.map((item) => [item.id, item.kitLine, item.status])).toEqual([
-      [awayBid.messageId, "F.C. København · 2023/24 · Ude", "pending"],
-      [homeBid.messageId, "F.C. København · 2023/24 · Hjemme", "declined"],
-    ]);
-    expect(afterDelete.map((item) => item.userJerseyId)).toEqual([awayJersey.id, null]);
+    // Deleting declines the Bud on that jersey: it leaves waiting, the thread stays.
+    const afterDelete = await getIndbakke(app, owner);
+    expect(afterDelete.waiting.map((row) => row.messageId)).toEqual([awayBid.messageId]);
+    expect(afterDelete.conversations.map((row) => row.id)).toEqual([homeBid.conversationId]);
+  });
+
+  it("keeps a waiting Bud without a thumb when its UserJersey link is gone", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-nothumb@example.com");
+    const bidder = await registerSession(app, "bidder-nothumb@example.com");
+    const jersey = await saveJerseyForUser(app, owner, fixture);
+    const { messageId } = await createBidConversation(app, owner, bidder, jersey.id);
+
+    const { db, pool } = createDb(DATABASE_URL);
+    await db
+      .update(conversationMessage)
+      .set({ userJerseyId: null })
+      .where(eq(conversationMessage.id, messageId));
+    await pool.end();
+
+    const inbox = await getIndbakke(app, owner);
+    expect(inbox.waiting).toHaveLength(1);
+    expect(inbox.waiting[0]).toMatchObject({ messageId, userJerseyId: null, thumbUrl: null });
   });
 
   it("serves the photo of an image message whose bytes sit under another Conversation id", async () => {
@@ -892,11 +962,13 @@ describe("Collection conversations /v1", () => {
     expect(refused.statusCode).toBe(404);
   });
 
-  it("rejects unauthenticated activity list with 401", async () => {
+  it("no longer serves a separate activity list", async () => {
+    const registered = await registerSession(app, "inbox-no-activity@example.com");
     const response = await app.inject({
       method: "GET",
       url: "/v1/collection/activity",
+      headers: { authorization: `Bearer ${registered.accessToken}` },
     });
-    expect(response.statusCode).toBe(401);
+    expect(response.statusCode).toBe(404);
   });
 });
