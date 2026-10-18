@@ -137,6 +137,10 @@ describe("send bid screen chrome (KIT-270)", () => {
     expect(source).toMatch(/if \(peerJersey && landsOnJerseyDetail\) \{\s+rememberBidSent/);
   });
 
+  it("keeps Back at the left edge, not centred over the title", () => {
+    expect(readScreen()).toMatch(/header: \{\s+alignItems: "flex-start"/);
+  });
+
   it("keeps the documented test ids", () => {
     const source = readScreen();
 

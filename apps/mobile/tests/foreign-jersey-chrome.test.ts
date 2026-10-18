@@ -54,6 +54,11 @@ describe("foreign jersey detail screen chrome (KIT-290)", () => {
     expect(row).toBeGreaterThan(scrollClose);
     expect(source).toContain('dockState.kind === "own-pending"');
     expect(source).toContain("/(tabs)/inbox/${dockState.conversationId}");
+    // The detail is a modal over the Søg tab; the Søg stack closes before the thread opens.
+    expect(source.indexOf("router.dismissAll()")).toBeGreaterThan(-1);
+    expect(source.indexOf("router.dismissAll()")).toBeLessThan(
+      source.indexOf("router.push(`/(tabs)/inbox/"),
+    );
   });
 
   it("shows the sent-bid Toast once from a handoff, through a host on this screen (KIT-291)", () => {

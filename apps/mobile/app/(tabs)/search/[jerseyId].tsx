@@ -242,7 +242,13 @@ export default function ForeignJerseyDetailScreen() {
         <ButtonDock>
           <OwnBidRow
             amountDkk={dockState.amountDkk}
-            onPress={() => router.push(`/(tabs)/inbox/${dockState.conversationId}`)}
+            onPress={() => {
+              // This screen is a full-screen modal over the Søg tab: a push into the Indbakke tab
+              // alone opens the thread behind it (hosted Device flow, KIT-291). Close the Søg
+              // stack first.
+              router.dismissAll();
+              router.push(`/(tabs)/inbox/${dockState.conversationId}`);
+            }}
           />
         </ButtonDock>
       ) : null}

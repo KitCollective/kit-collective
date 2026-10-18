@@ -323,6 +323,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    alignItems: "flex-start",
     paddingHorizontal: space.insetMd,
     paddingBottom: space.insetSm,
   },
