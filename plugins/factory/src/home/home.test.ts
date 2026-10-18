@@ -1,6 +1,6 @@
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { z } from "zod";
+import { z } from "zod";
 import plugin from "../../server.js";
 import type { rpcContract } from "../contract.js";
 
@@ -53,7 +53,7 @@ const mentioned = (id: string, createdAt: string) => ({
 /** A fake Linear: every issue is in `Waiting` since the given time; `mentions` are the unread notifications. */
 const linear = (rows: () => Entry[], mentions: () => unknown[]) =>
   vi.fn(async (_url: unknown, init?: { body?: unknown }) => {
-    const query = JSON.parse(String(init?.body)).query as string;
+    const { query } = z.object({ query: z.string() }).parse(JSON.parse(String(init?.body)));
     if (/query Mentions/.test(query)) {
       return new Response(
         JSON.stringify({
