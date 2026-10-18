@@ -13,7 +13,7 @@
 # 1. The Test Collector: the list, the unread rows, and a waiting row that opens its thread.
 # 2. e2e_peer, the bidder: no Venter på dit svar, the Bud as the viewer's own sentence, and then
 #    the empty Indbakke. e2e_peer has one Conversation, so the flow empties Indbakke by hiding it
-#    (Slet samtale in the thread's Detaljer), which also shows that a hidden Conversation is not
+#    (Slet samtale in the thread's More Sheet, then its confirm Sheet), which also shows that a hidden Conversation is not
 #    listed (criterion 8).
 #
 # Not on a screen here, proved by tests instead: that the response returns waiting and
@@ -26,7 +26,7 @@
 # fixture threads are short, so on screen the Bud is visible either way.
 #
 # Taps are by testID (inbox-row-<message id or conversation id>, inbox-empty-*), except the
-# native tab bar (by label), the thread's Detaljer rows and the system alert (by copy).
+# native tab bar (by label).
 appId: app.kitcollective.mobile
 name: kit-296
 ---
@@ -103,13 +103,17 @@ name: kit-296
 - tapOn:
     id: conversation-more
 - extendedWaitUntil:
-    visible: Slet samtale
+    visible:
+      id: conversation-more-delete
     timeout: 15000
-- tapOn: Slet samtale
+- tapOn:
+    id: conversation-more-delete
 - extendedWaitUntil:
-    visible: OK
+    visible:
+      id: conversation-confirm-submit
     timeout: 15000
-- tapOn: OK
+- tapOn:
+    id: conversation-confirm-submit
 # AC 8: the hidden Conversation is not listed; with none left Indbakke is empty.
 # AC 9: Ingen samtaler endnu, one line of explanation, primary Find trøjer and secondary Åbn for bud.
 - extendedWaitUntil:
