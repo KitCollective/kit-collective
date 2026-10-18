@@ -43,7 +43,7 @@ function preview(card: InboxCardDto): string {
   }
 }
 
-const DOT: Record<InboxCardDto["kind"], string> = {
+export const DOT: Record<InboxCardDto["kind"], string> = {
   review: "bg-emerald-500",
   question: "bg-amber-500",
   mention: "bg-sky-500",

@@ -3,9 +3,9 @@
 // waiting, and until the Inbox is set up, the section shows one quiet line.
 import { useBbNavigate, useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
 import { useCallback, useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
 import type { rpcContract } from "../../src/contract";
 import type { HomeDto } from "../../src/home/contract";
+import { DOT } from "../inbox";
 
 const INBOX = "inbox";
 
@@ -55,19 +55,13 @@ export function Waiting() {
       </button>
       <ul className="flex flex-col gap-0.5">
         {home.newest.map((card) => (
-          <li key={card.identifier}>
+          <li key={card.id}>
             <button
               type="button"
-              onClick={() => navigate.toPluginPanel(INBOX, { subPath: card.identifier })}
+              onClick={() => navigate.toPluginPanel(INBOX, { subPath: card.id })}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/50"
             >
-              <span
-                className={cn(
-                  "size-2 shrink-0 rounded-full",
-                  card.kind === "question" ? "bg-amber-500" : "bg-emerald-500",
-                )}
-                aria-hidden
-              />
+              <span className={`size-2 shrink-0 rounded-full ${DOT[card.kind]}`} aria-hidden />
               <span className="font-medium">{card.identifier}</span>
               <span className="truncate">{card.title}</span>
             </button>

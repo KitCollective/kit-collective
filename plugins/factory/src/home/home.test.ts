@@ -34,9 +34,38 @@ const registry = JSON.stringify({
 
 type Entry = { identifier: string; labels: string[]; since: string };
 
-/** A fake Linear: every issue is in `Waiting` since the given time. */
-const linear = (rows: () => Entry[]) =>
-  vi.fn(async () => {
+/** An unread notification that mentions the key owner. */
+const mentioned = (id: string, createdAt: string) => ({
+  id,
+  type: "issueCommentMention",
+  readAt: null,
+  archivedAt: null,
+  createdAt,
+  issue: {
+    identifier: "ENG-30",
+    title: "Title of ENG-30",
+    url: "https://linear.app/acme/issue/ENG-30",
+  },
+  comment: { body: "@owner can you look?", url: "https://linear.app/acme/issue/ENG-30#comment-1" },
+  actor: { name: "Max" },
+});
+
+/** A fake Linear: every issue is in `Waiting` since the given time; `mentions` are the unread notifications. */
+const linear = (rows: () => Entry[], mentions: () => unknown[]) =>
+  vi.fn(async (_url: unknown, init?: { body?: unknown }) => {
+    const query = JSON.parse(String(init?.body)).query as string;
+    if (/query Mentions/.test(query)) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            notifications: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              nodes: mentions(),
+            },
+          },
+        }),
+      );
+    }
     const nodes = rows().map((entry) => ({
       identifier: entry.identifier,
       title: `Title of ${entry.identifier}`,
@@ -54,8 +83,8 @@ const linear = (rows: () => Entry[]) =>
     );
   });
 
-async function homeOn(rows: () => Entry[], { inbox = true } = {}) {
-  vi.stubGlobal("fetch", linear(rows));
+async function homeOn(rows: () => Entry[], { inbox = true, mentions = (): unknown[] => [] } = {}) {
+  vi.stubGlobal("fetch", linear(rows, mentions));
   const host = createFakePluginHost({
     pluginId: "optio",
     settings: { linearWebhookSecret: "whsec", linearApiKey: "lin_key" },
@@ -99,34 +128,40 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("Venter på dig on bb's Home", () => {
   it("counts every Inbox card and lists the three newest by when they began to wait", async () => {
-    const rpc = await homeOn(() => [
-      issue("ENG-1", 2),
-      issue("ENG-2", 9, ["asks"]),
-      issue("ENG-3", 5),
-      issue("ENG-4", 7, ["asks"]),
-      issue("ENG-5", 1),
-    ]);
+    const rpc = await homeOn(
+      () => [
+        issue("ENG-1", 2),
+        issue("ENG-2", 9, ["asks"]),
+        issue("ENG-3", 5),
+        issue("ENG-4", 7, ["asks"]),
+        issue("ENG-5", 1),
+      ],
+      { mentions: () => [mentioned("n-1", "2026-10-06T00:00:00Z")] },
+    );
     const home = await rpc("home_waiting", null);
     expect(home.error).toBeNull();
-    expect(home.count).toBe(5);
+    expect(home.count).toBe(6);
     expect(home.newest).toEqual([
       {
+        id: "ENG-2",
         identifier: "ENG-2",
         title: "Title of ENG-2",
         kind: "question",
         since: "2026-10-09T00:00:00.000Z",
       },
       {
+        id: "ENG-4",
         identifier: "ENG-4",
         title: "Title of ENG-4",
         kind: "question",
         since: "2026-10-07T00:00:00.000Z",
       },
       {
-        identifier: "ENG-3",
-        title: "Title of ENG-3",
-        kind: "review",
-        since: "2026-10-05T00:00:00.000Z",
+        id: "mention:n-1",
+        identifier: "ENG-30",
+        title: "Title of ENG-30",
+        kind: "mention",
+        since: "2026-10-06T00:00:00.000Z",
       },
     ]);
   });

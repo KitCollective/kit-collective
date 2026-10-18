@@ -21,7 +21,7 @@ export function createHome({ inbox }: HomeDeps) {
           Date.parse(b.since) - Date.parse(a.since) || a.identifier.localeCompare(b.identifier),
       )
       .slice(0, HOME_CARDS)
-      .map(({ identifier, title, kind, since }) => ({ identifier, title, kind, since }));
+      .map(({ id, identifier, title, kind, since }) => ({ id, identifier, title, kind, since }));
     return { error, count: cards.length, newest };
   }
 

@@ -5,11 +5,12 @@ import { z } from "zod";
 export const HOME_CARDS = 3;
 
 const homeCard = z.object({
+  /** The card's id in the Inbox: what the Inbox panel's `subPath` opens. */
+  id: z.string(),
   identifier: z.string(),
   title: z.string(),
-  /** A review waits for the merge; a question waits for an answer. */
-  kind: z.enum(["review", "question"]),
-  /** When the issue entered the Inbox state (ISO). */
+  kind: z.enum(["review", "question", "mention", "alarm"]),
+  /** When the card began to wait (ISO). */
   since: z.string(),
 });
 
