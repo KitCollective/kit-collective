@@ -42,6 +42,7 @@ export function Avatar({ handle, uri, uriHeaders, size = "lg" }: AvatarProps) {
       <Image
         accessibilityIgnoresInvertColors
         source={{ uri, headers: uriHeaders }}
+        resizeMode="cover"
         style={[
           styles.circle,
           {

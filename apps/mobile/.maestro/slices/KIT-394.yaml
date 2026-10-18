@@ -1,0 +1,52 @@
+# Device flow for KIT-394: Avatar gets the 44px sm size, used by a collector in a 44px slot (ADR-0049).
+#
+# design-sections: Avatar, Søg home and typeahead
+#
+# AC 1 (sm renders a 44px circle, initials in type.label) is shown by the collector hit below:
+# e2e_peer has no photo, so the 44px circle carries the initial. The size table itself is pinned
+# by tests/avatar.test.ts.
+# AC 2: the collector hit in the typeahead shows a 44px Avatar inside its 44px leading slot.
+# AC 3: the Samlere shelf rows on Søg home use the 44px Avatar. The shelf only exists when the
+# home feed returns collectors; if the test data does not, the step is skipped and the call site
+# is proved by tests/search-collector-avatar.test.ts instead.
+# AC 4: lg stays on Profil (the identity card); md is unchanged and is pinned by tests/avatar.test.ts.
+appId: app.kitcollective.mobile
+name: kit-394
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-394
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+# AC 3: the Samlere shelf rows lead with the 44px Avatar.
+- extendedWaitUntil:
+    visible:
+      id: magazine-shelf-collectors
+    timeout: 15000
+    optional: true
+- takeScreenshot: kc__kit-394__00-samlere-shelf-44-avatar
+# AC 1, 2: a Collector hit leads with the 44px Avatar, initial in type.label, inside its slot.
+- tapOn:
+    id: search-input
+- inputText: e2e_peer
+- extendedWaitUntil:
+    visible:
+      id: typeahead-hit-collector-e2e_peer
+    timeout: 15000
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-394__01-collector-hit-44-avatar
+# AC 4: the lg Avatar on the Profil identity card is as before.
+- tapOn: Profil
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-394__02-profil-lg-avatar-unchanged
+- stopRecording
