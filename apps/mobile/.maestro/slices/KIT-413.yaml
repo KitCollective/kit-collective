@@ -1,0 +1,244 @@
+# KIT-413: Send nyt bud returns to the thread it was tapped in, and Send bud from Søg is unchanged.
+#
+# design-sections: Bid card, Conversation
+#
+# FIXTURE THIS FLOW READS (apps/api/src/e2e/test-data.fixture.ts, as in KIT-297): the Test Collector's
+# thread with e2e_peer (...0501) holds e2e_peer's pending 250 kr Bud on FC København (...0101,
+# message ...0502). e2e_peer's OB jersey (...0105) is åben for bud.
+#
+# Two Collectors sign in, in this order, and the test data is reset only before the first:
+# 1. The Test Collector sends a Bud on e2e_peer's OB jersey from Søg (AC 3: Send bud opened without
+#    returnTo goes back to the detail, with its Toast). Then declines the FC København Bud in the
+#    thread with e2e_peer and turns åben for bud on on FC København, so the Bud has Send nyt bud.
+# 2. e2e_peer (as in KIT-297, no data reset): Send nyt bud on the declined Bud (AC 1), the thread
+#    with the new pending Bud comes back (AC 2), and Søg then shows its root, not Send bud.
+#
+# Not on a screen here, proved by a test instead: the returnTo choice with and without the param and
+# what is refused (apps/mobile/tests/send-bid-return.test.ts).
+#
+# The Thread row has no testID (src/components/thread-row.tsx, outside this issue's write-scope).
+# The row is matched on its accessibility name, which starts with the fixture Handle (as in KIT-295).
+appId: app.kitcollective.mobile
+name: kit-413
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-413
+# ---- The Test Collector sends a Bud from Søg ----
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 15000
+- tapOn:
+    id: search-input
+# The typeahead's Trøjer grid holds the OB jersey (as in KIT-293).
+- inputText: OB
+- extendedWaitUntil:
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    timeout: 15000
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+- extendedWaitUntil:
+    visible:
+      id: send-bid-open
+    timeout: 15000
+- tapOn:
+    id: send-bid-open
+- extendedWaitUntil:
+    visible:
+      id: bid-amount
+    timeout: 15000
+# The amount field starts underneath the floating tab bar; scroll it clear first.
+- scroll
+- runFlow: ../subflows/settle.yaml
+- tapOn:
+    id: bid-amount
+- inputText: "200"
+# The number pad has no return key and covers the form; a tap on the photo dismisses it.
+- tapOn:
+    point: 50%,25%
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: bid-submit
+# AC 3: Send bud opened from Søg (no returnTo) goes back to the foreign detail, with its Toast.
+- extendedWaitUntil:
+    visible:
+      id: bid-sent-toast
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: own-bid-row
+    timeout: 15000
+- takeScreenshot: kc__kit-413__01-send-bid-from-search-back-on-the-detail
+# ---- Decline the FC København Bud in the thread with e2e_peer, from the jersey's bid row ----
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000101
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-bid-row
+    centerElement: true
+- tapOn:
+    id: jersey-detail-bid-row
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: bid-card-decline-e2e00000-0000-4000-8000-000000000502
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- tapOn:
+    id: bid-card-decline-e2e00000-0000-4000-8000-000000000502
+- extendedWaitUntil:
+    visible:
+      id: bid-card-status-declined
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+# ---- FC København åben for bud on, so the declined Bud has Send nyt bud ----
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000101
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-bidding
+    centerElement: false
+- tapOn:
+    id: jersey-detail-bidding
+- runFlow: ../subflows/settle.yaml
+# ---- e2e_peer signs in (no data reset: the declined Bud must stay) ----
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-have-account
+    timeout: 90000
+- tapOn:
+    id: welcome-have-account
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 60000
+- tapOn:
+    id: door-email
+- inputText: ${MAESTRO_PEER_EMAIL}
+- tapOn:
+    id: door-submit
+- extendedWaitUntil:
+    visible:
+      id: code-screen
+    timeout: 60000
+- runScript:
+    file: ../scripts/sign-in-code.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+      EMAIL: ${MAESTRO_PEER_EMAIL}
+      EXPIRE: "false"
+- inputText: ${output.code}
+- extendedWaitUntil:
+    visible:
+      id: collection-add
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: Indbakke
+- extendedWaitUntil:
+    visible: "e2e_collector, .*"
+    timeout: 15000
+- tapOn: "e2e_collector, .*"
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+# AC 1: Send nyt bud on the declined FC København Bud opens Send bud.
+- scrollUntilVisible:
+    element:
+      id: bid-card-send-new-bid-e2e00000-0000-4000-8000-000000000502
+    direction: UP
+    centerElement: true
+- runFlow: ../subflows/settle.yaml
+- tapOn:
+    id: bid-card-send-new-bid-e2e00000-0000-4000-8000-000000000502
+- extendedWaitUntil:
+    visible:
+      id: bid-amount
+    timeout: 15000
+# The amount field starts underneath the floating tab bar; scroll it clear first.
+- scroll
+- runFlow: ../subflows/settle.yaml
+- tapOn:
+    id: bid-amount
+- inputText: "275"
+- tapOn:
+    point: 50%,25%
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: bid-submit
+# AC 2: the thread comes back by itself, without a tap on Indbakke.
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-413__02-back-in-the-thread-after-send-nyt-bud
+# AC 2: the new Bud is in that thread, pending, end-aligned. It is the last item, so it cannot be
+# centred.
+- scrollUntilVisible:
+    element:
+      id: bid-card-status-pending-sender
+    centerElement: false
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-413__03-new-bud-in-the-thread
+# AC 2: Søg shows its root, not Send bud left on its stack.
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 15000
+- assertNotVisible:
+    id: bid-amount
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-413__04-search-shows-its-root
+- stopRecording
