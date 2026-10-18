@@ -9,7 +9,7 @@ Operator path from idea to landed work. Matt’s engineering loop, Linear as the
   → planner claims (To-do + ready-for-agent + unblocked → In Progress)
   → /implement (/tdd + domain helpers) → PR + Linear evidence → In Review
   → checker (/code-review)
-  → approver reads the PR, Linear → Merging (Approval is also where a human answers a question or approves a plan: answer in a comment, move to To-do)
+  → approver reads the PR, Linear → Merging (Approval is also where a human answers a question or approves a plan: answer in a comment and swap the help label to ready-for-agent; it resumes in its thread, never via To-do)
   → /land into lanes.integration (merge → Post-Merge; Done only after gate.mjs land is open)
   → milestone complete → staging → production
 ```

@@ -1,6 +1,6 @@
 # Status model: To-do dispatches, Approval waits for a human, Blocked, Post-Merge precedes Done
 
-Nicklas, 2026-10-11. Status: accepted. Supersedes the status names (not the behaviour) in ADR-0022, ADR-0024, ADR-0025, ADR-0028 and ADR-0049: where they say `Implementing` read `In Progress`, where they say `Ready for merge` read `Approval`, where they say dispatch from `Backlog` read `To-do`, and where they say `Parked` read `Backlog` (deferred) or `Blocked` (waiting for another issue). Their bodies are not rewritten.
+Nicklas, 2026-10-11. Status: accepted; partly superseded by ADR-0066 (an answered `Approval` resumes in its Issue thread and never goes back to `To-do`). Supersedes the status names (not the behaviour) in ADR-0022, ADR-0024, ADR-0025, ADR-0028 and ADR-0049: where they say `Implementing` read `In Progress`, where they say `Ready for merge` read `Approval`, where they say dispatch from `Backlog` read `To-do`, and where they say `Parked` read `Backlog` (deferred) or `Blocked` (waiting for another issue). Their bodies are not rewritten.
 
 ## The model
 

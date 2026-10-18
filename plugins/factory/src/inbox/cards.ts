@@ -1,6 +1,7 @@
 // One card for every issue waiting for a person, built from what Linear says now.
 import type { InboxCardDto, InboxConfig } from "./contract.js";
 import type { WaitingIssue } from "./linear.js";
+import type { AlarmThread, Mention } from "./notices.js";
 
 /** What the Inbox needs besides the issues: the config, the workpad heading and the recorded verdict. */
 interface InboxContext {
@@ -28,6 +29,33 @@ function parseWaiting(body: string): InboxCardDto["waiting"] {
   return { ask, stage: stage?.[1] ?? "", asked: stage?.[2]?.trim() || null };
 }
 
+/**
+ * The lettered choices an ask offers: `A)`, `(A)`, `A:` or `A.` markers that run A, B, … in order.
+ * Fewer than two letters is no choice, so a stray "A." in a sentence offers none.
+ */
+export function parseChoices(ask: string): InboxCardDto["choices"] {
+  const found: { letter: string; start: number; textStart: number }[] = [];
+  let from = 0;
+  for (let code = 65; code <= 90; code += 1) {
+    const letter = String.fromCharCode(code);
+    const marker = new RegExp(`(?:^|[\\s;,])(\\(${letter}\\)|${letter}[).:])(?=\\s)`, "g");
+    marker.lastIndex = from;
+    const match = marker.exec(ask);
+    if (match === null) break;
+    const start = match.index + match[0].length - match[1].length;
+    found.push({ letter, start, textStart: match.index + match[0].length });
+    from = match.index + match[0].length;
+  }
+  if (found.length < 2) return [];
+  return found.map((choice, index) => ({
+    letter: choice.letter,
+    text: ask
+      .slice(choice.textStart, found[index + 1]?.start ?? ask.length)
+      .replace(/[\s;,]*(?:\bor)?[\s;,]*$/i, "")
+      .trim(),
+  }));
+}
+
 function pullRequestOf(issue: WaitingIssue) {
   const found = issue.attachments.flatMap((attachment) => {
     const match = /\/pull\/(\d+)(?:[/?#]|$)/.exec(attachment.url);
@@ -48,16 +76,19 @@ function sinceOf(issue: WaitingIssue, state: string): string {
   ).toISOString();
 }
 
-/** Reviews first, then questions, oldest first inside each kind. */
+/** Reviews first, then questions, oldest first inside each kind. Mentions and alarms come after, see `withNotices`. */
 export function buildCards(issues: WaitingIssue[], context: InboxContext): InboxCardDto[] {
   const { config, workpadHeading, verdictOf } = context;
   const cards = issues.map((issue): InboxCardDto => {
     const pull = pullRequestOf(issue);
     const common = {
+      id: issue.identifier,
       identifier: issue.identifier,
       title: issue.title,
       url: issue.url,
       pullRequest: pull === null ? null : { number: pull.number, url: pull.url },
+      mention: null,
+      alarm: null,
       since: sinceOf(issue, config.state),
     };
     const label = config.questionLabels.find((name) => issue.labels.includes(name)) ?? null;
@@ -66,11 +97,13 @@ export function buildCards(issues: WaitingIssue[], context: InboxContext): Inbox
         workpadHeading === null
           ? undefined
           : issue.comments.find((body) => body.trimStart().startsWith(workpadHeading));
+      const waiting = workpad === undefined ? null : parseWaiting(workpad);
       return {
         ...common,
         kind: "question",
         label,
-        waiting: workpad === undefined ? null : parseWaiting(workpad),
+        choices: waiting === null ? [] : parseChoices(waiting.ask),
+        waiting,
         review: null,
       };
     }
@@ -79,6 +112,7 @@ export function buildCards(issues: WaitingIssue[], context: InboxContext): Inbox
       ...common,
       kind: "review",
       label: null,
+      choices: [],
       waiting: null,
       // An untitled link carries its URL as the title, which says nothing about the change.
       review: {
@@ -93,5 +127,90 @@ export function buildCards(issues: WaitingIssue[], context: InboxContext): Inbox
       rank(a) - rank(b) ||
       Date.parse(a.since) - Date.parse(b.since) ||
       a.identifier.localeCompare(b.identifier),
+  );
+}
+
+/** The problems an alarm comment lists: its bullets up to the "Already healed" part. */
+function alarmProblems(body: string): string[] {
+  const problems: string[] = [];
+  for (const line of body.split("\n")) {
+    if (/^\s*already healed/i.test(line)) break;
+    const bullet = /^\s*[-*]\s+(.*\S)\s*$/.exec(line)?.[1];
+    if (bullet !== undefined) problems.push(bullet);
+  }
+  return problems;
+}
+
+/** The first line says what the watchdog's comment is: an alarm, or the all clear after one. */
+function alarmKind(body: string): "alarm" | "clear" | null {
+  const first = body.trimStart().split("\n")[0] ?? "";
+  if (/watchdog\s*alarm/i.test(first)) return "alarm";
+  if (/watchdog:?\s*clear/i.test(first)) return "clear";
+  return null;
+}
+
+/** One card per alarm comment that no later comment of the watchdog cleared. */
+export function alarmCards(thread: AlarmThread): InboxCardDto[] {
+  let lastClear = -Infinity;
+  for (const comment of thread.comments) {
+    if (alarmKind(comment.body) === "clear") {
+      lastClear = Math.max(lastClear, Date.parse(comment.createdAt));
+    }
+  }
+  return thread.comments.flatMap((comment): InboxCardDto[] =>
+    alarmKind(comment.body) === "alarm" && Date.parse(comment.createdAt) > lastClear
+      ? [
+          {
+            id: `alarm:${comment.id}`,
+            identifier: thread.identifier,
+            title: thread.title,
+            url: comment.url,
+            pullRequest: null,
+            kind: "alarm",
+            label: null,
+            choices: [],
+            waiting: null,
+            review: null,
+            mention: null,
+            alarm: { problems: alarmProblems(comment.body) },
+            since: new Date(Date.parse(comment.createdAt)).toISOString(),
+          },
+        ]
+      : [],
+  );
+}
+
+export function mentionCards(mentions: Mention[]): InboxCardDto[] {
+  return mentions.map(
+    (mention): InboxCardDto => ({
+      id: `mention:${mention.notificationId}`,
+      identifier: mention.identifier,
+      title: mention.title,
+      url: mention.url,
+      pullRequest: null,
+      kind: "mention",
+      label: null,
+      choices: [],
+      waiting: null,
+      review: null,
+      mention: {
+        notificationId: mention.notificationId,
+        comment: mention.comment,
+        author: mention.author,
+      },
+      alarm: null,
+      since: new Date(Date.parse(mention.createdAt)).toISOString(),
+    }),
+  );
+}
+
+/** Approval and question cards as they are, then the mentions, then the alarms; oldest first inside each kind. */
+export function withNotices(cards: InboxCardDto[], notices: InboxCardDto[]): InboxCardDto[] {
+  const rank = { review: 0, question: 1, mention: 2, alarm: 3 } as const;
+  return [...cards, ...notices].sort(
+    (a, b) =>
+      rank[a.kind] - rank[b.kind] ||
+      Date.parse(a.since) - Date.parse(b.since) ||
+      a.id.localeCompare(b.id),
   );
 }

@@ -28,13 +28,13 @@ name: kit-346
 - tapOn:
     id: capture-source-gallery
 - tapOn: Fotos
-# The system photo picker has no stable ids: two cells, then confirm. Two photos go straight to
+# The system photo picker has no stable ids: two cells by point, then Done by its text (the banner
+# subflow first closes iOS's Private Access banner, which moves the grid). Two photos go straight to
 # Confirm (three or fewer), so the draft holds a front and a back photo. The second cell is tapped
 # at 38%: the centre of the second column of a four-column grid and inside the second of three. The
 # picker settles after each tap before the next (the first hosted runs, tapping back to back, picked
 # one photo).
-- waitForAnimationToEnd:
-    timeout: 8000
+- runFlow: ../subflows/photo-picker-banner.yaml
 - tapOn:
     point: 16%,25%
 - waitForAnimationToEnd:
@@ -43,22 +43,9 @@ name: kit-346
     point: 38%,25%
 - waitForAnimationToEnd:
     timeout: 3000
-# Wait for the picker's selected footer, tap confirm, and tap again while the footer
-# shows (the reason is in regression/add-jersey.yaml).
-- extendedWaitUntil:
-    visible: 2 Photos
-    timeout: 15000
-    optional: true
-- tapOn:
-    point: 90%,12%
-- repeat:
-    while:
-      visible: 2 Photos
-    times: 3
-    commands:
-      - runFlow: ../subflows/settle.yaml
-      - tapOn:
-          point: 90%,12%
+# Tap the picker's Done once it is enabled, and again while it still shows (the reason is in
+# regression/add-jersey.yaml).
+- runFlow: ../subflows/photo-picker-done.yaml
 - extendedWaitUntil:
     visible:
       id: confirm-save

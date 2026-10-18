@@ -35,6 +35,7 @@ import {
   resetDatabase,
   season,
   teamSeason,
+  user,
   userJersey,
   userJerseyFavorite,
   userJerseyPatch,
@@ -363,6 +364,13 @@ async function findOwnJersey(
   return body.jerseys.find((item) => item.id === jerseyId);
 }
 
+/** Every leaf value of a parsed JSON body, so a test can look for an amount without matching ids. */
+function jsonValues(node: unknown): unknown[] {
+  if (Array.isArray(node)) return node.flatMap(jsonValues);
+  if (node !== null && typeof node === "object") return Object.values(node).flatMap(jsonValues);
+  return [node];
+}
+
 async function getPeerJerseyRaw(app: NestFastifyApplication, session: Session, jerseyId: string) {
   return app.inject({
     method: "GET",
@@ -384,6 +392,7 @@ async function discoverJerseyIds(app: NestFastifyApplication, session: Session):
 
 describe("Collection /v1", () => {
   let app: NestFastifyApplication;
+  let realPutObject: ObjectStoreAdapter["putObject"];
 
   beforeAll(async () => {
     process.env.DATABASE_URL = DATABASE_URL;
@@ -399,6 +408,8 @@ describe("Collection /v1", () => {
     app.setGlobalPrefix("v1");
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
+    const objectStore = app.get<ObjectStoreAdapter>(OBJECT_STORE);
+    realPutObject = objectStore.putObject.bind(objectStore);
   });
 
   afterAll(async () => {
@@ -406,6 +417,8 @@ describe("Collection /v1", () => {
   });
 
   beforeEach(async () => {
+    // A test that forgets its `finally` must not leak a fake putObject into the next test.
+    app.get<ObjectStoreAdapter>(OBJECT_STORE).putObject = realPutObject;
     await clearAuthThrottleHits();
   });
 
@@ -869,15 +882,13 @@ describe("Collection /v1", () => {
     expect(inboxBody.conversations[0]?.snippet).toContain("350");
   });
 
-  it("shows the latest Bud amount of each UserJersey when one Conversation holds Buds on several", async () => {
+  it("never shows another Collector's Bud amount on the peer UserJersey", async () => {
     const fixture = await insertClubSeasonFixture();
-    const owner = await registerSession(app, "owner-latest-bid@example.com");
-    const bidder = await registerSession(app, "bidder-latest-bid@example.com");
+    const owner = await registerSession(app, "owner-no-amount@example.com");
+    const bidder = await registerSession(app, "bidder-no-amount@example.com");
     const firstJersey = await saveJerseyForUser(app, owner, fixture);
     const secondJersey = await saveJerseyForUser(app, owner, fixture);
-    const untouchedJersey = await saveJerseyForUser(app, owner, fixture);
 
-    const conversationIds: string[] = [];
     for (const [jersey, amountDkk] of [
       [firstJersey, 350],
       [secondJersey, 500],
@@ -890,20 +901,145 @@ describe("Collection /v1", () => {
         payload: { amountDkk },
       });
       expect(bidResponse.statusCode).toBe(201);
-      conversationIds.push(
-        collectionSendBidResponseSchema.parse(JSON.parse(bidResponse.body)).conversationId,
-      );
     }
-    expect(conversationIds[1]).toBe(conversationIds[0]);
 
-    const latestBidOf = async (jerseyId: string) => {
-      const response = await getPeerJerseyRaw(app, bidder, jerseyId);
+    for (const jersey of [firstJersey, secondJersey]) {
+      for (const viewer of [
+        bidder,
+        await registerSession(app, `viewer-${jersey.id}@example.com`),
+      ]) {
+        const response = await getPeerJerseyRaw(app, viewer, jersey.id);
+        expect(response.statusCode).toBe(200);
+        // SAFETY: the body is the JSON object the peer jersey route returns; the test only reads its keys.
+        const raw = JSON.parse(response.body) as Record<string, unknown>;
+        expect(raw).not.toHaveProperty("latestBidAmountDkk");
+        expect(Object.keys(raw).filter((key) => /[Aa]mount|[Bb]id(?!ding)/.test(key))).toEqual([]);
+        // Compare parsed values, not body substrings: the body holds random hex ids that can contain "350".
+        expect(jsonValues(raw)).not.toContain(350);
+        expect(jsonValues(raw)).not.toContain(500);
+        expect(jsonValues(raw)).not.toContain("350");
+        expect(jsonValues(raw)).not.toContain("500");
+        collectionPeerJerseySchema.parse(raw);
+      }
+    }
+  });
+
+  describe("peer UserJersey facts (KIT-290)", () => {
+    async function insertPlayerAndPatch(
+      fixture: Awaited<ReturnType<typeof insertClubSeasonFixture>>,
+    ) {
+      const { db, pool } = createDb(DATABASE_URL);
+      const [insertedPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+      await db.insert(playerClubSeason).values({
+        playerId: insertedPlayer!.id,
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        squadNumber: 9,
+      });
+      await db.insert(catalogLabel).values({
+        entityType: "player",
+        entityId: insertedPlayer!.id,
+        locale: "da",
+        kind: "label",
+        text: "Jonas Wind",
+        source: "seed",
+      });
+      const [insertedPatch] = await db
+        .insert(patch)
+        .values({ seasonId: fixture.seasonId })
+        .returning({ id: patch.id });
+      await db.insert(catalogLabel).values({
+        entityType: "patch",
+        entityId: insertedPatch!.id,
+        locale: "da",
+        kind: "label",
+        text: "Superligaen",
+        source: "seed",
+      });
+      await pool.end();
+      return { playerId: insertedPlayer!.id, patchId: insertedPatch!.id };
+    }
+
+    async function getPeerJersey(session: Session, jerseyId: string) {
+      const response = await getPeerJerseyRaw(app, session, jerseyId);
       expect(response.statusCode).toBe(200);
-      return collectionPeerJerseySchema.parse(JSON.parse(response.body)).latestBidAmountDkk;
-    };
-    expect(await latestBidOf(firstJersey.id)).toBe(350);
-    expect(await latestBidOf(secondJersey.id)).toBe(500);
-    expect(await latestBidOf(untouchedJersey.id)).toBeNull();
+      return collectionPeerJerseySchema.parse(JSON.parse(response.body));
+    }
+
+    it("carries size, condition, patches and player, and null / empty when there are none", async () => {
+      const fixture = await insertClubSeasonFixture();
+      const { playerId, patchId } = await insertPlayerAndPatch(fixture);
+      const owner = await registerSession(app, "owner-facts@example.com");
+      const viewer = await registerSession(app, "viewer-facts@example.com");
+
+      const saveResponse = await app.inject({
+        method: "POST",
+        url: "/v1/collection/jerseys/save",
+        headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+        payload: {
+          clubId: fixture.clubId,
+          seasonId: fixture.seasonId,
+          type: "home",
+          size: "l",
+          condition: "worn",
+          playerId,
+          patchIds: [patchId],
+          photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+        },
+      });
+      expect(saveResponse.statusCode).toBe(201);
+      const full = collectionSaveResponseSchema.parse(JSON.parse(saveResponse.body)).jersey;
+      const plain = await saveJerseyForUser(app, owner, fixture, { size: "s" });
+
+      const fullPeer = await getPeerJersey(viewer, full.id);
+      expect(fullPeer.size).toBe("l");
+      expect(fullPeer.condition).toBe("worn");
+      expect(fullPeer.playerLabel).toBe("Jonas Wind");
+      expect(fullPeer.playerNumber).toBe("9");
+      expect(fullPeer.patches).toEqual([{ id: patchId, label: "Superligaen" }]);
+
+      const plainPeer = await getPeerJersey(viewer, plain.id);
+      expect(plainPeer.size).toBe("s");
+      expect(plainPeer.condition).toBe("used");
+      expect(plainPeer.playerLabel).toBeNull();
+      expect(plainPeer.playerNumber).toBeNull();
+      expect(plainPeer.patches).toEqual([]);
+    });
+
+    it("shows the owner's city only when Vis by is on", async () => {
+      const fixture = await insertClubSeasonFixture();
+      const owner = await registerSession(app, "owner-city@example.com");
+      const viewer = await registerSession(app, "viewer-city@example.com");
+      const jersey = await saveJerseyForUser(app, owner, fixture);
+
+      const setCity = async (showCity: boolean) => {
+        const { db, pool } = createDb(DATABASE_URL);
+        await db
+          .update(user)
+          .set({ city: "Aarhus", showCity })
+          .where(eq(user.email, "owner-city@example.com"));
+        await pool.end();
+      };
+
+      await setCity(true);
+      expect((await getPeerJersey(viewer, jersey.id)).ownerCity).toBe("Aarhus");
+
+      await setCity(false);
+      const hidden = await getPeerJerseyRaw(app, viewer, jersey.id);
+      expect(JSON.parse(hidden.body).ownerCity).toBeNull();
+    });
+
+    it("counts only the owner's non-private UserJerseys", async () => {
+      const fixture = await insertClubSeasonFixture();
+      const owner = await registerSession(app, "owner-count@example.com");
+      const viewer = await registerSession(app, "viewer-count@example.com");
+      const first = await saveJerseyForUser(app, owner, fixture);
+      await saveJerseyForUser(app, owner, fixture);
+      const hiddenJersey = await saveJerseyForUser(app, owner, fixture);
+      expect((await patchJerseyPrivate(app, owner, hiddenJersey.id, true)).statusCode).toBe(200);
+
+      expect((await getPeerJersey(viewer, first.id)).ownerJerseyCount).toBe(2);
+    });
   });
 
   it("counts unanswered pending bids per jersey on GET /collection/jerseys", async () => {
@@ -1308,6 +1444,24 @@ describe("Collection /v1", () => {
     expect(privateBody.statusCode).toBe(nonexistentBody.statusCode);
     expect(privateBody.message).toBe(nonexistentBody.message);
     expect(privateBody.error).toBe(nonexistentBody.error);
+  });
+
+  it("the owner's own jersey reads as not found on the peer route, like an unknown id", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "own-peer-owner@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+    await patchJerseyBidding(app, owner, ownerJersey.id, true);
+
+    const ownResponse = await getPeerJerseyRaw(app, owner, ownerJersey.id);
+    expect(ownResponse.statusCode).toBe(404);
+
+    const nonexistentResponse = await getPeerJerseyRaw(
+      app,
+      owner,
+      "00000000-0000-0000-0000-0000000000aa",
+    );
+    expect(nonexistentResponse.statusCode).toBe(404);
+    expect(JSON.parse(ownResponse.body)).toEqual(JSON.parse(nonexistentResponse.body));
   });
 
   it("excludes private jerseys from discover results (peer)", async () => {
@@ -2675,35 +2829,65 @@ describe("Collection /v1", () => {
 
     await waitForDerivativeObjects(objectStore, objectKey!);
 
-    const originalUpload = await app.inject({
-      method: "PUT",
-      url: `/v1/collection/photos/${photoId}/original`,
-      headers: { authorization: `Bearer ${session.accessToken}` },
-      payload: { contentBase64: JPEG_BASE64 },
-    });
-    expect(originalUpload.statusCode).toBe(204);
-
     const prefix = photoPrefixFromStoredObjectKey(objectKey!);
     expect(prefix).not.toBeNull();
-    const variantKeys = [
-      variantObjectKey(prefix!, "grid"),
-      stripObjectKey(prefix!),
-      lightboxObjectKey(prefix!),
-      originalObjectKey(prefix!),
-    ];
-    for (const key of variantKeys) {
-      expect(await objectStore.objectExists(key)).toBe(true);
-    }
 
-    const deleteResponse = await app.inject({
-      method: "DELETE",
-      url: `/v1/collection/jerseys/${jersey.id}`,
-      headers: { authorization: `Bearer ${session.accessToken}` },
+    // The wrapper goes in after the save's own derivatives are in place, so the only lightbox put
+    // it can see is the /original PUT's fire-and-forget derivative job (whose last put is the lightbox).
+    const realPut = objectStore.putObject.bind(objectStore);
+    let derivativeJobDone!: () => void;
+    const derivativeJobFinished = new Promise<void>((resolve) => {
+      derivativeJobDone = resolve;
     });
-    expect(deleteResponse.statusCode).toBe(204);
+    objectStore.putObject = async (key, bytes) => {
+      await realPut(key, bytes);
+      if (key === lightboxObjectKey(prefix!)) {
+        derivativeJobDone();
+      }
+    };
 
-    for (const key of photoObjectKeysForDeletion(objectKey!)) {
-      expect(await objectStore.objectExists(key)).toBe(false);
+    try {
+      const originalUpload = await app.inject({
+        method: "PUT",
+        url: `/v1/collection/photos/${photoId}/original`,
+        headers: { authorization: `Bearer ${session.accessToken}` },
+        payload: { contentBase64: JPEG_BASE64 },
+      });
+      expect(originalUpload.statusCode).toBe(204);
+
+      let deadline: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        derivativeJobFinished,
+        new Promise<never>((_, reject) => {
+          deadline = setTimeout(
+            () => reject(new Error("Timed out waiting for the original's derivative job")),
+            5000,
+          );
+        }),
+      ]).finally(() => clearTimeout(deadline));
+
+      const variantKeys = [
+        variantObjectKey(prefix!, "grid"),
+        stripObjectKey(prefix!),
+        lightboxObjectKey(prefix!),
+        originalObjectKey(prefix!),
+      ];
+      for (const key of variantKeys) {
+        expect(await objectStore.objectExists(key)).toBe(true);
+      }
+
+      const deleteResponse = await app.inject({
+        method: "DELETE",
+        url: `/v1/collection/jerseys/${jersey.id}`,
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      });
+      expect(deleteResponse.statusCode).toBe(204);
+
+      for (const key of photoObjectKeysForDeletion(objectKey!)) {
+        expect(await objectStore.objectExists(key)).toBe(false);
+      }
+    } finally {
+      objectStore.putObject = realPut;
     }
   });
 

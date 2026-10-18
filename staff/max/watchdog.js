@@ -10,6 +10,7 @@
 //   env-keys      the runs machine's .env lacks a required key   -> the missing lines are appended from
 //                 this checkout's .env (values are never printed); alarm only if they are missing here too
 //   max-stuck     a Max thread has been active for over 45 min   -> alarm
+//   worktrees     worktrees of Done/Canceled issues on the runs machine -> reaped (ADR-0066)
 // An alarm is one comment on the alarm issue as Max, with Nicklas's profile URL so it reaches his Linear
 // inbox. The same set of problems is not repeated within 6 hours, and a comment says when they cleared.
 // A tick with nothing wrong and nothing healed prints nothing (a silent, free run).
@@ -137,6 +138,20 @@
     }
   } catch (error) {
     problems.push(`threads-unreadable: ${String(error.message).split("\n")[0].slice(0, 200)}`);
+  }
+
+  // Worktrees (ADR-0066): reap the runs machine's worktrees of finished issues. Quiet when there is
+  // nothing to reap; a reap is reported as healed, a failure to read bb or Linear is not an alarm.
+  if (fs.existsSync("scripts/reap-environments.mjs")) {
+    try {
+      const out = execFileSync(
+        "node",
+        ["scripts/reap-environments.mjs", ...(dryRun ? [] : ["--apply"]), "--machine", machine],
+        { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 240000 },
+      );
+      const summary = out.trim().split("\n").at(-1) ?? "";
+      if (/(reaped|would reap) [1-9]/.test(summary)) healed.push(`worktrees: ${summary}`);
+    } catch {}
   }
 
   // Alarm: once per set of problems per 6 hours, and once when it clears.

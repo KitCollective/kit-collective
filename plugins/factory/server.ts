@@ -21,6 +21,7 @@ import { rpcContract } from "./src/contract.js";
 import { createCore } from "./src/core.js";
 import { createInbox } from "./src/inbox/index.js";
 import { createLoops } from "./src/loops/index.js";
+import { createReviewerProxy } from "./src/reviewer-proxy/index.js";
 import { createRuns } from "./src/runs/index.js";
 import { createStaff } from "./src/staff/index.js";
 import { createThreads } from "./src/threads/index.js";
@@ -33,6 +34,10 @@ export default async function plugin(bb: BbPluginApi) {
   const inbox = createInbox(core);
   const loops = createLoops(core);
   const threads = createThreads(core);
+  createReviewerProxy({
+    bb: core.bb,
+    keyFile: async () => (await core.settings.get()).linearApiKeyFile,
+  }).register();
 
   bb.rpc.register(rpcContract, {
     ...staff.rpc,
@@ -41,6 +46,9 @@ export default async function plugin(bb: BbPluginApi) {
     ...threads.rpc,
     inbox_list: inbox.list,
     ...loops.rpc,
+    inbox_answer: inbox.answer,
+    inbox_read: inbox.read,
+    inbox_reject: inbox.reject,
   });
 
   bb.cli.register(

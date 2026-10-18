@@ -10,7 +10,7 @@ export const meta = {
       issue: { type: "string" },
       resume: { type: "boolean" },
       skipLead: { type: "boolean" },
-      maxRounds: { type: "integer", minimum: 1, maximum: 3 },
+      maxRounds: { type: "integer", minimum: 1, maximum: 5 },
       machine: { type: "string" },
       autoLand: { type: "boolean" },
     },
@@ -70,7 +70,8 @@ if (!ISSUE.test(issue)) {
   return { issue, status: "refused", stoppedAt: "args", note: "issue must look like KIT-123" };
 }
 const resume = args.resume === true;
-const maxRounds = Number.isInteger(args.maxRounds) ? Math.min(Math.max(args.maxRounds, 1), 3) : 2;
+// At most five rounds (ADR-0066); from the third the Lead replans before the Engineer patches again.
+const maxRounds = Number.isInteger(args.maxRounds) ? Math.min(Math.max(args.maxRounds, 1), 5) : 5;
 const machine = typeof args.machine === "string" && /^[A-Za-z0-9_.-]{1,59}$/.test(args.machine) ? args.machine : "";
 const machineFlag = machine ? ` --machine ${machine}` : "";
 
@@ -447,6 +448,12 @@ const roles = Array.isArray(decision.roles) ? decision.roles.join(", ") : "";
 // rather than risk overwriting the plan.
 /** Run-log lines waiting for the next runner (see shAfter). Flushed before the loop at the latest. */
 const carried = [];
+// An answered Approval or a resolved Blocked resumes here, in its Issue thread: it goes straight to
+// In Progress and never through To-do (ADR-0066). The move rides with the next runner, so a resume
+// spends no runner of its own (KIT-295).
+if (resume) {
+  carried.push(stateCmd("In Progress"));
+}
 let leadNeeded = decision.plan && args.skipLead !== true;
 if (leadNeeded && resume) {
   const planCheck = (await sh("plan-check", "Lead", [`node scripts/workpad-has-plan.mjs ${issue}`], false, true))[0];
@@ -537,13 +544,66 @@ async function engineerPass(round, feedback, engineerModelAlias) {
     "An acceptance criterion that needs the owner's machine (reload Optio, probe a thread, the Board) is proven after the merge by the checks the issue names on its `live-check:` line (scripts/lib/live-checks.mjs). Build what they check, but never stop or return blocked to ask a person for that evidence; say in the workpad which criterion the live check covers. If no listed check fits, say so under `### Waiting` instead of inventing one.",
     `A slice with a slice flow (apps/mobile/.maestro/slices/${issue}.yaml) needs a green \`Device flows\` status on the PR head (the pre-review gate row in implement/SKILL.md). This machine has no simulator: ask for the hosted run with \`node scripts/request-device-flows.mjs <pr> --issue ${issue}\` and wait with \`node scripts/gate.mjs pre-review <pr> --issue ${issue} --timeout ${GATE_SLICE_SECONDS}\` in the same slices. A red flow is yours to fix. If the status stays missing or pending after ${GATE_SLICES} slices, or ends \`error\` again after a re-request, never return ready: write the ask and the stage under workpad \`### Waiting\` and return blocked with the sentence \`needs-human: run device-run.sh on the Mac on <sha>\`.`,
     "Never move the issue to Merging, Post-Merge or Done, never merge, never enable auto-merge, never post a kc/audit status. Move nothing in Linear except the workpad and your evidence comments.",
-    feedback ? `Change request from the last round (fix the class, not the instance):\n${feedback}` : "",
+    feedback ? `Change request from the last round (fix the class, not the instance). Answer every gating finding in the workpad under ### Notes, one line each: fixed in <commit>, or disagreed with the reason:\n${feedback}` : "",
     "Return outcome ready (only when the pre-review gate in implement/SKILL.md is true), blocked (sentence starts `needs-human:` or `blocked-by KIT-m:`) or failed, one sentence, the PR number, and your own thread id ($BB_THREAD_ID) in threadId.",
   ]
     .filter(Boolean)
     .join("\n");
   return spawn(engineerModelAlias, prompt, `engineer:${issue}:r${round}`, "Engineer", ENGINEER_SCHEMA);
 }
+
+/**
+ * The Lead settles what the Engineer cannot, inside the run (ADR-0066): a stop the Engineer reports, or
+ * a third round on the same findings. Returns { outcome: "plan" | "stop", sentence } or null. Only a
+ * Human call comes back as stop and goes on to Approval.
+ */
+async function replan(why) {
+  phase("Lead");
+  let lead = null;
+  try {
+    lead = await agent(
+      [
+        `You are the Lead for ${issue}, mode replan. Read .cursor/agents/lead.md and follow it exactly. You are read-only: write no code and no tests; you write \`### Plan\` in the issue's single workpad comment.`,
+        `Why the run asks you now: ${String(why).replace(/\s+/g, " ").slice(0, 1500)}`,
+        "Settle it yourself whenever it is the work inside the ticket: the plan, splitting the work, an approach the acceptance criteria allow, a neighbouring module the code needs. A wider write-scope is yours when every path sits in an app, package or plugin the scope already names and none is schema, auth, billing, a workflow or a factory path: append the paths to the issue's `write-scope:` line (`node scripts/linear.mjs description <KIT-n> --body-file <file>`) and to the PR body's (`gh pr edit <pr> --body-file <file>`). Write the decision into `### Plan` and return outcome plan with it in one sentence.",
+        "Return outcome stop only for a Human call (CONTEXT.md): changing an acceptance criterion or a product decision, a conflict with or a gap in the design lock, factory files or rules, schema, auth or billing, a merge auto-land may not do. Put the question for Nicklas in the sentence.",
+        "Put your own thread id ($BB_THREAD_ID) in threadId.",
+      ].join("\n"),
+      {
+        label: `lead:${issue}:replan`,
+        phase: "Lead",
+        provider: "claude-code",
+        model: "claude-opus-5-5",
+        reasoningLevel: "high",
+        schema: {
+          type: "object",
+          required: ["outcome", "sentence", "threadId"],
+          additionalProperties: false,
+          properties: {
+            outcome: { enum: ["plan", "stop"] },
+            sentence: { type: "string" },
+            threadId: { type: "string" },
+          },
+        },
+      },
+    );
+  } catch (error) {
+    lead = null;
+  }
+  if (lead && pick(lead.outcome, ["plan", "stop"]) === null) {
+    lead = null;
+  }
+  const thread = lead && THREAD.test(lead.threadId) ? ` --thread ${lead.threadId}` : "";
+  await sh("log:replan", "Lead", [
+    logCmd("reason", `--issue ${issue} --code replan`),
+    logCmd("spawn", `--issue ${issue} --step lead${thread} --mode replan --provider ${PROVIDER} --model ${MODELS.opus}${machineFlag}`),
+    ...(lead
+      ? [logCmd("result", `--issue ${issue} --step lead --outcome ${lead.outcome}${thread ? ` --usage-thread ${lead.threadId}` : ""}`)]
+      : [logCmd("reason", `--issue ${issue} --code no-result-line`)]),
+  ], true);
+  return lead;
+}
+let replans = 0;
 
 let feedback = "";
 let prNumber = resumePr;
@@ -603,6 +663,19 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   // Two red audits earn the strong model, as the start decision says.
   const modelAlias = round >= 3 ? "opus" : engineerAlias;
   if (round > 0) {
+    // From the third round the same findings twice mean the plan is wrong: the Lead replans first
+    // (ADR-0066, Review finding).
+    if (round >= 3 && feedback && replans < 2) {
+      replans += 1;
+      const lead = await replan(`Round ${round}: the review is still red after ${round - 1} fix rounds. Findings:\n${feedback}`);
+      if (lead && lead.outcome === "stop") {
+        const state = await stopForHuman("Lead", `needs-human: ${lead.sentence}`);
+        return stopped("lead", state, { prNumber, rounds, note: `Human call: ${lead.sentence}` });
+      }
+      if (lead && lead.outcome === "plan") {
+        feedback = `${feedback}\nThe Lead replanned: ${lead.sentence}. Follow ### Plan.`;
+      }
+    }
     phase("Engineer");
     if ((round > 1 || resume) && !backInProgress) {
       await move("Engineer", "In Progress");
@@ -636,6 +709,22 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
     if (engineer.outcome !== "ready") {
       await logEngineer();
       if (engineer.outcome === "blocked") {
+        // A stop the Lead can settle is settled inside the run; only a Human call or another issue
+        // that must land first leaves it (ADR-0066). At most two replans in one run.
+        if (!/^blocked-by KIT-\d+/.test(String(engineer.sentence)) && replans < 2) {
+          replans += 1;
+          const lead = await replan(`The Engineer stopped: ${engineer.sentence}`);
+          if (lead && lead.outcome === "plan") {
+            feedback = `The Lead settled your stop: ${lead.sentence}. Carry on from ### Plan.`;
+            backInProgress = true;
+            round -= 1;
+            continue;
+          }
+          if (lead && lead.outcome === "stop") {
+            const state = await stopForHuman("Lead", `needs-human: ${lead.sentence}`);
+            return stopped("lead", state, { rounds, note: `Human call: ${lead.sentence}` });
+          }
+        }
         const state = await stopForHuman("Engineer", engineer.sentence);
         return stopped("engineer", state, { rounds, note: engineer.sentence });
       }
@@ -707,6 +796,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
         "An acceptance criterion covered by a check on the issue's `live-check:` line runs after the merge on the owner's machine: in the spec-ac row its evidence is `deferred to live check <name>`, which is not a finding, as long as the code it checks is in the diff.",
         "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
         `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
+        "Every finding names the file and line, what is wrong, and what green looks like, so the Engineer can check it, and is marked `gating` or `nit`. Only gating findings make the review red; nits go in the matrix and do not hold it (ADR-0066).",
         "On red, also return light: true only when every finding is light: the wording of a comment, a doc line, a name or a message, with no gap in behaviour, tests, an acceptance criterion, the design lock or the write-scope. Otherwise light: false.",
       ].join("\n"),
       `reviewer:${issue}:r${round}`,
@@ -805,7 +895,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
     ], true);
     const asked = await sh("reviewer:result-line", "Review gate", [
       `bb thread tell ${rThread} "Your review ended without the result line. Do not review again and change nothing. If the head is still ${reviewSha} and your verdict stands, reply with exactly one line and nothing else: AUDIT-RESULT ${issue} green ${reviewSha}"`,
-      `bb thread wait ${rThread} --timeout 300`,
+      `bb thread wait ${rThread} --timeout 600`,
     ]);
     if (asked.length === 2 && asked.every((r) => r.code === 0)) {
       dry = await sh("receipt:dry-run", "Review gate", [receiptCmd], false, true);

@@ -22,6 +22,7 @@ import {
   killSwitch,
   latestCheckRuns,
   maxPerDay,
+  prCheckRuns,
   queueState,
   riskClass,
 } from "../lib/auto-land.mjs";
@@ -90,6 +91,9 @@ if (args[0] === "pr" && args[1] === "view") {
     process.exit(1);
   }
   console.log(JSON.stringify(args.includes("--slurp") ? [{ total_count: s.checks.length, check_runs: s.checks }] : s.checks));
+} else if (args[0] === "api" && /actions\\/runs\\?head_sha=/.test(joined)) {
+  // Only the workflow_dispatch runs are asked for; their check suites are not the PR's gate.
+  console.log(JSON.stringify({ workflow_runs: (s.dispatchedSuites || []).map((id) => ({ check_suite_id: id, event: "workflow_dispatch" })) }));
 } else if (args[0] === "api" && /\\/statuses\\//.test(joined)) {
   if (args.includes("-f")) {
     const field = (name) => args.find((a) => a.startsWith(name + "="))?.slice(name.length + 1);
@@ -1115,6 +1119,44 @@ test("only the newest run of each check counts: a cancelled duplicate CI run is 
     ];
   });
   assert.equal(w.start(["--dry-run"]).status, 0);
+});
+
+test("a dispatched run's check is not the PR's gate: a failed manual Device flows run does not refuse a green PR", () => {
+  // KIT-284, 2026-10-18: the PR's own iOS Simulator run passed; a workflow_dispatch run of the
+  // same workflow started two seconds later and failed, and the newest-wins rule picked it.
+  const runs = [
+    {
+      name: "iOS Simulator",
+      conclusion: "success",
+      started_at: "2026-10-18T01:23:28Z",
+      id: 1,
+      check_suite: { id: 10 },
+    },
+    {
+      name: "iOS Simulator",
+      conclusion: "failure",
+      started_at: "2026-10-18T01:23:30Z",
+      id: 2,
+      check_suite: { id: 20 },
+    },
+  ];
+  assert.deepEqual(latestCheckRuns(prCheckRuns(runs, [20])), [
+    { name: "iOS Simulator", conclusion: "success" },
+  ]);
+  assert.deepEqual(latestCheckRuns(prCheckRuns(runs, [])), [
+    { name: "iOS Simulator", conclusion: "failure" },
+  ]);
+  const w = world();
+  w.setGh((s) => {
+    s.checks = runs;
+    s.dispatchedSuites = [20];
+  });
+  assert.equal(w.start(["--dry-run"]).status, 0);
+  const red = world();
+  red.setGh((s) => {
+    s.checks = runs;
+  });
+  assert.notEqual(red.start(["--dry-run"]).status, 0);
 });
 
 test("a check still running on the head is waiting (exit 3), not a refusal", () => {

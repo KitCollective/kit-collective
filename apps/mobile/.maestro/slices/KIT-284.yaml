@@ -21,9 +21,9 @@
 #   shows the empty block and the opened drill.
 # - Vision failing on Confirm for one photo is the same regression flow, not repeated here.
 #
-# The picker points below are those of KIT-282 (first cell at 16%,25%, row pitch about 15% of the
-# height on an iPhone 17), carried over to five rows, and a scroll for the sixteenth photo. If a
-# picker changes, only the points change.
+# The picker cell points below are those of KIT-282 (first cell at 16%,25%, row pitch about 15% of
+# the height on an iPhone 17), carried over to five rows, and a scroll for the sixteenth photo. If a
+# picker changes, only the points change. The picker's Done is found by its text, not a point.
 appId: app.kitcollective.mobile
 name: kit-284
 ---
@@ -42,10 +42,11 @@ name: kit-284
 - tapOn:
     id: capture-source-gallery
 - tapOn: Fotos
-# The system photo picker has no stable ids: sixteen cells, then confirm. Five rows of three fit
-# on the screen (rows at 25%, 40%, 55%, 70%, 85% of the height; columns at 16%, 50%, 83%).
-- waitForAnimationToEnd:
-    timeout: 8000
+# The system photo picker has no stable ids: sixteen cells by point, then Done by its text. The
+# banner subflow first closes iOS's Private Access banner, so the rows start where they do without
+# it. Five rows of three fit on the screen (rows at 25%, 40%, 55%, 70%, 85% of the height; columns
+# at 16%, 50%, 83%).
+- runFlow: ../subflows/photo-picker-banner.yaml
 - tapOn:
     point: 16%,25%
 - tapOn:
@@ -90,8 +91,9 @@ name: kit-284
     timeout: 3000
 - tapOn:
     point: 16%,85%
-- tapOn:
-    point: 90%,12%
+# Tap the picker's Done once it is enabled, and again while it still shows (the reason is in
+# regression/add-jersey.yaml).
+- runFlow: ../subflows/photo-picker-done.yaml
 # Sixteen photos with Vision on open the overview; wait for the grouping to be done, so the frame
 # is the settled one (the progress bar and skeleton rows are KIT-282's frame).
 - extendedWaitUntil:
@@ -166,8 +168,7 @@ name: kit-284
 - tapOn:
     id: capture-source-gallery
 - tapOn: Fotos
-- waitForAnimationToEnd:
-    timeout: 8000
+- runFlow: ../subflows/photo-picker-banner.yaml
 - tapOn:
     point: 16%,25%
 - tapOn:
@@ -176,8 +177,9 @@ name: kit-284
     point: 83%,25%
 - tapOn:
     point: 16%,40%
-- tapOn:
-    point: 90%,12%
+# Tap the picker's Done once it is enabled, and again while it still shows (the reason is in
+# regression/add-jersey.yaml).
+- runFlow: ../subflows/photo-picker-done.yaml
 # AC (Vision did not answer): the overview says so with Prøv Vision igen and Sortér selv, and the
 # photos are kept in the inbox row. The caption is the id's text, so a frame of the grouping in
 # flight (no caption) is never taken.
