@@ -9,6 +9,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
+import { z } from "zod";
 
 /** The thread titles that take the proxy. */
 export const PROXIED_TITLE = /^reviewer:.+:openrouter$/;
@@ -16,6 +17,8 @@ export const PROXIED_TITLE = /^reviewer:.+:openrouter$/;
 const OPENROUTER_MODEL = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i;
 const UPSTREAM = "https://openrouter.ai/api/v1/messages";
 const ROUTE = "/reviewer/v1/messages";
+/** The part of an Anthropic Messages body the proxy reads; the rest is forwarded as it came. */
+const messagesBody = z.object({ model: z.string().regex(OPENROUTER_MODEL) }).passthrough();
 const SECRET_KEY = "reviewerProxySecret";
 /** Where the route is mounted for the host (`/api/v1/plugins/<id>/http/...`). */
 const mountedAt = (pluginId: string) => `/api/v1/plugins/${pluginId}/http/reviewer`;
@@ -115,8 +118,8 @@ export function createReviewerProxy(deps: ReviewerProxyDeps) {
             401,
           );
         }
-        const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-        if (body === null || typeof body.model !== "string" || !OPENROUTER_MODEL.test(body.model)) {
+        const parsed = messagesBody.safeParse(await c.req.json().catch(() => null));
+        if (!parsed.success) {
           return c.json(
             {
               type: "error",
@@ -135,7 +138,10 @@ export function createReviewerProxy(deps: ReviewerProxyDeps) {
           return c.json(
             {
               type: "error",
-              error: { type: "api_error", message: String((error as Error).message) },
+              error: {
+                type: "api_error",
+                message: error instanceof Error ? error.message : String(error),
+              },
             },
             503,
           );
@@ -149,9 +155,9 @@ export function createReviewerProxy(deps: ReviewerProxyDeps) {
             "anthropic-version": c.req.header("anthropic-version") ?? "2023-06-01",
             "x-title": "Optio reviewer",
           },
-          body: JSON.stringify({ ...body, provider: { data_collection: "deny" } }),
+          body: JSON.stringify({ ...parsed.data, provider: { data_collection: "deny" } }),
         });
-        deps.bb.log.info(`reviewer proxy: ${threadId} ${body.model} -> ${upstream.status}`);
+        deps.bb.log.info(`reviewer proxy: ${threadId} ${parsed.data.model} -> ${upstream.status}`);
         return new Response(upstream.body, {
           status: upstream.status,
           headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
