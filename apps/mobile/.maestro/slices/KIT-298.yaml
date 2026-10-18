@@ -187,8 +187,10 @@ name: kit-298
     visible:
       id: conversation-header
     timeout: 15000
+# The bubble is one accessibility element with the reference row above it ("Om trøjen, OB 2023/24,
+# Hej, ..., 21.37"), and Maestro matches the whole label, so the text is matched with .* around it.
 - extendedWaitUntil:
-    visible: "Hej, har du den i M også\\?"
+    visible: ".*Hej, har du den i M også\\?.*"
     timeout: 15000
 - runFlow: ../subflows/settle.yaml
 # AC 7: the sender's own bubble carries the read-only reference (Om trøjen, the jersey) above it,
@@ -250,12 +252,12 @@ name: kit-298
       id: conversation-header
     timeout: 15000
 - scrollUntilVisible:
-    element: "Hej, har du den i M også\\?"
+    element: ".*Hej, har du den i M også\\?.*"
     centerElement: false
 - runFlow: ../subflows/settle.yaml
 # AC 7: the receiver sees which jersey the message is about, above the bubble (a read-only row:
 # the Chat bubble has no jersey slot, a lock gap flagged in the PR).
-- assertVisible: "Om trøjen"
+- assertVisible: ".*Om trøjen.*"
 - takeScreenshot: kc__kit-298__07-receiver-sees-the-jersey-it-is-about
 # ---- e2e_peer turns åben for bud off on OB, so the foreign dock has Skriv til alone ----
 - launchApp:
