@@ -145,7 +145,7 @@ async function saveJerseyForUser(
   return collectionSaveResponseSchema.parse(JSON.parse(response.body)).jersey;
 }
 
-async function getIndbakke(
+async function getInbox(
   app: NestFastifyApplication,
   session: Awaited<ReturnType<typeof registerSession>>,
 ) {
@@ -413,7 +413,7 @@ describe("Collection conversations /v1", () => {
     const awayBid = await createBidConversation(app, owner, bidder, awayJersey.id, 450);
     expect(awayBid.conversationId).toBe(homeBid.conversationId);
 
-    const ownerInbox = await getIndbakke(app, owner);
+    const ownerInbox = await getInbox(app, owner);
 
     // One row per incoming pending Bud, newest first, each with its own jersey.
     expect(ownerInbox.waiting).toEqual([
@@ -452,7 +452,7 @@ describe("Collection conversations /v1", () => {
     expect(ownerInbox.unreadCount).toBe(1);
 
     // The bidder waits for an answer; nothing waits for the bidder.
-    const bidderInbox = await getIndbakke(app, bidder);
+    const bidderInbox = await getInbox(app, bidder);
     expect(bidderInbox.waiting).toEqual([]);
     expect(bidderInbox.conversations).toHaveLength(1);
     expect(bidderInbox.conversations[0]?.latest).toEqual({
@@ -483,12 +483,12 @@ describe("Collection conversations /v1", () => {
       });
 
     expect((await respond(homeBid.messageId, "decline")).statusCode).toBe(200);
-    expect((await getIndbakke(app, owner)).waiting.map((row) => row.messageId)).toEqual([
+    expect((await getInbox(app, owner)).waiting.map((row) => row.messageId)).toEqual([
       awayBid.messageId,
     ]);
 
     expect((await respond(awayBid.messageId, "accept")).statusCode).toBe(200);
-    const answered = await getIndbakke(app, owner);
+    const answered = await getInbox(app, owner);
     expect(answered.waiting).toEqual([]);
     expect(answered.conversations[0]?.latest).toEqual({
       kind: "bid",
@@ -505,7 +505,7 @@ describe("Collection conversations /v1", () => {
     const jersey = await saveJerseyForUser(app, owner, fixture);
     await createBidConversation(app, owner, bidder, jersey.id);
 
-    expect((await getIndbakke(app, owner)).conversations[0]?.peerAvatarUrl).toBeNull();
+    expect((await getInbox(app, owner)).conversations[0]?.peerAvatarUrl).toBeNull();
 
     const { db, pool } = createDb(DATABASE_URL);
     await db
@@ -514,7 +514,7 @@ describe("Collection conversations /v1", () => {
       .where(eq(user.id, bidder.user.id));
     await pool.end();
 
-    expect((await getIndbakke(app, owner)).conversations[0]?.peerAvatarUrl).toBe(
+    expect((await getInbox(app, owner)).conversations[0]?.peerAvatarUrl).toBe(
       `/v1/identity/peers/${bidder.user.id}/avatar`,
     );
   });
@@ -560,7 +560,7 @@ describe("Collection conversations /v1", () => {
     const peerBody = collectionConversationDetailSchema.parse(JSON.parse(peerDetail.body));
     expect(peerBody.messages[0]?.bidStatus).toBe("accepted");
 
-    const ownerInbox = await getIndbakke(app, owner);
+    const ownerInbox = await getInbox(app, owner);
     expect(ownerInbox.waiting).toEqual([]);
     expect(ownerInbox.conversations[0]?.latest).toMatchObject({ kind: "bid", status: "accepted" });
   });
@@ -577,7 +577,7 @@ describe("Collection conversations /v1", () => {
       jersey.id,
     );
 
-    const before = await getIndbakke(app, owner);
+    const before = await getInbox(app, owner);
     expect(before.waiting.map((row) => row.messageId)).toEqual([messageId]);
     expect(before.conversations[0]?.unread).toBe(true);
     expect(before.unreadCount).toBe(1);
@@ -591,7 +591,7 @@ describe("Collection conversations /v1", () => {
       },
     });
 
-    const after = await getIndbakke(app, owner);
+    const after = await getInbox(app, owner);
     expect(after.unreadCount).toBe(0);
     expect(after.conversations[0]?.unread).toBe(false);
     // Reading does not answer the Bud.
@@ -809,7 +809,7 @@ describe("Collection conversations /v1", () => {
     expect(deleteResponse.statusCode).toBe(204);
 
     for (const session of [owner, bidder]) {
-      const inboxBody = await getIndbakke(app, session);
+      const inboxBody = await getInbox(app, session);
       expect(inboxBody.conversations.map((item) => item.id)).toEqual([homeBid.conversationId]);
       expect(inboxBody.conversations[0]?.latest).toEqual({ kind: "text", text: "Hej" });
     }
@@ -877,7 +877,7 @@ describe("Collection conversations /v1", () => {
     const homeBid = await createBidConversation(app, owner, bidder, homeJersey.id);
     const awayBid = await createBidConversation(app, owner, bidder, awayJersey.id);
 
-    const before = await getIndbakke(app, owner);
+    const before = await getInbox(app, owner);
     expect(
       before.waiting.map((row) => [
         row.messageId,
@@ -897,7 +897,7 @@ describe("Collection conversations /v1", () => {
     });
 
     // Deleting declines the Bud on that jersey: it leaves waiting, the thread stays.
-    const afterDelete = await getIndbakke(app, owner);
+    const afterDelete = await getInbox(app, owner);
     expect(afterDelete.waiting.map((row) => row.messageId)).toEqual([awayBid.messageId]);
     expect(afterDelete.conversations.map((row) => row.id)).toEqual([homeBid.conversationId]);
   });
@@ -916,7 +916,7 @@ describe("Collection conversations /v1", () => {
       .where(eq(conversationMessage.id, messageId));
     await pool.end();
 
-    const inbox = await getIndbakke(app, owner);
+    const inbox = await getInbox(app, owner);
     expect(inbox.waiting).toHaveLength(1);
     expect(inbox.waiting[0]).toMatchObject({ messageId, userJerseyId: null, thumbUrl: null });
   });

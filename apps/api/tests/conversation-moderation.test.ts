@@ -142,7 +142,7 @@ async function saveJerseyForUser(
   return collectionSaveResponseSchema.parse(JSON.parse(response.body)).jersey;
 }
 
-async function getIndbakke(
+async function getInbox(
   app: NestFastifyApplication,
   session: Awaited<ReturnType<typeof registerSession>>,
 ) {
@@ -296,10 +296,10 @@ describe("Conversation moderation /v1", () => {
       jersey.id,
     );
 
-    const ownerBefore = await getIndbakke(app, owner);
+    const ownerBefore = await getInbox(app, owner);
     expect(ownerBefore.waiting.map((row) => row.messageId)).toEqual([messageId]);
     expect(ownerBefore.conversations).toHaveLength(1);
-    expect((await getIndbakke(app, bidder)).conversations).toHaveLength(1);
+    expect((await getInbox(app, bidder)).conversations).toHaveLength(1);
 
     const blockResponse = await app.inject({
       method: "POST",
