@@ -22,7 +22,15 @@ export interface InboxDeps<Board extends { teamKey: string; projectId: string }>
   gateRuns: { latestReview(issue: string, since: number): { verdictLine: string | null } | null };
   /** The questions Staff members have put to the person in their Staff chats and that are still open. */
   staffQuestions: () => Promise<
-    { agentId: string; name: string; question: string; askedAt: number; chatThreadId: string }[]
+    {
+      id: string;
+      agentId: string;
+      name: string;
+      question: string;
+      askedAt: number;
+      chatThreadId: string;
+      chatHref: string;
+    }[]
   >;
 }
 
@@ -53,14 +61,18 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
 
   /** One card per open Staff question, oldest first, linking to the chat it was asked in. */
   async function staffCards(): Promise<InboxCardDto[]> {
-    const base = deps.bb.server.experimental_appUrl ?? deps.bb.server.loopbackBaseUrl;
+    const base = (deps.bb.server.experimental_appUrl ?? deps.bb.server.loopbackBaseUrl).replace(
+      /\/+$/,
+      "",
+    );
     return (await deps.staffQuestions())
       .sort((a, b) => a.askedAt - b.askedAt)
       .map(
         (question): InboxCardDto => ({
-          identifier: question.name,
+          // Unique per question: the page keys and opens a card by it.
+          identifier: `${question.name}-${question.id}`,
           title: `Question in ${question.name}'s Staff chat`,
-          url: `${base}/thread/${question.chatThreadId}`,
+          url: `${base}${question.chatHref}`,
           pullRequest: null,
           // A question, so the page shows it as one and never as a review that is ready to merge.
           kind: "question",

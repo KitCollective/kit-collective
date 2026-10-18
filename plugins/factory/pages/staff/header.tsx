@@ -25,34 +25,37 @@ export function StaffChatHeader({
   const budget =
     header.budget.limit === null
       ? "budget not set"
-      : `budget ${header.budget.used ?? "not measured"} of ${header.budget.limit}`;
+      : header.budget.used === null
+        ? `budget ${header.budget.limit}, use not measured`
+        : `budget ${header.budget.used} of ${header.budget.limit}`;
+  const details = (
+    <>
+      <span className="truncate">{heartbeat}</span>
+      <span className="truncate">{budget}</span>
+    </>
+  );
   return (
-    <div
-      className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
-      title={`${header.name}: ${header.title}, ${header.status}, ${heartbeat}, ${budget}`}
-    >
-      <span
-        aria-hidden
-        className={cn(
-          "size-2 shrink-0 rounded-full",
-          header.status === "on" ? "bg-emerald-500" : "bg-muted-foreground",
-        )}
-      />
-      <span className="truncate text-foreground">{header.title}</span>
-      <span>{header.status}</span>
-      {isCompactViewport ? null : (
-        <>
-          <span className="truncate">{heartbeat}</span>
-          <span className="truncate">{budget}</span>
-        </>
-      )}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => navigate.toPluginPanel(PANEL, { subPath: header.agentId })}
-      >
-        Update
-      </Button>
+    <div className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          aria-hidden
+          className={cn(
+            "size-2 shrink-0 rounded-full",
+            header.status === "on" ? "bg-emerald-500" : "bg-muted-foreground",
+          )}
+        />
+        <span className="truncate text-foreground">{header.title}</span>
+        <span>{header.status}</span>
+        {isCompactViewport ? null : details}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate.toPluginPanel(PANEL, { subPath: header.agentId })}
+        >
+          Update
+        </Button>
+      </div>
+      {isCompactViewport ? <div className="flex min-w-0 items-center gap-2">{details}</div> : null}
     </div>
   );
 }

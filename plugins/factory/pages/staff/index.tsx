@@ -233,7 +233,7 @@ function NewAgent() {
   const ready = form.name.trim() !== "" && form.projectId !== "";
   return (
     <Page>
-      <Back to="" label="Agents" />
+      <Back to="" label="Staff" />
       <h1 className="mt-3 text-base font-medium">New agent</h1>
       <AgentFields form={form} projects={value?.projects ?? []} onChange={setForm} />
       <Problem message={error} />
@@ -1005,7 +1005,7 @@ function AgentDetail({ id }: { id: string }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Chat");
   return (
     <Page>
-      <Back to="" label="Agents" />
+      <Back to="" label="Staff" />
       <Problem message={error} />
       {value === null ? (
         error === null ? (
@@ -1097,7 +1097,7 @@ export function AgentPicker() {
   );
 }
 
-/** The Agents page: the agent list, one agent, or a view another area hands in by its sub-path. */
+/** The Staff page: the agent list, one agent, or a view another area hands in by its sub-path. */
 export function Agents({
   subPath,
   views,

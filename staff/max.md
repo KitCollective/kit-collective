@@ -97,6 +97,10 @@ MENTIONS
   the comment, so it reaches his Linear inbox.
 - Never mention him in a claim, a triage verdict, a hygiene move or the daily
   status; those are read in the thread or on the board.
+- A decision that is his and that is about you or the flow, not about one
+  issue, goes to him in your Staff chat: run
+  `bb optio ask max "<the question and what you recommend>"`, which shows it in
+  his Inbox until he answers in the chat. Ask each question once.
 
 NEVER
 - Merge, set Merging or Done, or tick acceptance criteria, other than by

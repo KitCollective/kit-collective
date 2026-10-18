@@ -309,7 +309,7 @@ describe("Staff questions in the Inbox", () => {
   /** Threads where the project holds a Charter for `max`, and the chat's timeline is `timeline()`. */
   const staffThreads = (timeline: () => unknown[], sent: string[] = []) => ({
     spawn: async () => ({ id: "thr_chat" }),
-    get: async () => ({ status: "idle", archivedAt: null }),
+    get: async () => ({ status: "idle", archivedAt: null, deletedAt: null, projectId: "proj_1" }),
     list: async () => [],
     timeline: async () => ({ rows: timeline() }),
     send: async ({ input }: { input: { text: string }[] }) => {
@@ -352,12 +352,12 @@ describe("Staff questions in the Inbox", () => {
       expect(sent).toEqual(["[optio ask] Ship the paywall Friday?"]);
 
       const inbox = await rpc("inbox_list", null);
-      expect(inbox.cards.map((card) => card.identifier)).toEqual([
+      expect(inbox.cards.map((card) => card.identifier).slice(0, 3)).toEqual([
         "ENG-1",
         "ENG-2",
         "ENG-3",
-        "Max",
       ]);
+      expect(inbox.cards[3]?.identifier).toMatch(/^Max-\w+$/);
       expect(inbox.cards[3]).toMatchObject({
         kind: "question",
         label: "Max",
@@ -367,7 +367,8 @@ describe("Staff questions in the Inbox", () => {
         waiting: { ask: "Ship the paywall Friday?", stage: "Staff chat" },
         chat: { threadId: "thr_chat" },
       });
-      expect(inbox.cards[3]?.url).toContain("thr_chat");
+      // bb's thread route, under the app's base URL.
+      expect(inbox.cards[3]?.url).toMatch(/\/projects\/proj_1\/threads\/thr_chat$/);
 
       // Optio's own messages and an agent's do not answer it.
       rows = [
@@ -396,6 +397,72 @@ describe("Staff questions in the Inbox", () => {
     }
   });
 
+  it("keeps two open questions of one Staff member apart, and every one asked at once", async () => {
+    try {
+      const { rpc, cli } = await withMax(
+        () => entries,
+        staffThreads(() => []),
+      );
+      const asks = await Promise.all(
+        ["First?", "Second?", "Third?"].map((question) => cli(["ask", "max", question])),
+      );
+      expect(asks.map((run) => run.exitCode)).toEqual([0, 0, 0]);
+      const cards = (await rpc("inbox_list", null)).cards.filter(
+        (card) => card.kind === "question" && card.chat,
+      );
+      expect(cards.map((card) => card.waiting?.ask).sort()).toEqual([
+        "First?",
+        "Second?",
+        "Third?",
+      ]);
+      expect(new Set(cards.map((card) => card.identifier)).size).toBe(3);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not lose a question asked while the chats are read", async () => {
+    let rows: unknown[] = [];
+    let release: () => void = () => undefined;
+    let reading: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      reading = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let hold = false;
+    try {
+      const threads = {
+        ...staffThreads(() => rows),
+        timeline: async () => {
+          if (hold) {
+            reading();
+            await gate;
+          }
+          return { rows };
+        },
+      };
+      const { rpc, cli } = await withMax(() => entries, threads);
+      const pause = () => new Promise((resolve) => setTimeout(resolve, 5));
+      await cli(["ask", "max", "Old?"]);
+      await pause();
+      rows = [reply("Answered.", Date.now())];
+      await pause();
+      hold = true;
+      const listing = rpc("inbox_list", null);
+      await started;
+      hold = false;
+      await cli(["ask", "max", "New?"]);
+      release();
+      await listing;
+      const after = (await rpc("inbox_list", null)).cards.filter((card) => card.chat);
+      expect(after.map((card) => card.waiting?.ask)).toEqual(["New?"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("does not relay a question that Max asks from inside the chat", async () => {
     const sent: string[] = [];
     try {
@@ -407,7 +474,7 @@ describe("Staff questions in the Inbox", () => {
       const run = await cli(["ask", "max", "In the chat?"], { threadId: "thr_chat" });
       expect(run.exitCode).toBe(0);
       expect(sent).toEqual([]);
-      expect((await rpc("inbox_list", null)).cards.at(-1)?.identifier).toBe("Max");
+      expect((await rpc("inbox_list", null)).cards.at(-1)?.identifier).toMatch(/^Max-/);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -424,7 +491,7 @@ describe("Staff questions in the Inbox", () => {
       await cli(["ask", "max", "Still there?"]);
       const inbox = await rpc("inbox_list", null);
       expect(inbox.error).toContain("not set up");
-      expect(inbox.cards.map((card) => card.identifier)).toEqual(["Max"]);
+      expect(inbox.cards.map((card) => card.label)).toEqual(["Max"]);
     } finally {
       vi.unstubAllGlobals();
     }

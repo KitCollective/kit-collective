@@ -27,15 +27,15 @@ interface Options {
   files?: Record<string, string>;
   archived?: Set<string>;
   threadList?: { id: string; title: string; updatedAt: number }[];
-  /** The user messages of each thread, as timeline rows. */
-  timeline?: Record<string, unknown[]>;
+  /** Thread ids whose read fails with this error. */
+  failing?: Map<string, Error>;
 }
 
 async function load({
   files = { "staff/max.md": CHARTER },
   archived = new Set<string>(),
   threadList = [],
-  timeline = {},
+  failing = new Map<string, Error>(),
 }: Options = {}) {
   let spawned = 0;
   const host = createFakePluginHost({
@@ -48,14 +48,18 @@ async function load({
           spawned += 1;
           return { id: `thr_chat${spawned}` };
         },
-        get: async ({ threadId }: { threadId: string }) => ({
-          status: "idle",
-          archivedAt: archived.has(threadId) ? 1 : null,
-        }),
+        get: async ({ threadId }: { threadId: string }) => {
+          const failure = failing.get(threadId);
+          if (failure !== undefined) throw failure;
+          return {
+            status: "idle",
+            projectId: "proj_1",
+            deletedAt: null,
+            archivedAt: archived.has(threadId) ? 1 : null,
+          };
+        },
         list: async () => threadList,
-        timeline: async ({ threadId }: { threadId: string }) => ({
-          rows: timeline[threadId] ?? [],
-        }),
+        timeline: async () => ({ rows: [] }),
         send: async () => ({}),
       },
       projects: {
@@ -137,6 +141,29 @@ describe("the standing Staff chat", () => {
     const second = await rpc("staff_chat_open", { agentId: "max" });
     expect(second.threadId).not.toBe(first.threadId);
     expect(spawns()).toHaveLength(2);
+  });
+
+  it("is made again when the host says the chat no longer exists", async () => {
+    const failing = new Map<string, Error>();
+    const { rpc, agent, spawns } = await load({ failing });
+    await agent("max", "Max");
+    const first = await rpc("staff_chat_open", { agentId: "max" });
+    failing.set(first.threadId, Object.assign(new Error("Thread not found"), { status: 404 }));
+    const second = await rpc("staff_chat_open", { agentId: "max" });
+    expect(second.threadId).not.toBe(first.threadId);
+    expect(spawns()).toHaveLength(2);
+  });
+
+  it("is not made again when reading it fails for another reason", async () => {
+    const failing = new Map<string, Error>();
+    const { rpc, agent, spawns } = await load({ failing });
+    await agent("max", "Max");
+    const first = await rpc("staff_chat_open", { agentId: "max" });
+    failing.set(first.threadId, new Error("socket hang up"));
+    await expect(rpc("staff_chat_open", { agentId: "max" })).rejects.toThrow(/socket hang up/);
+    failing.delete(first.threadId);
+    expect((await rpc("staff_chat_open", { agentId: "max" })).threadId).toBe(first.threadId);
+    expect(spawns()).toHaveLength(1);
   });
 
   it("is refused for an agent with no Charter", async () => {

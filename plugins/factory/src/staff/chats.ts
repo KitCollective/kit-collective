@@ -2,6 +2,7 @@
 // found again after that, the header the thread shows, and the questions a Staff member has put to
 // the person in it (CONTEXT.md: Staff chat). The chat ids and open questions live in the plugin's
 // key-value store; no table is added.
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Agent } from "../agent-store.js";
 import type { Core } from "../core.js";
@@ -15,10 +16,14 @@ const ownerKey = (threadId: string) => `staffChatOf:${threadId}`;
 const QUESTIONS_KEY = "staffQuestions";
 
 export interface StaffQuestion {
+  /** Tells this question from the agent's other open ones. */
+  id: string;
   agentId: string;
   question: string;
   askedAt: number;
   chatThreadId: string;
+  /** The app-relative URL bb opens the chat at. */
+  chatHref: string;
 }
 
 export type StaffStatus = "on" | "off" | "paused";
@@ -26,6 +31,21 @@ export type StaffStatus = "on" | "off" | "paused";
 /** The title of a Staff member's daily activity thread; the chat's title must never match it. */
 const dailyThread = (name: string) => new RegExp(`^${escapeRegExp(name)} · \\d{4}-\\d{2}-\\d{2}`);
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Whether bb's answer to a thread read says the thread does not exist. */
+function isNotFound(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const { code, status, message } = error as {
+    code?: unknown;
+    status?: unknown;
+    message?: unknown;
+  };
+  return (
+    status === 404 ||
+    (typeof code === "string" && /not.?found/i.test(code)) ||
+    (typeof message === "string" && /not.?found/i.test(message))
+  );
+}
 
 const userRow = z.object({
   kind: z.literal("conversation"),
@@ -82,12 +102,21 @@ export function createStaffChats(core: Core) {
     return { agent, charter };
   }
 
-  /** The chat saved for the agent, when it still exists and is not archived. */
+  /**
+   * The chat saved for the agent, when it still exists and is not archived. Only a missing or
+   * archived thread counts as gone; any other failure to read it is thrown, so a hiccup never
+   * makes a second standing chat.
+   */
   async function savedChat(agentId: string): Promise<string | null> {
     const saved = await kv.get<string>(chatKey(agentId));
     if (typeof saved !== "string") return null;
-    const thread = await bb.sdk.threads.get({ threadId: saved }).catch(() => null);
-    return thread !== null && thread.archivedAt === null ? saved : null;
+    try {
+      const thread = await bb.sdk.threads.get({ threadId: saved });
+      return thread.archivedAt === null && thread.deletedAt == null ? saved : null;
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
   }
 
   const opening = new Map<string, Promise<string>>();
@@ -177,13 +206,23 @@ export function createStaffChats(core: Core) {
       title: charter.title,
       status,
       lastHeartbeat,
-      // Nothing measures what a Staff member has used yet (staff/max.md, "Not yet").
+      // The Charter states no measured use, and nothing else measures it either.
       budget: { limit: charter.budget, used: null },
     };
   }
 
   async function storedQuestions(): Promise<StaffQuestion[]> {
     return (await kv.get<StaffQuestion[]>(QUESTIONS_KEY)) ?? [];
+  }
+
+  /** Changes to the stored questions run one after the other, each on a fresh read. */
+  let writes: Promise<unknown> = Promise.resolve();
+  function changeQuestions(change: (stored: StaffQuestion[]) => StaffQuestion[]): Promise<void> {
+    const run = writes.then(async () => {
+      await kv.set(QUESTIONS_KEY, change(await storedQuestions()));
+    });
+    writes = run.catch(() => undefined);
+    return run;
   }
 
   /**
@@ -200,10 +239,16 @@ export function createStaffChats(core: Core) {
         input: [{ type: "text", text: `${OPTIO_MESSAGE} ask] ${question}`, mentions: [] }],
       });
     }
-    await kv.set(QUESTIONS_KEY, [
-      ...(await storedQuestions()),
-      { agentId, question, askedAt, chatThreadId },
-    ]);
+    const chat = await bb.sdk.threads.get({ threadId: chatThreadId });
+    const asked: StaffQuestion = {
+      id: randomUUID().slice(0, 8),
+      agentId,
+      question,
+      askedAt,
+      chatThreadId,
+      chatHref: `/projects/${chat.projectId}/threads/${chatThreadId}`,
+    };
+    await changeQuestions((stored) => [...stored, asked]);
     changed();
     return { threadId: chatThreadId };
   }
@@ -227,14 +272,17 @@ export function createStaffChats(core: Core) {
   async function openQuestions() {
     const stored = await storedQuestions();
     if (stored.length === 0) return [];
-    const kept: StaffQuestion[] = [];
+    const gone = new Set<string>();
     for (const question of stored) {
-      if (!(await answered(question))) kept.push(question);
+      if (await answered(question)) gone.add(question.id);
     }
-    if (kept.length !== stored.length) await kv.set(QUESTIONS_KEY, kept);
-    return kept.flatMap((question) => {
+    // Dropped from a fresh read, so a question asked while the chats were read is kept.
+    if (gone.size > 0) {
+      await changeQuestions((fresh) => fresh.filter((question) => !gone.has(question.id)));
+    }
+    return stored.flatMap((question) => {
       const agent = agents.get(question.agentId);
-      return agent === null ? [] : [{ ...question, name: agent.name }];
+      return gone.has(question.id) || agent === null ? [] : [{ ...question, name: agent.name }];
     });
   }
 
