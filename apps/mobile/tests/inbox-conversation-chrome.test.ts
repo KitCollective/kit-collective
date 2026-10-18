@@ -35,7 +35,7 @@ describe("inbox conversation chrome (KIT-118)", () => {
       /<ConversationView\s+key=\{`\$\{selectedConversationId\}:\$\{openCount\}`\}/,
     );
     expect(inboxSource).toMatch(/setOpenCount\(/);
-    // And a reused view starts over when the conversation or the Bud changes.
+    // And a mounted view starts over when its conversation or Bud prop changes.
     expect(viewSource).toMatch(/focusRequest\.current = \{ key, scrolled: false \}/);
   });
 

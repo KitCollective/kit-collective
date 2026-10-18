@@ -131,7 +131,7 @@ export function ConversationView({
 
   useEffect(() => {
     const key = `${conversationId}:${focusMessageId}`;
-    // A reused view (the wide Indbakke) can come back to a key it already scrolled to after another conversation: a new key starts over.
+    // A mounted view whose conversationId or focusMessageId prop changes starts over and scrolls to the new message.
     if (focusRequest.current.key !== key) {
       focusRequest.current = { key, scrolled: false };
     }
