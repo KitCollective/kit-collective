@@ -23,6 +23,16 @@ name: kit-291
     env:
       EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
 - startRecording: kc__kit-291
+# The first tab press right after sign-in can be swallowed while Samling is still settling on the
+# hosted simulator (run 39149973670 stayed on Samling): press once, then again if Søg is not up.
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 8000
+    optional: true
 - tapOn: Søg
 - extendedWaitUntil:
     visible:
