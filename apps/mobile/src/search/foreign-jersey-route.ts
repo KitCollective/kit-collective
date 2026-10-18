@@ -28,5 +28,6 @@ export function sitsDirectlyAboveForeignJerseyOf(
   if (!below || below.name !== FOREIGN_JERSEY_ROUTE) {
     return false;
   }
-  return (below.params as { jerseyId?: string } | undefined)?.jerseyId === jerseyId;
+  const params = below.params;
+  return !!params && "jerseyId" in params && params.jerseyId === jerseyId;
 }
