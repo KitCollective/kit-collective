@@ -99,12 +99,7 @@ function describe(loops: LoopDto[]): string {
   return `${text}\n\nstartsPerDay: ${STARTS_PER_DAY_NOTE}`;
 }
 
-/** What the Loops read from the Inbox area: the bb project it was set up with, if any. */
-export interface LoopsDeps {
-  inbox: { projectId(): Promise<string | undefined> };
-}
-
-export function createLoops(core: Core, { inbox }: LoopsDeps) {
+export function createLoops(core: Core) {
   const store = createSettingsStore(core.bb.storage.database());
 
   /** Every Loop's overrides by name, as the scheduler applies them. */
@@ -118,17 +113,15 @@ export function createLoops(core: Core, { inbox }: LoopsDeps) {
   core.scheduler.useLoopOverrides(overrides);
 
   /**
-   * The bb project whose `factory.config.json` holds the Loops: the one named, else the Board's,
-   * else the Inbox's. The Loops never need the Board, as the Inbox never does.
+   * The bb project whose `factory.config.json` holds the Loops: the one named, else the Board's.
+   * Another area's setting is not read here: areas only meet through `core`.
    */
   async function project(named: string | undefined): Promise<string> {
     if (named !== undefined) return named;
     const board = await core.storedScheduler();
     if (board !== null) return board.projectId;
-    const inboxProject = await inbox.projectId();
-    if (inboxProject !== undefined) return inboxProject;
     throw new Error(
-      "no bb project to read factory.config.json from: set up the Board, run `bb optio inbox --project <bb project id>`, or pass --project (docs/agents/optio.md)",
+      "no bb project to read factory.config.json from: set up the Board or pass --project <bb project id> (docs/agents/optio.md)",
     );
   }
 
@@ -215,8 +208,7 @@ export function createLoops(core: Core, { inbox }: LoopsDeps) {
       json,
       project: {
         type: "string",
-        description:
-          "The bb project whose factory.config.json to read; default the Board's or the Inbox's",
+        description: "The bb project whose factory.config.json to read; default the Board's",
       },
     },
     async run({ options }) {

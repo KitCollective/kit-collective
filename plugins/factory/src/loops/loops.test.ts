@@ -335,29 +335,24 @@ describe("the Board and the tick read override-or-file", () => {
     expect(JSON.parse(printed.stdout).error).toContain("factory.config.json");
   });
 
-  it("needs no Board: the Inbox's project, or --project, is enough", async () => {
+  it("without a Board it needs --project, and reads no other area's setting", async () => {
     const { rpc, cli } = await load(registry(), { board: false });
     const unset = await rpc("loops_list", null);
     expect(unset.loops).toEqual([]);
-    expect(unset.error).toContain("bb optio inbox --project");
+    expect(unset.error).toContain("pass --project");
     await expect(
       rpc("loops_set", { loop: "Issue run", key: "enabled", value: false, by: "Dana" }),
-    ).rejects.toThrow("bb optio inbox --project");
+    ).rejects.toThrow("pass --project");
 
     const named = await cli(["loops", "--json", "--project", "proj_1"], { threadId: "thr_x" });
     expect(named.exitCode).toBe(0);
     expect(JSON.parse(named.stdout).loops).toHaveLength(2);
 
+    // The Inbox's project does not stand in for the Board's.
     await cli(["inbox", "--state", "Approval", "--labels", "question", "--project", "proj_1"], {
       threadId: "thr_x",
     });
-    expect((await rpc("loops_list", null)).loops).toHaveLength(2);
-    await rpc("loops_set", { loop: "Issue run", key: "maxLive", value: 1, by: "Dana" });
-    const printed = await cli(["loops", "--json"], { threadId: "thr_x" });
-    expect(JSON.parse(printed.stdout).loops[0].settings.maxLive).toMatchObject({
-      value: 1,
-      file: 3,
-    });
+    expect((await rpc("loops_list", null)).error).toContain("pass --project");
   });
 
   it("says where a starts-per-day override stops applying", async () => {

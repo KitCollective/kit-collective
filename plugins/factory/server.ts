@@ -33,7 +33,7 @@ export default async function plugin(bb: BbPluginApi) {
   const board = createBoard(core);
   const runs = createRuns(core);
   const inbox = createInbox(core);
-  const loops = createLoops(core, { inbox });
+  const loops = createLoops(core);
   const home = createHome({ inbox });
   const threads = createThreads(core);
   const reviewerProxy = createReviewerProxy({

@@ -225,10 +225,5 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     },
   });
 
-  /** The bb project the Inbox was set up with, for areas that read the same `factory.config.json`. */
-  async function projectId(): Promise<string | undefined> {
-    return (await config())?.projectId;
-  }
-
-  return { list, answer, reject, read, command, projectId };
+  return { list, answer, reject, read, command };
 }
