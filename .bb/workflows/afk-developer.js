@@ -280,22 +280,29 @@ async function gateSlices(label, phaseTitle, command, before = [], retry = true,
 const logCmd = (event, flags) => `node scripts/run-log.mjs ${event} ${flags}`;
 // Asks for the hosted Device flows run of the PR head (ADR-0059). It decides for itself: nothing is
 // asked for without a slice flow, when the head already has the status, or when a re-request has
-// failed too. The pre-review gate waits for the status with the checks, so this rides in front of
-// every slice of that gate: a first `error` is asked for again inside the run.
+// failed too. It rides in front of the pre-review gate, so the run starts as soon as the head exists
+// and goes on while the Reviewer reviews; only the review gate waits for the status (amendment of
+// 2026-10-18). It also rides in front of every slice of both gates: a first `error` is asked for
+// again inside the run.
 const requestDeviceFlows = (pr) => `node scripts/request-device-flows.mjs ${pr} --issue ${issue}`;
 
 /**
- * The sentence of a pre-review gate that cannot get a Device flows verdict (the `error` run was asked for
+ * The sentence of a review gate that cannot get a Device flows verdict (the `error` run was asked for
  * again and failed too, or the status was still pending when the wait ran out), or null. No simulator is
- * here, so a person runs device-run.sh on the Mac: no fix round, no Reviewer.
+ * here, so a person runs device-run.sh on the Mac: no fix round.
  */
-function deviceFlowsNoVerdict(pre) {
-  const closed = pre.code === 1 ? /device-flows-no-verdict: (needs-human: run device-run\.sh on the Mac on [0-9a-f]+)/.exec(pre.line) : null;
+function deviceFlowsNoVerdict(gate) {
+  const closed = gate.code === 1 ? /device-flows-no-verdict: (needs-human: run device-run\.sh on the Mac on [0-9a-f]+)/.exec(gate.line) : null;
   if (closed) {
     return closed[1];
   }
-  const pending = pre.exhausted ? /device-flows-pending on ([0-9a-f]+)/.exec(pre.line) : null;
+  const pending = gate.exhausted ? /device-flows-pending on ([0-9a-f]+)/.exec(gate.line) : null;
   return pending ? `needs-human: run device-run.sh on the Mac on ${pending[1]}` : null;
+}
+
+/** True when a closed review gate's only red check is the `Device flows` status: a red flow, which is the Engineer's to fix. */
+function deviceFlowsRedOnly(gate) {
+  return gate.code === 1 && /checks: (?:TIMEOUT after \d+s: )?RED \([^)]*\): Device flows$/.test(gate.line);
 }
 
 /** The one place a Linear state command is built, so no caller can write a state outside MAY_SET. */
@@ -592,7 +599,7 @@ async function engineerPass(round, feedback, engineerModelAlias, mergeRound = fa
     "Read `### Plan` in the workpad when there is one. Copy the issue's write-scope: line into the PR body (plain globs, no backslashes).",
     `Wait for CI only in the foreground, in slices (a foreground command is capped at 10 minutes, and your shell tool backgrounds it after 2 unless you set the tool's timeout to 600000 ms, so set it): \`node scripts/wait-for-checks.mjs <pr> --timeout ${GATE_SLICE_SECONDS}\`. On exit 2 (still pending) run the same command again in the same turn, up to ${GATE_SLICES} times in all; only after that end with \`blocked ci-pending\`. Exit 5 means gh is unusable: report \`blocked\` with the verdict line and do not retry. Never start it in the background and end your turn.`,
     "An acceptance criterion that needs the owner's machine (reload Optio, probe a thread, the Board) is proven after the merge by the checks the issue names on its `live-check:` line (scripts/lib/live-checks.mjs). Build what they check, but never stop or return blocked to ask a person for that evidence; say in the workpad which criterion the live check covers. If no listed check fits, say so under `### Waiting` instead of inventing one.",
-    `A slice with a slice flow (apps/mobile/.maestro/slices/${issue}.yaml) needs a green \`Device flows\` status on the PR head (the pre-review gate row in implement/SKILL.md). This machine has no simulator: ask for the hosted run with \`node scripts/request-device-flows.mjs <pr> --issue ${issue}\` and wait with \`node scripts/gate.mjs pre-review <pr> --issue ${issue} --timeout ${GATE_SLICE_SECONDS}\` in the same slices. A red flow is yours to fix. If the status stays missing or pending after ${GATE_SLICES} slices, or ends \`error\` again after a re-request, never return ready: write the ask and the stage under workpad \`### Waiting\` and return blocked with the sentence \`needs-human: run device-run.sh on the Mac on <sha>\`.`,
+    `A slice with a slice flow (apps/mobile/.maestro/slices/${issue}.yaml) gets its \`Device flows\` status from a hosted run (the pre-review gate row in implement/SKILL.md). This machine has no simulator: after every push, ask for the hosted run with \`node scripts/request-device-flows.mjs <pr> --issue ${issue}\`, then return ready once the pre-review gate is true. Do not wait for the \`Device flows\` status: it runs while the Reviewer reviews, and the review gate of this run waits for it. A red flow comes back to you as a fix round; fix it, push, and ask for the run again.`,
     "Never move the issue to Merging, Post-Merge or Done, never merge, never enable auto-merge, never post a kc/audit status. Move nothing in Linear except the workpad and your evidence comments.",
     feedback ? `Change request from the last round (fix the class, not the instance). Answer every gating finding in the workpad under ### Notes, one line each: fixed in <commit>, or disagreed with the reason:\n${feedback}` : "",
     "Return outcome ready (only when the pre-review gate in implement/SKILL.md is true), blocked (sentence starts `needs-human:` or `blocked-by KIT-m:`) or failed, one sentence, the PR number, and your own thread id ($BB_THREAD_ID) in threadId.",
@@ -686,12 +693,6 @@ if (resume && resumePr !== null) {
     const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${resumePr} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [requestDeviceFlows(resumePr)], true, [requestDeviceFlows(resumePr)]);
     if (pre.runner) {
       return stopped("pre-review gate", "stopped", { prNumber: resumePr, note: pre.line });
-    }
-    const noVerdictAtResume = deviceFlowsNoVerdict(pre);
-    if (noVerdictAtResume) {
-      await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code device-flows-no-verdict`)], true);
-      const state = await stopForHuman("Pre-review gate", noVerdictAtResume, { stage: "pre-review gate", ask: noVerdictAtResume });
-      return stopped("pre-review gate", state, { prNumber: resumePr, note: noVerdictAtResume });
     }
     if (pre.exhausted) {
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
@@ -809,14 +810,6 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
       // The runner failed, not the gate: sh() logged runner-no-result, and no fix round can help.
       return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
     }
-    const noVerdict = deviceFlowsNoVerdict(pre);
-    if (noVerdict) {
-      // The hosted Device flows run cannot reach a verdict and no simulator is here: a person runs
-      // device-run.sh on the Mac. Not a red gate and not a pending one, so no fix round and no Reviewer.
-      await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code device-flows-no-verdict`)], true);
-      const state = await stopForHuman("Pre-review gate", noVerdict, { stage: "pre-review gate", ask: noVerdict });
-      return stopped("pre-review gate", state, { prNumber, rounds, note: noVerdict });
-    }
     if (pre.exhausted) {
       // Checks never finished inside the bound: not a red gate, so no fix round, and the issue is still In Progress.
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
@@ -860,6 +853,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
         "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
         `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
         "Every finding names the file and line, what is wrong, and what green looks like, so the Engineer can check it, and is marked `gating` or `nit`. Only gating findings make the review red; nits go in the matrix and do not hold it (ADR-0066).",
+        "The `Device flows` status of a slice flow may still be running while you review: it is not a required check, not yours to wait for and not a finding. Review the flow file against the acceptance criteria; the review gate waits for the run.",
         "On red, also return light: true only when every finding is light: the wording of a comment, a doc line, a name or a message, with no gap in behaviour, tests, an acceptance criterion, the design lock or the write-scope. Otherwise light: false.",
       ].join("\n"),
       `reviewer:${issue}:r${round}`,
@@ -902,14 +896,24 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
     return stopped("reviewer", "In Review", { prNumber, rounds, verdict: "amber", note: review.sentence });
   }
 
-  // -- Full review gate (matrix included) and the receipt as a dry run.
+  // -- Full review gate (matrix included) and the receipt as a dry run. For a slice with a slice flow it
+  // also waits for the hosted Device flows run, which was asked for before the pre-review gate and ran
+  // while the Reviewer reviewed; the request rides in front of every slice so a first `error` is asked for again.
   phase("Review gate");
-  const gate = await gateSlices("gate:review", "Review gate", `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, reviewerLog);
-  if (gate.exhausted) {
-    await sh("log:gate", "Review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
+  const gate = await gateSlices("gate:review", "Review gate", `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [...reviewerLog, requestDeviceFlows(prNumber)], true, [requestDeviceFlows(prNumber)]);
+  if (gate.runner) {
     return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
   }
-  if (gate.runner) {
+  const noVerdict = deviceFlowsNoVerdict(gate);
+  if (noVerdict) {
+    // The hosted Device flows run cannot reach a verdict and no simulator is here: a person runs
+    // device-run.sh on the Mac. Not a red gate and not a pending one, so no fix round.
+    await sh("log:gate", "Review gate", [logCmd("reason", `--issue ${issue} --code device-flows-no-verdict`)], true);
+    const state = await stopForHuman("Review gate", noVerdict, { stage: "review gate", ask: noVerdict });
+    return stopped("review gate", state, { prNumber, rounds, verdict: review.verdict, note: noVerdict });
+  }
+  if (gate.exhausted) {
+    await sh("log:gate", "Review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
     return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
   }
   if (review.verdict === "red" || gate.code !== 0) {
@@ -929,7 +933,12 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
     ], true);
     if (round < roundCap) {
       backInProgress = true;
-      feedback = `${review.verdict === "red" ? `The Reviewer returned red: ${review.sentence}. The findings are under \`### Review feedback\` in the workpad.` : ""}${gate.code !== 0 ? `\nThe review gate says: ${gate.line}` : ""}`.trim();
+      // A red Device flows run is a fix round like a red pre-review check: the Engineer gets the line, fixes, pushes
+      // and asks for the run again; the new head goes through the pre-review gate and a fresh review.
+      const flowRed = deviceFlowsRedOnly(gate)
+        ? `\nThe hosted Device flows run is red on the PR head: ${gate.line}. The status links the run, whose artifact holds the screenshots; fix the flow or the app, push, and ask for the run again with node scripts/request-device-flows.mjs ${prNumber} --issue ${issue}.`
+        : "";
+      feedback = `${review.verdict === "red" ? `The Reviewer returned red: ${review.sentence}. The findings are under \`### Review feedback\` in the workpad.` : ""}${gate.code !== 0 ? `\nThe review gate says: ${gate.line}` : ""}${flowRed}`.trim();
       continue;
     }
     // Out of rounds: a person has to act, and Linear still says In Review, so say Approval.
