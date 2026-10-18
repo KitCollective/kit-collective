@@ -1222,7 +1222,7 @@ test("autoLand must be a boolean in the input schema, and never changes how the 
     // The Reviewer runs on an OpenRouter model through Optio's proxy (ADR-0067); everyone else on Claude.
     assert.match(
       spawn.options.model,
-      spawn.options.label.startsWith("reviewer:") ? /^(deepseek|z-ai)\// : /^claude-/,
+      spawn.options.label.startsWith("reviewer:") ? /^z-ai\// : /^claude-/,
     );
   }
 });
@@ -1763,14 +1763,14 @@ test("the Reviewer marks each finding gating or nit and says what green looks li
   assert.match(reviewer.prompt, /what green looks like/);
 });
 
-test("the Reviewer is DeepSeek for a Sonnet Engineer and GLM once an Engineer round ran Opus, through Optio's proxy (ADR-0067)", async () => {
+test("the Reviewer is GLM 5.3 through Optio's proxy, for a Sonnet and an Opus Engineer alike (ADR-0067)", async () => {
   const sonnet = await run();
   const r1 = agentSpawns(sonnet.spawns).find((s) => s.options.label.startsWith("reviewer:"));
   assert.equal(r1.options.label, "reviewer:KIT-9:r1:openrouter");
-  assert.equal(r1.options.model, "deepseek/deepseek-v4-pro");
+  assert.equal(r1.options.model, "z-ai/glm-5.3");
   assert.ok(
     sonnet.commands.some((c) =>
-      /--step reviewer .*--provider claude-code --model deepseek\/deepseek-v4-pro/.test(c),
+      /--step reviewer .*--provider claude-code --model z-ai\/glm-5.3/.test(c),
     ),
   );
   const opus = await run({ startDecision: { engineerModel: "opus" } });
