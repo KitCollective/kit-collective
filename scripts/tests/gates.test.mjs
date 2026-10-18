@@ -547,7 +547,10 @@ test("resume point: a PR GitHub calls CONFLICTING is never reviewed as it is, wh
   assert.equal(conflicting.code, GATE_EXIT.closed);
   // The workflow reads this prefix as the merge round.
   assert.match(conflicting.line, /^CLOSED: conflicting: /);
-  assert.match(resumePoint({ ...base, events: [], mergeable: "CONFLICTING" }).line, /^CLOSED: conflicting: /);
+  assert.match(
+    resumePoint({ ...base, events: [], mergeable: "CONFLICTING" }).line,
+    /^CLOSED: conflicting: /,
+  );
   for (const mergeable of ["MERGEABLE", "UNKNOWN", undefined]) {
     assert.equal(resumePoint({ ...base, mergeable }).code, GATE_EXIT.open);
   }

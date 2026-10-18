@@ -1807,8 +1807,14 @@ test("every agent() call names provider, model and reasoningLevel together, as b
 // ---- A resume of a PR that conflicts with development (2026-10-18: KIT-404 and KIT-400) -----------
 const CONFLICT_POINT =
   "CLOSED: conflicting: the PR conflicts with development; merge origin/development into it first";
-const MERGE_NOTE = /First job of this round, before anything else: PR #55 conflicts with development/;
-const onPr55 = () => ({ outcome: "ready", sentence: "merged", threadId: ENGINEER_THREAD, prNumber: 55 });
+const MERGE_NOTE =
+  /First job of this round, before anything else: PR #55 conflicts with development/;
+const onPr55 = () => ({
+  outcome: "ready",
+  sentence: "merged",
+  threadId: ENGINEER_THREAD,
+  prNumber: 55,
+});
 
 test("a resume the dispatcher could not merge opens with an Engineer merge round, never a review as it is", async () => {
   // resume-point says review as it is, but the dispatcher's merge conflicted: the head is not what lands.
@@ -1831,7 +1837,9 @@ test("a resume the dispatcher could not merge opens with an Engineer merge round
   assert.ok(commands.some((c) => c.includes("--code conflict")));
   const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:"));
   assert.equal(reviewer.options.label, "reviewer:KIT-9:r1:openrouter");
-  assert.ok(commands.some((c) => c.startsWith("node scripts/auto-land.mjs start 55 --issue KIT-9")));
+  assert.ok(
+    commands.some((c) => c.startsWith("node scripts/auto-land.mjs start 55 --issue KIT-9")),
+  );
   assert.equal(result.status, "Done");
   assert.equal(result.prNumber, 55);
 });
@@ -1861,13 +1869,22 @@ test("a pre-review gate that finds the PR CONFLICTING opens the next round with 
       if (!isPre(c)) return undefined;
       gates += 1;
       return gates === 1
-        ? { code: 1, line: "CLOSED (review): checks: checks green (9 pass) but PR is CONFLICTING (DIRTY)" }
+        ? {
+            code: 1,
+            line: "CLOSED (review): checks: checks green (9 pass) but PR is CONFLICTING (DIRTY)",
+          }
         : undefined;
     }),
     engineer: onPr55,
     reviewer: (round) =>
       round === 1
-        ? { verdict: "red", sha: SHA, rows: ["spec"], sentence: "AC 2 unmet", threadId: REVIEWER_THREAD }
+        ? {
+            verdict: "red",
+            sha: SHA,
+            rows: ["spec"],
+            sentence: "AC 2 unmet",
+            threadId: REVIEWER_THREAD,
+          }
         : undefined,
   });
   const prompts = engineers(spawns).map((s) => s.prompt);
@@ -1882,7 +1899,9 @@ test("a resume gate closed on CONFLICTING also opens the first round with the me
   const { spawns } = await run({
     args: { issue: "KIT-9", resume: true },
     shell: resumeShell(0, (c) =>
-      isPre(c) ? { code: 1, line: "CLOSED (review): checks: checks green but PR is CONFLICTING (DIRTY)" } : undefined,
+      isPre(c)
+        ? { code: 1, line: "CLOSED (review): checks: checks green but PR is CONFLICTING (DIRTY)" }
+        : undefined,
     ),
     engineer: onPr55,
   });
@@ -1892,7 +1911,10 @@ test("a resume gate closed on CONFLICTING also opens the first round with the me
 test("mergeFirst means nothing without a PR to merge into: a fresh run and a resume without a PR build as before", async () => {
   for (const extra of [
     { args: { issue: "KIT-9", mergeFirst: true } },
-    { args: { issue: "KIT-9", resume: true, mergeFirst: true }, shell: (c) => (lookup(c) ? { code: 0, line: "" } : undefined) },
+    {
+      args: { issue: "KIT-9", resume: true, mergeFirst: true },
+      shell: (c) => (lookup(c) ? { code: 0, line: "" } : undefined),
+    },
   ]) {
     const { commands, spawns } = await run(extra);
     assert.doesNotMatch(engineers(spawns)[0].prompt, /First job of this round/);

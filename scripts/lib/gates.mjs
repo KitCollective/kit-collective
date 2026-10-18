@@ -95,7 +95,9 @@ export function headChanged({ head, issue, events, workpad = "" }) {
  */
 export function resumePoint({ head, issue, events, workpad = "", mergeable = "UNKNOWN" }) {
   if (mergeable === "CONFLICTING") {
-    return closed("conflicting: the PR conflicts with development; merge origin/development into it first");
+    return closed(
+      "conflicting: the PR conflicts with development; merge origin/development into it first",
+    );
   }
   const lastEngineer = events.findLast(
     (e) => e.issue === issue && e.event === "result" && e.step === "engineer",
