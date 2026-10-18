@@ -101,7 +101,7 @@ function spawn(alias, prompt, label, phaseTitle, schema) {
     return agent(prompt, { label, phase: phaseTitle, schema, provider: "claude-code", model: "claude-sonnet-5-5", reasoningLevel: "high" });
   }
   if (alias === "glm") {
-    return agent(prompt, { label: `${label}:openrouter`, phase: phaseTitle, schema, provider: "claude-code", model: "z-ai/glm-5.3" });
+    return agent(prompt, { label: `${label}:openrouter`, phase: phaseTitle, schema, provider: "claude-code", model: "z-ai/glm-5.3", reasoningLevel: "high" });
   }
   throw new Error(`afk-developer has no model for alias ${alias}`);
 }
