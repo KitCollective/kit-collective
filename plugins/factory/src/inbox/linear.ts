@@ -1,4 +1,5 @@
-// The one Linear read the Inbox makes: the issues of a team that are in a state now.
+// The Inbox's Linear calls: the issues of a team that are in a state now, and the writes of an
+// answer, a rejection and an approval.
 import { z } from "zod";
 
 const ENDPOINT = "https://api.linear.app/graphql";
@@ -240,6 +241,32 @@ export async function settleIssue(
       ready.id,
     ]),
   ];
+  await commentThenMove(apiKey, fetchImpl, {
+    issueId: issue.id,
+    identifier: settlement.identifier,
+    body: settlement.comment,
+    move: `mutation Hand($id: String!, $stateId: String!, $labelIds: [String!]!) {
+             issueUpdate(id: $id, input: { stateId: $stateId, labelIds: $labelIds }) { success }
+           }`,
+    variables: { id: issue.id, stateId: state.id, labelIds },
+  });
+}
+
+/**
+ * Writes the comment, then the move. When the move fails after the comment went in, the comment is
+ * deleted again, so the issue stays as it was.
+ */
+async function commentThenMove(
+  apiKey: string,
+  fetchImpl: typeof fetch,
+  write: {
+    issueId: string;
+    identifier: string;
+    body: string;
+    move: string;
+    variables: Record<string, unknown>;
+  },
+): Promise<void> {
   const created = z
     .object({
       commentCreate: z.object({
@@ -254,7 +281,7 @@ export async function settleIssue(
         `mutation Comment($id: String!, $body: String!) {
            commentCreate(input: { issueId: $id, body: $body }) { success comment { id } }
          }`,
-        { id: issue.id, body: settlement.comment },
+        { id: write.issueId, body: write.body },
       ),
     );
   const comment =
@@ -263,16 +290,9 @@ export async function settleIssue(
       : null;
   if (comment === null) throw new Error("Linear did not save the comment");
   try {
-    const moved = z.object({ issueUpdate: z.object({ success: z.boolean() }) }).safeParse(
-      await call(
-        apiKey,
-        fetchImpl,
-        `mutation Hand($id: String!, $stateId: String!, $labelIds: [String!]!) {
-             issueUpdate(id: $id, input: { stateId: $stateId, labelIds: $labelIds }) { success }
-           }`,
-        { id: issue.id, stateId: state.id, labelIds },
-      ),
-    );
+    const moved = z
+      .object({ issueUpdate: z.object({ success: z.boolean() }) })
+      .safeParse(await call(apiKey, fetchImpl, write.move, write.variables));
     if (!moved.success || !moved.data.issueUpdate.success) {
       throw new Error("Linear did not save the move");
     }
@@ -290,7 +310,106 @@ export async function settleIssue(
     throw new Error(
       undone
         ? why
-        : `${why}; the comment was posted and could not be taken back, so it is on ${settlement.identifier} now`,
+        : `${why}; the comment was posted and could not be taken back, so it is on ${write.identifier} now`,
     );
   }
+}
+
+const APPROVE_QUERY = `
+query Approve($id: String!) {
+  issue(id: $id) {
+    id title url
+    state { name }
+    labels(first: 50) { nodes { name } }
+    attachments(first: 25) { nodes { url title } }
+    team { key states(first: 50) { nodes { id name } } }
+  }
+}`;
+
+const approveData = z.object({
+  issue: z
+    .object({
+      id: z.string(),
+      title: z.string(),
+      url: z.string(),
+      state: z.object({ name: z.string() }),
+      labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
+      attachments: z.object({
+        nodes: z.array(z.object({ url: z.string(), title: z.string().nullable() })),
+      }),
+      team: z.object({
+        key: z.string(),
+        states: z.object({ nodes: z.array(z.object({ id: z.string(), name: z.string() })) }),
+      }),
+    })
+    .nullable(),
+});
+
+/** What an approval writes: the comment, then the move to the merge-permission state, labels unchanged. */
+export interface Approval {
+  identifier: string;
+  comment: string;
+  /** The state the issue must be in now. */
+  waitingState: string;
+  /** A green review carries none of these. */
+  questionLabels: string[];
+  /** The merge-permission state. */
+  toState: string;
+}
+
+/** The approved issue, as the landing card shows it. */
+export interface Approved {
+  title: string;
+  url: string;
+  attachments: { url: string; title: string }[];
+}
+
+/**
+ * Approves a green review: the issue is read first, and one that left the state or carries a question
+ * label is refused, so a stale card writes nothing. Then the comment, then the move, with the comment
+ * taken back when the move fails. The labels are left as they are.
+ */
+export async function approveIssue(
+  apiKey: string,
+  approval: Approval,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Approved> {
+  const read = approveData.safeParse(
+    await call(apiKey, fetchImpl, APPROVE_QUERY, { id: approval.identifier }),
+  );
+  const issue = read.success ? read.data.issue : null;
+  if (issue === null) throw new Error(`Linear has no issue ${approval.identifier}`);
+  if (issue.state.name !== approval.waitingState) {
+    throw new Error(
+      `${approval.identifier} is in ${issue.state.name} now, not ${approval.waitingState}: refresh the Inbox`,
+    );
+  }
+  if (issue.labels.nodes.some((label) => approval.questionLabels.includes(label.name))) {
+    throw new Error(
+      `${approval.identifier} is a question now, not a green review: refresh the Inbox`,
+    );
+  }
+  const state = issue.team.states.nodes.find((node) => node.name === approval.toState);
+  if (state === undefined) {
+    throw new Error(`team ${issue.team.key} has no state "${approval.toState}"`);
+  }
+  const attachments = issue.attachments.nodes.map((attachment) => ({
+    url: attachment.url,
+    title: attachment.title ?? "",
+  }));
+  if (!attachments.some((attachment) => /\/pull\/\d+(?:[/?#]|$)/.test(attachment.url))) {
+    throw new Error(
+      `${approval.identifier} has no pull request attached: there is nothing to land`,
+    );
+  }
+  await commentThenMove(apiKey, fetchImpl, {
+    issueId: issue.id,
+    identifier: approval.identifier,
+    body: approval.comment,
+    move: `mutation Approve($id: String!, $stateId: String!) {
+             issueUpdate(id: $id, input: { stateId: $stateId }) { success }
+           }`,
+    variables: { id: issue.id, stateId: state.id },
+  });
+  return { title: issue.title, url: issue.url, attachments };
 }

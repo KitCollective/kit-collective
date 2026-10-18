@@ -307,6 +307,7 @@ jobs:
           scripts/tests/ref-injection.test.mjs
           scripts/tests/afk-developer-workflow.test.mjs
           scripts/tests/auto-land.test.mjs
+          scripts/tests/land-approved.test.mjs
           scripts/tests/scenarios.test.mjs
           scripts/tests/holdout-guard.test.mjs
           scripts/tests/auto-land-allow.test.mjs
