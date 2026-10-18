@@ -68,7 +68,11 @@ if (cmd === "issue") {
     process.exit(1);
   }
   fs.appendFileSync(dir + "/linear-writes.log", line + "\\n");
-  if (cmd === "state") { data.state = rest[0]; fs.writeFileSync(file, JSON.stringify(data)); }
+  if (cmd === "state") data.state = rest[0];
+  if (cmd === "label" && rest[0] === "add") data.labels = [...(data.labels ?? []), rest[1]];
+  if (cmd === "label" && rest[0] === "swap") data.labels = (data.labels ?? []).map((one) => (one === rest[1] ? rest[2] : one));
+  if (cmd === "comment") data.comments = [...(data.comments ?? []), { body: fs.readFileSync(rest[1], "utf8") }];
+  fs.writeFileSync(file, JSON.stringify(data));
 }
 `;
 
@@ -145,11 +149,14 @@ function world({ state = "Merging", labels = ["ready-for-agent"] } = {}) {
   return w;
 }
 
+/** The hand-over: the reason comment, then ready-for-human, then Approval as the last write. */
 const handedOver = (w, code) => {
   const writes = w.read("linear-writes.log");
-  assert.match(writes, /state KIT-9 Approval/);
-  assert.match(writes, /label KIT-9 swap ready-for-agent ready-for-human/);
-  assert.match(writes, new RegExp(`comment KIT-9 .*Landing stopped \\(${code}\\)`));
+  const at = (pattern) => writes.split("\n").findIndex((line) => pattern.test(line));
+  const comment = at(new RegExp(`^comment KIT-9 .*Landing stopped \\(${code}\\)`));
+  const label = at(/^label KIT-9 swap ready-for-agent ready-for-human$/);
+  const state = at(/^state KIT-9 Approval$/);
+  assert.ok(comment >= 0 && label > comment && state > label, writes);
   assert.doesNotMatch(writes, /state KIT-9 Done/);
 };
 
@@ -344,6 +351,26 @@ test("a hand-over whose Linear writes fail is UNKNOWN (exit 4), not STOPPED", ()
     result.stdout,
     /^UNKNOWN \(land-approved\): enqueue-failed: .*NOT moved to Approval/,
   );
+});
+
+test("a hand-over whose comment or label write fails leaves the issue landing, and a second stop finishes it", () => {
+  for (const failing of ["comment", "label"]) {
+    const w = world();
+    const first = w.stop("the runs machine did not answer: timeout", { FAKE_LINEAR_FAIL: failing });
+    assert.equal(first.status, 4, first.stdout + first.stderr);
+    assert.match(first.stdout, /^UNKNOWN \(land-approved\): optio: .*the hand-over failed/);
+    // Approval is the last write, so the issue is still Merging and the stop can run again.
+    assert.doesNotMatch(w.read("linear-writes.log"), /^state /m);
+    assert.equal(JSON.parse(w.read("linear-issue.json")).state, "Merging");
+
+    const second = w.stop("the runs machine did not answer: timeout");
+    assert.equal(second.status, 1, second.stdout + second.stderr);
+    handedOver(w, "optio");
+    const writes = w.read("linear-writes.log");
+    // A comment or a label already there is not written again.
+    assert.equal(writes.match(/^comment /gm)?.length, 1, writes);
+    assert.equal(writes.match(/^label /gm)?.length, 1, writes);
+  }
 });
 
 // ---- stop ----------------------------------------------------------------------------------------------

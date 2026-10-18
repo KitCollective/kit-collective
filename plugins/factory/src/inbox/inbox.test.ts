@@ -5,6 +5,7 @@ import plugin from "../../server.js";
 import type { rpcContract } from "../contract.js";
 import { createGateStore } from "../gate-store.js";
 import { GATE_CALL_TIMEOUT_MS } from "../host-contract.js";
+import { RETRY_WAIT_MS } from "./landing.js";
 
 type Contract = typeof rpcContract;
 type Rpc = <M extends keyof Contract & string>(
@@ -858,7 +859,8 @@ describe("approving from the Inbox", () => {
     }
   });
 
-  it("says so on the card when the hand-over fails too, and tries the slice again on the next read", async () => {
+  it("says so on the card when the hand-over fails too, and tries the slice again on the first read after the wait", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
     try {
       const { rpc, machine } = await approving([reviewed]);
       await rpc("inbox_approve", { identifier: "ENG-1" });
@@ -869,7 +871,15 @@ describe("approving from the Inbox", () => {
       );
       const card = await cardOf(rpc, "ENG-1");
       expect(card).toMatchObject({ kind: "landing", landing: { phase: "approved" } });
-      // The read started the landing again from the phase it had.
+      // A read inside the wait (as the page's on `changed`) starts no driver.
+      await cardOf(rpc, "ENG-1");
+      vi.setSystemTime(Date.now() + RETRY_WAIT_MS - 1_000);
+      await cardOf(rpc, "ENG-1");
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(machine.calls).toHaveLength(2);
+      // The first read after the wait starts the landing again from the phase it had.
+      vi.setSystemTime(Date.now() + 2_000);
+      await cardOf(rpc, "ENG-1");
       await vi.waitFor(() => expect(machine.calls).toHaveLength(3));
       expect(machine.calls.map((call) => call.input)).toMatchObject([
         { step: "start" },
@@ -877,6 +887,7 @@ describe("approving from the Inbox", () => {
         { step: "start" },
       ]);
     } finally {
+      vi.useRealTimers();
       vi.unstubAllGlobals();
     }
   });

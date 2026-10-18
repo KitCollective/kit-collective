@@ -21,8 +21,9 @@
  *       answer, or a slice answered UNKNOWN): a landing issue (Merging or Post-Merge) is stopped with
  *       the reason; any other is refused and nothing is written, since a person moved it on.
  *
- * A stop hands the issue to a person: Approval, ready-for-human and one comment with the reason. A
- * hand-over whose Linear writes fail is UNKNOWN, so the caller knows nobody was told.
+ * A stop hands the issue to a person: one comment with the reason, ready-for-human, then Approval as
+ * the last write. A hand-over whose Linear writes fail is UNKNOWN, so the caller knows nobody was
+ * told; a failure before the state write leaves the issue landing, so the next stop finishes it.
  *
  * One verdict line on every path:
  *   QUEUED (land-approved): …                exit 0, start enqueued it (or found it queued)
@@ -131,23 +132,28 @@ function bodyFile(text) {
 }
 
 /**
- * Hands the issue to a person: ready-for-human, Approval and one comment with the reason. Exit 1;
- * exit 4 (UNKNOWN) when a write failed, so the caller knows the hand-over did not happen.
+ * Hands the issue to a person: one comment with the reason, ready-for-human, then Approval as the
+ * last write. Exit 1; exit 4 (UNKNOWN) when a write failed, so the caller knows the hand-over did not
+ * happen. A failure before the state write leaves the issue landing, so the hand-over can run again;
+ * a comment or a label already there is not written again.
+ * @param {{ labels?: string[], comments?: Array<{ body: string }> }} data the issue as read
  */
-async function stop(code, detail, labels) {
-  const swap = handOverLabel(labels);
+async function stop(code, detail, data) {
+  const body = stoppedComment(code, detail, pr);
+  const commented = (data.comments ?? []).some((one) => one.body.trim() === body.trim());
+  const comment = commented
+    ? { code: 0 }
+    : await linear("comment", issue, "--body-file", bodyFile(body));
+  const swap = comment.code === 0 ? handOverLabel(data.labels ?? []) : null;
   const label = swap === null ? { code: 0 } : await linear("label", issue, ...swap);
-  const state = await linear("state", issue, "Approval");
-  const comment = await linear(
-    "comment",
-    issue,
-    "--body-file",
-    bodyFile(stoppedComment(code, detail, pr)),
-  );
+  const state =
+    comment.code === 0 && label.code === 0
+      ? await linear("state", issue, "Approval")
+      : { code: 1, line: "not tried, the writes before it failed" };
   const failed = [
-    ...(state.code === 0 ? [] : [`NOT moved to Approval (${state.line})`]),
-    ...(label.code === 0 ? [] : [`ready-for-human NOT set (${label.line})`]),
     ...(comment.code === 0 ? [] : [`the comment NOT posted (${comment.line})`]),
+    ...(comment.code !== 0 || label.code === 0 ? [] : [`ready-for-human NOT set (${label.line})`]),
+    ...(state.code === 0 ? [] : [`NOT moved to Approval (${state.line})`]),
   ];
   if (failed.length > 0) {
     out(4, verdict("UNKNOWN", `${code}: ${detail}; the hand-over failed: ${failed.join("; ")}`));
@@ -194,7 +200,6 @@ async function checksOn(head) {
 
 async function start() {
   const data = await linearIssue(issue);
-  const labels = data.labels ?? [];
   if (data.state !== MERGE_PERMISSION_STATUS) {
     out(
       1,
@@ -213,7 +218,7 @@ async function start() {
       out(0, verdict("QUEUED", `PR ${pr} ${decision.detail}; run finish to land it`));
     }
     if (decision.act === "stop") {
-      await stop(decision.code, decision.detail, labels);
+      await stop(decision.code, decision.detail, data);
     }
     if (decision.act === "enqueue") {
       const result = landAtMergeGate({
@@ -254,7 +259,7 @@ async function start() {
           ),
         );
       }
-      await stop("enqueue-failed", result.reason, labels);
+      await stop("enqueue-failed", result.reason, data);
     }
     if (!timeLeft()) {
       out(
@@ -271,7 +276,6 @@ async function start() {
 
 async function finish() {
   const data = await linearIssue(issue);
-  const labels = data.labels ?? [];
   if (data.state === MERGED_STATUS) {
     const view = await viewPr("state,mergeCommit");
     if (view.state === "MERGED") {
@@ -302,14 +306,14 @@ async function finish() {
     };
     const where = queueState(view);
     if (where === "closed") {
-      await stop("queue-ejected", "the PR was closed without being merged", labels);
+      await stop("queue-ejected", "the PR was closed without being merged", data);
     }
     notQueued = where === "not-queued" ? notQueued + 1 : 0;
     if (notQueued >= 2) {
       await stop(
         "queue-ejected",
         "the merge queue dropped the PR (auto-merge is off and it is not in the queue): a red queue run or a conflict",
-        labels,
+        data,
       );
     }
     let gateLine = "";
@@ -353,7 +357,7 @@ async function finish() {
         );
       }
       if (land.code === 1) {
-        await stop("integration-red", land.line, labels);
+        await stop("integration-red", land.line, data);
       }
       if (land.code !== 3) {
         out(
@@ -392,7 +396,7 @@ async function handOver() {
       ),
     );
   }
-  await stop("optio", reason, data.labels ?? []);
+  await stop("optio", reason, data);
 }
 
 try {

@@ -71,7 +71,7 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
         { hostId, timeoutMs: LAND_HOST_TIMEOUT_MS },
       ),
     changed: () => deps.bb.realtime.publish(CHANGED, {}),
-    now: Date.now,
+    now: () => Date.now(),
     log: (message) => deps.bb.log.error(message),
   });
 

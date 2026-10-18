@@ -8,6 +8,8 @@ import type { InboxListCardDto, LandingPhase } from "./contract.js";
 const PREFIX = "landing:";
 /** The longest reason a stop hands to the script. */
 const REASON_MAX = 900;
+/** How long a landing waits after a slice and its hand-over both failed before it is tried again. */
+export const RETRY_WAIT_MS = 5 * 60_000;
 
 /** One approved issue on its way to done. */
 export interface LandingRecord {
@@ -25,6 +27,8 @@ export interface LandingRecord {
   line: string | null;
   approvedAt: string;
   at: string;
+  /** After a slice whose hand-over failed too: no driver starts before this time (ISO). */
+  retryAt?: string;
 }
 
 /** The step the landing script takes next from a phase; null when the landing is over. */
@@ -152,8 +156,8 @@ export function createLandings(deps: LandingDeps) {
   /**
    * What the record becomes after a slice: the phase it says, removed when the issue moved on, or,
    * when the slice failed with nobody told, the script's `stop` with the reason. When that fails too
-   * the phase stays as it was with the reason on the card, and the driver ends: the next read of the
-   * Inbox starts it again, so the slice is tried again.
+   * the phase stays as it was with the reason on the card, and the driver ends: the first read of the
+   * Inbox after the wait (`RETRY_WAIT_MS`) starts it again, so the slice is tried again.
    */
   async function settleSlice(record: LandingRecord, outcome: SliceOutcome) {
     if (outcome.kind !== "failed") return { outcome, retryLater: false };
@@ -163,7 +167,7 @@ export function createLandings(deps: LandingDeps) {
       outcome: {
         kind: "phase",
         phase: record.phase,
-        line: `${outcome.why}; the hand-over failed too (${handed.why}), so the next read of the Inbox tries again`,
+        line: `${outcome.why}; the hand-over failed too (${handed.why}), so the first read of the Inbox after ${RETRY_WAIT_MS / 60_000} minutes tries again`,
       } satisfies SliceOutcome,
       retryLater: true,
     };
@@ -187,7 +191,16 @@ export function createLandings(deps: LandingDeps) {
           await remove(identifier);
         } else {
           const { phase, line } = outcome;
-          await save({ ...current, phase, line, at: new Date(deps.now()).toISOString() });
+          const now = deps.now();
+          const { retryAt: _, ...rest } = current;
+          await save({
+            ...rest,
+            phase,
+            line,
+            at: new Date(now).toISOString(),
+            // The page reads the Inbox again on `changed`; the wait keeps that read from retrying at once.
+            ...(retryLater ? { retryAt: new Date(now + RETRY_WAIT_MS).toISOString() } : {}),
+          });
         }
         deps.changed();
         if (retryLater || outcome.kind === "over") return;
@@ -210,10 +223,17 @@ export function createLandings(deps: LandingDeps) {
     start(record.identifier);
   }
 
-  /** Starts a driver for every landing that is not over and has none, as after a plugin reload. */
+  /**
+   * Starts a driver for every landing that is not over, has none and is not waiting to be tried
+   * again, as after a plugin reload or once a failed slice's wait is over.
+   */
   function resume(records: LandingRecord[]): void {
+    const now = deps.now();
     for (const record of records) {
-      if (nextStep(record.phase) !== null && !live.has(record.identifier)) start(record.identifier);
+      const waiting = record.retryAt !== undefined && Date.parse(record.retryAt) > now;
+      if (nextStep(record.phase) !== null && !live.has(record.identifier) && !waiting) {
+        start(record.identifier);
+      }
     }
   }
 
