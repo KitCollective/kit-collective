@@ -88,9 +88,15 @@ export function headChanged({ head, issue, events, workpad = "" }) {
  * result in the run log is `ready` (the Engineer said the PR is built) and the head has no findings
  * open against it. Anything else means the Engineer has work, so the answer is to build.
  * The caller still runs the pre-review gate before any Reviewer is spawned.
- * @param {{ head: string, issue: string, events: Record<string, any>[], workpad?: string }} input
+ * A PR GitHub calls CONFLICTING is never reviewed as it is: the Engineer merges origin/development
+ * into it first. Its line starts `CLOSED: conflicting:`, which the workflow reads as that round
+ * (2026-10-18: KIT-404 and KIT-400 sat in To-do after KIT-403 landed). UNKNOWN is not a conflict.
+ * @param {{ head: string, issue: string, events: Record<string, any>[], workpad?: string, mergeable?: string }} input
  */
-export function resumePoint({ head, issue, events, workpad = "" }) {
+export function resumePoint({ head, issue, events, workpad = "", mergeable = "UNKNOWN" }) {
+  if (mergeable === "CONFLICTING") {
+    return closed("conflicting: the PR conflicts with development; merge origin/development into it first");
+  }
   const lastEngineer = events.findLast(
     (e) => e.issue === issue && e.event === "result" && e.step === "engineer",
   );

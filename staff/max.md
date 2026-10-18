@@ -57,7 +57,12 @@ DISPATCH
   worktree from origin/development, which runs
   `bb workflows run --file .bb/workflows/afk-developer.js --args '{"issue":"KIT-n","autoLand":true}'`
   exactly once, adding "resume":true when the issue already has an open PR
-  (titled "KIT-n: ..."), since a fresh run is refused then. The run moves the issue itself; you never set In Progress,
+  (titled "KIT-n: ..."), since a fresh run is refused then. The thread first merges
+  origin/development into the PR branch; when that conflicts it aborts, detaches at
+  origin/development and still starts the run, with "mergeFirst":true added: the run's first
+  Engineer round merges and resolves the conflict, keeping both sides' features, before review.
+  A conflict is never a reason to leave an issue in To-do (2026-10-18: KIT-404 and KIT-400 waited
+  for a person after KIT-403 landed). The run moves the issue itself; you never set In Progress,
   In Review, Approval, Merging or Done.
 
 LANDING (each entry in the tick's landing list)

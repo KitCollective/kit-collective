@@ -1803,3 +1803,114 @@ test("every agent() call names provider, model and reasoningLevel together, as b
     assert.match(call, /reasoningLevel:/, call);
   }
 });
+
+// ---- A resume of a PR that conflicts with development (2026-10-18: KIT-404 and KIT-400) -----------
+const CONFLICT_POINT =
+  "CLOSED: conflicting: the PR conflicts with development; merge origin/development into it first";
+const MERGE_NOTE = /First job of this round, before anything else: PR #55 conflicts with development/;
+const onPr55 = () => ({ outcome: "ready", sentence: "merged", threadId: ENGINEER_THREAD, prNumber: 55 });
+
+test("a resume the dispatcher could not merge opens with an Engineer merge round, never a review as it is", async () => {
+  // resume-point says review as it is, but the dispatcher's merge conflicted: the head is not what lands.
+  const { result, commands, spawns } = await run({
+    args: { issue: "KIT-9", resume: true, mergeFirst: true, autoLand: true },
+    shell: resumeShell(0),
+    engineer: onPr55,
+  });
+  assert.equal(engineers(spawns).length, 1);
+  const prompt = engineers(spawns)[0].prompt;
+  assert.match(prompt, MERGE_NOTE);
+  assert.match(prompt, /git merge --no-edit origin\/development/);
+  assert.match(prompt, /both sides' features survive/);
+  assert.match(prompt, /Never rebase, force-push/);
+  assert.match(prompt, /never open a second PR/);
+  assert.ok(prompt.indexOf("First job of this round") < prompt.indexOf("Read `### Plan`"));
+  // The only pre-review gate is the one after the merge round, and the review follows it.
+  assert.equal(commands.filter(isPre).length, 1);
+  assert.ok(!commands.some((c) => c.includes("--code engineer-skipped")));
+  assert.ok(commands.some((c) => c.includes("--code conflict")));
+  const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:"));
+  assert.equal(reviewer.options.label, "reviewer:KIT-9:r1:openrouter");
+  assert.ok(commands.some((c) => c.startsWith("node scripts/auto-land.mjs start 55 --issue KIT-9")));
+  assert.equal(result.status, "Done");
+  assert.equal(result.prNumber, 55);
+});
+
+test("a resume whose resume point says CONFLICTING merges first without the dispatcher's flag", async () => {
+  const { result, commands, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: (c) =>
+      lookup(c)
+        ? { code: 0, line: "55" }
+        : isPoint(c)
+          ? { code: 1, line: CONFLICT_POINT }
+          : undefined,
+    engineer: onPr55,
+  });
+  assert.equal(engineers(spawns).length, 1);
+  assert.match(engineers(spawns)[0].prompt, MERGE_NOTE);
+  assert.equal(commands.filter(isPre).length, 1);
+  assert.equal(result.status, "Approval");
+});
+
+test("a pre-review gate that finds the PR CONFLICTING opens the next round with the merge, and only that round", async () => {
+  let gates = 0;
+  const { result, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(1, (c) => {
+      if (!isPre(c)) return undefined;
+      gates += 1;
+      return gates === 1
+        ? { code: 1, line: "CLOSED (review): checks: checks green (9 pass) but PR is CONFLICTING (DIRTY)" }
+        : undefined;
+    }),
+    engineer: onPr55,
+    reviewer: (round) =>
+      round === 1
+        ? { verdict: "red", sha: SHA, rows: ["spec"], sentence: "AC 2 unmet", threadId: REVIEWER_THREAD }
+        : undefined,
+  });
+  const prompts = engineers(spawns).map((s) => s.prompt);
+  assert.equal(prompts.length, 3);
+  assert.doesNotMatch(prompts[0], MERGE_NOTE);
+  assert.match(prompts[1], MERGE_NOTE);
+  assert.doesNotMatch(prompts[2], MERGE_NOTE);
+  assert.equal(result.status, "Approval");
+});
+
+test("a resume gate closed on CONFLICTING also opens the first round with the merge", async () => {
+  const { spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(0, (c) =>
+      isPre(c) ? { code: 1, line: "CLOSED (review): checks: checks green but PR is CONFLICTING (DIRTY)" } : undefined,
+    ),
+    engineer: onPr55,
+  });
+  assert.match(engineers(spawns)[0].prompt, MERGE_NOTE);
+});
+
+test("mergeFirst means nothing without a PR to merge into: a fresh run and a resume without a PR build as before", async () => {
+  for (const extra of [
+    { args: { issue: "KIT-9", mergeFirst: true } },
+    { args: { issue: "KIT-9", resume: true, mergeFirst: true }, shell: (c) => (lookup(c) ? { code: 0, line: "" } : undefined) },
+  ]) {
+    const { commands, spawns } = await run(extra);
+    assert.doesNotMatch(engineers(spawns)[0].prompt, /First job of this round/);
+    assert.ok(!commands.some((c) => c.includes("--code conflict")));
+  }
+});
+
+test("the dispatch tick starts a conflicting resume with mergeFirst, a flag the workflow accepts", () => {
+  const tick = readFileSync(
+    join(fileURLToPath(new URL("../..", import.meta.url)), "staff/max/tick.js"),
+    "utf8",
+  );
+  // 2026-10-18: the tick aborted the merge and reported, and KIT-404 and KIT-400 waited for a person.
+  assert.doesNotMatch(tick, /report the conflict instead of starting the run/);
+  assert.match(tick, /git merge --abort\\` and \\`git checkout -q --detach origin\/development\\`/);
+  assert.match(tick, /start the run anyway with \\`"mergeFirst":true\\`/);
+  // The input schema has additionalProperties: false, so bb refuses an arg the meta does not name.
+  const meta = /export const meta = (\{[\s\S]*?\n\});/.exec(SOURCE)[1];
+  assert.match(meta, /additionalProperties: false/);
+  assert.match(meta, /mergeFirst: \{ type: "boolean" \}/);
+});
