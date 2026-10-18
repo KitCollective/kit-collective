@@ -122,9 +122,12 @@ own tunnel to that one path.
 
 | Path | What it holds |
 | --- | --- |
-| `server.ts` | Registrations only: settings, schedules, routes, RPC, the CLI. |
-| `app.tsx` | The Agents page: agent list, one agent, the board. |
-| `src/contract.ts` | The RPC contract shared by server and page. |
+| `server.ts` | Registrations only: one `create<Area>(core)` per area, one RPC register, one CLI register. |
+| `app.tsx` | Registrations only: the composer's agent picker and one nav panel per area. |
+| `src/contract.ts` | The RPC contract shared by server and page: each area's `<area>Contract` spread, and the realtime channel. |
+| `src/core.ts` | The wiring every area reads: settings, stores, sessions, the scheduler, the Linear key, the host client, the agent tools, the routes other systems call, the thread events. |
+| `src/<area>/` | One area's server side: `index.ts` (its RPC handlers and `bb optio` commands) and `contract.ts` (its part of the RPC contract). Areas: `staff`, `board`, `runs`, `inbox`; `src/shared/` holds what two areas use. |
+| `pages/<area>/` | One area's UI: `staff` (the Agents page and the composer's agent picker), `board`, `runs`, `inbox`; `pages/shared/` holds the pieces several pages use. |
 | `src/agent-store.ts` | Agents, memory and automations in the plugin's SQLite database. |
 | `src/sessions.ts` | Starting an agent thread; the brief; due automations; workflow launchers. |
 | `src/store.ts` | The ledger of agent sessions. |
