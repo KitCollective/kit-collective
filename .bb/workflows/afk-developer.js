@@ -843,6 +843,10 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   // -- Reviewer: fresh hidden thread on another model than the Engineer.
   phase("Reviewer");
   const rAlias = reviewerAlias(modelAlias);
+  const proxied = rAlias === "glm";
+  const rLabel = `reviewer:${issue}:r${round}`;
+  // The exact title spawn() gives a proxied Reviewer's thread.
+  const rTitle = proxied ? `${rLabel}:openrouter` : rLabel;
   let review = null;
   try {
     review = await spawn(
@@ -856,7 +860,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
         "The `Device flows` status of a slice flow may still be running while you review: it is not a required check, not yours to wait for and not a finding. Review the flow file against the acceptance criteria; the review gate waits for the run.",
         "On red, also return light: true only when every finding is light: the wording of a comment, a doc line, a name or a message, with no gap in behaviour, tests, an acceptance criterion, the design lock or the write-scope. Otherwise light: false.",
       ].join("\n"),
-      `reviewer:${issue}:r${round}`,
+      rLabel,
       "Reviewer",
       {
         type: "object",
@@ -878,7 +882,19 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   if (review && pick(review.verdict, ["green", "amber", "red"]) === null) {
     review = null;
   }
-  const rThread = review && THREAD.test(review.threadId) ? review.threadId : "";
+  // A proxied Reviewer's thread comes from bb, never from the model: GLM 5.3 once reported the Issue
+  // thread's id as its own, so reviewer-served asked about the wrong thread and a served green review
+  // stopped as evidence-gap (KIT-400, 2026-10-18). Optio looks the thread up by the exact label the
+  // agent() call got and names it in its answer; that thread is the one logged, received and told.
+  let servedAnswer = null;
+  let rThread = review && THREAD.test(review.threadId) ? review.threadId : "";
+  if (review && proxied) {
+    servedAnswer = (await sh("reviewer-served", "Reviewer", [`bb optio reviewer-served --title ${rTitle}`], true, true))[0];
+    const named = servedAnswer && !servedAnswer.runner ? /^(?:NOT )?SERVED (thr_[a-z0-9]+)\b/.exec(servedAnswer.line ?? "") : null;
+    if (named && THREAD.test(named[1])) {
+      rThread = named[1];
+    }
+  }
   if (!review || !rThread) {
     await sh("log:no-result", "Reviewer", [logCmd("reason", `--issue ${issue} --code no-result-line`)], true);
     return stopped("reviewer", "In Review", { prNumber, rounds, note: "the Reviewer ended without a usable result or thread id" });
@@ -952,16 +968,15 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.
   const receiptCmd = `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread}${engineerThread ? ` --implementer-thread ${engineerThread}` : ""} --require-different-model --dry-run`;
   // `auto-land.mjs enabled` rides in the same runner (it only reads the config and the kill file), so the default path spends no extra runner.
-  // A proxied review counts only when Optio's proxy served its thread: otherwise it ran on the carrier.
-  const proxied = rAlias === "glm";
-  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd, "node scripts/auto-land.mjs enabled", ...(proxied ? [`bb optio reviewer-served --thread ${rThread}`] : [])], true, true);
-  const enabledAnswer = dry[1];
-  const servedAnswer = dry[2];
-  dry = dry.slice(0, 1);
-  if (proxied && (!servedAnswer || servedAnswer.runner || servedAnswer.code !== 0 || !/^SERVED /.test(servedAnswer.line ?? ""))) {
+  // A proxied review counts only when Optio's proxy served its thread (asked right after the review,
+  // by title): otherwise it ran on the carrier, and no receipt is tried.
+  if (proxied && (!servedAnswer || servedAnswer.runner || servedAnswer.code !== 0 || !/^SERVED thr_/.test(servedAnswer.line ?? ""))) {
     await sh("log:receipt", "Review gate", [logCmd("reason", `--issue ${issue} --code evidence-gap`)], true);
-    return stopped("receipt", "In Review", { prNumber, rounds, verdict: "green", receipt: servedAnswer?.line ?? "no answer from reviewer-served", note: `the reviewer proxy did not serve ${rThread}, so the review ran on the carrier model: ${servedAnswer?.line ?? "no answer"}` });
+    return stopped("receipt", "In Review", { prNumber, rounds, verdict: "green", receipt: servedAnswer?.line ?? "no answer from reviewer-served", note: `the reviewer proxy did not serve ${rTitle} (${rThread}), so the review ran on the carrier model: ${servedAnswer?.line ?? "no answer"}` });
   }
+  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd, "node scripts/auto-land.mjs enabled"], true, true);
+  const enabledAnswer = dry[1];
+  dry = dry.slice(0, 1);
   // A Reviewer that returned its verdict through the result tool can end on another sentence, and
   // the receipt reads only the thread's last text (KIT-283 and KIT-286, 2026-10-14). The Reviewer
   // is asked once for the line, as bb-orchestrate allows, and the receipt is tried again. The message
