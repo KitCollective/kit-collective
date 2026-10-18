@@ -134,6 +134,13 @@ function InboxHome() {
     await refreshUnreadCount();
   }, [refreshInbox, refreshUnreadCount]);
 
+  // Blokér or Slet samtale ran: the pane goes back to "Vælg en samtale" and the row leaves the list.
+  const handleConversationHidden = useCallback(async () => {
+    setSelectedConversationId(null);
+    setSelectedMessageId(null);
+    await refreshInbox();
+  }, [refreshInbox]);
+
   // A waiting row passes the Bud's message id; the thread opens at that Bud.
   const openConversation = (conversationId: string, messageId: string | null) => {
     if (isWide) {
@@ -296,8 +303,8 @@ function InboxHome() {
               conversationId={selectedConversationId}
               focusMessageId={selectedMessageId}
               onBack={() => setSelectedConversationId(null)}
-              onOpenDetails={() => router.push(`/(tabs)/inbox/${selectedConversationId}/details`)}
               onConversationOpened={() => void handleConversationOpened()}
+              onConversationHidden={() => void handleConversationHidden()}
             />
           ) : (
             <EmptyState
