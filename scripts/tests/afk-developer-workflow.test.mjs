@@ -1220,10 +1220,7 @@ test("autoLand must be a boolean in the input schema, and never changes how the 
   for (const spawn of agentSpawns(spawns)) {
     assert.equal(spawn.options.provider, "claude-code");
     // The Reviewer runs on an OpenRouter model through Optio's proxy (ADR-0067); everyone else on Claude.
-    assert.match(
-      spawn.options.model,
-      spawn.options.label.startsWith("reviewer:") ? /^z-ai\// : /^claude-/,
-    );
+    assert.match(spawn.options.model, /^claude-/);
   }
 });
 
@@ -1237,7 +1234,7 @@ test("a resume whose head is ready goes straight to the Reviewer: no Engineer, a
   assert.equal(result.prNumber, 55);
   assert.equal(result.rounds, 0);
   const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:"));
-  assert.equal(reviewer.options.label, "reviewer:KIT-9:r0:openrouter");
+  assert.equal(reviewer.options.label, "reviewer:KIT-9:r0");
   assert.equal(commands.filter((c) => c.includes('state KIT-9 "In Progress"')).length, 1);
   assert.ok(commands.some((c) => c.includes("--code engineer-skipped")));
   assert.equal(
@@ -1763,19 +1760,14 @@ test("the Reviewer marks each finding gating or nit and says what green looks li
   assert.match(reviewer.prompt, /what green looks like/);
 });
 
-test("the Reviewer is GLM 5.3 through Optio's proxy, for a Sonnet and an Opus Engineer alike (ADR-0067)", async () => {
+test("the Reviewer is Opus for a Sonnet Engineer and Fable once an Engineer round ran Opus", async () => {
   const sonnet = await run();
   const r1 = agentSpawns(sonnet.spawns).find((s) => s.options.label.startsWith("reviewer:"));
-  assert.equal(r1.options.label, "reviewer:KIT-9:r1:openrouter");
-  assert.equal(r1.options.model, "z-ai/glm-5.3");
-  assert.ok(
-    sonnet.commands.some((c) =>
-      /--step reviewer .*--provider claude-code --model z-ai\/glm-5.3/.test(c),
-    ),
-  );
+  assert.equal(r1.options.label, "reviewer:KIT-9:r1");
+  assert.equal(r1.options.model, "claude-opus-5-5");
   const opus = await run({ startDecision: { engineerModel: "opus" } });
   const r2 = agentSpawns(opus.spawns).find((s) => s.options.label.startsWith("reviewer:"));
-  assert.equal(r2.options.model, "z-ai/glm-5.3");
+  assert.equal(r2.options.model, "claude-fable-5-1");
 });
 
 test("every agent() call names provider, model and reasoningLevel together, as bb workflows validate demands (2026-10-18)", () => {
