@@ -13,7 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../../src/contract";
-import type { InboxCardDto, InboxDto } from "../../src/inbox/contract";
+import type {
+  InboxListCardDto as InboxCardDto,
+  InboxListDto,
+  LandingDto,
+} from "../../src/inbox/contract";
 import { DOT, INBOX } from "../shared/common";
 
 function kindLabel(card: InboxCardDto): string {
@@ -26,10 +30,24 @@ function kindLabel(card: InboxCardDto): string {
       return "watchdog alarm";
     case "review":
       return "green review";
+    case "landing":
+      return "approved";
   }
 }
 
+/** The colour of a landing card; Home lists no landing, so it is not one of the shared kinds. */
+const LANDING_DOT = "bg-sky-500";
+
+const PHASE_TEXT: Record<LandingDto["phase"], string> = {
+  approved: "Approved, not in the merge queue yet",
+  queued: "In the merge queue",
+  merged: "Merged, waiting for the land gate",
+  done: "Done",
+  stopped: "Landing stopped",
+};
+
 function preview(card: InboxCardDto): string {
+  if (card.landing !== null) return PHASE_TEXT[card.landing.phase];
   switch (card.kind) {
     case "question":
       return card.waiting?.ask ?? "The workpad holds no question.";
@@ -38,6 +56,7 @@ function preview(card: InboxCardDto): string {
     case "alarm":
       return card.alarm?.problems.join("; ") || "The alarm lists no problem.";
     case "review":
+    case "landing":
       return card.review?.verdict ?? "No review verdict recorded.";
   }
 }
@@ -62,7 +81,17 @@ function Row({ card, open, onOpen }: { card: InboxCardDto; open: boolean; onOpen
         )}
       >
         <div className="flex items-center gap-2">
-          <span className={cn("size-2 shrink-0 rounded-full", DOT[card.kind])} aria-hidden />
+          <span
+            className={cn(
+              "size-2 shrink-0 rounded-full",
+              card.landing?.phase === "stopped"
+                ? DOT.question
+                : card.kind === "landing"
+                  ? LANDING_DOT
+                  : DOT[card.kind],
+            )}
+            aria-hidden
+          />
           <span className="font-medium">{card.identifier}</span>
           <span className="ml-auto shrink-0 text-xs text-muted-foreground">
             {waited(card.since)}
@@ -150,6 +179,60 @@ function Reply({ card, onSent }: { card: InboxCardDto; onSent: () => void }) {
           </p>
         )}
       </div>
+    </section>
+  );
+}
+
+/**
+ * Approve on a green review: the approver's comment and the move to the merge-permission state, then
+ * Optio lands it on the runs machine and the card shows how far it got. A failure shows next to the button.
+ */
+function Approve({ card }: { card: InboxCardDto }) {
+  const rpc = useRpc<typeof rpcContract>();
+  const [sending, setSending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const approve = () => {
+    setSending(true);
+    setFailure(null);
+    rpc.call("inbox_approve", { identifier: card.identifier }).then(
+      (result) => {
+        setSending(false);
+        if (result.error !== null) setFailure(result.error);
+      },
+      (cause: unknown) => {
+        setSending(false);
+        setFailure(cause instanceof Error ? cause.message : String(cause));
+      },
+    );
+  };
+  return (
+    <div className="flex items-center gap-3">
+      <Button disabled={sending} onClick={approve}>
+        {sending ? "Approving…" : "Approve"}
+      </Button>
+      {failure === null ? null : (
+        <p role="alert" className="text-sm text-destructive">
+          {failure}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** How far the landing got and what its last slice said. Information only: the card's kind decides its actions. */
+function Landing({ landing }: { landing: LandingDto }) {
+  return (
+    <section
+      role="status"
+      className="flex flex-col gap-1 rounded-lg border border-border px-4 py-3 text-sm"
+    >
+      <h3 className="text-xs text-muted-foreground">Landing</h3>
+      <p className={cn(landing.phase === "stopped" && "text-destructive")}>
+        {PHASE_TEXT[landing.phase]}
+      </p>
+      {landing.line === null ? null : (
+        <p className="text-xs text-muted-foreground">{landing.line}</p>
+      )}
     </section>
   );
 }
@@ -282,6 +365,9 @@ function Detail({
           </p>
         </section>
       )}
+      {card.landing === null ? null : <Landing landing={card.landing} />}
+      {card.kind === "review" ? <Approve key={card.id} card={card} /> : null}
+      {/* A landing card's issue has left the Inbox state: there is nothing to answer or reject. */}
       {/* A Staff question is answered in its Staff chat, not through Linear. */}
       {(card.kind === "question" && card.chat === undefined) || card.kind === "review" ? (
         <Reply key={card.id} card={card} onSent={onSent} />
@@ -307,7 +393,7 @@ function Message({ role, children }: { role: "alert" | "status"; children: strin
 export function Inbox({ subPath }: PluginNavPanelProps) {
   const rpc = useRpc<typeof rpcContract>();
   const navigate = useBbNavigate();
-  const [inbox, setInbox] = useState<InboxDto | null>(null);
+  const [inbox, setInbox] = useState<InboxListDto | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const refetch = useCallback(() => {
     rpc.call("inbox_list").then(

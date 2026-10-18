@@ -30,6 +30,7 @@ import {
   settleDeviceFlowsError,
   shouldLogGate,
   sliceFlowPath,
+  waitsForDeviceFlows,
   workpadHasPlan,
 } from "../lib/gates.mjs";
 import { append, readEvents } from "../lib/run-log.mjs";
@@ -462,6 +463,52 @@ test("gate.mjs passes the remaining budget to wait-for-checks and logs no waitin
   assert.equal((src.match(/if \(shouldLogGate\(result\)\)/g) ?? []).length, 2);
 });
 
+test("only the review gate waits for Device flows; the pre-review gate opens while they run (ADR-0059, 2026-10-18)", () => {
+  assert.equal(waitsForDeviceFlows("review", true), true);
+  assert.equal(waitsForDeviceFlows("review", false), false);
+  assert.equal(waitsForDeviceFlows("pre-review", true), false);
+  assert.equal(waitsForDeviceFlows("pre-review", false), false);
+
+  // gate.mjs asks for the slice flow only in the full gate, and every Device flows step hangs on that answer.
+  const src = readFileSync(GATE, "utf8");
+  assert.match(
+    src,
+    /waitsForDeviceFlows\(\s*sub,\s*full && \(await existsAtHead\(sliceFlowPath\(issue\), view\.headRefOid\)\),?\s*\)/,
+  );
+  assert.match(src, /const also = hasSliceFlow \? \["--also", DEVICE_FLOWS_CONTEXT\] : \[\];/);
+  assert.match(src, /if \(hasSliceFlow && budget !== null\)/);
+
+  // So a pre-review gate whose required checks are green is open, whether the Device flows status
+  // of the head is missing or pending: wait-for-checks never sees it, and no fold reads it.
+  const required = {
+    name: "checks",
+    code: 0,
+    line: "GREEN (3 pass, 0 fail, 0 pending, 0 skipped); PR is MERGEABLE",
+  };
+  const pre = foldReview([{ name: "scope", code: 0, line: "ok" }, required]);
+  assert.equal(pre.code, GATE_EXIT.open);
+
+  // The review gate of the same head waits for the status and closes on a red flow.
+  const pending = deviceFlowsStep(
+    {
+      code: 2,
+      line: "TIMEOUT after 470s: PENDING (3 pass, 0 fail, 1 pending, 0 skipped): Device flows",
+    },
+    [{ context: DEVICE_FLOWS_CONTEXT, state: "pending" }],
+    HEAD,
+  );
+  assert.equal(foldReview([{ name: "checks", ...pending }]).code, GATE_EXIT.waiting);
+  const red = { code: 1, line: "RED (3 pass, 1 fail, 0 pending, 0 skipped): Device flows" };
+  const closed = foldReview([
+    {
+      name: "checks",
+      ...deviceFlowsStep(red, [{ context: DEVICE_FLOWS_CONTEXT, state: "failure" }], HEAD),
+    },
+  ]);
+  assert.equal(closed.code, GATE_EXIT.closed);
+  assert.match(closed.line, /checks: RED \([^)]*\): Device flows$/);
+});
+
 test("a waiting slice writes no gate event; only the final open or closed one does", () => {
   const dir = mkdtempSync(join(tmpdir(), "gate-log-"));
   const path = join(dir, "run-log.jsonl");
@@ -537,6 +584,24 @@ test("resume point: review as it is only after a ready Engineer result with no f
   assert.equal(resumePoint({ ...base, events: [ready, red] }).code, GATE_EXIT.closed);
   assert.equal(resumePoint({ ...base, head: OTHER, events: [ready, red] }).code, GATE_EXIT.open);
   assert.equal(resumePoint({ ...base, head: "", events: [ready] }).code, GATE_EXIT.closed);
+});
+
+test("resume point: a PR GitHub calls CONFLICTING is never reviewed as it is, whatever the run log says", () => {
+  // 2026-10-18: KIT-404 and KIT-400 conflicted with development after KIT-403 landed.
+  const ready = { event: "result", issue: "KIT-1", step: "engineer", outcome: "ready" };
+  const base = { head: HEAD, issue: "KIT-1", events: [ready] };
+  const conflicting = resumePoint({ ...base, mergeable: "CONFLICTING" });
+  assert.equal(conflicting.code, GATE_EXIT.closed);
+  // The workflow reads this prefix as the merge round.
+  assert.match(conflicting.line, /^CLOSED: conflicting: /);
+  assert.match(
+    resumePoint({ ...base, events: [], mergeable: "CONFLICTING" }).line,
+    /^CLOSED: conflicting: /,
+  );
+  for (const mergeable of ["MERGEABLE", "UNKNOWN", undefined]) {
+    assert.equal(resumePoint({ ...base, mergeable }).code, GATE_EXIT.open);
+  }
+  assert.doesNotMatch(resumePoint({ ...base, events: [] }).line, /conflicting/);
 });
 
 test("device flows request: only a head with a slice flow and no status asks for a run", () => {

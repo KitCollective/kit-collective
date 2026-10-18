@@ -6,11 +6,14 @@ import {
   league,
   nationalTeam,
   nationalTeamSeason,
+  patch,
+  player,
+  playerClubSeason,
   season,
   teamSeason,
 } from "@kit/db";
 import { eq } from "drizzle-orm";
-import { TEST_DATA_CATALOG } from "./test-data.fixture.js";
+import { TEST_DATA_CATALOG, TEST_PLAYER_SQUAD_NUMBER } from "./test-data.fixture.js";
 
 const SEASON_LABELS = ["2022/23", "2023/24"];
 
@@ -20,6 +23,36 @@ function one<T>(rows: T[]): T {
     throw new Error("Expected one row");
   }
   return row;
+}
+
+/** The club whose latest season holds the fixture player and badge (the peer's OB jersey). */
+const FIXTURE_PLAYER_CLUB = "OB";
+
+async function insertPlayerAndBadge(db: Db, clubId: string, seasonId: string): Promise<void> {
+  const fixturePlayer = one(await db.insert(player).values({}).returning({ id: player.id }));
+  await db.insert(catalogLabel).values({
+    entityType: "player",
+    entityId: fixturePlayer.id,
+    locale: "da",
+    kind: "label",
+    text: TEST_DATA_CATALOG.players[0],
+    source: "seed",
+  });
+  await db.insert(playerClubSeason).values({
+    playerId: fixturePlayer.id,
+    clubId,
+    seasonId,
+    squadNumber: TEST_PLAYER_SQUAD_NUMBER,
+  });
+  const fixtureBadge = one(await db.insert(patch).values({ seasonId }).returning({ id: patch.id }));
+  await db.insert(catalogLabel).values({
+    entityType: "patch",
+    entityId: fixtureBadge.id,
+    locale: "da",
+    kind: "label",
+    text: TEST_DATA_CATALOG.badges[0],
+    source: "seed",
+  });
 }
 
 /**
@@ -74,6 +107,9 @@ export async function insertLocalFixtureCatalog(db: Db): Promise<void> {
       source: "seed",
     });
     await db.insert(teamSeason).values(seasonIds.map((seasonId) => ({ clubId: row.id, seasonId })));
+    if (label === FIXTURE_PLAYER_CLUB) {
+      await insertPlayerAndBadge(db, row.id, seasonIds[seasonIds.length - 1]!);
+    }
   }
   for (const label of TEST_DATA_CATALOG.nationalTeams) {
     const row = one(

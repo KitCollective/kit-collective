@@ -47,8 +47,6 @@ import { useTheme } from "@/theme/use-theme";
 type ConversationViewProps = {
   conversationId: string;
   onBack: () => void;
-  /** @deprecated Ignored: More is a Sheet over the thread now, it no longer routes. The wide Indbakke (KIT-296) still passes it. */
-  onOpenDetails?: () => void;
   onConversationOpened?: () => void;
   /** After Blokér or Slet samtale ran; the Collector goes back to Indbakke. Defaults to `onBack`. */
   onConversationHidden?: () => void;

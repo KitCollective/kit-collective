@@ -1,0 +1,127 @@
+# KIT-291: Send bud with a large amount, and one pending Bud.
+#
+# design-sections: Send bid, Foreign UserJersey detail, Button dock, Toast, Banner, Tab bar
+#
+# The fixed test data holds ONE foreign jersey: OB (...0105), owned by e2e_peer, åben for bud. The
+# flow sends a Bud on it and ends with the Bud pending, so it shows AC 1-3, 5, 6, 8, 10-12 and 17.
+#
+# Not shown by a screen, and proved by tests instead:
+# - AC 4 (digits only, no decimals, no leading zero), AC 5's disabled state and AC 7 (no last bid):
+#   apps/mobile/tests/bid-rules.test.ts and send-bid-chrome.test.ts.
+# - AC 9 (a failed send shows a Banner and keeps the amount): the fixed data offers no failing send.
+#   send-bid-chrome.test.ts holds the Banner and the kept amount.
+# - AC 13-16 (myPendingBid, the conflict, a new Bud after a decline, the refusals): the API suites
+#   (apps/api/tests/collection.test.ts and conversations.test.ts).
+#
+# AC 10, 11 and 12 need the Bud to stay pending, so the flow signs in once and never resets the data
+# again. Taps are by testID: bid-amount, bid-keyboard-done, bid-submit, bid-sent-toast, own-bid-row.
+appId: app.kitcollective.mobile
+name: kit-291
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-291
+# The first tab press right after sign-in can be swallowed while Samling is still settling on the
+# hosted simulator (run 39149973670 stayed on Samling): press once, then again if Søg is not up.
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 8000
+    optional: true
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 15000
+- tapOn:
+    id: search-input
+# The second test Collector's jersey is on this catalog side.
+- inputText: OB
+- extendedWaitUntil:
+    visible:
+      id: typeahead-list
+    timeout: 15000
+- hideKeyboard
+- tapOn:
+    id: typeahead-hit-club-.*
+- extendedWaitUntil:
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    timeout: 15000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+- extendedWaitUntil:
+    visible:
+      id: send-bid-open
+    timeout: 15000
+- tapOn:
+    id: send-bid-open
+- extendedWaitUntil:
+    visible:
+      id: bid-amount
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+# AC 1, 2, 3, 5, 6, 8, 17: Back and the title Send bud over the summary (thumb, club and season,
+# type · size · condition, owner Handle), no large photo; the number pad is open on arrival; the
+# empty amount under Dit bud with kr; the disabled Send bud and the line "e2e_peer får dit bud i
+# Indbakke. Det er ikke et køb." sit directly on top of the number pad; no Tab bar, and no gap
+# of a Tab bar's height between the button and the pad.
+- takeScreenshot: kc__kit-291__01-send-bid-opened
+# AC 3, 5: a whole-kroner amount in mono 56 with the underline, and the button carrying it.
+- inputText: "250"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-291__02-amount-entered
+# The number pad has no return key; the keyboard accessory's Færdig dismisses it.
+- tapOn:
+    id: bid-keyboard-done
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: bid-submit
+# AC 10: back on the foreign detail with the Toast "Dit bud er sendt til e2e_peer" and, in the dock,
+# Dit bud, the amount and Afventer svar with a chevron instead of Send bud.
+- extendedWaitUntil:
+    visible:
+      id: bid-sent-toast
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: own-bid-row
+    timeout: 15000
+- takeScreenshot: kc__kit-291__03-bid-sent-toast-and-own-bid-row
+# AC 12: leave the jersey and open it again; the own bid row is there, Send bud is not.
+- tapOn:
+    id: jersey-detail-back
+- extendedWaitUntil:
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    timeout: 15000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+- extendedWaitUntil:
+    visible:
+      id: own-bid-row
+    timeout: 15000
+- assertNotVisible:
+    id: send-bid-open
+- assertNotVisible:
+    id: bid-sent-toast
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-291__04-reopened-with-own-bid-row
+# AC 11: the own bid row opens the thread for that Bud.
+- tapOn:
+    id: own-bid-row
+- extendedWaitUntil:
+    notVisible:
+      id: own-bid-row
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-291__05-own-bid-row-opens-thread
+- stopRecording

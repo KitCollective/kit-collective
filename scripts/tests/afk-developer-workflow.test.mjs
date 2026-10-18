@@ -70,7 +70,7 @@ async function run({
           (command.includes("start-decision.mjs")
             ? { code: 0, line: JSON.stringify(decision) }
             : command.startsWith("bb optio reviewer-served")
-              ? { code: 0, line: "SERVED thr_rev as z-ai/glm-5.3 (3 calls)" }
+              ? { code: 0, line: `SERVED ${REVIEWER_THREAD} as z-ai/glm-5.3 (3 calls)` }
               : { code: 0, line: "OPEN: fine" });
         // A `shell` answer with its own `exit` plays a runner that did not relay the printed marker.
         results.push({ exit: result.exit ?? `KIT-EXIT:${result.code}`, line: result.line });
@@ -784,6 +784,49 @@ test("resume with no open PR tells the Engineer to open exactly one", async () =
   assert.match(engineer.prompt, /exactly one PR/);
 });
 
+test("a start-decision answered only with the exit line gets one more runner, then the run goes on (KIT-409)", async () => {
+  let asked = 0;
+  const { result, commands } = await run({
+    shell: (c) => {
+      if (!c.includes("start-decision")) return undefined;
+      asked += 1;
+      return asked === 1 ? { code: 0, line: "KIT-EXIT:0" } : undefined;
+    },
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(commands.filter((c) => c.includes("start-decision.mjs --issue KIT-9")).length, 2);
+  assert.equal(
+    commands.filter((c) => c.includes("run-log.mjs start")).length,
+    1,
+    "start is logged once",
+  );
+  assert.equal(commands.filter((c) => c.includes('state KIT-9 "In Progress"')).length, 1);
+});
+
+test("a start-decision with no JSON twice stops at start-decision, after exactly one retry", async () => {
+  const { result, commands } = await run({
+    shell: (c) => (c.includes("start-decision") ? { code: 0, line: "KIT-EXIT:0" } : undefined),
+  });
+  assert.equal(result.status, "stopped");
+  assert.equal(result.stoppedAt, "start-decision");
+  assert.match(result.note, /no JSON twice/);
+  assert.equal(commands.filter((c) => c.includes("start-decision.mjs")).length, 2);
+});
+
+test("a PR lookup answered only with the exit line is asked once more, not read as two PRs (KIT-409)", async () => {
+  let asked = 0;
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: (c) => {
+      if (!lookup(c)) return undefined;
+      asked += 1;
+      return { code: 0, line: asked === 1 ? "KIT-EXIT:0" : "" };
+    },
+  });
+  assert.notEqual(result.stoppedAt, "resume");
+  assert.equal(commands.filter(lookup).length, 2);
+});
+
 test("a fresh run does no PR lookup", async () => {
   const { commands } = await run();
   assert.ok(!commands.some(lookup));
@@ -844,87 +887,150 @@ const NO_VERDICT_LINE =
   "CLOSED (review): checks: RED (2 pass, 1 fail, 0 pending, 0 skipped): Device flows; device-flows-no-verdict: needs-human: run device-run.sh on the Mac on abc1234";
 const PENDING_LINE = (n) =>
   `WAITING (review): checks: TIMEOUT after 470s: PENDING (2 pass, 0 fail, 1 pending, 0 skipped): Device flows; device-flows-pending on abc1234${n}`;
+const FLOW_RED_LINE =
+  "CLOSED (review): checks: RED (2 pass, 1 fail, 0 pending, 0 skipped): Device flows";
+const isReviewGate = (c) => c.includes("gate.mjs review");
+const reviewers = (spawns) =>
+  agentSpawns(spawns).filter((s) => s.options.label.startsWith("reviewer:"));
 
-test("a Device flows run with no verdict ends needs-human in Approval, with no fix round and no Reviewer", async () => {
+test("the Reviewer starts while Device flows still run: the pre-review gate is not held for them (amendment of 2026-10-18)", async () => {
+  const { result, commands, spawns } = await run();
+  assert.equal(result.status, "Approval");
+  const request = commands.indexOf("node scripts/request-device-flows.mjs 77 --issue KIT-9");
+  assert.ok(request >= 0 && request < commands.findIndex(isPre), "asked for before pre-review");
+  assert.equal(commands.filter(isPre).length, 1);
+  assert.equal(reviewers(spawns).length, 1);
+  const reviewer = reviewers(spawns)[0].prompt;
+  assert.match(reviewer, /`Device flows` status of a slice flow may still be running/);
+  // The review gate is where the run waits: the request rides in front of every slice of it.
+  commands.forEach((c, i) => {
+    if (isReviewGate(c))
+      assert.ok(commands[i - 1].includes("request-device-flows.mjs 77"), "the ask comes first");
+  });
+});
+
+test("a Device flows run with no verdict at the review gate ends needs-human in Approval, with no fix round", async () => {
   const { result, commands, spawns } = await run({
-    shell: (c) => (isPre(c) ? { code: 1, line: NO_VERDICT_LINE } : undefined),
+    shell: (c) => (isReviewGate(c) ? { code: 1, line: NO_VERDICT_LINE } : undefined),
   });
   assert.equal(result.status, "Approval");
-  assert.equal(result.stoppedAt, "pre-review gate");
+  assert.equal(result.stoppedAt, "review gate");
   assert.equal(result.note, "needs-human: run device-run.sh on the Mac on abc1234");
   assert.ok(commands.some((c) => c.includes("swap ready-for-agent ready-for-human")));
   assert.ok(commands.some((c) => c.includes("--code device-flows-no-verdict")));
   assert.equal(lastState(commands), "Approval");
   assert.ok(!commands.some((c) => c.includes("--code gate-closed")));
-  assert.equal(commands.filter(isPre).length, 1);
+  assert.equal(commands.filter(isReviewGate).length, 1);
+  assert.ok(!commands.some((c) => c.includes("audit-receipt.mjs")), "no receipt without a verdict");
   const agents = agentSpawns(spawns);
   assert.equal(agents.filter((s) => s.options.label.startsWith("engineer:")).length, 1);
-  assert.equal(agents.filter((s) => s.options.label.startsWith("reviewer:")).length, 0);
+  assert.equal(reviewers(spawns).length, 1);
 });
 
-test("a Device flows status still pending after five slices ends needs-human, not ci-pending", async () => {
+test("a Device flows status still pending after five review gate slices ends needs-human, not ci-pending", async () => {
   const pending = await run({
-    shell: (c) => (isPre(c) ? { code: 3, line: PENDING_LINE("") } : undefined),
+    shell: (c) => (isReviewGate(c) ? { code: 3, line: PENDING_LINE("") } : undefined),
   });
-  assert.equal(pending.commands.filter(isPre).length, 5);
+  assert.equal(pending.commands.filter(isReviewGate).length, 5);
   assert.equal(pending.result.status, "Approval");
   assert.equal(pending.result.note, "needs-human: run device-run.sh on the Mac on abc1234");
   assert.equal(lastState(pending.commands), "Approval");
   assert.ok(!pending.commands.some((c) => c.includes("--code ci-pending")));
-  assert.equal(
-    agentSpawns(pending.spawns).filter((s) => s.options.label.startsWith("reviewer:")).length,
-    0,
-  );
 
-  // Any other pending check keeps the old ending: In Progress and ci-pending.
+  // Any other pending check keeps the old ending: In Review and ci-pending.
   const plain = await run({
-    shell: (c) => (isPre(c) ? { code: 3, line: "WAITING: checks pending" } : undefined),
+    shell: (c) => (isReviewGate(c) ? { code: 3, line: "WAITING: checks pending" } : undefined),
   });
-  assert.equal(plain.result.status, "In Progress");
+  assert.equal(plain.result.status, "In Review");
   assert.ok(plain.commands.some((c) => c.includes("--code ci-pending")));
   assert.ok(!plain.commands.some((c) => c.includes("--code device-flows-no-verdict")));
 });
 
-test("a red Device flows flow (or any closed gate without the no-verdict tag) still gets a fix round", async () => {
+test("a red Device flows run at the review gate is an Engineer fix round, and the new head is reviewed again", async () => {
+  let gates = 0;
+  const { result, commands, spawns } = await run({
+    shell: (c) => {
+      if (!isReviewGate(c)) return undefined;
+      gates += 1;
+      return gates === 1 ? { code: 1, line: FLOW_RED_LINE } : { code: 0, line: "OPEN (review)" };
+    },
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(result.verdict, "green");
+  assert.ok(commands.some((c) => c.includes("--code gate-closed")));
+  assert.ok(!commands.some((c) => c.includes("--code device-flows-no-verdict")));
+  const engineerSpawns = agentSpawns(spawns).filter((s) => s.options.label.startsWith("engineer:"));
+  assert.equal(engineerSpawns.length, 2);
+  assert.match(engineerSpawns[1].prompt, /The hosted Device flows run is red on the PR head/);
+  assert.match(engineerSpawns[1].prompt, /request-device-flows\.mjs 77 --issue KIT-9/);
+  // The green review of the first head never counts for the second: the new head goes through the
+  // pre-review gate and a fresh Reviewer before the review gate opens.
+  assert.equal(reviewers(spawns).length, 2);
+  assert.equal(commands.filter(isPre).length, 2);
+  assert.equal(commands.filter(isReviewGate).length, 2);
+  const secondPre = commands.findLastIndex(isPre);
+  const firstGate = commands.findIndex(isReviewGate);
+  assert.ok(firstGate < secondPre);
+  assert.ok(
+    commands.slice(firstGate, secondPre).some((c) => c.includes("request-device-flows.mjs 77")),
+    "the run is asked for again for the new head, before its pre-review gate",
+  );
+  // Only the last, open review gate leads to the receipt.
+  assert.equal(commands.filter((c) => c.includes("audit-receipt.mjs")).length, 1);
+  assert.ok(commands.findIndex((c) => c.includes("audit-receipt.mjs")) > secondPre);
+});
+
+test("a Device flows run that stays red counts toward the round cap and ends with a person", async () => {
+  const { result, spawns } = await run({
+    args: { issue: "KIT-9", maxRounds: 2 },
+    shell: (c) => (isReviewGate(c) ? { code: 1, line: FLOW_RED_LINE } : undefined),
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(result.stoppedAt, "review gate");
+  assert.match(result.note, /Device flows/);
+  assert.equal(
+    agentSpawns(spawns).filter((s) => s.options.label.startsWith("engineer:")).length,
+    2,
+  );
+});
+
+test("a closed pre-review gate still gets a fix round; a Device flows error at the review gate that turns green is no stop", async () => {
   let n = 0;
-  const { result, commands } = await run({
+  const pre = await run({
     shell: (c) => {
       if (!isPre(c)) return undefined;
       n += 1;
       return n === 1
         ? {
             code: 1,
-            line: "CLOSED (review): checks: RED (2 pass, 1 fail, 0 pending, 0 skipped): Device flows",
+            line: "CLOSED (review): checks: RED (2 pass, 1 fail, 0 pending, 0 skipped): test",
           }
         : { code: 0, line: "OPEN" };
     },
   });
-  assert.equal(result.status, "Approval");
-  assert.ok(commands.some((c) => c.includes("--code gate-closed")));
-  assert.ok(!commands.some((c) => c.includes("--code device-flows-no-verdict")));
-});
+  assert.equal(pre.result.status, "Approval");
+  assert.ok(pre.commands.some((c) => c.includes("--code gate-closed")));
 
-test("a Device flows error that is asked for again and then turns green ends In Review, not Approval", async () => {
-  let n = 0;
+  let g = 0;
   const { result } = await run({
     shell: (c) => {
-      if (!isPre(c)) return undefined;
-      n += 1;
-      if (n === 1)
+      if (!isReviewGate(c)) return undefined;
+      g += 1;
+      if (g === 1)
         return {
           code: 3,
-          line: "WAITING (review): checks: PENDING: Device flows stopped before the flow finished on abc1234; asked for again",
+          line: "WAITING (review): checks: PENDING: Device flows stopped before the flow finished on abc1234; asked for again; device-flows-pending on abc1234",
         };
-      if (n === 2)
+      if (g === 2)
         return {
           code: 3,
-          line: "WAITING (review): checks: PENDING (2 pass, 0 fail, 1 pending, 0 skipped): Device flows",
+          line: "WAITING (review): checks: PENDING (2 pass, 0 fail, 1 pending, 0 skipped): Device flows; device-flows-pending on abc1234",
         };
       return { code: 0, line: "OPEN (review): clean" };
     },
   });
   assert.equal(result.status, "Approval");
-  assert.ok(result.stoppedAt !== "pre-review gate");
+  assert.equal(result.stoppedAt, "approval");
 });
 
 test("the Device flows request rides in front of every pre-review slice, not only the first", async () => {
@@ -941,11 +1047,11 @@ test("the Device flows request rides in front of every pre-review slice, not onl
 
 const waitingCmds = (commands) => commands.filter((c) => c.includes("linear.mjs waiting"));
 const WAITING_DEVICE_FLOWS =
-  'node scripts/linear.mjs waiting KIT-9 --stage "pre-review gate" --ask "needs-human: run device-run.sh on the Mac on abc1234"';
+  'node scripts/linear.mjs waiting KIT-9 --stage "review gate" --ask "needs-human: run device-run.sh on the Mac on abc1234"';
 
 test("a gate-detected needs-human stop fills ### Waiting with linear.mjs waiting, once, after the move, with no agent", async () => {
   const noVerdict = await run({
-    shell: (c) => (isPre(c) ? { code: 1, line: NO_VERDICT_LINE } : undefined),
+    shell: (c) => (isReviewGate(c) ? { code: 1, line: NO_VERDICT_LINE } : undefined),
   });
   assert.deepEqual(waitingCmds(noVerdict.commands), [WAITING_DEVICE_FLOWS]);
   assert.equal(noVerdict.commands.at(-1), WAITING_DEVICE_FLOWS);
@@ -959,7 +1065,7 @@ test("a gate-detected needs-human stop fills ### Waiting with linear.mjs waiting
   // A write that fails leaves the stop standing: the state was set before it.
   const failing = await run({
     shell: (c) =>
-      isPre(c)
+      isReviewGate(c)
         ? { code: 1, line: NO_VERDICT_LINE }
         : c.includes("linear.mjs waiting")
           ? { code: 1, line: "linear: the workpad of KIT-9 has no ### Waiting section" }
@@ -970,45 +1076,33 @@ test("a gate-detected needs-human stop fills ### Waiting with linear.mjs waiting
 
   // The exhausted-pending ending writes it too; an ordinary ci-pending stop does not.
   const pending = await run({
-    shell: (c) => (isPre(c) ? { code: 3, line: PENDING_LINE("") } : undefined),
+    shell: (c) => (isReviewGate(c) ? { code: 3, line: PENDING_LINE("") } : undefined),
   });
   assert.deepEqual(waitingCmds(pending.commands), [WAITING_DEVICE_FLOWS]);
   const plain = await run({
-    shell: (c) => (isPre(c) ? { code: 3, line: "WAITING: checks pending" } : undefined),
+    shell: (c) => (isReviewGate(c) ? { code: 3, line: "WAITING: checks pending" } : undefined),
   });
   assert.equal(waitingCmds(plain.commands).length, 0);
 });
 
-test("a resume whose gate has no Device flows verdict fills ### Waiting the same way", async () => {
+test("a resume whose review gate has no Device flows verdict fills ### Waiting the same way", async () => {
   const { result, commands } = await run({
     args: { issue: "KIT-9", resume: true },
-    shell: resumeShell(0, (c) => (isPre(c) ? { code: 1, line: NO_VERDICT_LINE } : undefined)),
+    shell: resumeShell(0, (c) =>
+      isReviewGate(c) ? { code: 1, line: NO_VERDICT_LINE } : undefined,
+    ),
   });
   assert.equal(result.status, "Approval");
   assert.deepEqual(waitingCmds(commands), [WAITING_DEVICE_FLOWS]);
 });
 
-test("an Engineer without a simulator returns blocked needs-human for the Mac run: Approval, no Reviewer", async () => {
-  const { result, commands, spawns } = await run({
-    engineer: () => ({
-      outcome: "blocked",
-      sentence: "needs-human: run device-run.sh on the Mac on abc1234",
-      threadId: ENGINEER_THREAD,
-      prNumber: 77,
-    }),
-  });
-  assert.equal(result.status, "Approval");
-  assert.ok(commands.some((c) => c.includes("swap ready-for-agent ready-for-human")));
-  assert.equal(lastState(commands), "Approval");
-  assert.equal(
-    agentSpawns(spawns).filter((s) => s.options.label.startsWith("reviewer:")).length,
-    0,
-  );
-  assert.ok(!commands.some(isPre), "no gate is run after the Engineer's own stop");
+test("the Engineer asks for the hosted run but does not wait for it before ready", async () => {
+  const { spawns } = await run();
   const engineer = agentSpawns(spawns).find((s) => s.options.label.startsWith("engineer:")).prompt;
-  assert.match(engineer, /needs-human: run device-run\.sh on the Mac on <sha>/);
   assert.match(engineer, /request-device-flows\.mjs <pr> --issue KIT-9/);
-  assert.match(engineer, /### Waiting/);
+  assert.match(engineer, /Do not wait for the `Device flows` status/);
+  assert.doesNotMatch(engineer, /needs a green `Device flows` status/);
+  assert.doesNotMatch(engineer, /gate\.mjs pre-review <pr>/);
 });
 
 test("the review gate keeps going when early slices wait and a later one is open", async () => {
@@ -1325,7 +1419,7 @@ test("a fresh run, and a resume without a PR, never ask for the resume point", a
 const runners = (spawns) => spawns.filter((s) => s.options.schema?.required?.includes("results"));
 const labels = (spawns) => runners(spawns).map((s) => s.options.label);
 
-test("a green run spends eight runners: the log lines ride with the gates", async () => {
+test("a green run spends nine runners: the log lines ride with the gates, and the proxied Reviewer's thread is looked up by title", async () => {
   const { result, commands, spawns } = await run();
   assert.equal(result.status, "Approval");
   assert.deepEqual(labels(spawns), [
@@ -1334,6 +1428,7 @@ test("a green run spends eight runners: the log lines ride with the gates", asyn
     "gate:pre-review",
     "head-changed",
     "linear:In Review",
+    "reviewer-served",
     "gate:review",
     "receipt:dry-run",
     "linear:Approval",
@@ -1443,6 +1538,7 @@ test("a resume that reviews the head as it is writes both skip lines on runners 
     "resume-point",
     "gate:pre-review",
     "linear:In Review",
+    "reviewer-served",
     "gate:review",
     "receipt:dry-run",
     "linear:Approval",
@@ -1764,24 +1860,28 @@ test("the Reviewer is GLM 5.3 through Optio's proxy on a catalog carrier, for ev
   const sonnet = await run();
   const r1 = agentSpawns(sonnet.spawns).find((s) => s.options.label.startsWith("reviewer:"));
   assert.equal(r1.options.label, "reviewer:KIT-9:r1:openrouter");
-  assert.equal(r1.options.model, "claude-haiku-4-5-20251001");
+  assert.equal(r1.options.model, "claude-haiku-5-5");
   assert.equal(r1.options.reasoningLevel, "low");
   assert.ok(
     sonnet.commands.some((c) =>
       /--step reviewer .*--provider claude-code --model z-ai\/glm-5.3/.test(c),
     ),
   );
-  assert.ok(sonnet.commands.some((c) => /^bb optio reviewer-served --thread thr_/.test(c)));
+  assert.ok(
+    sonnet.commands.some(
+      (c) => c === "bb optio reviewer-served --title reviewer:KIT-9:r1:openrouter",
+    ),
+  );
   const opus = await run({ startDecision: { engineerModel: "opus" } });
   const r2 = agentSpawns(opus.spawns).find((s) => s.options.label.startsWith("reviewer:"));
-  assert.equal(r2.options.model, "claude-haiku-4-5-20251001");
+  assert.equal(r2.options.model, "claude-haiku-5-5");
 });
 
 test("a green review the proxy never served ran on the carrier: it holds In Review and is not green", async () => {
   const { result, commands } = await run({
     shell: (c) =>
       c.startsWith("bb optio reviewer-served")
-        ? { code: 1, line: "NOT SERVED thr_rev: the proxy forwarded no call of this thread" }
+        ? { code: 1, line: "NOT SERVED thr_reviewer01: the proxy forwarded no call of this thread" }
         : undefined,
   });
   assert.equal(result.status, "In Review");
@@ -1789,6 +1889,54 @@ test("a green review the proxy never served ran on the carrier: it holds In Revi
   assert.match(result.note, /did not serve/);
   assert.ok(commands.some((c) => c.includes("--code evidence-gap")));
   assert.ok(!commands.some((c) => c.includes("auto-land.mjs start")));
+});
+
+test("a Reviewer that reports the Issue thread's id is still found by its title, and the served review auto-lands (KIT-400, 2026-10-18)", async () => {
+  const ISSUE_THREAD = "thr_7jfxi558dt";
+  const SERVED_THREAD = "thr_2ktb6maqxm";
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", autoLand: true },
+    reviewer: () => ({ verdict: "green", sha: SHA, sentence: "clean", threadId: ISSUE_THREAD }),
+    shell: (c) =>
+      c === "bb optio reviewer-served --title reviewer:KIT-9:r1:openrouter"
+        ? { code: 0, line: `SERVED ${SERVED_THREAD} as z-ai/glm-5.3 (41 calls)` }
+        : autoLandShell()(c),
+  });
+  assert.equal(result.status, "Done");
+  assert.equal(result.stoppedAt, "done");
+  const at = (needle) => commands.findIndex((c) => c.includes(needle));
+  assert.ok(at("bb optio reviewer-served --title") < at("--step reviewer --outcome green"));
+  assert.match(
+    commands.find((c) => c.includes("spawn") && c.includes("--step reviewer")),
+    new RegExp(`--thread ${SERVED_THREAD} .*--model z-ai/glm-5.3`),
+  );
+  assert.match(
+    commands.find((c) => c.includes("--step reviewer --outcome green")),
+    new RegExp(`--usage-thread ${SERVED_THREAD}$`),
+  );
+  assert.match(
+    commands.find((c) => c.includes("audit-receipt.mjs")),
+    new RegExp(`--thread ${SERVED_THREAD} `),
+  );
+  assert.ok(!commands.some((c) => c.includes(ISSUE_THREAD)), "the model's id enters no command");
+  assert.ok(!commands.some((c) => c.includes("reviewer-served --thread")));
+});
+
+test("no thread with the Reviewer's title, or a runner that cannot ask, stops a green review as evidence-gap", async () => {
+  for (const answer of [
+    { code: 1, line: "NOT FOUND: no thread titled reviewer:KIT-9:r1:openrouter" },
+    null,
+  ]) {
+    const { result, commands } = await run({
+      args: { issue: "KIT-9", autoLand: true },
+      shell: (c) => (c.startsWith("bb optio reviewer-served") ? answer : autoLandShell()(c)),
+    });
+    assert.equal(result.status, "In Review");
+    assert.equal(result.stoppedAt, "receipt");
+    assert.ok(commands.some((c) => c.includes("--code evidence-gap")));
+    assert.ok(!commands.some((c) => c.includes("audit-receipt.mjs")));
+    assert.ok(!commands.some((c) => c.includes("auto-land.mjs start")));
+  }
 });
 
 test("every agent() call names provider, model and reasoningLevel together, as bb workflows validate demands (2026-10-18)", () => {
@@ -1802,4 +1950,223 @@ test("every agent() call names provider, model and reasoningLevel together, as b
     assert.match(call, /model:/, call);
     assert.match(call, /reasoningLevel:/, call);
   }
+});
+
+// ---- A resume of a PR that conflicts with development (2026-10-18: KIT-404 and KIT-400) -----------
+const CONFLICT_POINT =
+  "CLOSED: conflicting: the PR conflicts with development; merge origin/development into it first";
+const MERGE_NOTE =
+  /First job of this round, before anything else: PR #55 conflicts with development/;
+const onPr55 = () => ({
+  outcome: "ready",
+  sentence: "merged",
+  threadId: ENGINEER_THREAD,
+  prNumber: 55,
+});
+
+test("a resume the dispatcher could not merge opens with an Engineer merge round, never a review as it is", async () => {
+  // resume-point says review as it is, but the dispatcher's merge conflicted: the head is not what lands.
+  const { result, commands, spawns } = await run({
+    args: { issue: "KIT-9", resume: true, mergeFirst: true, autoLand: true },
+    shell: resumeShell(0),
+    engineer: onPr55,
+  });
+  assert.equal(engineers(spawns).length, 1);
+  const prompt = engineers(spawns)[0].prompt;
+  assert.match(prompt, MERGE_NOTE);
+  assert.match(prompt, /git merge --no-edit origin\/development/);
+  assert.match(prompt, /both sides' features survive/);
+  assert.match(prompt, /Never rebase, force-push/);
+  assert.match(prompt, /never open a second PR/);
+  assert.ok(prompt.indexOf("First job of this round") < prompt.indexOf("Read `### Plan`"));
+  // The only pre-review gate is the one after the merge round, and the review follows it.
+  assert.equal(commands.filter(isPre).length, 1);
+  assert.ok(!commands.some((c) => c.includes("--code engineer-skipped")));
+  assert.ok(commands.some((c) => c.includes("--code conflict")));
+  const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:"));
+  assert.equal(reviewer.options.label, "reviewer:KIT-9:r1:openrouter");
+  assert.ok(
+    commands.some((c) => c.startsWith("node scripts/auto-land.mjs start 55 --issue KIT-9")),
+  );
+  assert.equal(result.status, "Done");
+  assert.equal(result.prNumber, 55);
+});
+
+test("a resume whose resume point says CONFLICTING merges first without the dispatcher's flag", async () => {
+  const { result, commands, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: (c) =>
+      lookup(c)
+        ? { code: 0, line: "55" }
+        : isPoint(c)
+          ? { code: 1, line: CONFLICT_POINT }
+          : undefined,
+    engineer: onPr55,
+  });
+  assert.equal(engineers(spawns).length, 1);
+  assert.match(engineers(spawns)[0].prompt, MERGE_NOTE);
+  assert.equal(commands.filter(isPre).length, 1);
+  assert.equal(result.status, "Approval");
+});
+
+test("a pre-review gate that finds the PR CONFLICTING opens the next round with the merge, and only that round", async () => {
+  let gates = 0;
+  const { result, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(1, (c) => {
+      if (!isPre(c)) return undefined;
+      gates += 1;
+      return gates === 1
+        ? {
+            code: 1,
+            line: "CLOSED (review): checks: checks green (9 pass) but PR is CONFLICTING (DIRTY)",
+          }
+        : undefined;
+    }),
+    engineer: onPr55,
+    reviewer: (round) =>
+      round === 1
+        ? {
+            verdict: "red",
+            sha: SHA,
+            rows: ["spec"],
+            sentence: "AC 2 unmet",
+            threadId: REVIEWER_THREAD,
+          }
+        : undefined,
+  });
+  const prompts = engineers(spawns).map((s) => s.prompt);
+  assert.equal(prompts.length, 3);
+  assert.doesNotMatch(prompts[0], MERGE_NOTE);
+  assert.match(prompts[1], MERGE_NOTE);
+  assert.doesNotMatch(prompts[2], MERGE_NOTE);
+  assert.equal(result.status, "Approval");
+});
+
+test("a resume gate closed on CONFLICTING also opens the first round with the merge", async () => {
+  const { spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(0, (c) =>
+      isPre(c)
+        ? { code: 1, line: "CLOSED (review): checks: checks green but PR is CONFLICTING (DIRTY)" }
+        : undefined,
+    ),
+    engineer: onPr55,
+  });
+  assert.match(engineers(spawns)[0].prompt, MERGE_NOTE);
+});
+
+test("mergeFirst means nothing without a PR to merge into: a fresh run and a resume without a PR build as before", async () => {
+  for (const extra of [
+    { args: { issue: "KIT-9", mergeFirst: true } },
+    {
+      args: { issue: "KIT-9", resume: true, mergeFirst: true },
+      shell: (c) => (lookup(c) ? { code: 0, line: "" } : undefined),
+    },
+  ]) {
+    const { commands, spawns } = await run(extra);
+    assert.doesNotMatch(engineers(spawns)[0].prompt, /First job of this round/);
+    assert.ok(!commands.some((c) => c.includes("--code conflict")));
+  }
+});
+
+test("the dispatch tick starts a conflicting resume with mergeFirst, a flag the workflow accepts", () => {
+  const tick = readFileSync(
+    join(fileURLToPath(new URL("../..", import.meta.url)), "staff/max/tick.js"),
+    "utf8",
+  );
+  // 2026-10-18: the tick aborted the merge and reported, and KIT-404 and KIT-400 waited for a person.
+  assert.doesNotMatch(tick, /report the conflict instead of starting the run/);
+  assert.match(tick, /git merge --abort\\` and \\`git checkout -q --detach origin\/development\\`/);
+  assert.match(tick, /start the run anyway with \\`"mergeFirst":true\\`/);
+  // The input schema has additionalProperties: false, so bb refuses an arg the meta does not name.
+  const meta = /export const meta = (\{[\s\S]*?\n\});/.exec(SOURCE)[1];
+  assert.match(meta, /additionalProperties: false/);
+  assert.match(meta, /mergeFirst: \{ type: "boolean" \}/);
+});
+
+/** Max's tick's stoppedRuns, from the tick's own source (it is a self-contained function above the IIFE). */
+const stoppedRuns = (() => {
+  const tick = readFileSync(
+    join(fileURLToPath(new URL("../..", import.meta.url)), "staff/max/tick.js"),
+    "utf8",
+  );
+  const from = tick.indexOf("function stoppedRuns(");
+  const to = tick.indexOf("// end stoppedRuns");
+  assert.ok(from >= 0 && to > from, "tick.js defines stoppedRuns");
+  return new Function(`${tick.slice(from, to)}; return stoppedRuns;`)();
+})();
+
+const NOW = Date.parse("2026-10-18T20:30:00Z");
+const minutesAgo = (m) => new Date(NOW - m * 60000).toISOString();
+const tickInput = (overrides = {}) => ({
+  board: [{ key: "KIT-409", state: "In Progress" }],
+  events: [
+    { at: minutesAgo(190), event: "gate", issue: "KIT-409", gate: "session", outcome: "open" },
+    { at: minutesAgo(187), event: "start", issue: "KIT-409" },
+  ],
+  prOf: () => undefined,
+  skip: new Set(),
+  now: NOW,
+  runStuckMinutes: 120,
+  maxStartsPerDay: 3,
+  ...overrides,
+});
+
+test("the tick restarts a run that stopped before its PR (KIT-409, 2026-10-18)", () => {
+  const { resume, loops } = stoppedRuns(tickInput());
+  assert.deepEqual(resume, [{ issue: "KIT-409", mode: "restart", pr: null, quietMinutes: 187 }]);
+  assert.deepEqual(loops, []);
+});
+
+test("the tick resumes a stopped run that has an open PR, as before", () => {
+  const { resume } = stoppedRuns(
+    tickInput({
+      board: [{ key: "KIT-284", state: "In Review" }],
+      events: [
+        { at: minutesAgo(130), event: "reason", issue: "KIT-284", code: "runner-no-result" },
+      ],
+      prOf: (key) => (key === "KIT-284" ? { number: 301 } : undefined),
+    }),
+  );
+  assert.deepEqual(resume, [{ issue: "KIT-284", mode: "resume", pr: 301, quietMinutes: 130 }]);
+});
+
+test("the tick leaves a run alone while it still logs, a landing, and issues it never ran", () => {
+  const recent = tickInput({ events: [{ at: minutesAgo(30), event: "start", issue: "KIT-409" }] });
+  assert.deepEqual(stoppedRuns(recent).resume, []);
+  assert.deepEqual(stoppedRuns(tickInput({ skip: new Set(["KIT-409"]) })).resume, []);
+  assert.deepEqual(stoppedRuns(tickInput({ events: [] })).resume, []);
+  for (const state of ["To-do", "Approval", "Blocked", "Merging"])
+    assert.deepEqual(stoppedRuns(tickInput({ board: [{ key: "KIT-409", state }] })).resume, []);
+});
+
+test("a stopped run at the attempt cap is a loop for Nicklas, never restarted, with or without a PR", () => {
+  const starts = [400, 300, 190].map((m) => ({
+    at: minutesAgo(m),
+    event: "start",
+    issue: "KIT-409",
+  }));
+  for (const prOf of [() => undefined, () => ({ number: 9 })]) {
+    const { resume, loops } = stoppedRuns(tickInput({ events: starts, prOf }));
+    assert.deepEqual(resume, []);
+    assert.deepEqual(loops, ["KIT-409"]);
+  }
+});
+
+test("a stopped run holds no live slot, and the tick restarts it with resume:true (the session check refuses a fresh run In Progress)", () => {
+  const tick = readFileSync(
+    join(fileURLToPath(new URL("../..", import.meta.url)), "staff/max/tick.js"),
+    "utf8",
+  );
+  assert.match(
+    tick,
+    /issue\.touchedMinutesAgo < liveWindowMinutes &&\s*!stoppedKeys\.has\(issue\.key\)/,
+  );
+  assert.ok(
+    tick.indexOf("const live = ") > tick.indexOf("stoppedRuns({"),
+    "live is counted after the stopped runs are known",
+  );
+  assert.match(tick, /mode restart \(no open PR[^\n]*still passes \\`"resume":true\\`/);
+  assert.doesNotMatch(tick, /if \(!pr\) continue;\n\s*const starts/);
 });

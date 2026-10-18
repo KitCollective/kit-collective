@@ -88,9 +88,17 @@ export function headChanged({ head, issue, events, workpad = "" }) {
  * result in the run log is `ready` (the Engineer said the PR is built) and the head has no findings
  * open against it. Anything else means the Engineer has work, so the answer is to build.
  * The caller still runs the pre-review gate before any Reviewer is spawned.
- * @param {{ head: string, issue: string, events: Record<string, any>[], workpad?: string }} input
+ * A PR GitHub calls CONFLICTING is never reviewed as it is: the Engineer merges origin/development
+ * into it first. Its line starts `CLOSED: conflicting:`, which the workflow reads as that round
+ * (2026-10-18: KIT-404 and KIT-400 sat in To-do after KIT-403 landed). UNKNOWN is not a conflict.
+ * @param {{ head: string, issue: string, events: Record<string, any>[], workpad?: string, mergeable?: string }} input
  */
-export function resumePoint({ head, issue, events, workpad = "" }) {
+export function resumePoint({ head, issue, events, workpad = "", mergeable = "UNKNOWN" }) {
+  if (mergeable === "CONFLICTING") {
+    return closed(
+      "conflicting: the PR conflicts with development; merge origin/development into it first",
+    );
+  }
   const lastEngineer = events.findLast(
     (e) => e.issue === issue && e.event === "result" && e.step === "engineer",
   );
@@ -385,6 +393,18 @@ export function sliceFlowPath(issue) {
 }
 
 /**
+ * Whether a gate waits for the `Device flows` status of a head. Only the full review gate does, and
+ * only for a head that holds the issue's slice flow: the pre-review gate waits for the ordinary
+ * checks alone, so the hosted run goes on while the Reviewer reviews (ADR-0059, amendment of
+ * 2026-10-18). A red flow then closes the review gate and is the Engineer's next round.
+ * @param {string} gate `pre-review` or `review`
+ * @param {boolean} hasSliceFlow
+ */
+export function waitsForDeviceFlows(gate, hasSliceFlow) {
+  return gate === "review" && hasSliceFlow === true;
+}
+
+/**
  * What the `Device flows` statuses of a head say, newest first. `error` is not a verdict (the run
  * stopped before the flow finished), so it is asked for again once; a head with a second `error`
  * (`no-verdict`) has had its re-request and still has no verdict (ADR-0059 "Not settled"): only a
@@ -469,7 +489,7 @@ export function deviceFlowsErrorWaiting(head) {
 
 /**
  * Waits for the re-requested run to leave a first `error`. `wait-for-checks` treats a status `error` as
- * red and returns at once, so without this a pre-review gate slice ends in seconds on a run that has
+ * red and returns at once, so without this a review gate slice ends in seconds on a run that has
  * only been asked for, and the next slice asks again, which cancels the run queued one slice earlier
  * (`cancel-in-progress` in device-flows.yml): the five slices burn in minutes. The status turns
  * `pending` when the hosted job starts, so the slice holds here, inside its own budget, until it does.
@@ -500,7 +520,7 @@ export async function settleDeviceFlowsError({
 }
 
 /**
- * Folds the Device flows statuses of the head into the `checks` step of a pre-review gate that
+ * Folds the Device flows statuses of the head into the `checks` step of a review gate that
  * waited for them (ADR-0059). `wait-for-checks` buckets a commit status `error` as red, which
  * would close the gate and spend a fix round on a run no Engineer can fix, and a status that is
  * still pending when the budget runs out looks like any other pending check. So, only when

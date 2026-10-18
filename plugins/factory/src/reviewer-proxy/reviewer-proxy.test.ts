@@ -12,7 +12,18 @@ const titles: Record<string, string> = {
   thr_review1: "reviewer:ISSUE-1:r1:openrouter",
   thr_claude1: "reviewer:ISSUE-1:r1",
   thr_engine1: "engineer:ISSUE-1:r1",
+  thr_issue01: "ISSUE-1",
+  thr_review0: "reviewer:ISSUE-1:r1:openrouter",
+  thr_review2: "reviewer:ISSUE-2:r1:openrouter",
 };
+/** What `threads.list` knows: an older and a newer thread share a title; one is archived. */
+const listed = [
+  { id: "thr_issue01", projectId: "p", createdAt: 1, archived: false },
+  { id: "thr_review0", projectId: "p", createdAt: 2, archived: false },
+  { id: "thr_review1", projectId: "p", createdAt: 3, archived: false },
+  { id: "thr_review2", projectId: "p", createdAt: 4, archived: true },
+];
+const listCalls: Record<string, unknown>[] = [];
 
 async function load() {
   const host = createFakePluginHost({
@@ -25,6 +36,18 @@ async function load() {
           const title = titles[threadId];
           if (title === undefined) throw new Error("no such thread");
           return { id: threadId, title, archivedAt: null };
+        },
+        list: async (
+          query: { projectId?: string; archived?: boolean; includeHidden?: boolean } = {},
+        ) => {
+          listCalls.push(query);
+          return listed
+            .filter(
+              (thread) =>
+                (query.projectId === undefined || thread.projectId === query.projectId) &&
+                thread.archived === (query.archived ?? false),
+            )
+            .map((thread) => ({ ...thread, title: titles[thread.id] ?? null }));
         },
       },
     },
@@ -44,7 +67,10 @@ async function tokenFor(behavior: Awaited<ReturnType<typeof load>>, threadId: st
   return typeof token === "string" ? token : "";
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  listCalls.length = 0;
+});
 
 describe("the reviewer proxy (ADR-0067)", () => {
   it("gives a proxied reviewer thread the proxy and a token, and every other thread nothing", async () => {
@@ -99,7 +125,7 @@ describe("the reviewer proxy (ADR-0067)", () => {
     for (let i = 0; i < 2; i += 1) {
       await behavior.fetchHttp("POST", "/reviewer/v1/messages", {
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", messages: [] }),
+        body: JSON.stringify({ model: "claude-haiku-5-5", messages: [] }),
       });
     }
     const [, init] = upstream.mock.calls[0] ?? [];
@@ -107,6 +133,111 @@ describe("the reviewer proxy (ADR-0067)", () => {
     const after = await behavior.cli(["reviewer-served", "--thread", "thr_review1"]);
     expect(after.exitCode).toBe(0);
     expect(after.stdout).toBe("SERVED thr_review1 as z-ai/glm-5.3 (2 calls)");
+  });
+
+  it("finds the reviewer thread by its exact title, newest first, and names it in the answer", async () => {
+    const upstream = vi.fn(
+      async (_url: string, _init: RequestInit) =>
+        new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", upstream);
+    const behavior = await load();
+    const title = "reviewer:ISSUE-1:r1:openrouter";
+    const before = await behavior.cli(["reviewer-served", "--title", title], { projectId: "p" });
+    expect(before.exitCode).toBe(1);
+    expect(before.stdout).toBe(
+      "NOT SERVED thr_review1: the proxy forwarded no call of this thread",
+    );
+    const token = await tokenFor(behavior, "thr_review1");
+    await behavior.fetchHttp("POST", "/reviewer/v1/messages", {
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ model: "claude-haiku-5-5", messages: [] }),
+    });
+    const after = await behavior.cli(["reviewer-served", "--title", title], { projectId: "p" });
+    expect(after.exitCode).toBe(0);
+    expect(after.stdout).toBe("SERVED thr_review1 as z-ai/glm-5.3 (1 calls)");
+    // Hidden workflow threads count, in the caller's project, archived or not.
+    expect(listCalls).toContainEqual(
+      expect.objectContaining({ projectId: "p", includeHidden: true, archived: false }),
+    );
+    expect(listCalls).toContainEqual(expect.objectContaining({ archived: true }));
+  });
+
+  it("finds an archived thread, and says NOT FOUND for a title no thread has", async () => {
+    const behavior = await load();
+    const archived = await behavior.cli([
+      "reviewer-served",
+      "--title",
+      "reviewer:ISSUE-2:r1:openrouter",
+      "--project",
+      "p",
+    ]);
+    expect(archived.stdout).toMatch(/^NOT SERVED thr_review2: /);
+    const missing = await behavior.cli(["reviewer-served", "--title", "reviewer:ISSUE-3:r1"], {
+      projectId: "p",
+    });
+    expect(missing.exitCode).toBe(1);
+    expect(missing.stdout).toBe("NOT FOUND: no thread titled reviewer:ISSUE-3:r1");
+    // Another project's threads are not this project's.
+    const elsewhere = await behavior.cli(
+      ["reviewer-served", "--title", "reviewer:ISSUE-1:r1:openrouter"],
+      { projectId: "q" },
+    );
+    expect(elsewhere.stdout).toMatch(/^NOT FOUND: /);
+  });
+
+  it("takes exactly one of --thread and --title", async () => {
+    const behavior = await load();
+    expect((await behavior.cli(["reviewer-served"])).exitCode).toBe(2);
+    const both = await behavior.cli([
+      "reviewer-served",
+      "--thread",
+      "thr_review1",
+      "--title",
+      "reviewer:ISSUE-1:r1:openrouter",
+    ]);
+    expect(both.exitCode).toBe(2);
+    expect(both.stdout).toMatch(/^usage: /);
+  });
+
+  it("lifts a mid-conversation system message into the system prompt and its tools into tools", async () => {
+    const upstream = vi.fn(
+      async (_url: string, _init: RequestInit) =>
+        new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", upstream);
+    const behavior = await load();
+    const token = await tokenFor(behavior, "thr_review1");
+    const definition = { name: "late_tool", description: "d", input_schema: { type: "object" } };
+    await behavior.fetchHttp("POST", "/reviewer/v1/messages", {
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-haiku-5-5",
+        system: "base",
+        tools: [{ name: "Bash" }],
+        output_config: { effort: "low" },
+        messages: [
+          { role: "user", content: [{ type: "text", text: "review" }] },
+          {
+            role: "system",
+            output_config: { effort: "low" },
+            content: [
+              { type: "text", text: "late note" },
+              { type: "tool_addition", tool: { type: "tool_definition", definition } },
+            ],
+          },
+        ],
+      }),
+    });
+    const [, init] = upstream.mock.calls[0] ?? [];
+    const sent = JSON.parse(String(init?.body));
+    expect(sent.messages).toEqual([{ role: "user", content: [{ type: "text", text: "review" }] }]);
+    expect(sent.system).toEqual([
+      { type: "text", text: "base" },
+      { type: "text", text: "late note" },
+    ]);
+    expect(sent.tools).toEqual([{ name: "Bash" }, definition]);
+    expect(sent.output_config).toEqual({ effort: "low" });
   });
 
   it("does not count a failed upstream call as served", async () => {
@@ -118,7 +249,7 @@ describe("the reviewer proxy (ADR-0067)", () => {
     const token = await tokenFor(behavior, "thr_review1");
     await behavior.fetchHttp("POST", "/reviewer/v1/messages", {
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", messages: [] }),
+      body: JSON.stringify({ model: "claude-haiku-5-5", messages: [] }),
     });
     expect((await behavior.cli(["reviewer-served", "--thread", "thr_review1"])).exitCode).toBe(1);
   });

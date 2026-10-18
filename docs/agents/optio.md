@@ -69,6 +69,28 @@ bb optio inbox --off    # switch the Inbox off
 
 `bb project list` shows the project id. Until the Inbox is set, `bb optio inbox` exits 1 and names this command, and the page says the same. `bb optio inbox [--json]` prints the same messages as the page. The code lives in `plugins/factory/src/inbox/` (RPC, Linear read, cards) and `plugins/factory/pages/inbox/` (the page); `app.tsx`, `server.ts` and `src/contract.ts` only register it.
 
+### Approve and landing (KIT-400)
+
+A green review has an **Approve** button. Approving writes one comment, `<approver> approved it from the Inbox.` (`approver` from the project's `factory.config.json`), and moves the issue to the merge-permission state (`Merging`) with its labels unchanged. That is a person's move to `Merging` (ADR-0061): the click is the approval. A card that left `Approval`, carries a question label or has no pull request attached is refused and nothing is written.
+
+Optio then lands the PR itself, never through a model: it runs `scripts/land-approved.mjs` through its host bundle (`run_land`, the script fixed in `src/host-contract.ts`) on the runs machine, in that machine's main checkout, one slice at a time, and goes by the exit code and the verdict line. While the issue is out of the Inbox state it has a landing card of its own, with no action: approved (not enqueued yet), in the merge queue, merged (the land gate is waiting), `Done` (shown once). An issue that is in the Inbox state keeps its own card and its actions (Approve and Reject on a review, Answer on a question); a landing record only adds its landing box. Home lists no landing: nothing waits for a person on it, so Home counts and shows only the cards that do (`inbox.waiting`), and the landing kind and box are the Inbox page's own card type (`src/inbox/contract.ts`), not part of the card Home shares.
+
+Every stop ends with a person told in Linear. The script's own stops (`STOPPED`) put the issue in `Approval` with `ready-for-human` and the reason, so it comes back as a question card that carries the stop reason; answering it ends the landing record. A slice that fails outside the script's own stops (the runs machine does not answer, `UNKNOWN`, a usage error or a line Optio cannot read) is handed over by the script's `stop` step with what happened as the reason. When that call fails too, the card keeps its phase and says why, and the first read of the Inbox after a wait of five minutes (`RETRY_WAIT_MS`) tries the slice again; a read inside the wait starts nothing. A `REFUSED` slice means the issue is not landing any more (a person moved it on), so the record ends and nothing is written. A stopped record whose issue left the Inbox state by any route (answered in Linear, landed by hand, `Done`, `Canceled`) is dropped on the next read. The records live in the plugin's kv (`landing:<issue>`), so a plugin reload picks a landing up again at its stored phase on the next read of the Inbox. The landing settings are set once, with the rest or alone:
+
+```bash
+bb optio inbox --approve-to Merging --land-host <runs machine host id> --land-checkout <absolute path of its main checkout>
+```
+
+Until they are set, Approve answers with this command. The script can also be run by hand on an issue a person moved to `Merging`:
+
+```bash
+node scripts/land-approved.mjs start <pr> --issue KIT-n [--timeout s]   # enqueue through landAtMergeGate
+node scripts/land-approved.mjs finish <pr> --issue KIT-n [--timeout s]  # wait, Post-Merge, land gate, Done
+node scripts/land-approved.mjs stop <pr> --issue KIT-n --reason <text>  # hand a landing issue to a person
+```
+
+`start` refuses an issue that is not `Merging` and writes nothing; a PR already queued or merged answers `QUEUED` again without a second enqueue. `finish` sets `Post-Merge` on the merge, runs `gate.mjs land`, and on an open gate comments the merge SHA and sets `Done`. A land gate still waiting at the end of the slice leaves the issue in `Post-Merge`. A PR the queue ejects (closed, or not queued on two polls), a closed land gate (a red integration check), a conflict or a refused enqueue is a stop: `Approval`, `ready-for-human` and one comment with the reason. A land gate that cannot decide (exit 2 or 4) or a `Post-Merge` write that fails is `UNKNOWN`, never waiting. `stop` hands an issue in `Merging` or `Post-Merge` to a person the same way and refuses any other. A hand-over writes the reason comment, then `ready-for-human`, then `Approval` as its last write, and writes a comment or label that is already there only once. A hand-over whose Linear writes fail is `UNKNOWN`, not `STOPPED`; a failure before the state write leaves the issue landing, so the next `stop` finishes the hand-over. One verdict line on every path: `QUEUED` or `LANDED` (exit 0), `WAITING (land-approved): <approved|queued|merged>: …` (exit 3, run it again), `STOPPED` (exit 1, handed to a person), `REFUSED` (exit 1, nothing written: the issue is not landing), `UNKNOWN` (exit 4), usage exit 2.
+
 ## Where a new area's code goes (KIT-412)
 
 Optio's code is cut by area so tickets for different areas run side by side. The areas are `inbox`, `staff` (the Agents page: list, one agent, chat, memory, automations, follow-ups, Linear triggers, instructions), `board` (setup, machines, requirements, the plan) and `runs`. A new area `<area>` puts:
@@ -81,7 +103,7 @@ Optio's code is cut by area so tickets for different areas run side by side. The
 
 ## The reviewer proxy (ADR-0067)
 
-A reviewer thread whose title ends in `:openrouter` runs Claude Code on an OpenRouter model. Optio gives that thread, and no other, `ANTHROPIC_BASE_URL` pointing at its route `/api/v1/plugins/optio/http/reviewer` and a token for that thread (`bb.providers.experimental_contributeEnv`); the route checks the token, refuses a model id that is not `vendor/model`, and forwards the call to OpenRouter with `OPENROUTER_API_KEY` from the key file named in Optio's settings (`linearApiKeyFile`), asking for endpoints that do not train on the data. The key never reaches the thread. The code is `plugins/factory/src/reviewer-proxy/`.
+A reviewer thread whose title ends in `:openrouter` runs Claude Code on an OpenRouter model. Optio gives that thread, and no other, `ANTHROPIC_BASE_URL` pointing at its route `/api/v1/plugins/optio/http/reviewer` and a token for that thread (`bb.providers.experimental_contributeEnv`); the route checks the token, refuses a model id that is not `vendor/model`, and forwards the call to OpenRouter with `OPENROUTER_API_KEY` from the key file named in Optio's settings (`linearApiKeyFile`), asking for endpoints that do not train on the data. The key never reaches the thread. `bb optio reviewer-served --thread <thr>` or `--title <exact title>` (the newest thread with that title in the caller's project, hidden and archived ones included; `--project` names another) says `SERVED <thr> as <model> (<n> calls)`, `NOT SERVED <thr>: ...` or `NOT FOUND: ...`; the AFK developer workflow asks by title, so the reviewer's thread id never comes from the model. The code is `plugins/factory/src/reviewer-proxy/`.
 
 ## After a merge that touches `plugins/factory/`
 

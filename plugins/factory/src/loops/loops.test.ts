@@ -135,6 +135,8 @@ describe("the Loops page", () => {
       name: "Issue run",
       workflow: "issue-run",
       trigger: { kind: "issue", summary: "Ready with agent-ready, unblocked" },
+      machines: ["mac"],
+      roles: [],
       settings: {
         enabled: { value: true, file: true, override: null },
         maxLive: { value: 3, file: 3, override: null },

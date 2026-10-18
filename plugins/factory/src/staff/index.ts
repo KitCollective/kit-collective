@@ -6,6 +6,7 @@ import { cliCommand, PluginCliError } from "@get-bb/plugin-sdk";
 import type { Agent } from "../agent-store.js";
 import type { Core } from "../core.js";
 import { fetchLinearOptions } from "../linear-api.js";
+import { createProposals } from "../loops/proposal.js";
 import { assertCron, renderBrief } from "../sessions.js";
 import { json } from "../shared/cli.js";
 import type { Run } from "../store.js";
@@ -28,6 +29,33 @@ function describeRun(run: Run): string {
 
 export function createStaff(core: Core) {
   const { bb, agents, runs, sessions, changed, linearApiKey } = core;
+
+  const proposals = createProposals(core);
+
+  /** `staff/<first name, lower case>.md`: the Charter file of a Staff member, named after them. */
+  const charterPath = (agent: Agent) =>
+    `staff/${
+      agent.name
+        .trim()
+        .split(/\s+/)[0]
+        ?.toLowerCase()
+        .replace(/[^a-z0-9-]/g, "") ?? ""
+    }.md`;
+
+  /** The Charter's text, or null when the member has no Charter file in their project. */
+  async function readCharter(agent: Agent): Promise<string | null> {
+    try {
+      const file = await bb.sdk.projects.fileContent({
+        projectId: agent.projectId,
+        path: charterPath(agent),
+      });
+      return file.contentEncoding === "base64"
+        ? Buffer.from(file.content, "base64").toString("utf8")
+        : file.content;
+    } catch {
+      return null;
+    }
+  }
 
   const need = (id: string): Agent => {
     const agent = agents.get(id);
@@ -75,6 +103,33 @@ export function createStaff(core: Core) {
           createdAt: run.createdAt,
         })),
       };
+    },
+    async agent_charter({ id }) {
+      const agent = need(id);
+      const content = await readCharter(agent);
+      return {
+        file: content === null ? null : charterPath(agent),
+        content,
+        proposals: await proposals.list("staff", agent.id),
+      };
+    },
+    async agent_propose({ id, text, by }) {
+      const agent = need(id);
+      if ((await readCharter(agent)) === null) {
+        throw new Error(
+          `${agent.name} has no Charter file (${charterPath(agent)}) in their project`,
+        );
+      }
+      return proposals.propose({
+        kind: "staff",
+        subject: agent.id,
+        heading: `the Charter of ${agent.name}`,
+        title: `Charter ${agent.name}: change proposed in Optio`,
+        file: charterPath(agent),
+        text,
+        by,
+        projectId: agent.projectId,
+      });
     },
     agent_create(input) {
       const agent = agents.create(input, Date.now());

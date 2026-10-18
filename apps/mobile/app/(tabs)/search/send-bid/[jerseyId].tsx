@@ -1,5 +1,4 @@
-import { KIT_TYPE_LABELS_DA } from "@kit/domain";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -19,19 +18,32 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BiddingFetchError, fetchPeerJersey, sendBid } from "@/api/bidding";
 import { resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
+import { Banner } from "@/components/catalog-ui";
 import { Button, IconButton } from "@/components/ui";
-import { sendBidButtonLabel, sendBidDockBottomPadding } from "@/search/send-bid-layout";
+import { normalizeBidAmountInput, sendBidButton } from "@/search/bid-rules";
+import { rememberBidSent } from "@/search/bid-sent-handoff";
+import {
+  sitsAboveForeignJersey,
+  sitsDirectlyAboveForeignJerseyOf,
+} from "@/search/foreign-jersey-route";
+import { sendBidDockBottomPadding } from "@/search/send-bid-layout";
+import { sendBidExit } from "@/search/send-bid-return";
+import { buildSendBidSummary } from "@/search/send-bid-summary";
 import { useBrandFontsEnabled, useTypography } from "@/theme/brand-fonts";
 import { fontFamily, radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 export default function SendBidScreen() {
-  const { jerseyId } = useLocalSearchParams<{ jerseyId: string }>();
+  const { jerseyId, returnTo } = useLocalSearchParams<{
+    jerseyId: string;
+    returnTo?: string | string[];
+  }>();
   const router = useRouter();
   const { accessToken } = useAuth();
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const brandFontsEnabled = useBrandFontsEnabled();
   const amountInputRef = useRef<TextInput>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -97,8 +109,34 @@ export default function SendBidScreen() {
     return () => cancelAnimationFrame(frame);
   }, [formReady]);
 
+  // Above the foreign detail on iOS the Tab bar is hidden (full-screen modal), so the dock adds no
+  // Tab bar inset. On Android the Material bar stays (Tab bar → Hide behavior).
+  const [tabBarShown] = useState(() => {
+    if (Platform.OS !== "ios") {
+      return true;
+    }
+    const state = navigation.getState();
+    if (!state) {
+      return true;
+    }
+    return !sitsAboveForeignJersey(
+      state.routes.map((candidate) => candidate.name),
+      state.index,
+    );
+  });
+
+  // The detail of this jersey is what back returns to. From an Indbakke thread (Send nyt bud) it
+  // is not, and the Toast must not wait for a later visit to the detail.
+  const [landsOnJerseyDetail] = useState(() => {
+    const state = navigation.getState();
+    return (
+      !!state && !!jerseyId && sitsDirectlyAboveForeignJerseyOf(state.routes, state.index, jerseyId)
+    );
+  });
+
   const parsedAmount = Number.parseInt(amount, 10);
-  const canSubmit = Number.isInteger(parsedAmount) && parsedAmount >= 1 && !submitting;
+  const submitButton = sendBidButton(amount);
+  const canSubmit = !submitButton.disabled && !submitting;
 
   const handleSendBid = async () => {
     if (!accessToken || !jerseyId || !canSubmit) {
@@ -109,7 +147,20 @@ export default function SendBidScreen() {
     setError(null);
     try {
       await sendBid(accessToken, jerseyId, { amountDkk: parsedAmount });
-      router.back();
+      const exit = sendBidExit(returnTo);
+      if (exit.kind === "back") {
+        // The detail under this screen shows the Toast once, when it regains focus.
+        if (peerJersey && landsOnJerseyDetail) {
+          rememberBidSent(jerseyId, peerJersey.ownerHandle);
+        }
+        router.back();
+      } else {
+        // Send nyt bud: pop Send bud off the Søg stack, then show the thread it was tapped in. The
+        // thread has no detail waiting for the Toast, so nothing is remembered.
+        router.back();
+        // SAFETY: sendBidExit only returns a single-slash in-app path, which Href accepts as a string.
+        router.navigate(exit.href as Href);
+      }
     } catch (caught) {
       if (caught instanceof BiddingFetchError) {
         setError("Buddet kunne ikke sendes. Tjek at trøjen stadig er åben for bud.");
@@ -139,7 +190,7 @@ export default function SendBidScreen() {
   }
 
   const primaryPhoto = peerJersey.photos[0];
-  const summaryTitle = `${peerJersey.clubLabel} ${peerJersey.seasonLabel}`;
+  const summary = buildSendBidSummary(peerJersey);
   const amountWidth = Math.max(amount.length, 1) * AMOUNT_CHAR_WIDTH;
 
   return (
@@ -151,6 +202,11 @@ export default function SendBidScreen() {
         <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
         <Text style={[typography.title, { color: theme.contentPrimary }]}>Send bud</Text>
       </View>
+      {error ? (
+        <View style={styles.banner}>
+          <Banner tone="danger" message={error} />
+        </View>
+      ) : null}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -173,13 +229,13 @@ export default function SendBidScreen() {
           </View>
           <View style={styles.summaryText}>
             <Text style={[typography.label, { color: theme.contentPrimary }]} numberOfLines={1}>
-              {summaryTitle}
+              {summary.title}
             </Text>
             <Text style={[typography.mono, { color: theme.contentSecondary }]} numberOfLines={1}>
-              {KIT_TYPE_LABELS_DA[peerJersey.type]}
+              {summary.facts}
             </Text>
             <Text style={[typography.caption, { color: theme.contentSecondary }]} numberOfLines={1}>
-              {peerJersey.ownerHandle}
+              {summary.byline}
             </Text>
           </View>
         </View>
@@ -199,7 +255,7 @@ export default function SendBidScreen() {
               inputAccessoryViewID={Platform.OS === "ios" ? KEYBOARD_ACCESSORY_ID : undefined}
               onSubmitEditing={Keyboard.dismiss}
               value={amount}
-              onChangeText={(text) => setAmount(text.replace(/\D/g, ""))}
+              onChangeText={(text) => setAmount(normalizeBidAmountInput(text))}
               placeholder="0"
               placeholderTextColor={theme.contentMuted}
               style={[
@@ -225,22 +281,17 @@ export default function SendBidScreen() {
         style={[
           styles.dock,
           {
-            paddingBottom: sendBidDockBottomPadding(keyboardVisible, insets.bottom),
+            paddingBottom: sendBidDockBottomPadding(keyboardVisible, insets.bottom, tabBarShown),
             borderTopColor: theme.borderSubtle,
             backgroundColor: theme.canvas,
           },
         ]}
       >
-        {error ? (
-          <Text style={[typography.body, { color: theme.danger }]} accessibilityLiveRegion="polite">
-            {error}
-          </Text>
-        ) : null}
         <Text style={[typography.caption, { color: theme.contentSecondary }]}>
           {peerJersey.ownerHandle} får dit bud i Indbakke. Det er ikke et køb.
         </Text>
         <Button
-          label={sendBidButtonLabel(amount)}
+          label={submitButton.label}
           testID="bid-submit"
           width="fill"
           loading={submitting}
@@ -285,6 +336,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    alignItems: "flex-start",
+    paddingHorizontal: space.insetMd,
+    paddingBottom: space.insetSm,
+  },
+  banner: {
     paddingHorizontal: space.insetMd,
     paddingBottom: space.insetSm,
   },

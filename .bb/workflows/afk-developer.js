@@ -13,6 +13,7 @@ export const meta = {
       maxRounds: { type: "integer", minimum: 1, maximum: 5 },
       machine: { type: "string" },
       autoLand: { type: "boolean" },
+      mergeFirst: { type: "boolean" },
     },
   },
   outputSchema: {
@@ -70,6 +71,10 @@ if (!ISSUE.test(issue)) {
   return { issue, status: "refused", stoppedAt: "args", note: "issue must look like KIT-123" };
 }
 const resume = args.resume === true;
+// The PR conflicts with development (the dispatcher's merge stopped on a conflict, or resume-point says
+// CONFLICTING): the first Engineer round merges origin/development into the PR branch before anything is
+// reviewed. Before 2026-10-18 the dispatcher aborted and the issue sat in To-do (KIT-404, KIT-400).
+let mergeFirst = resume && args.mergeFirst === true;
 // At most five rounds (ADR-0066); from the third the Lead replans before the Engineer patches again.
 const maxRounds = Number.isInteger(args.maxRounds) ? Math.min(Math.max(args.maxRounds, 1), 5) : 5;
 const machine = typeof args.machine === "string" && /^[A-Za-z0-9_.-]{1,59}$/.test(args.machine) ? args.machine : "";
@@ -87,8 +92,9 @@ const MODELS = {
   // The Reviewer on GLM 5.3 through Optio's proxy (ADR-0067): what the run log records for it. The
   // agent() call names a catalog carrier, because `bb workflows validate` only accepts catalog models.
   glm: "z-ai/glm-5.3",
-  // The catalog model the GLM reviewer's agent() call names; Optio's proxy never sends it on.
-  glmCarrier: "claude-haiku-4-5-20251001",
+  // The catalog model the GLM reviewer's agent() call names; Optio's proxy never sends it on. Haiku
+  // 4.5 has no auto mode, so its reviewer asked a person before each command (KIT-425, 2026-10-18).
+  glmCarrier: "claude-haiku-5-5",
 };
 /** Spawns a high-reasoning worker on the aliased model: one literal agent() call per alias. */
 function spawn(alias, prompt, label, phaseTitle, schema) {
@@ -104,7 +110,7 @@ function spawn(alias, prompt, label, phaseTitle, schema) {
   if (alias === "glm") {
     // Carrier: Optio's proxy sends this thread's calls as GLM 5.3 (the title ends in :openrouter), and
     // `bb optio reviewer-served` must confirm it before the review counts as green.
-    return agent(prompt, { label: `${label}:openrouter`, phase: phaseTitle, schema, provider: "claude-code", model: "claude-haiku-4-5-20251001", reasoningLevel: "low" });
+    return agent(prompt, { label: `${label}:openrouter`, phase: phaseTitle, schema, provider: "claude-code", model: "claude-haiku-5-5", reasoningLevel: "low" });
   }
   throw new Error(`afk-developer has no model for alias ${alias}`);
 }
@@ -274,22 +280,29 @@ async function gateSlices(label, phaseTitle, command, before = [], retry = true,
 const logCmd = (event, flags) => `node scripts/run-log.mjs ${event} ${flags}`;
 // Asks for the hosted Device flows run of the PR head (ADR-0059). It decides for itself: nothing is
 // asked for without a slice flow, when the head already has the status, or when a re-request has
-// failed too. The pre-review gate waits for the status with the checks, so this rides in front of
-// every slice of that gate: a first `error` is asked for again inside the run.
+// failed too. It rides in front of the pre-review gate, so the run starts as soon as the head exists
+// and goes on while the Reviewer reviews; only the review gate waits for the status (amendment of
+// 2026-10-18). It also rides in front of every slice of both gates: a first `error` is asked for
+// again inside the run.
 const requestDeviceFlows = (pr) => `node scripts/request-device-flows.mjs ${pr} --issue ${issue}`;
 
 /**
- * The sentence of a pre-review gate that cannot get a Device flows verdict (the `error` run was asked for
+ * The sentence of a review gate that cannot get a Device flows verdict (the `error` run was asked for
  * again and failed too, or the status was still pending when the wait ran out), or null. No simulator is
- * here, so a person runs device-run.sh on the Mac: no fix round, no Reviewer.
+ * here, so a person runs device-run.sh on the Mac: no fix round.
  */
-function deviceFlowsNoVerdict(pre) {
-  const closed = pre.code === 1 ? /device-flows-no-verdict: (needs-human: run device-run\.sh on the Mac on [0-9a-f]+)/.exec(pre.line) : null;
+function deviceFlowsNoVerdict(gate) {
+  const closed = gate.code === 1 ? /device-flows-no-verdict: (needs-human: run device-run\.sh on the Mac on [0-9a-f]+)/.exec(gate.line) : null;
   if (closed) {
     return closed[1];
   }
-  const pending = pre.exhausted ? /device-flows-pending on ([0-9a-f]+)/.exec(pre.line) : null;
+  const pending = gate.exhausted ? /device-flows-pending on ([0-9a-f]+)/.exec(gate.line) : null;
   return pending ? `needs-human: run device-run.sh on the Mac on ${pending[1]}` : null;
+}
+
+/** True when a closed review gate's only red check is the `Device flows` status: a red flow, which is the Engineer's to fix. */
+function deviceFlowsRedOnly(gate) {
+  return gate.code === 1 && /checks: (?:TIMEOUT after \d+s: )?RED \([^)]*\): Device flows$/.test(gate.line);
 }
 
 /** The one place a Linear state command is built, so no caller can write a state outside MAY_SET. */
@@ -386,20 +399,35 @@ if (!session || session.code !== 0) {
 // enters it. Its answer is one JSON line (a runner relays only the last line) and is guidance, not a
 // gate: it can fail without stopping the run, so it is read apart from the start steps.
 const startSteps = resume ? 2 : 3;
+const decisionCmd = `node scripts/start-decision.mjs --issue ${issue}`;
 const begun = await sh("start", "Session", [
   logCmd("start", `--issue ${issue}`),
-  `node scripts/start-decision.mjs --issue ${issue}`,
+  decisionCmd,
   ...(resume ? [] : [`node scripts/linear.mjs state ${issue} "In Progress"`]),
   `node scripts/scenarios.mjs titles --issue ${issue}`,
 ]);
 if (begun.length < startSteps || begun.slice(0, startSteps).some((r) => r.code !== 0)) {
   return stopped("start", "stopped", { note: begun.slice(0, startSteps).find((r) => r.code !== 0)?.line ?? "start step incomplete" });
 }
-let decision;
-try {
-  decision = JSON.parse(begun[1].line);
-} catch (error) {
-  return stopped("start-decision", "stopped", { note: `start-decision printed no JSON: ${begun[1].line}` });
+// A runner sometimes relays the exit line where the command's answer belongs (KIT-409 on 2026-10-18:
+// start-decision answered only `KIT-EXIT:0`, the run stopped at its first step and nobody restarted
+// it for three hours). start-decision only reads, so it gets one more runner of its own before that
+// is a stop.
+const parseDecision = (result) => {
+  try {
+    const parsed = JSON.parse(result?.line ?? "");
+    return parsed !== null && typeof parsed === "object" ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+};
+let decision = parseDecision(begun[1]);
+if (decision === null) {
+  const again = (await sh("start-decision", "Session", [decisionCmd]))[0];
+  decision = again.code === 0 ? parseDecision(again) : null;
+  if (decision === null) {
+    return stopped("start-decision", "stopped", { note: `start-decision printed no JSON twice: ${again.line}` });
+  }
 }
 const engineerAlias = decision.engineerModel === "opus" ? "opus" : "sonnet";
 
@@ -407,9 +435,12 @@ const engineerAlias = decision.engineerModel === "opus" ? "opus" : "sonnet";
 // answer is digits or nothing, so it can enter the Engineer prompt.
 let resumePr = null;
 if (resume) {
-  const found = await sh("pr-lookup", "Session", [
-    `gh pr list --state open --search "${issue} in:title" --json number,title --jq '[.[] | select(.title | startswith("${issue}:")) | .number] | join(",")'`,
-  ], false, true);
+  const lookup = `gh pr list --state open --search "${issue} in:title" --json number,title --jq '[.[] | select(.title | startswith("${issue}:")) | .number] | join(",")'`;
+  let found = await sh("pr-lookup", "Session", [lookup], false, true);
+  // The exit line in place of the answer is the runner's slip, not two PRs: one more runner (KIT-409).
+  if (found[0].code === 0 && EXIT_MARK.test(String(found[0].line ?? "").trim())) {
+    found = await sh("pr-lookup", "Session", [lookup]);
+  }
   const answer = String(found[0]?.line ?? "").trim();
   if (found[0].code !== 0) {
     return stopped("resume", "stopped", { note: found[0].line });
@@ -540,7 +571,20 @@ const ENGINEER_SCHEMA = {
   },
 };
 
-async function engineerPass(round, feedback, engineerModelAlias) {
+/**
+ * The merge round's opening (ADR-0066: a merge conflict is resolved inside the run, never by a person).
+ * The dispatcher leaves the worktree detached at origin/development when its own merge conflicted, so the
+ * Engineer checks the PR branch out first. Only the validated PR number enters the text.
+ */
+function mergeFirstNote(pr) {
+  return [
+    `First job of this round, before anything else: PR #${pr} conflicts with development. This worktree may be detached at origin/development (the dispatcher's merge stopped on the conflict). \`git fetch -q origin\`, check out the PR's branch (\`gh pr view ${pr} --json headRefName --jq .headRefName\`; \`git checkout -q -b <branch> origin/<branch>\` when it does not exist here, else \`git checkout -q <branch>\` and \`git merge -q --ff-only origin/<branch>\`), then \`git merge --no-edit origin/development\`.`,
+    "Resolve every conflict so both sides' features survive: read what each side meant (this issue and its PR, and the commits on development that touched the file: `git log origin/development -- <file>`) and combine them. Never take one side whole (no `-X ours`, `-X theirs`, `checkout --ours` or `--theirs` on a file both sides changed), and never drop the other side's lines, tests or registrations.",
+    "Then run the tests of every area the conflicts touched and the PR's own, fix what the merge broke, commit the merge and push it. Never rebase, force-push or rewrite pushed history. Note the merge and how each conflict was resolved under `### Notes` in the workpad. After that the round goes on as usual: the pre-review gate in implement/SKILL.md, then return ready.",
+  ].join("\n");
+}
+
+async function engineerPass(round, feedback, engineerModelAlias, mergeRound = false) {
   const knownPr = prNumber ?? resumePr;
   const resumeNote =
     knownPr !== null
@@ -550,11 +594,12 @@ async function engineerPass(round, feedback, engineerModelAlias) {
         : "Branch from origin/development, one PR into development.";
   const prompt = [
     `You are the Engineer for ${issue}. Read .cursor/skills/implement/SKILL.md and follow it, with /tdd and the Roles it names. ${resumeNote}`,
+    mergeRound && knownPr !== null ? mergeFirstNote(knownPr) : "",
     scenarioLine,
     "Read `### Plan` in the workpad when there is one. Copy the issue's write-scope: line into the PR body (plain globs, no backslashes).",
     `Wait for CI only in the foreground, in slices (a foreground command is capped at 10 minutes, and your shell tool backgrounds it after 2 unless you set the tool's timeout to 600000 ms, so set it): \`node scripts/wait-for-checks.mjs <pr> --timeout ${GATE_SLICE_SECONDS}\`. On exit 2 (still pending) run the same command again in the same turn, up to ${GATE_SLICES} times in all; only after that end with \`blocked ci-pending\`. Exit 5 means gh is unusable: report \`blocked\` with the verdict line and do not retry. Never start it in the background and end your turn.`,
     "An acceptance criterion that needs the owner's machine (reload Optio, probe a thread, the Board) is proven after the merge by the checks the issue names on its `live-check:` line (scripts/lib/live-checks.mjs). Build what they check, but never stop or return blocked to ask a person for that evidence; say in the workpad which criterion the live check covers. If no listed check fits, say so under `### Waiting` instead of inventing one.",
-    `A slice with a slice flow (apps/mobile/.maestro/slices/${issue}.yaml) needs a green \`Device flows\` status on the PR head (the pre-review gate row in implement/SKILL.md). This machine has no simulator: ask for the hosted run with \`node scripts/request-device-flows.mjs <pr> --issue ${issue}\` and wait with \`node scripts/gate.mjs pre-review <pr> --issue ${issue} --timeout ${GATE_SLICE_SECONDS}\` in the same slices. A red flow is yours to fix. If the status stays missing or pending after ${GATE_SLICES} slices, or ends \`error\` again after a re-request, never return ready: write the ask and the stage under workpad \`### Waiting\` and return blocked with the sentence \`needs-human: run device-run.sh on the Mac on <sha>\`.`,
+    `A slice with a slice flow (apps/mobile/.maestro/slices/${issue}.yaml) gets its \`Device flows\` status from a hosted run (the pre-review gate row in implement/SKILL.md). This machine has no simulator: after every push, ask for the hosted run with \`node scripts/request-device-flows.mjs <pr> --issue ${issue}\`, then return ready once the pre-review gate is true. Do not wait for the \`Device flows\` status: it runs while the Reviewer reviews, and the review gate of this run waits for it. A red flow comes back to you as a fix round; fix it, push, and ask for the run again.`,
     "Never move the issue to Merging, Post-Merge or Done, never merge, never enable auto-merge, never post a kc/audit status. Move nothing in Linear except the workpad and your evidence comments.",
     feedback ? `Change request from the last round (fix the class, not the instance). Answer every gating finding in the workpad under ### Notes, one line each: fixed in <commit>, or disagreed with the reason:\n${feedback}` : "",
     "Return outcome ready (only when the pre-review gate in implement/SKILL.md is true), blocked (sentence starts `needs-human:` or `blocked-by KIT-m:`) or failed, one sentence, the PR number, and your own thread id ($BB_THREAD_ID) in threadId.",
@@ -630,23 +675,24 @@ let engineerThread = "";
 // findings are open against the head (resume-point.mjs) and the pre-review gate is open. Then the
 // run starts at round 0, which is the review alone and is not an Engineer round: maxRounds still
 // counts Engineer rounds. Any other answer builds first, as before.
+// A PR that conflicts with development is never reviewed as it is: the first round merges development in.
 let reviewAsIs = false;
+if (resume && resumePr === null) {
+  mergeFirst = false;
+}
 if (resume && resumePr !== null) {
   const point = await shAfter(carried.splice(0), "resume-point", "Pre-review gate", `node scripts/resume-point.mjs ${issue} --pr ${resumePr}`);
   if (!point || point.runner) {
     return stopped("resume-point", "stopped", { prNumber: resumePr, note: point?.line ?? "no output from resume-point" });
   }
-  if (point.code === 0) {
+  if (point.code === 1 && /^CLOSED: conflicting:/.test(point.line)) {
+    mergeFirst = true;
+  }
+  if (point.code === 0 && !mergeFirst) {
     phase("Pre-review gate");
     const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${resumePr} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [requestDeviceFlows(resumePr)], true, [requestDeviceFlows(resumePr)]);
     if (pre.runner) {
       return stopped("pre-review gate", "stopped", { prNumber: resumePr, note: pre.line });
-    }
-    const noVerdictAtResume = deviceFlowsNoVerdict(pre);
-    if (noVerdictAtResume) {
-      await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code device-flows-no-verdict`)], true);
-      const state = await stopForHuman("Pre-review gate", noVerdictAtResume, { stage: "pre-review gate", ask: noVerdictAtResume });
-      return stopped("pre-review gate", state, { prNumber: resumePr, note: noVerdictAtResume });
     }
     if (pre.exhausted) {
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
@@ -656,6 +702,7 @@ if (resume && resumePr !== null) {
       reviewAsIs = true;
     } else if (pre.code === 1) {
       feedback = `The pre-review gate is closed: ${pre.line}`;
+      mergeFirst = /PR is CONFLICTING/.test(pre.line);
     }
   }
 }
@@ -696,7 +743,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
     let engineer = null;
     for (let attempt = 1; attempt <= 2 && engineer === null; attempt += 1) {
       try {
-        engineer = await engineerPass(round, attempt === 1 ? feedback : `${feedback}\n(The previous attempt ended without a result. Resume where it stopped.)`, modelAlias);
+        engineer = await engineerPass(round, attempt === 1 ? feedback : `${feedback}\n(The previous attempt ended without a result. Resume where it stopped.)`, modelAlias, mergeFirst);
       } catch (error) {
         engineer = null;
       }
@@ -714,6 +761,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
     engineerThread = eThread;
     // The two log lines ride with the pre-review gate; a stop before the gate writes them alone.
     const engineerLog = [
+      ...(mergeFirst ? [logCmd("reason", `--issue ${issue} --code conflict`)] : []),
       logCmd("spawn", `--issue ${issue} --step engineer --thread ${eThread} --mode ${round > 1 || reviewAsIs ? "fix" : "start"} --provider ${PROVIDER} --model ${MODELS[modelAlias]}${machineFlag}`),
       logCmd("result", `--issue ${issue} --step engineer --outcome ${engineer.outcome} --usage-thread ${eThread}`),
     ];
@@ -742,6 +790,8 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
       }
       return stopped("engineer", "In Progress", { rounds, note: `Engineer failed: ${engineer.sentence}` });
     }
+    // The merge is the Engineer's to finish: a stop the Lead settles comes back to the same merge round.
+    mergeFirst = false;
     if (prNumber !== null && Number.isInteger(engineer.prNumber) && engineer.prNumber !== prNumber) {
       // A second PR for the same issue: stop before any gate reads it.
       await logEngineer();
@@ -760,14 +810,6 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
       // The runner failed, not the gate: sh() logged runner-no-result, and no fix round can help.
       return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
     }
-    const noVerdict = deviceFlowsNoVerdict(pre);
-    if (noVerdict) {
-      // The hosted Device flows run cannot reach a verdict and no simulator is here: a person runs
-      // device-run.sh on the Mac. Not a red gate and not a pending one, so no fix round and no Reviewer.
-      await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code device-flows-no-verdict`)], true);
-      const state = await stopForHuman("Pre-review gate", noVerdict, { stage: "pre-review gate", ask: noVerdict });
-      return stopped("pre-review gate", state, { prNumber, rounds, note: noVerdict });
-    }
     if (pre.exhausted) {
       // Checks never finished inside the bound: not a red gate, so no fix round, and the issue is still In Progress.
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
@@ -781,6 +823,8 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ${reason}`)], true);
       if (again) {
         feedback = `The pre-review gate is closed: ${pre.line}`;
+        // Development moved again while the round ran: the next round opens with the merge.
+        mergeFirst = /PR is CONFLICTING/.test(pre.line);
         continue;
       }
       return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
@@ -799,6 +843,10 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   // -- Reviewer: fresh hidden thread on another model than the Engineer.
   phase("Reviewer");
   const rAlias = reviewerAlias(modelAlias);
+  const proxied = rAlias === "glm";
+  const rLabel = `reviewer:${issue}:r${round}`;
+  // The exact title spawn() gives a proxied Reviewer's thread.
+  const rTitle = proxied ? `${rLabel}:openrouter` : rLabel;
   let review = null;
   try {
     review = await spawn(
@@ -809,9 +857,10 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
         "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
         `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
         "Every finding names the file and line, what is wrong, and what green looks like, so the Engineer can check it, and is marked `gating` or `nit`. Only gating findings make the review red; nits go in the matrix and do not hold it (ADR-0066).",
+        "The `Device flows` status of a slice flow may still be running while you review: it is not a required check, not yours to wait for and not a finding. Review the flow file against the acceptance criteria; the review gate waits for the run.",
         "On red, also return light: true only when every finding is light: the wording of a comment, a doc line, a name or a message, with no gap in behaviour, tests, an acceptance criterion, the design lock or the write-scope. Otherwise light: false.",
       ].join("\n"),
-      `reviewer:${issue}:r${round}`,
+      rLabel,
       "Reviewer",
       {
         type: "object",
@@ -833,7 +882,19 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   if (review && pick(review.verdict, ["green", "amber", "red"]) === null) {
     review = null;
   }
-  const rThread = review && THREAD.test(review.threadId) ? review.threadId : "";
+  // A proxied Reviewer's thread comes from bb, never from the model: GLM 5.3 once reported the Issue
+  // thread's id as its own, so reviewer-served asked about the wrong thread and a served green review
+  // stopped as evidence-gap (KIT-400, 2026-10-18). Optio looks the thread up by the exact label the
+  // agent() call got and names it in its answer; that thread is the one logged, received and told.
+  let servedAnswer = null;
+  let rThread = review && THREAD.test(review.threadId) ? review.threadId : "";
+  if (review && proxied) {
+    servedAnswer = (await sh("reviewer-served", "Reviewer", [`bb optio reviewer-served --title ${rTitle}`], true, true))[0];
+    const named = servedAnswer && !servedAnswer.runner ? /^(?:NOT )?SERVED (thr_[a-z0-9]+)\b/.exec(servedAnswer.line ?? "") : null;
+    if (named && THREAD.test(named[1])) {
+      rThread = named[1];
+    }
+  }
   if (!review || !rThread) {
     await sh("log:no-result", "Reviewer", [logCmd("reason", `--issue ${issue} --code no-result-line`)], true);
     return stopped("reviewer", "In Review", { prNumber, rounds, note: "the Reviewer ended without a usable result or thread id" });
@@ -851,14 +912,24 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
     return stopped("reviewer", "In Review", { prNumber, rounds, verdict: "amber", note: review.sentence });
   }
 
-  // -- Full review gate (matrix included) and the receipt as a dry run.
+  // -- Full review gate (matrix included) and the receipt as a dry run. For a slice with a slice flow it
+  // also waits for the hosted Device flows run, which was asked for before the pre-review gate and ran
+  // while the Reviewer reviewed; the request rides in front of every slice so a first `error` is asked for again.
   phase("Review gate");
-  const gate = await gateSlices("gate:review", "Review gate", `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, reviewerLog);
-  if (gate.exhausted) {
-    await sh("log:gate", "Review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
+  const gate = await gateSlices("gate:review", "Review gate", `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [...reviewerLog, requestDeviceFlows(prNumber)], true, [requestDeviceFlows(prNumber)]);
+  if (gate.runner) {
     return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
   }
-  if (gate.runner) {
+  const noVerdict = deviceFlowsNoVerdict(gate);
+  if (noVerdict) {
+    // The hosted Device flows run cannot reach a verdict and no simulator is here: a person runs
+    // device-run.sh on the Mac. Not a red gate and not a pending one, so no fix round.
+    await sh("log:gate", "Review gate", [logCmd("reason", `--issue ${issue} --code device-flows-no-verdict`)], true);
+    const state = await stopForHuman("Review gate", noVerdict, { stage: "review gate", ask: noVerdict });
+    return stopped("review gate", state, { prNumber, rounds, verdict: review.verdict, note: noVerdict });
+  }
+  if (gate.exhausted) {
+    await sh("log:gate", "Review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
     return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
   }
   if (review.verdict === "red" || gate.code !== 0) {
@@ -878,7 +949,12 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
     ], true);
     if (round < roundCap) {
       backInProgress = true;
-      feedback = `${review.verdict === "red" ? `The Reviewer returned red: ${review.sentence}. The findings are under \`### Review feedback\` in the workpad.` : ""}${gate.code !== 0 ? `\nThe review gate says: ${gate.line}` : ""}`.trim();
+      // A red Device flows run is a fix round like a red pre-review check: the Engineer gets the line, fixes, pushes
+      // and asks for the run again; the new head goes through the pre-review gate and a fresh review.
+      const flowRed = deviceFlowsRedOnly(gate)
+        ? `\nThe hosted Device flows run is red on the PR head: ${gate.line}. The status links the run, whose artifact holds the screenshots; fix the flow or the app, push, and ask for the run again with node scripts/request-device-flows.mjs ${prNumber} --issue ${issue}.`
+        : "";
+      feedback = `${review.verdict === "red" ? `The Reviewer returned red: ${review.sentence}. The findings are under \`### Review feedback\` in the workpad.` : ""}${gate.code !== 0 ? `\nThe review gate says: ${gate.line}` : ""}${flowRed}`.trim();
       continue;
     }
     // Out of rounds: a person has to act, and Linear still says In Review, so say Approval.
@@ -892,16 +968,15 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.
   const receiptCmd = `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread}${engineerThread ? ` --implementer-thread ${engineerThread}` : ""} --require-different-model --dry-run`;
   // `auto-land.mjs enabled` rides in the same runner (it only reads the config and the kill file), so the default path spends no extra runner.
-  // A proxied review counts only when Optio's proxy served its thread: otherwise it ran on the carrier.
-  const proxied = rAlias === "glm";
-  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd, "node scripts/auto-land.mjs enabled", ...(proxied ? [`bb optio reviewer-served --thread ${rThread}`] : [])], true, true);
-  const enabledAnswer = dry[1];
-  const servedAnswer = dry[2];
-  dry = dry.slice(0, 1);
-  if (proxied && (!servedAnswer || servedAnswer.runner || servedAnswer.code !== 0 || !/^SERVED /.test(servedAnswer.line ?? ""))) {
+  // A proxied review counts only when Optio's proxy served its thread (asked right after the review,
+  // by title): otherwise it ran on the carrier, and no receipt is tried.
+  if (proxied && (!servedAnswer || servedAnswer.runner || servedAnswer.code !== 0 || !/^SERVED thr_/.test(servedAnswer.line ?? ""))) {
     await sh("log:receipt", "Review gate", [logCmd("reason", `--issue ${issue} --code evidence-gap`)], true);
-    return stopped("receipt", "In Review", { prNumber, rounds, verdict: "green", receipt: servedAnswer?.line ?? "no answer from reviewer-served", note: `the reviewer proxy did not serve ${rThread}, so the review ran on the carrier model: ${servedAnswer?.line ?? "no answer"}` });
+    return stopped("receipt", "In Review", { prNumber, rounds, verdict: "green", receipt: servedAnswer?.line ?? "no answer from reviewer-served", note: `the reviewer proxy did not serve ${rTitle} (${rThread}), so the review ran on the carrier model: ${servedAnswer?.line ?? "no answer"}` });
   }
+  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd, "node scripts/auto-land.mjs enabled"], true, true);
+  const enabledAnswer = dry[1];
+  dry = dry.slice(0, 1);
   // A Reviewer that returned its verdict through the result tool can end on another sentence, and
   // the receipt reads only the thread's last text (KIT-283 and KIT-286, 2026-10-14). The Reviewer
   // is asked once for the line, as bb-orchestrate allows, and the receipt is tried again. The message

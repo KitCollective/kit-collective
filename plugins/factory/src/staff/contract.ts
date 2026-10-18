@@ -1,6 +1,7 @@
 // The staff area's part of the RPC contract: the Agents page, its chat, memory, automations,
 // follow-ups and Linear triggers.
 import { z } from "zod";
+import { proposalDto } from "../loops/contract.js";
 import { ok } from "../shared/contract.js";
 
 const agent = z.object({
@@ -140,6 +141,27 @@ export const staffContract = {
       linearTriggers: z.array(linearTrigger),
       sessions: z.array(session),
     }),
+  },
+  /** A Staff member's Charter as the project checkout holds it, with the changes proposed to it. */
+  agent_charter: {
+    input: z.object({ id: z.string() }).strict(),
+    output: z.object({
+      /** The Charter's path in the checkout; null when the member has none. */
+      file: z.string().nullable(),
+      content: z.string().nullable(),
+      proposals: z.array(proposalDto),
+    }),
+  },
+  /** Opens a pull request that edits the Charter; nothing about the member changes until it is merged. */
+  agent_propose: {
+    input: z
+      .object({
+        id: z.string(),
+        text: z.string().max(20_000),
+        by: z.string().trim().min(1).max(80),
+      })
+      .strict(),
+    output: proposalDto,
   },
   followup_cancel: { input: z.object({ id: z.string() }).strict(), output: ok },
   linear_options: {

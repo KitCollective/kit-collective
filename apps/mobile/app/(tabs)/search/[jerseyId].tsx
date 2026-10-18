@@ -1,14 +1,16 @@
 import type { CollectionPeerJersey } from "@kit/api-contract";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 import { BiddingFetchError, fetchPeerJersey } from "@/api/bidding";
 import { resolvePhotoUrl } from "@/api/collection";
 import { addFavorite, fetchFavorites, removeFavorite } from "@/api/favorites";
 import { blockPeer, reportPeer } from "@/api/moderation";
 import { useAuth } from "@/auth/AuthProvider";
 import { Sheet } from "@/components/catalog-ui";
+import { toastConfig } from "@/components/toast-config";
 import { Button, ButtonDock, IconButton } from "@/components/ui";
 import {
   JerseyFactRow,
@@ -17,11 +19,17 @@ import {
 } from "@/jersey-detail/jersey-detail-rows";
 import { JerseyPhotoPager } from "@/jersey-detail/jersey-photos";
 import { peerJerseyDockState } from "@/search/bid-rules";
+import { consumeBidSent } from "@/search/bid-sent-handoff";
+import { bidSentToastConfig, showBidSentToast } from "@/search/bid-sent-toast";
 import { ForeignJerseyOwnerRow } from "@/search/foreign-jersey-owner-row";
 import { buildForeignJerseyView } from "@/search/foreign-jersey-view-model";
+import { OwnBidRow } from "@/search/own-bid-row";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
+
+/** Dock content (the 54 high own bid row and Send bud) plus the dock's top padding and a gap. */
+const BID_ROW_DOCK_CLEARANCE = 54 + space.insetMd + space.gapMd;
 
 export default function ForeignJerseyDetailScreen() {
   const { jerseyId } = useLocalSearchParams<{ jerseyId: string }>();
@@ -52,7 +60,6 @@ export default function ForeignJerseyDetailScreen() {
       ]);
       setPeerJersey(response);
       setIsFavorite(favorites.favorites.some((item) => item.userJerseyId === jerseyId));
-      setPhotoIndex(0);
     } catch (caught) {
       if (caught instanceof BiddingFetchError && caught.status === 404) {
         setPeerJersey(null);
@@ -62,25 +69,33 @@ export default function ForeignJerseyDetailScreen() {
     }
   }, [accessToken, jerseyId]);
 
-  useEffect(() => {
-    let active = true;
+  // Reload on every focus, so coming back from Send bud (or a thread) shows the own bid row. The
+  // Toast is a one-shot handoff consumed here, not on every reload.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
 
-    async function run() {
-      try {
-        await loadPeerJersey();
-      } finally {
-        if (active) {
-          setLoading(false);
+      async function run() {
+        try {
+          await loadPeerJersey();
+        } finally {
+          if (active) {
+            setLoading(false);
+          }
         }
       }
-    }
 
-    void run();
+      void run();
+      const sentTo = jerseyId ? consumeBidSent(jerseyId) : null;
+      if (sentTo) {
+        showBidSentToast(sentTo);
+      }
 
-    return () => {
-      active = false;
-    };
-  }, [loadPeerJersey]);
+      return () => {
+        active = false;
+      };
+    }, [loadPeerJersey, jerseyId]),
+  );
 
   const handleToggleFavorite = async () => {
     if (!accessToken || !jerseyId || favoriteBusy) {
@@ -166,13 +181,16 @@ export default function ForeignJerseyDetailScreen() {
     );
   }
 
-  const dockState = peerJerseyDockState({ biddingEnabled: peerJersey.biddingEnabled });
+  const dockState = peerJerseyDockState({
+    biddingEnabled: peerJersey.biddingEnabled,
+    myPendingBid: peerJersey.myPendingBid,
+  });
 
   return (
     <View testID="foreign-jersey-detail" style={[styles.root, { backgroundColor: theme.canvas }]}>
       <ScrollView
         contentContainerStyle={{
-          paddingBottom: dockState === "none" ? insets.bottom + space.insetLg : space.insetLg,
+          paddingBottom: dockState.kind === "none" ? insets.bottom + space.insetLg : space.insetLg,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -204,7 +222,7 @@ export default function ForeignJerseyDetailScreen() {
         </View>
       </ScrollView>
 
-      {dockState === "send" ? (
+      {dockState.kind === "send" ? (
         <ButtonDock>
           {/* A row so KIT-298 can add the 54px message Icon button before Send bud. */}
           <View style={styles.dockRow}>
@@ -219,6 +237,34 @@ export default function ForeignJerseyDetailScreen() {
           </View>
         </ButtonDock>
       ) : null}
+
+      {dockState.kind === "own-pending" ? (
+        <ButtonDock>
+          <OwnBidRow
+            amountDkk={dockState.amountDkk}
+            onPress={() => {
+              // This screen is a full-screen modal over the Søg tab: a push into the Indbakke tab
+              // alone opens the thread behind it (hosted Device flow, KIT-291). Close the Søg
+              // stack first.
+              router.dismissAll();
+              router.push(`/(tabs)/inbox/${dockState.conversationId}`);
+            }}
+          />
+        </ButtonDock>
+      ) : null}
+
+      {/*
+        This screen is a full-screen modal on iOS, a native surface the root <Toast> cannot cover:
+        the host lives here, like the (capture) group's. It carries the locked `toastConfig` too: Toast
+        routes every show to the last mounted host, so an `error` Toast must keep its danger chrome.
+        bottomOffset clears the dock.
+        docs/design-system.md → Toast → Placement.
+      */}
+      <Toast
+        config={{ ...toastConfig, ...bidSentToastConfig }}
+        position="bottom"
+        bottomOffset={Math.max(insets.bottom, space.insetMd) + BID_ROW_DOCK_CLEARANCE}
+      />
 
       <Sheet visible={overflowOpen} title="Handlinger" onDismiss={() => setOverflowOpen(false)}>
         <View style={styles.overflowActions}>

@@ -85,4 +85,18 @@ describe("inbox conversation chrome (KIT-118)", () => {
     expect(inboxSource).toMatch(/label="Åbn for bud"[\s\S]*?variant="secondary"/);
     expect(inboxSource).toMatch(/router\.navigate\(PLACE_HREFS\.collection\)/);
   });
+
+  it("sends the wide thread pane back to Vælg en samtale after Blokér or Slet samtale (KIT-425)", () => {
+    const inboxSource = readFileSync(inboxIndexPath, "utf8");
+    const conversationSource = readFileSync(conversationViewPath, "utf8");
+
+    expect(inboxSource).toMatch(
+      /<ConversationView[\s\S]*?onConversationHidden=\{\(\) => void handleConversationHidden\(\)\}/,
+    );
+    expect(inboxSource).toMatch(
+      /const handleConversationHidden = useCallback\(async \(\) => \{[\s\S]*?setSelectedConversationId\(null\)[\s\S]*?await refreshInbox\(\)/,
+    );
+    expect(inboxSource).not.toMatch(/onOpenDetails/);
+    expect(conversationSource).not.toMatch(/onOpenDetails/);
+  });
 });

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { tabBarContentInset } from "../src/components/tab-bar-metrics";
-import { sendBidButtonLabel, sendBidDockBottomPadding } from "../src/search/send-bid-layout";
+import { sendBidDockBottomPadding } from "../src/search/send-bid-layout";
 import { space } from "../src/theme/tokens";
 
 const screenPath = join(__dirname, "../app/(tabs)/search/send-bid/[jerseyId].tsx");
@@ -20,13 +20,16 @@ describe("send bid dock layout (KIT-270)", () => {
   it("sits flush on the number pad while it is open", () => {
     expect(sendBidDockBottomPadding(true, 34)).toBe(space.insetSm);
     expect(sendBidDockBottomPadding(true, 83)).toBe(space.insetSm);
+    expect(sendBidDockBottomPadding(true, 34, false)).toBe(space.insetSm);
   });
 
-  it("carries the amount on the button only for a whole kroner amount", () => {
-    expect(sendBidButtonLabel("")).toBe("Send bud");
-    expect(sendBidButtonLabel("0")).toBe("Send bud");
-    expect(sendBidButtonLabel("abc")).toBe("Send bud");
-    expect(sendBidButtonLabel("250")).toBe("Send bud på 250 kr");
+  it("adds no Tab bar inset while the number pad is closed and the Tab bar is hidden", () => {
+    expect(sendBidDockBottomPadding(false, 34, false)).toBe(34);
+    expect(sendBidDockBottomPadding(false, 0, false)).toBe(space.insetMd);
+  });
+
+  it("keeps the Tab bar inset when the Tab bar shows", () => {
+    expect(sendBidDockBottomPadding(false, 34, true)).toBe(tabBarContentInset(34));
   });
 });
 
@@ -88,11 +91,66 @@ describe("send bid screen chrome (KIT-270)", () => {
     expect(source).toMatch(/onPress=\{Keyboard\.dismiss\}/);
   });
 
+  it("shows a failed send as a danger Banner under the header and keeps the amount", () => {
+    const source = readScreen();
+
+    expect(source).toContain("<Banner");
+    expect(source).toContain('tone="danger"');
+    expect(source.indexOf("<Banner")).toBeLessThan(source.indexOf("<ScrollView"));
+    expect(source).not.toMatch(/setAmount\(""\)/);
+  });
+
+  it("drops the Tab bar inset when Send bud sits above the foreign detail on iOS", () => {
+    const source = readScreen();
+
+    expect(source).toContain("sitsAboveForeignJersey");
+    expect(source).toContain(
+      "sendBidDockBottomPadding(keyboardVisible, insets.bottom, tabBarShown)",
+    );
+  });
+
+  it("hands the sent bid to the detail for the Toast, then goes back", () => {
+    const source = readScreen();
+
+    expect(source).toContain("rememberBidSent");
+    expect(source.indexOf("rememberBidSent")).toBeLessThan(source.indexOf("router.back()"));
+  });
+
+  it("returns to the thread named by returnTo, else goes back (KIT-413)", () => {
+    const source = readScreen();
+
+    expect(source).toMatch(/const \{ jerseyId, returnTo \} = useLocalSearchParams/);
+    expect(source).toContain("sendBidExit(returnTo)");
+    expect(source).toContain('exit.kind === "back"');
+    expect(source).toContain("router.navigate(exit.href as Href)");
+    // The Toast handoff belongs to the back branch only: the thread has no detail waiting for it.
+    expect(source.indexOf('exit.kind === "back"')).toBeLessThan(source.indexOf("rememberBidSent("));
+    expect(source.indexOf("rememberBidSent(")).toBeLessThan(source.indexOf("router.back();"));
+  });
+
+  it("summarises the jersey as club and season, type · size · condition, player · owner", () => {
+    const source = readScreen();
+
+    expect(source).toContain("buildSendBidSummary");
+    expect(source).not.toMatch(/aspectRatio:\s*4\s*\/\s*5/);
+  });
+
   it("does not show the last bid or any other collector's amount", () => {
     const source = readScreen();
 
     expect(source).not.toContain("latestBidAmountDkk");
     expect(source).not.toContain("Seneste bud");
+  });
+
+  it("remembers the sent-bid Toast only when back lands on this jersey's detail (KIT-291)", () => {
+    const source = readScreen();
+
+    expect(source).toContain("sitsDirectlyAboveForeignJerseyOf");
+    expect(source).toMatch(/if \(peerJersey && landsOnJerseyDetail\) \{\s+rememberBidSent/);
+  });
+
+  it("keeps Back at the left edge, not centred over the title", () => {
+    expect(readScreen()).toMatch(/header: \{\s+alignItems: "flex-start"/);
   });
 
   it("keeps the documented test ids", () => {

@@ -5,25 +5,14 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { LoopChangeDto, LoopDto } from "../../src/loops/contract";
+import type { LoopChangeDto, LoopDto, ProposalDto } from "../../src/loops/contract";
 import { formatSetting, STARTS_PER_DAY_NOTE } from "../../src/loops/format";
 import { when } from "../shared/common";
 import { Empty, Labeled, Page, Problem, Section } from "../shared/layout";
 import { useLoaded } from "../shared/use-loaded";
+import { ProposeChange, useName } from "./propose";
 
 type Settings = LoopDto["settings"];
-
-const NAME_KEY = "optio.loops.by";
-
-/** The RPC has no caller identity, so the page asks who is changing a setting and remembers it. */
-function useName() {
-  const [name, setName] = useState(() => globalThis.localStorage?.getItem(NAME_KEY) ?? "");
-  const save = (next: string) => {
-    setName(next);
-    globalThis.localStorage?.setItem(NAME_KEY, next);
-  };
-  return [name, save] as const;
-}
 
 function SettingRow({
   label,
@@ -69,10 +58,16 @@ function LoopCard({
   loop,
   by,
   write,
+  proposals,
+  propose,
+  onError,
 }: {
   loop: LoopDto;
   by: string;
   write: (key: string, value: unknown | undefined) => Promise<void>;
+  proposals: ProposalDto[];
+  propose: (text: string) => Promise<unknown>;
+  onError: (cause: unknown) => void;
 }) {
   const { enabled, maxLive, startsPerDay, schedule } = loop.settings;
   const [live, setLive] = useState(String(maxLive.value));
@@ -92,9 +87,33 @@ function LoopCard({
   return (
     <section className="mt-4 rounded-lg border border-border bg-card px-4 py-3">
       <h2 className="text-sm font-semibold">{loop.name}</h2>
-      <p className="text-xs text-muted-foreground">
-        Runs the {loop.workflow} workflow. Starts from {loop.trigger.summary}.
-      </p>
+      <div className="mt-2 rounded-md border border-border px-3 py-2">
+        <h3 className="text-xs font-medium">What this Loop is</h3>
+        <dl className="mt-1 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5 text-xs">
+          <dt className="text-muted-foreground">Trigger</dt>
+          <dd>{loop.trigger.summary}</dd>
+          <dt className="text-muted-foreground">Workflow</dt>
+          <dd>{loop.workflow}</dd>
+          <dt className="text-muted-foreground">Roles</dt>
+          <dd>
+            {loop.roles.length === 0
+              ? `not readable from .bb/workflows/${loop.workflow}.js`
+              : loop.roles.join(" → ")}
+          </dd>
+          <dt className="text-muted-foreground">Machines</dt>
+          <dd>{loop.machines.join(", ")}</dd>
+        </dl>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Read-only: it lives in factory.config.json and changes by a reviewed pull request.
+        </p>
+        <ProposeChange
+          what={`the ${loop.name} Loop`}
+          by={by}
+          proposals={proposals}
+          onPropose={propose}
+          onError={onError}
+        />
+      </div>
       <SettingRow
         label="On or off"
         hint="Off stops new runs at the next tick; on resumes them."
@@ -220,7 +239,13 @@ function Log({ log }: { log: LoopChangeDto[] }) {
 }
 
 export function Loops() {
-  const { value, error, act } = useLoaded((rpc) => rpc.call("loops_list"), "loops");
+  const { rpc, value, error, report, act } = useLoaded(
+    async (rpc) => ({
+      ...(await rpc.call("loops_list")),
+      proposals: (await rpc.call("loops_proposals")).proposals,
+    }),
+    "loops",
+  );
   const [by, setBy] = useName();
   const write = (loop: string) => (key: string, next: unknown | undefined) =>
     act((rpc) =>
@@ -247,7 +272,17 @@ export function Loops() {
       {value === null
         ? null
         : value.loops.map((loop) => (
-            <LoopCard key={loop.name} loop={loop} by={by} write={write(loop.name)} />
+            <LoopCard
+              key={loop.name}
+              loop={loop}
+              by={by}
+              write={write(loop.name)}
+              proposals={value.proposals.filter((proposal) => proposal.subject === loop.name)}
+              propose={(text) =>
+                rpc.call("loops_propose", { loop: loop.name, text, by: by.trim() })
+              }
+              onError={report}
+            />
           ))}
       <Section title="Changes">
         <Log log={value?.log ?? []} />

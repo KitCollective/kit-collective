@@ -8,7 +8,9 @@
 // catalog model as a carrier and the route sends OpenRouter's model instead (an OpenRouter id in the
 // request is forwarded as it is). Every thread the route serves is recorded, and
 // `bb optio reviewer-served --thread <id>` answers whether it was: a review the proxy never served ran
-// on the carrier, and the workflow does not count it as green.
+// on the carrier, and the workflow does not count it as green. `--title <title>` asks the same for the
+// newest thread with that exact title, so the workflow learns the reviewer's thread id from bb rather
+// than from the model, which once reported its parent's id instead of its own (2026-10-18).
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { type BbPluginApi, cliCommand } from "@get-bb/plugin-sdk";
@@ -26,6 +28,63 @@ const ROUTE = "/reviewer/v1/messages";
 /** The part of an Anthropic Messages body the proxy reads; the rest is forwarded as it came. */
 const messagesBody = z.object({ model: z.string().min(1) }).passthrough();
 const SECRET_KEY = "reviewerProxySecret";
+/** Thread listing pages for `--title`, as the Issue-thread archiver pages them. */
+const PAGE = 200;
+const MAX_PAGES = 20;
+
+const textBlock = z.object({ type: z.literal("text"), text: z.string() }).passthrough();
+const toolAddition = z.object({
+  type: z.literal("tool_addition"),
+  tool: z.object({ definition: z.record(z.string(), z.unknown()) }).passthrough(),
+});
+const systemMessage = z.object({
+  role: z.literal("system"),
+  content: z.union([z.string(), z.array(z.unknown())]),
+});
+
+/**
+ * A Messages body OpenRouter's GLM accepts. A carrier from the 4.6 family on sends `role: "system"`
+ * messages inside `messages`, with the effort and the deferred tools (`tool_addition`) on them, and
+ * GLM refuses that as a mid-conversation effort change (2026-10-18). Their text joins
+ * the system prompt, their tools join `tools`, and the rest of the body goes as it came.
+ */
+export function forOpenRouter(body: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(body.messages)) return body;
+  const messages: unknown[] = [];
+  const tools: unknown[] = Array.isArray(body.tools) ? [...body.tools] : [];
+  const text: { type: "text"; text: string }[] = [];
+  for (const message of body.messages) {
+    const lifted = systemMessage.safeParse(message);
+    if (!lifted.success) {
+      messages.push(message);
+      continue;
+    }
+    const content = lifted.data.content;
+    if (typeof content === "string") {
+      text.push({ type: "text", text: content });
+      continue;
+    }
+    for (const block of content) {
+      const added = toolAddition.safeParse(block);
+      if (added.success) tools.push(added.data.tool.definition);
+      const said = textBlock.safeParse(block);
+      if (said.success) text.push({ type: "text", text: said.data.text });
+    }
+  }
+  if (messages.length === body.messages.length) return body;
+  const system =
+    typeof body.system === "string"
+      ? [{ type: "text", text: body.system }]
+      : Array.isArray(body.system)
+        ? body.system
+        : [];
+  return {
+    ...body,
+    messages,
+    system: [...system, ...text],
+    ...(tools.length > 0 ? { tools } : {}),
+  };
+}
 /** Where the route is mounted for the host (`/api/v1/plugins/<id>/http/...`). */
 const mountedAt = (pluginId: string) => `/api/v1/plugins/${pluginId}/http/reviewer`;
 
@@ -163,7 +222,11 @@ export function createReviewerProxy(deps: ReviewerProxyDeps) {
             "anthropic-version": c.req.header("anthropic-version") ?? "2023-06-01",
             "x-title": "Optio reviewer",
           },
-          body: JSON.stringify({ ...parsed.data, model, provider: { data_collection: "deny" } }),
+          body: JSON.stringify({
+            ...forOpenRouter(parsed.data),
+            model,
+            provider: { data_collection: "deny" },
+          }),
         });
         deps.bb.log.info(
           `reviewer proxy: ${threadId} ${parsed.data.model} as ${model} -> ${upstream.status}`,
@@ -195,16 +258,65 @@ export function createReviewerProxy(deps: ReviewerProxyDeps) {
       : null;
   }
 
+  /**
+   * The newest thread whose title is exactly `title`: archived and hidden threads included, since a
+   * workflow's reviewer thread is hidden and may be archived by the time anyone asks.
+   */
+  async function threadTitled(
+    title: string,
+    projectId: string | undefined,
+  ): Promise<string | null> {
+    let newest: { id: string; createdAt: number } | null = null;
+    for (const archived of [false, true]) {
+      for (let page = 0; page < MAX_PAGES; page += 1) {
+        const threads = await deps.bb.sdk.threads.list({
+          ...(projectId === undefined ? {} : { projectId }),
+          archived,
+          includeHidden: true,
+          limit: PAGE,
+          offset: page * PAGE,
+        });
+        for (const thread of threads) {
+          if (thread.title === title && (newest === null || thread.createdAt > newest.createdAt)) {
+            newest = { id: thread.id, createdAt: thread.createdAt };
+          }
+        }
+        if (threads.length < PAGE) break;
+      }
+    }
+    return newest?.id ?? null;
+  }
+
+  const usage = "usage: bb optio reviewer-served (--thread thr_x | --title <exact thread title>)";
   const command = cliCommand({
     summary: "Say whether the reviewer proxy served a thread, and as which model",
     description:
-      "Exit 0 with SERVED when the proxy forwarded at least one call of the thread to OpenRouter; exit 1 with NOT SERVED otherwise. The AFK developer workflow asks before it counts a proxied review as green.",
-    options: { thread: { type: "string", description: "The reviewer thread id" } },
-    async run({ options }) {
-      const threadId = typeof options.thread === "string" ? options.thread : "";
-      if (!/^thr_[a-z0-9]+$/.test(threadId)) {
-        return { exitCode: 2, stdout: "usage: bb optio reviewer-served --thread thr_x" };
+      "Exit 0 with SERVED <thread> when the proxy forwarded at least one call of the thread to OpenRouter; exit 1 with NOT SERVED <thread> otherwise. --title names the thread by its exact title instead (the newest one, archived and hidden threads included) and exits 1 with NOT FOUND when no thread has it. The AFK developer workflow asks before it counts a proxied review as green.",
+    options: {
+      thread: { type: "string", description: "The reviewer thread id" },
+      title: { type: "string", description: "The reviewer thread's exact title" },
+      project: {
+        type: "string",
+        description: "The bb project --title looks in (default: the caller's)",
+      },
+    },
+    async run({ options }, ctx) {
+      const byId = typeof options.thread === "string" ? options.thread : "";
+      const title = typeof options.title === "string" ? options.title.trim() : "";
+      if ((byId === "") === (title === "")) return { exitCode: 2, stdout: usage };
+      let threadId = byId;
+      if (title !== "") {
+        const project =
+          typeof options.project === "string" && options.project !== ""
+            ? options.project
+            : ctx.projectId;
+        const found = await threadTitled(title, project);
+        if (found === null) {
+          return { exitCode: 1, stdout: `NOT FOUND: no thread titled ${title}` };
+        }
+        threadId = found;
       }
+      if (!/^thr_[a-z0-9]+$/.test(threadId)) return { exitCode: 2, stdout: usage };
       const record = await served(threadId);
       return record === null
         ? {
