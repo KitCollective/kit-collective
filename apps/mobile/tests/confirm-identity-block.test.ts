@@ -198,6 +198,37 @@ describe("resolveIdentityBlock: empty", () => {
   });
 });
 
+describe("the empty block after Vision found nothing", () => {
+  it("offers Vælg as its only way on: no retry control, no facts", () => {
+    const block = resolveIdentityBlock(baseInput());
+    expect(block.headline).toBe("Vælg klub og sæson");
+    expect(block.pill).toEqual({ label: "Vælg", tone: "primary", action: "open-data" });
+    expect(block.actions).toEqual([]);
+    expect(block.facts).toEqual([]);
+    expect(block.accessibilityLabel).not.toMatch(/igen/i);
+  });
+
+  it("keeps Gem off until the collector fills the identity by hand, then turns it on", () => {
+    const base = createCaptureSession([URI_FRONT]);
+    const id = getActiveDraft(base).id;
+    expect(confirmSaveEnabled({ draft: getActiveDraft(base), lowConfidencePending: false })).toBe(
+      false,
+    );
+
+    let session = setDraftClub(base, id, CLUB_ID, "FC Barcelona");
+    session = setDraftSeason(session, id, SEASON_ID, "2023/24");
+    session = selectDraftKitType(session, id, "home");
+    session = selectDraftSize(session, id, "m");
+    session = selectDraftCondition(session, id, "used");
+    const draft = getActiveDraft(session);
+
+    const block = resolveIdentityBlock(baseInput({ draft }));
+    expect(block.kind).toBe("resolved");
+    expect(block.label).toBeNull();
+    expect(confirmSaveEnabled({ draft, lowConfidencePending: false })).toBe(true);
+  });
+});
+
 describe("confirmSaveEnabled", () => {
   it("is on exactly when photo, club or national team, season, type, size and condition are set", () => {
     const base = createCaptureSession([URI_FRONT]);

@@ -2,6 +2,12 @@ import type { VisionJobResponse } from "@kit/api-contract";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchVisionGroupingJob, startVisionGroupingSuggest } from "@/api/vision-grouping";
 import {
+  inBatches,
+  pendingUploadFailures,
+  retryUploadFailures,
+  splitPreparedPhotos,
+} from "@/capture/captureOverview";
+import {
   applyGroupingSuggestion,
   ensureSessionPhotoIds,
   groupingJobFingerprint,
@@ -20,11 +26,51 @@ import { motion } from "@/theme/tokens";
 
 const GROUPING_TIMEOUT_MS = 15_000;
 const GROUPING_POLL_INTERVAL_MS = 2_000;
+const GROUPING_START_TIMEOUT_MS = 30_000;
+/** Photos read and shrunk at once; a pile of sixteen in parallel stalls a slow device. */
+const GROUPING_PREPARE_BATCH = 4;
 /** Between two landed groups, so the overview fills row by row rather than all at once. */
 export const GROUPING_ROW_STAGGER_MS = motion.fast;
 
+type PreparedGroupingPhoto = { photoId: string; contentBase64: string };
+
+/** A start request that never answers must end as "Vision did not answer", not a spinner. */
+function withinTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Vision grouping start timed out")), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Prepares each photo on its own, so one that fails never takes the others down with it. */
+async function prepareGroupingPhotos(state: CaptureSessionState, uris: string[]) {
+  const prepared: PromiseSettledResult<PreparedGroupingPhoto>[] = [];
+  for (const batch of inBatches(uris, GROUPING_PREPARE_BATCH)) {
+    prepared.push(
+      ...(await Promise.allSettled(
+        batch.map(
+          async (uri): Promise<PreparedGroupingPhoto> => ({
+            photoId: state.photoIdByUri?.[uri] ?? "",
+            contentBase64: await readPreparedPhotoBase64(uri, "other", "groupingThumb"),
+          }),
+        ),
+      )),
+    );
+  }
+  return splitPreparedPhotos(uris, prepared);
 }
 
 type UseConfirmGroupingOptions = {
@@ -55,6 +101,13 @@ export function useConfirmGrouping({
   const [attempt, setAttempt] = useState(0);
   const attemptRef = useRef(0);
   attemptRef.current = attempt;
+  /** Photos whose prepare was rejected: left out of the request, still in the pile (Prøv igen). */
+  const [uploadFailed, setUploadFailed] = useState<string[]>([]);
+  const uploadFailedRef = useRef<string[]>([]);
+  uploadFailedRef.current = uploadFailed;
+  const retryingUploadRef = useRef(false);
+  /** The follow-up run for retried photos; polled apart so the rest of the session is not held. */
+  const [followUpJobId, setFollowUpJobId] = useState<string | null>(null);
   const startedFingerprint = useRef<string | null>(null);
   const failedFingerprints = useRef(new Set<string>());
   const appliedJobId = useRef<string | null>(null);
@@ -72,6 +125,9 @@ export function useConfirmGrouping({
     setJobId(null);
     setAnalyzing(false);
     setFailed(false);
+    setUploadFailed([]);
+    setFollowUpJobId(null);
+    retryingUploadRef.current = false;
   }, [sessionId]);
 
   const applyGroupingClose = useCallback(
@@ -149,20 +205,10 @@ export function useConfirmGrouping({
 
     void (async () => {
       try {
-        const prepared = await Promise.allSettled(
-          ensured.unboundUris.map(async (uri) => ({
-            photoId: ensured.photoIdByUri?.[uri] ?? "",
-            contentBase64: await readPreparedPhotoBase64(uri, "other", "groupingThumb"),
-          })),
-        );
-        const photos = prepared
-          .filter(
-            (
-              result,
-            ): result is PromiseFulfilledResult<{ photoId: string; contentBase64: string }> =>
-              result.status === "fulfilled",
-          )
-          .map((result) => result.value);
+        const { photos, failedUris } = await prepareGroupingPhotos(ensured, ensured.unboundUris);
+        if (mountedRef.current) {
+          setUploadFailed(failedUris);
+        }
         const request = buildGroupingSuggestRequest({
           sessionId,
           photos,
@@ -175,7 +221,10 @@ export function useConfirmGrouping({
           return;
         }
 
-        const nextJobId = await startVisionGroupingSuggest(accessToken, request);
+        const nextJobId = await withinTimeout(
+          startVisionGroupingSuggest(accessToken, request),
+          GROUPING_START_TIMEOUT_MS,
+        );
         if (mountedRef.current) {
           setJobId(nextJobId);
         }
@@ -251,5 +300,93 @@ export function useConfirmGrouping({
     setAttempt((current) => current + 1);
   }, []);
 
-  return { analyzing, failed, stop, retry };
+  /** Prøv igen: prepare only the failed photos and send them as a follow-up run. */
+  const retryUpload = useCallback(async () => {
+    const snapshot = snapshotRef.current;
+    if (!accessToken || !sessionId || !snapshot || retryingUploadRef.current) {
+      return;
+    }
+    const uris = pendingUploadFailures(uploadFailedRef.current, snapshot);
+    if (uris.length === 0) {
+      setUploadFailed([]);
+      return;
+    }
+
+    retryingUploadRef.current = true;
+    try {
+      const outcome = await retryUploadFailures({
+        uris,
+        prepare: (retried) => prepareGroupingPhotos(snapshot, retried),
+        send: async (photos) => {
+          const request = buildGroupingSuggestRequest({
+            sessionId,
+            photos,
+            priorGroups: groupingPriorGroups(snapshotRef.current ?? snapshot),
+          });
+          // Nothing to send (a lone photo with no jersey to join) still counts as prepared.
+          return request
+            ? withinTimeout(
+                startVisionGroupingSuggest(accessToken, request),
+                GROUPING_START_TIMEOUT_MS,
+              )
+            : null;
+        },
+      });
+      if (!mountedRef.current) {
+        return;
+      }
+      setUploadFailed(outcome.stillFailed);
+      if (outcome.jobId) {
+        setFollowUpJobId(outcome.jobId);
+      }
+    } finally {
+      retryingUploadRef.current = false;
+    }
+  }, [accessToken, sessionId]);
+
+  useEffect(() => {
+    if (!accessToken || !followUpJobId) {
+      return;
+    }
+
+    let cancelled = false;
+    const startedAt = Date.now();
+
+    const poll = async () => {
+      if (Date.now() - startedAt >= GROUPING_TIMEOUT_MS) {
+        // Vision did not answer; the photos were uploaded and wait in the pile.
+        if (!cancelled) {
+          setFollowUpJobId(null);
+        }
+        return;
+      }
+
+      try {
+        const job = await fetchVisionGroupingJob(accessToken, followUpJobId);
+        if (cancelled || job.status === "pending") {
+          return;
+        }
+        if (job.status === "ready") {
+          await applyJob(job);
+        }
+        if (!cancelled) {
+          setFollowUpJobId(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setFollowUpJobId(null);
+        }
+      }
+    };
+
+    const interval = setInterval(() => void poll(), GROUPING_POLL_INTERVAL_MS);
+    void poll();
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [accessToken, applyJob, followUpJobId]);
+
+  return { analyzing, failed, stop, retry, uploadFailed, retryUpload };
 }

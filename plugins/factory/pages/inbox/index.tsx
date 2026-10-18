@@ -14,16 +14,32 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../../src/contract";
 import type { InboxCardDto, InboxDto } from "../../src/inbox/contract";
-
-const PATH = "inbox";
+import { DOT, INBOX } from "../shared/common";
 
 function kindLabel(card: InboxCardDto): string {
-  return card.kind === "question" ? (card.label ?? "question") : "green review";
+  switch (card.kind) {
+    case "question":
+      return card.label ?? "question";
+    case "mention":
+      return "mention";
+    case "alarm":
+      return "watchdog alarm";
+    case "review":
+      return "green review";
+  }
 }
 
 function preview(card: InboxCardDto): string {
-  if (card.kind === "question") return card.waiting?.ask ?? "The workpad holds no question.";
-  return card.review?.verdict ?? "No review verdict recorded.";
+  switch (card.kind) {
+    case "question":
+      return card.waiting?.ask ?? "The workpad holds no question.";
+    case "mention":
+      return card.mention?.comment || "Mentioned in the description.";
+    case "alarm":
+      return card.alarm?.problems.join("; ") || "The alarm lists no problem.";
+    case "review":
+      return card.review?.verdict ?? "No review verdict recorded.";
+  }
 }
 
 function waited(since: string): string {
@@ -46,13 +62,7 @@ function Row({ card, open, onOpen }: { card: InboxCardDto; open: boolean; onOpen
         )}
       >
         <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "size-2 shrink-0 rounded-full",
-              card.kind === "question" ? "bg-amber-500" : "bg-emerald-500",
-            )}
-            aria-hidden
-          />
+          <span className={cn("size-2 shrink-0 rounded-full", DOT[card.kind])} aria-hidden />
           <span className="font-medium">{card.identifier}</span>
           <span className="ml-auto shrink-0 text-xs text-muted-foreground">
             {waited(card.since)}
@@ -67,8 +77,112 @@ function Row({ card, open, onOpen }: { card: InboxCardDto; open: boolean; onOpen
   );
 }
 
-function Detail({ card, onBack }: { card: InboxCardDto; onBack: () => void }) {
+const field =
+  "min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/**
+ * The reply to a card: an answer for a question (with the run's lettered choices as buttons), a
+ * required comment for a green review's Reject. The write goes to Linear as the key's owner; on a failure
+ * the card stays and the reason shows under the field, on success the card leaves the Inbox.
+ */
+function Reply({ card, onSent }: { card: InboxCardDto; onSent: () => void }) {
+  const rpc = useRpc<typeof rpcContract>();
   const question = card.kind === "question";
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const send = (body: string) => {
+    setSending(true);
+    setFailure(null);
+    const sent = question
+      ? rpc.call("inbox_answer", { identifier: card.identifier, answer: body })
+      : rpc.call("inbox_reject", { identifier: card.identifier, comment: body });
+    sent.then(
+      (result) => {
+        setSending(false);
+        if (result.error === null) onSent();
+        else setFailure(result.error);
+      },
+      (cause: unknown) => {
+        setSending(false);
+        setFailure(cause instanceof Error ? cause.message : String(cause));
+      },
+    );
+  };
+  const label = question ? "Answer" : "Reject with a comment";
+  return (
+    <section className="flex flex-col gap-2">
+      {card.choices.length === 0 ? null : (
+        <div className="flex flex-wrap gap-2">
+          {card.choices.map((choice) => (
+            <Button
+              key={choice.letter}
+              variant="outline"
+              disabled={sending}
+              onClick={() => send(choice.letter)}
+            >
+              {choice.letter} · {choice.text}
+            </Button>
+          ))}
+        </div>
+      )}
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        {label}
+        <textarea
+          className={cn(field, "text-foreground")}
+          value={text}
+          disabled={sending}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={question ? "Write your answer…" : "What has to change…"}
+        />
+      </label>
+      <div className="flex items-center gap-3">
+        <Button
+          variant={question ? "default" : "destructive"}
+          disabled={sending || text.trim() === ""}
+          onClick={() => send(text)}
+        >
+          {question ? "Send answer" : "Reject"}
+        </Button>
+        {failure === null ? null : (
+          <p role="alert" className="text-sm text-destructive">
+            {failure}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Marks a mention's notification read in Linear; on a failure the reason shows and the card stays. */
+function useMarkRead(card: InboxCardDto, onRead: () => void) {
+  const rpc = useRpc<typeof rpcContract>();
+  const [failure, setFailure] = useState<string | null>(null);
+  const markRead = (then: () => void) => {
+    const notificationId = card.mention?.notificationId;
+    if (notificationId === undefined) return;
+    setFailure(null);
+    rpc.call("inbox_read", { notificationId }).then(
+      (result) => {
+        if (result.error === null) then();
+        else setFailure(result.error);
+      },
+      (cause: unknown) => setFailure(cause instanceof Error ? cause.message : String(cause)),
+    );
+  };
+  return { failure, open: () => markRead(onRead), dismiss: () => markRead(onRead) };
+}
+
+function Detail({
+  card,
+  onBack,
+  onSent,
+}: {
+  card: InboxCardDto;
+  onBack: () => void;
+  onSent: () => void;
+}) {
+  const mention = useMarkRead(card, onSent);
   return (
     <article className="flex flex-col gap-4">
       <div className="flex items-center gap-2 md:hidden">
@@ -80,14 +194,23 @@ function Detail({ card, onBack }: { card: InboxCardDto; onBack: () => void }) {
       <header className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="rounded-full border border-border px-2 py-0.5">{kindLabel(card)}</span>
-          <span>waiting {waited(card.since)}</span>
+          <span>
+            {card.kind === "mention" || card.kind === "alarm" ? "raised" : "waiting"}{" "}
+            {waited(card.since)}
+          </span>
         </div>
         <h2 className="text-base font-medium">
           {card.identifier} · {card.title}
         </h2>
         <div className="flex flex-wrap gap-3 text-sm">
-          <a href={card.url} target="_blank" rel="noreferrer" className="hover:underline">
-            Open in Linear
+          <a
+            href={card.url}
+            target="_blank"
+            rel="noreferrer"
+            className="hover:underline"
+            onClick={card.kind === "mention" ? mention.open : undefined}
+          >
+            {card.chat === undefined ? "Open in Linear" : "Open the Staff chat"}
           </a>
           {card.pullRequest === null ? null : (
             <a
@@ -101,7 +224,7 @@ function Detail({ card, onBack }: { card: InboxCardDto; onBack: () => void }) {
           )}
         </div>
       </header>
-      {question ? (
+      {card.kind === "question" ? (
         <section className="flex flex-col gap-1 rounded-lg border border-border px-4 py-3 text-sm">
           <h3 className="text-xs text-muted-foreground">The run asks</h3>
           {card.waiting === null ? (
@@ -116,6 +239,40 @@ function Detail({ card, onBack }: { card: InboxCardDto; onBack: () => void }) {
             </>
           )}
         </section>
+      ) : card.kind === "mention" ? (
+        <section className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3 text-sm">
+          <h3 className="text-xs text-muted-foreground">
+            {card.mention?.author ?? "Someone"} mentioned you
+          </h3>
+          <p className="whitespace-pre-wrap">
+            {card.mention?.comment || "The mention is in the issue's description."}
+          </p>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={mention.dismiss}>
+              Dismiss
+            </Button>
+            {mention.failure === null ? null : (
+              <p role="alert" className="text-sm text-destructive">
+                {mention.failure}
+              </p>
+            )}
+          </div>
+        </section>
+      ) : card.kind === "alarm" ? (
+        <section className="flex flex-col gap-1 rounded-lg border border-border px-4 py-3 text-sm">
+          <h3 className="text-xs text-muted-foreground">
+            The watchdog lists these problems. The card closes when it says they cleared.
+          </h3>
+          {card.alarm?.problems.length === 0 ? (
+            <p className="text-muted-foreground">The alarm lists no problem.</p>
+          ) : (
+            <ul className="list-disc pl-5">
+              {card.alarm?.problems.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </ul>
+          )}
+        </section>
       ) : (
         <section className="flex flex-col gap-1 rounded-lg border border-border px-4 py-3 text-sm">
           <h3 className="text-xs text-muted-foreground">Review</h3>
@@ -125,6 +282,10 @@ function Detail({ card, onBack }: { card: InboxCardDto; onBack: () => void }) {
           </p>
         </section>
       )}
+      {/* A Staff question is answered in its Staff chat, not through Linear. */}
+      {(card.kind === "question" && card.chat === undefined) || card.kind === "review" ? (
+        <Reply key={card.id} card={card} onSent={onSent} />
+      ) : null}
     </article>
   );
 }
@@ -161,9 +322,9 @@ export function Inbox({ subPath }: PluginNavPanelProps) {
   useRealtime("changed", refetch);
   const problem = failure ?? inbox?.error ?? null;
   const cards = inbox?.cards ?? [];
-  const open = cards.find((card) => card.identifier === subPath) ?? null;
-  const show = (identifier: string) => navigate.toPluginPanel(PATH, { subPath: identifier });
-  const back = () => navigate.toPluginPanel(PATH, { subPath: "" });
+  const open = cards.find((card) => card.id === subPath) ?? null;
+  const show = (id: string) => navigate.toPluginPanel(INBOX, { subPath: id });
+  const back = () => navigate.toPluginPanel(INBOX, { subPath: "" });
 
   return (
     <div className="flex h-full min-h-0 flex-1">
@@ -182,20 +343,23 @@ export function Inbox({ subPath }: PluginNavPanelProps) {
           </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-          {problem !== null ? (
-            <Message role="alert">{problem}</Message>
-          ) : inbox === null ? (
-            <Message role="status">Reading Linear…</Message>
+          {problem === null ? null : <Message role="alert">{problem}</Message>}
+          {inbox === null ? (
+            problem === null ? (
+              <Message role="status">Reading Linear…</Message>
+            ) : null
           ) : cards.length === 0 ? (
-            <Message role="status">Nothing waits for you.</Message>
+            problem === null ? (
+              <Message role="status">Nothing waits for you.</Message>
+            ) : null
           ) : (
             <ul className="flex flex-col gap-0.5">
               {cards.map((card) => (
                 <Row
-                  key={card.identifier}
+                  key={card.id}
                   card={card}
-                  open={card.identifier === open?.identifier}
-                  onOpen={() => show(card.identifier)}
+                  open={card.id === open?.id}
+                  onOpen={() => show(card.id)}
                 />
               ))}
             </ul>
@@ -209,7 +373,14 @@ export function Inbox({ subPath }: PluginNavPanelProps) {
         )}
       >
         {open !== null ? (
-          <Detail card={open} onBack={back} />
+          <Detail
+            card={open}
+            onBack={back}
+            onSent={() => {
+              back();
+              refetch();
+            }}
+          />
         ) : (
           <p className="pt-10 text-center text-sm text-muted-foreground">
             {cards.length === 0 ? "" : "Choose a message."}

@@ -40,7 +40,7 @@ The Linear statuses an issue moves through, named in `factory.config.json` `stat
 _Avoid_: the old names `Implementing`, `Ready for merge` and `Parked`; inventing extra statuses
 
 **To-do**:
-The dispatch status (`dispatch.state`): shaped, approved and ready to be picked up. `/to-tickets` publishes here because its quiz step is the human's approval. A To-do issue with an unresolved `blockedBy` is simply not dispatchable. The only unstarted status.
+The dispatch status (`dispatch.state`): shaped, approved and ready to be picked up. `/to-tickets` publishes here because its quiz step is the human's approval. A To-do issue with an unresolved `blockedBy` is simply not dispatchable. The only unstarted status. Only for issues that have never started: a started issue never returns here.
 _Avoid_: using it for unshaped or deferred work (that is `Backlog`)
 
 **In Progress**:
@@ -48,8 +48,8 @@ The issue is claimed and being coded, including after a review or merge failure.
 _Avoid_: Implementing
 
 **Approval**:
-Waiting for a human, at any stage (renamed from Ready for merge, and now cross-stage). Three shapes: `needs-info` (the agent asks a question), `ready-for-human` (the agent needs a yes/no decision or permission, including a lead `plan-approval`), or neither (review is green and the approver may merge). What is asked and the stage it came from go under workpad `### Waiting`. The human answers in a Linear comment and moves the issue to `To-do` (any answer goes back to To-do, never to a specific stage), or to `Merging` to approve the merge. `Approval` is never merge permission by itself; only the move to `Merging` is. With auto-land enabled the normal path does not stop here: `Approval` is the exception exit, used when a rule was exceeded or a person is genuinely needed (ADR-0061).
-_Avoid_: Ready for merge; reading an issue in `Approval` as merge permission; answering by moving the card to a specific stage
+Waiting for a human, at any stage (renamed from Ready for merge, and now cross-stage). Three shapes: `needs-info` (the agent asks a question), `ready-for-human` (the agent needs a yes/no decision or permission, including a lead `plan-approval`), or neither (review is green and the approver may merge). What is asked and the stage it came from go under workpad `### Waiting`. The human answers in a Linear comment, or moves the issue to `Merging` to approve the merge. An answer **resumes the issue in its Issue thread** ahead of any new start; it never sends a started issue back to `To-do` (2026-10-18: answers through `To-do` made 17 started issues wait behind new work and start over in new threads). While it waits, the issue keeps its **Reserved write-scope**. `Approval` is never merge permission by itself; only the move to `Merging` is. With auto-land enabled the normal path does not stop here: `Approval` is the exception exit, used when a rule was exceeded or a person is genuinely needed (ADR-0061).
+_Avoid_: Ready for merge; reading an issue in `Approval` as merge permission; answering by moving the card to `To-do` or to a specific stage; `Approval` for what Max or the Lead can settle (a wider write-scope in the same area, a missing result line, a receipt, another review round)
 
 **Blocked**:
 Work that has started needs another issue done first. Requires at least one unresolved `blockedBy`; if a person is needed it is `Approval`, not `Blocked`. An agent that finds the dependency files it with `signal-up` (it lands in Triage, the owner accepts it) and then `node scripts/linear.mjs block <KIT-n> --by <KIT-m>`. At queue-build time the orchestrator moves a Blocked issue whose blockers are all Done or Canceled to `To-do`. Resumes only when its blockers are Done.
@@ -58,6 +58,14 @@ _Avoid_: Blocked for a question or a decision (that is `Approval`); Blocked with
 **Waiting** *(workpad section `### Waiting`)*:
 What an `Approval` issue is waiting for: what is asked, the stage it came from, `Asked: <date>`. When the orchestrator claims the issue again it swaps `needs-info` / `ready-for-human` back to `ready-for-agent` (one atomic `label swap`, the Triage group is single-select), writes `Resumed: <date>` under it, and resumes from the workpad with `--resume`.
 _Avoid_: asking the question only in a comment; leaving the label on after the answer
+
+**Reserved write-scope**:
+The `write-scope:` of a started issue that is not running (waiting in `Approval` or `Blocked`, or between runs) still counts against every new start: nothing overlapping starts until it is done. The issue gives up its live-run slot, never its paths.
+_Avoid_: freeing an issue's paths while it waits for an answer
+
+**Resume order**:
+When a slot is free, the dispatcher takes work in this order: a landing that stopped, then an issue whose `Approval` was answered, then a stalled run, and only then a new start from `To-do`.
+_Avoid_: starting new work while an answered or nearly done issue waits
 
 **Merging**:
 The approver moved the issue here from `Approval`, or `scripts/auto-land.mjs` set it after re-checking every condition itself (ADR-0061): this is merge permission (the PRs are opened with the approver's own GitHub account, so GitHub's approving review cannot be used). The PR is enqueued and stays `Merging` until GitHub says `MERGED`.
@@ -117,8 +125,16 @@ _Avoid_: treating surface labels as write scope
 <!-- factory:generated-end -->
 
 **Lead**:
-The read-only agent that plans one issue before the implementer builds (`.cursor/agents/lead.md`, ADR-0051). Writes `### Plan` in the workpad. Not the planner.
-_Avoid_: calling the lead "planner" (the planner claims and dispatches), a lead that writes code
+The read-only agent that plans one issue before the implementer builds (`.cursor/agents/lead.md`, ADR-0051). Writes `### Plan` in the workpad. Not the planner. Inside a run it also settles what the Engineer cannot: when the Engineer stops `blocked`, the run asks the Lead again (a **replan**), and only a **Human call** goes on to `Approval`.
+_Avoid_: calling the lead "planner" (the planner claims and dispatches), a lead that writes code, stopping a run for a question the Lead can settle
+
+**Human call**:
+What only Nicklas decides, and so the only reason a run stops in `Approval`: changing an acceptance criterion or a product decision; a conflict with, or a gap in, the design lock; factory files and rules; schema, auth and billing; a merge auto-land may not do; a signal-up that changes priority. Max settles operations (a wider write-scope in the same area, a missing result line or receipt, another review round, a resume after a crash, a flaky test run once more and signalled up). The Lead settles the work inside the ticket (the plan, splitting it, choosing an approach the criteria allow, a neighbouring module the code needs).
+_Avoid_: `Approval` for anything Max or the Lead can settle
+
+**Review finding**:
+One item a Reviewer gives on a red review: the file and line, what is wrong, and what green looks like so it can be checked, marked `gating` or `nit`. Only `gating` findings keep the review red. The Engineer's fix round answers each finding (fixed in a commit, or disagreed with a reason). From the third round the Lead replans instead of another patch. At most five rounds.
+_Avoid_: a finding without a way to check it; a nit that keeps a review red; a sixth round
 
 **Run log**:
 The central JSON-lines record of the issue flow, written only by the orchestrating session (ADR-0052). Fixed fields and reason codes, no free text.
@@ -170,11 +186,11 @@ One of `development`, `staging`, `production` — git branch, GitHub Environment
 _Avoid_: environment as a synonym without saying which object
 
 **Device flow**:
-A Maestro flow that drives the iOS Simulator build and takes a named screenshot at every meaningful step, plus one recording. Each mobile slice has its own, `apps/mobile/.maestro/slices/<KEY>.yaml`, with one step per Acceptance criterion a screen can show. Five **regression flows** (first session, Tilføj trøje, Samling, Søg and bud, Ønske and paywall) sit under `regression/` and run on request. They run on the approver's Mac against a local API, one run at a time in a queue, and a red Device flow blocks a PR through the `Device flows` commit status.
+A Maestro flow that drives the iOS Simulator build and takes a named screenshot at every meaningful step, plus one recording. Each mobile slice has its own, `apps/mobile/.maestro/slices/<KEY>.yaml`, with one step per Acceptance criterion a screen can show. Eight **regression flows** (first session, Tilføj trøje and three of its identity-block states, Samling, Søg and bud, Ønske and paywall) sit under `regression/` and run on request. They run on the approver's Mac against a local API, one run at a time in a queue, and a red Device flow blocks a PR through the `Device flows` commit status.
 _Avoid_: e2e test as a synonym for an API integration test; worker browser screenshots as evidence for a mobile slice; a flow that needs a manual step
 
 **Test Collector**:
-The Collector four of the five regression flows, and a slice flow by default, sign in as, with a Comp Entitlement and fixed Vision. A second test Collector owns the åben-for-bud UserJersey and signs in for the Ønske and paywall flow. Both have fixed ids and are reset before every flow; the reset writes only rows they own, and removes other Collectors' rows only where those point at a test Collector (a favourite, a conversation, a report or a block).
+The Collector six of the eight regression flows, and a slice flow by default, sign in as (the first-session flow starts signed out and stops at the code screen with its e-mail), with a Comp Entitlement and fixed Vision. A second test Collector owns the åben-for-bud UserJersey and signs in for the Ønske and paywall flow. Both have fixed ids and are reset before every flow; the reset writes only rows they own, and removes other Collectors' rows only where those point at a test Collector (a favourite, a conversation, a report or a block).
 _Avoid_: a real Collector's account in a flow; a lane-wide Vision switch; a fourth lane for tests
 
 **Evidence run**:

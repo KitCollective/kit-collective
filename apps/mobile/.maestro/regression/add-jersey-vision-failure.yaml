@@ -1,0 +1,118 @@
+# Tilføj trøje when Vision fails (the fixed Vision rejects every job, KIT-284): Confirm leaves the
+# reading state for the empty identity block ("Vision fandt ikke trøjen", Vælg), and nothing is
+# stuck. Vælg opens the Data drill, where club, season and type are picked by hand, and Gem saves
+# the jersey. The drill's rows and chips have no testIDs, and a picker row is one accessible element
+# (its initials and its name), so the picks are tapped by a pattern on their copy.
+appId: app.kitcollective.mobile
+name: add-jersey-vision-failure
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      VISION: failure
+- startRecording: kc__add-jersey-vision-failure
+- tapOn:
+    id: collection-add
+- extendedWaitUntil:
+    visible:
+      id: capture-source-gallery
+    timeout: 10000
+- tapOn:
+    id: capture-source-gallery
+- tapOn: Fotos
+# The system photo picker has no stable ids. The simulator's library holds the fixture photo,
+# newest first, among the iOS sample photos: the first cell by point, then Done by its text. The
+# banner subflow waits for the picker, pauses so a cold simulator has loaded its cells (the first
+# flow of a run missed its taps in the first hosted run), and closes iOS's Private Access banner,
+# which moves the grid.
+- runFlow: ../subflows/photo-picker-banner.yaml
+- tapOn:
+    point: 16%,25%
+- runFlow: ../subflows/photo-picker-done.yaml
+- extendedWaitUntil:
+    visible:
+      id: photo-slot-front-filled
+    timeout: 90000
+# The reading state may show for a moment before the failure lands; let it pass if it does, and
+# never screenshot it. A run where it is too short to see goes on after the wait times out.
+- extendedWaitUntil:
+    visible:
+      id: confirm-identity-in-flight
+    timeout: 4000
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: confirm-identity-empty
+    timeout: 90000
+- extendedWaitUntil:
+    notVisible:
+      id: confirm-identity-in-flight
+    timeout: 90000
+- extendedWaitUntil:
+    visible: "Vision fandt ikke trøjen.*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__add-jersey-vision-failure__01-empty-identity-block
+# Vælg opens the Data drill, where club, season and type are chosen by hand.
+- tapOn:
+    id: confirm-identity-open
+# The drill has no testID; its first row is the club select row (a tap by copy).
+- extendedWaitUntil:
+    visible: "Vælg klub eller landshold.*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__add-jersey-vision-failure__02-data-drill
+- tapOn: "Vælg klub eller landshold.*"
+- extendedWaitUntil:
+    visible: ".*AaB.*"
+    timeout: 30000
+- tapOn: ".*AaB.*"
+- extendedWaitUntil:
+    visible: "Vælg sæson.*"
+    timeout: 15000
+- tapOn: "Vælg sæson.*"
+- extendedWaitUntil:
+    visible: ".*2023/24.*"
+    timeout: 30000
+- tapOn: ".*2023/24.*"
+- extendedWaitUntil:
+    visible: ".*Hjemme.*"
+    timeout: 15000
+- tapOn: ".*Hjemme.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__add-jersey-vision-failure__03-picked-by-hand
+# Gem closes the drill and lands back on Confirm.
+- tapOn: "Gem"
+- extendedWaitUntil:
+    visible:
+      id: detail-size-m
+    timeout: 15000
+- tapOn:
+    id: detail-size-m
+- tapOn:
+    id: detail-condition-used
+- extendedWaitUntil:
+    visible:
+      id: confirm-save
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__add-jersey-vision-failure__04-ready-to-save
+# Save works by hand: the failed Vision did not stand in the way.
+- tapOn:
+    id: confirm-save
+- extendedWaitUntil:
+    visible:
+      id: post-save-to-collection
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Trøje nr\\. [0-9]+ i din samling"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__add-jersey-vision-failure__05-saved
+- stopRecording

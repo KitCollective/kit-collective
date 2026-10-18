@@ -2,7 +2,6 @@ import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  collectionActivitySchema,
   collectionBlockConversationResponseSchema,
   collectionBlockPeerResponseSchema,
   collectionConversationPeerSchema,
@@ -143,6 +142,18 @@ async function saveJerseyForUser(
   return collectionSaveResponseSchema.parse(JSON.parse(response.body)).jersey;
 }
 
+async function getInbox(
+  app: NestFastifyApplication,
+  session: Awaited<ReturnType<typeof registerSession>>,
+) {
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/collection/conversations",
+    headers: { authorization: `Bearer ${session.accessToken}` },
+  });
+  return collectionConversationsSchema.parse(JSON.parse(response.body));
+}
+
 async function createBidConversation(
   app: NestFastifyApplication,
   owner: Awaited<ReturnType<typeof registerSession>>,
@@ -260,6 +271,8 @@ describe("Conversation moderation /v1", () => {
     });
     const ownerBody = collectionConversationsSchema.parse(JSON.parse(ownerInbox.body));
     expect(ownerBody.conversations).toHaveLength(0);
+    expect(ownerBody.waiting).toHaveLength(0);
+    expect(ownerBody.unreadCount).toBe(0);
 
     const bidderInbox = await app.inject({
       method: "GET",
@@ -269,6 +282,112 @@ describe("Conversation moderation /v1", () => {
     const bidderBody = collectionConversationsSchema.parse(JSON.parse(bidderInbox.body));
     expect(bidderBody.conversations).toHaveLength(1);
     expect(bidderBody.conversations[0]?.id).toBe(conversationId);
+  });
+
+  // The owner reads the thread, then hides it, so a return can only come from something new.
+  async function readThenHide(
+    session: Awaited<ReturnType<typeof registerSession>>,
+    conversationId: string,
+  ) {
+    const read = await app.inject({
+      method: "GET",
+      url: `/v1/collection/conversations/${conversationId}`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(read.statusCode).toBe(200);
+
+    const hide = await app.inject({
+      method: "DELETE",
+      url: `/v1/collection/conversations/${conversationId}`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(hide.statusCode).toBe(204);
+    expect(await listInbox(session)).toEqual([]);
+  }
+
+  async function listInbox(session: Awaited<ReturnType<typeof registerSession>>) {
+    const inbox = await app.inject({
+      method: "GET",
+      url: "/v1/collection/conversations",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    return collectionConversationsSchema.parse(JSON.parse(inbox.body)).conversations;
+  }
+
+  it("a hidden Conversation returns unread when the other Collector writes", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-unhide-msg@example.com");
+    const bidder = await registerSession(app, "bidder-unhide-msg@example.com");
+    const jersey = await saveJerseyForUser(app, owner, fixture);
+    const { conversationId } = await createBidConversation(app, owner, bidder, jersey.id);
+    await readThenHide(owner, conversationId);
+
+    const send = await app.inject({
+      method: "POST",
+      url: `/v1/collection/conversations/${conversationId}/messages`,
+      headers: { authorization: `Bearer ${bidder.accessToken}` },
+      payload: { text: "Er den stadig til salg?" },
+    });
+    expect(send.statusCode).toBe(201);
+
+    const inbox = await listInbox(owner);
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]).toMatchObject({ id: conversationId, unread: true });
+  });
+
+  it("a hidden Conversation returns unread when the other Collector sends a Bud", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-unhide-bid@example.com");
+    const bidder = await registerSession(app, "bidder-unhide-bid@example.com");
+    const first = await saveJerseyForUser(app, owner, fixture);
+    const second = await saveJerseyForUser(app, owner, fixture);
+    const { conversationId } = await createBidConversation(app, owner, bidder, first.id);
+    await readThenHide(owner, conversationId);
+
+    await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/jerseys/${second.id}/bidding`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { biddingEnabled: true },
+    });
+    const bid = await app.inject({
+      method: "POST",
+      url: `/v1/collection/jerseys/${second.id}/bids`,
+      headers: { authorization: `Bearer ${bidder.accessToken}` },
+      payload: { amountDkk: 400 },
+    });
+    expect(bid.statusCode).toBe(201);
+    expect(collectionSendBidResponseSchema.parse(JSON.parse(bid.body)).conversationId).toBe(
+      conversationId,
+    );
+
+    const inbox = await listInbox(owner);
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]).toMatchObject({ id: conversationId, unread: true });
+  });
+
+  it("declining a Bud writes no message and leaves a hidden Conversation hidden", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-unhide-decline@example.com");
+    const bidder = await registerSession(app, "bidder-unhide-decline@example.com");
+    const jersey = await saveJerseyForUser(app, owner, fixture);
+    const { conversationId, messageId } = await createBidConversation(
+      app,
+      owner,
+      bidder,
+      jersey.id,
+    );
+    await readThenHide(bidder, conversationId);
+
+    const decline = await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/conversations/${conversationId}/messages/${messageId}/bid`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { decision: "decline" },
+    });
+    expect(decline.statusCode).toBe(200);
+
+    expect(await listInbox(bidder)).toEqual([]);
   });
 
   it("blocks a peer and hides the thread for both collectors", async () => {
@@ -283,18 +402,10 @@ describe("Conversation moderation /v1", () => {
       jersey.id,
     );
 
-    for (const session of [owner, bidder]) {
-      const activityBefore = await app.inject({
-        method: "GET",
-        url: "/v1/collection/activity",
-        headers: {
-          authorization: `Bearer ${session.accessToken}`,
-          "accept-language": "da",
-        },
-      });
-      const activityBeforeBody = collectionActivitySchema.parse(JSON.parse(activityBefore.body));
-      expect(activityBeforeBody.items.length).toBeGreaterThan(0);
-    }
+    const ownerBefore = await getInbox(app, owner);
+    expect(ownerBefore.waiting.map((row) => row.messageId)).toEqual([messageId]);
+    expect(ownerBefore.conversations).toHaveLength(1);
+    expect((await getInbox(app, bidder)).conversations).toHaveLength(1);
 
     const blockResponse = await app.inject({
       method: "POST",
@@ -312,17 +423,8 @@ describe("Conversation moderation /v1", () => {
       });
       const body = collectionConversationsSchema.parse(JSON.parse(inbox.body));
       expect(body.conversations).toHaveLength(0);
-
-      const activity = await app.inject({
-        method: "GET",
-        url: "/v1/collection/activity",
-        headers: {
-          authorization: `Bearer ${session.accessToken}`,
-          "accept-language": "da",
-        },
-      });
-      const activityBody = collectionActivitySchema.parse(JSON.parse(activity.body));
-      expect(activityBody.items).toHaveLength(0);
+      expect(body.waiting).toHaveLength(0);
+      expect(body.unreadCount).toBe(0);
 
       const messageResponse = await app.inject({
         method: "POST",

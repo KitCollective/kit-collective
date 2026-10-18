@@ -1,0 +1,87 @@
+# Tilføj trøje when Vision is not sure (identity confidence 60, KIT-284): the identity block asks
+# "Brug forslaget" / "Vælg selv", Save stays off until one is pressed. Here the suggestion is
+# accepted, then size and condition, Gem and the Saved sheet. The Data drill that "Vælg selv"
+# opens has no testIDs yet, so that branch is not walked (add-jersey-vision-failure walks the drill).
+appId: app.kitcollective.mobile
+name: add-jersey-low-confidence
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      VISION: low-confidence
+- startRecording: kc__add-jersey-low-confidence
+- tapOn:
+    id: collection-add
+- extendedWaitUntil:
+    visible:
+      id: capture-source-gallery
+    timeout: 10000
+- tapOn:
+    id: capture-source-gallery
+- tapOn: Fotos
+# The system photo picker has no stable ids. The simulator's library holds the fixture photo,
+# newest first, among the iOS sample photos: the first cell by point, then Done by its text. The
+# banner subflow waits for the picker, pauses so a cold simulator has loaded its cells (the first
+# flow of a run missed its taps in the first hosted run), and closes iOS's Private Access banner,
+# which moves the grid.
+- runFlow: ../subflows/photo-picker-banner.yaml
+- tapOn:
+    point: 16%,25%
+- runFlow: ../subflows/photo-picker-done.yaml
+# Wait for the low-confidence answer to land: a screenshot of the reading state would differ from
+# run to run.
+- extendedWaitUntil:
+    visible:
+      id: confirm-identity-low-confidence
+    timeout: 90000
+- extendedWaitUntil:
+    visible:
+      id: confirm-identity-apply-suggestion
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: confirm-identity-choose-myself
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: photo-slot-front-filled
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__add-jersey-low-confidence__01-block-asks
+# Brug forslaget turns the guess into the facts of the jersey; the block becomes the resolved one.
+- tapOn:
+    id: confirm-identity-apply-suggestion
+- extendedWaitUntil:
+    visible:
+      id: confirm-identity-resolved
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__add-jersey-low-confidence__02-suggestion-accepted
+- tapOn:
+    id: detail-size-m
+- tapOn:
+    id: detail-condition-used
+- extendedWaitUntil:
+    visible:
+      id: confirm-save
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__add-jersey-low-confidence__03-ready-to-save
+- tapOn:
+    id: confirm-save
+- extendedWaitUntil:
+    visible:
+      id: post-save-to-collection
+    timeout: 30000
+# The count line fills in after the Saved sheet opens; wait for it so the frame is the same each run.
+- extendedWaitUntil:
+    visible: "Trøje nr\\. [0-9]+ i din samling"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__add-jersey-low-confidence__04-saved
+- stopRecording

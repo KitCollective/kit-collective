@@ -5,7 +5,14 @@ import type { Decision, Dispatch, DispatchStore } from "./dispatch-store.js";
 import type { GateRun } from "./gate-store.js";
 import { decideHandOver, needsPrHead, type PrHead } from "./hand-over.js";
 import type { Board, BoardIssue } from "./linear-api.js";
-import { type IssueLoop, issueLoops, parseRegistry, type Registry } from "./loop-registry.js";
+import {
+  applyOverrides,
+  type IssueLoop,
+  issueLoops,
+  type LoopOverrides,
+  parseRegistry,
+  type Registry,
+} from "./loop-registry.js";
 import { machineEnvironment, type SchedulerConfig } from "./scheduler-config.js";
 import type { SpawnRequest } from "./sessions.js";
 
@@ -88,6 +95,8 @@ function launcherPrompt(
 
 export function createScheduler(deps: SchedulerDeps) {
   const { store } = deps;
+  /** The Operating setting overrides of the Loops; none until the Loops area registers its store. */
+  let loopOverrides: () => LoopOverrides = () => ({});
 
   /** Reads and validates the registry; a file that cannot be read is a refusal too. */
   async function readRegistry(
@@ -102,7 +111,19 @@ export function createScheduler(deps: SchedulerDeps) {
         error: `could not read factory.config.json: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
-    return parseRegistry(text);
+    const parsed = parseRegistry(text);
+    if (!parsed.ok) return parsed;
+    // Override-or-file for every reader of the registry: the tick, the Board, promote and resume.
+    // Overrides that cannot be read refuse the tick like a registry that does not parse, so a pause
+    // is never lost to a store error.
+    try {
+      return { ok: true, registry: applyOverrides(parsed.registry, loopOverrides()) };
+    } catch (error) {
+      return {
+        ok: false,
+        error: `could not read the Loops' Operating settings: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
   }
 
   const emptyPlan = (focus: string | null): Plan => ({
@@ -124,6 +145,7 @@ export function createScheduler(deps: SchedulerDeps) {
       focus: await deps.getFocus(),
       history: store.history(),
       recentStarts: store.startsSince(deps.now() - DAY_MS),
+      now: deps.now(),
     });
 
   async function start(
@@ -318,6 +340,13 @@ export function createScheduler(deps: SchedulerDeps) {
   }
 
   return {
+    /**
+     * Makes every reading of the registry apply the Loops' Operating setting overrides, read afresh
+     * each time. The Loops area calls it once at start-up, with its store.
+     */
+    useLoopOverrides(read: () => LoopOverrides): void {
+      loopOverrides = read;
+    },
     /**
      * Plans the board from the registry in the project checkout, which it
      * reads first: a registry that does not parse is refused and nothing is

@@ -4,9 +4,10 @@
 import { type BbPluginApi, cliCommand, PluginCliError } from "@get-bb/plugin-sdk";
 import { CHANGED } from "../contract.js";
 import { parseRegistry } from "../loop-registry.js";
-import { buildCards } from "./cards.js";
+import { alarmCards, buildCards, mentionCards, withNotices } from "./cards.js";
 import { type InboxCardDto, type InboxConfig, inboxConfig } from "./contract.js";
-import { fetchWaiting } from "./linear.js";
+import { fetchWaiting, settleIssue } from "./linear.js";
+import { fetchAlarmThread, fetchMentions, markMentionRead } from "./notices.js";
 
 const CONFIG_KEY = "inbox";
 
@@ -42,10 +43,14 @@ function describe(cards: InboxCardDto[]): string {
     `${cards.length} waiting in the Inbox`,
     ...cards.map((card) => {
       const pull = card.pullRequest === null ? "" : ` PR #${card.pullRequest.number}`;
-      const detail =
-        card.kind === "question"
-          ? `${card.label ?? "question"}: ${card.waiting?.ask ?? "no question in the workpad"}`
-          : `review: ${card.review?.verdict ?? "no verdict recorded"}`;
+      const detail = {
+        question: () =>
+          `${card.label ?? "question"}: ${card.waiting?.ask ?? "no question in the workpad"}`,
+        review: () => `review: ${card.review?.verdict ?? "no verdict recorded"}`,
+        mention: () =>
+          `mention by ${card.mention?.author ?? "someone"}: ${card.mention?.comment ?? ""}`,
+        alarm: () => `alarm: ${card.alarm?.problems.join("; ") || "no problem listed"}`,
+      }[card.kind]();
       return `${card.identifier}${pull} ${card.title} (${detail})`;
     }),
   ].join("\n");
@@ -70,6 +75,7 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
       .map(
         (question): InboxCardDto => ({
           // Unique per question: the page keys and opens a card by it.
+          id: `question:${question.id}`,
           identifier: `${question.name}-${question.id}`,
           title: `Question in ${question.name}'s Staff chat`,
           url: `${base}${question.chatHref}`,
@@ -77,19 +83,47 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
           // A question, so the page shows it as one and never as a review that is ready to merge.
           kind: "question",
           label: question.name,
+          choices: [],
           waiting: {
             ask: question.question,
             stage: "Staff chat",
             asked: new Date(question.askedAt).toISOString().slice(0, 10),
           },
           review: null,
+          mention: null,
+          alarm: null,
           since: new Date(question.askedAt).toISOString(),
           chat: { threadId: question.chatThreadId },
         }),
       );
   }
 
-  /** The cards: Linear's, read now, then the Staff questions; nothing is kept between calls. */
+  /** Where the Inbox looks and who it asks: its setting, the registry and the Linear team. */
+  async function resolve() {
+    const setting = await config();
+    if (setting === null) {
+      throw new Error(`the Inbox is not set up: run \`${SETUP}\` (docs/agents/optio.md)`);
+    }
+    // The Inbox's own project first, the Board's when it has none: it never needs the Board.
+    const board = setting.projectId === undefined ? await deps.storedScheduler() : null;
+    const projectId = setting.projectId ?? board?.projectId;
+    if (projectId === undefined) {
+      throw new Error(`the Inbox has no project: run \`${SETUP}\` (docs/agents/optio.md)`);
+    }
+    const registry = parseRegistry(await deps.projectConfigText(projectId));
+    if (!registry.ok) throw new Error(registry.error);
+    const teamKey = registry.registry.teamKey ?? board?.teamKey;
+    if (teamKey === undefined) {
+      throw new Error("factory.config.json names no Linear team: set linear.teamKey");
+    }
+    return { setting, registry: registry.registry, teamKey };
+  }
+
+  /**
+   * The cards: Linear's, read now, then the Staff questions; nothing is kept between calls. The
+   * waiting issues, the mentions, the alarms and the Staff questions are separate reads: one that
+   * fails is named in `error` and the others still show.
+   */
   async function list() {
     const linear = await linearCards();
     try {
@@ -104,37 +138,103 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
 
   async function linearCards() {
     try {
-      const setting = await config();
-      if (setting === null) {
-        throw new Error(`the Inbox is not set up: run \`${SETUP}\` (docs/agents/optio.md)`);
-      }
-      // The Inbox's own project first, the Board's when it has none: it never needs the Board.
-      const board = setting.projectId === undefined ? await deps.storedScheduler() : null;
-      const projectId = setting.projectId ?? board?.projectId;
-      if (projectId === undefined) {
-        throw new Error(`the Inbox has no project: run \`${SETUP}\` (docs/agents/optio.md)`);
-      }
-      const registry = parseRegistry(await deps.projectConfigText(projectId));
-      if (!registry.ok) throw new Error(registry.error);
-      const teamKey = registry.registry.teamKey ?? board?.teamKey;
-      if (teamKey === undefined) {
-        throw new Error("factory.config.json names no Linear team: set linear.teamKey");
-      }
-      const issues = await fetchWaiting(await deps.linearApiKey(), teamKey, setting.state);
-      const cards = buildCards(issues, {
-        config: setting,
-        workpadHeading: registry.registry.workpadHeading,
-        verdictOf: (identifier) => deps.gateRuns.latestReview(identifier, 0)?.verdictLine ?? null,
-      });
-      return { error: null, cards };
+      const { setting, registry, teamKey } = await resolve();
+      const key = await deps.linearApiKey();
+      const [waiting, mentions, alarm] = await Promise.allSettled([
+        fetchWaiting(key, teamKey, setting.state),
+        fetchMentions(key),
+        setting.alarmIssue === undefined
+          ? Promise.resolve(null)
+          : fetchAlarmThread(key, setting.alarmIssue),
+      ]);
+      const errors: string[] = [];
+      const failed = (what: string, outcome: PromiseSettledResult<unknown>) => {
+        if (outcome.status === "rejected") {
+          const reason: unknown = outcome.reason;
+          errors.push(`${what}: ${reason instanceof Error ? reason.message : String(reason)}`);
+        }
+      };
+      failed("waiting issues", waiting);
+      failed("mentions", mentions);
+      failed("alarms", alarm);
+      const issueCards =
+        waiting.status === "fulfilled"
+          ? buildCards(waiting.value, {
+              config: setting,
+              workpadHeading: registry.workpadHeading,
+              verdictOf: (identifier) =>
+                deps.gateRuns.latestReview(identifier, 0)?.verdictLine ?? null,
+            })
+          : [];
+      const notices = [
+        ...(mentions.status === "fulfilled" ? mentionCards(mentions.value) : []),
+        ...(alarm.status === "fulfilled" && alarm.value !== null ? alarmCards(alarm.value) : []),
+      ];
+      return {
+        error: errors.length === 0 ? null : errors.join("; "),
+        cards: withNotices(issueCards, notices),
+      };
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error), cards: [] };
     }
   }
 
+  /**
+   * Hands the issue back to the Loop that starts issues: the comment is the key owner's (the Linear key
+   * is theirs), the question label goes, the Loop's label and state come. A failed write is reported
+   * and leaves the issue as it was, so the card stays.
+   */
+  async function settle(identifier: string, comment: string, expectQuestion: boolean) {
+    try {
+      const text = comment.trim();
+      if (text === "") {
+        throw new Error(expectQuestion ? "write an answer first" : "a rejection needs a comment");
+      }
+      const { setting, registry, teamKey } = await resolve();
+      const loop = registry.loops.find((one) => one.enabled && one.trigger.kind === "issue");
+      if (loop === undefined || loop.trigger.kind !== "issue") {
+        throw new Error("factory.config.json has no enabled Loop to hand the issue back to");
+      }
+      await settleIssue(await deps.linearApiKey(), {
+        identifier,
+        teamKey,
+        comment: text,
+        waitingState: setting.state,
+        dropLabels: setting.questionLabels,
+        expectQuestion,
+        toState: loop.trigger.state,
+        toLabel: loop.trigger.label,
+      });
+      deps.bb.realtime.publish(CHANGED, {}); // open pages read again
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /** Handling a mention (opening it or dismissing it) marks its notification read in Linear. */
+  async function read({ notificationId }: { notificationId: string }) {
+    try {
+      if ((await config()) === null) {
+        throw new Error(`the Inbox is not set up: run \`${SETUP}\` (docs/agents/optio.md)`);
+      }
+      await markMentionRead(await deps.linearApiKey(), notificationId);
+      deps.bb.realtime.publish(CHANGED, {}); // open pages read again
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  const answer = ({ identifier, answer }: { identifier: string; answer: string }) =>
+    settle(identifier, answer, true);
+  const reject = ({ identifier, comment }: { identifier: string; comment: string }) =>
+    settle(identifier, comment, false);
+
   const command = cliCommand({
-    summary: "List what waits for a person in the Inbox: reviews first, then questions",
-    description: `With --state and --labels it sets where the Inbox looks instead: the state issues wait in, and the labels that mark a question. --project names the bb project whose factory.config.json gives the Linear team; without it the Board's project is used. --off switches the Inbox off.`,
+    summary:
+      "List what waits for a person in the Inbox: reviews first, then questions, mentions and alarms",
+    description: `With --state and --labels it sets where the Inbox looks instead: the state issues wait in, and the labels that mark a question. --project names the bb project whose factory.config.json gives the Linear team; without it the Board's project is used. --alarm-issue names the issue the watchdog comments on; without it there are no alarm cards. --off switches the Inbox off.`,
     options: {
       json: { type: "boolean", description: "Emit machine-readable JSON" },
       state: { type: "string", description: "Set the state issues wait in" },
@@ -142,6 +242,10 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
       project: {
         type: "string",
         description: "Set the bb project to read factory.config.json from",
+      },
+      "alarm-issue": {
+        type: "string",
+        description: "Set the issue whose watchdog alarm comments show as cards",
       },
       off: { type: "boolean", description: "Switch the Inbox off" },
     },
@@ -156,11 +260,13 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
             state: options.state,
             questionLabels: options.labels.split(",").map((label) => label.trim()),
             ...(options.project === undefined ? {} : { projectId: options.project }),
+            ...(options["alarm-issue"] === undefined ? {} : { alarmIssue: options["alarm-issue"] }),
           });
           if (!parsed.success) {
-            throw new PluginCliError("--state, --project and every label must be non-empty", {
-              code: "invalid_config",
-            });
+            throw new PluginCliError(
+              "--state, --project, --alarm-issue and every label must be non-empty",
+              { code: "invalid_config" },
+            );
           }
           await deps.bb.storage.kv.set(CONFIG_KEY, parsed.data);
         }
@@ -178,5 +284,5 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     },
   });
 
-  return { list, command };
+  return { list, answer, reject, read, command };
 }

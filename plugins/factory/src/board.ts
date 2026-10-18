@@ -1,7 +1,7 @@
 // The plan for one tick: which issues start where, and why the rest wait.
 // Pure: Linear's board and the ledger go in, a plan comes out.
 import type { BoardIssue } from "./linear-api.js";
-import { issueLoops, type Registry } from "./loop-registry.js";
+import { inSchedule, issueLoops, type Registry } from "./loop-registry.js";
 import type { Machine, SchedulerConfig } from "./scheduler-config.js";
 
 /** What the ledger knows about an issue the scheduler has started before. */
@@ -95,11 +95,14 @@ export function planBoard(input: {
   registry: Registry;
   focus: string | null;
   history: Map<string, IssueHistory>;
-  /** Starts of each issue in the last 24 h, for `flow.maxRunsPerDay`. */
+  /** Starts of each issue in the last 24 h, for a Loop's starts per day (`flow.maxRunsPerDay` unless overridden). */
   recentStarts?: Map<string, number>;
+  /** The time the plan is for (epoch ms), against which a Loop's schedule is checked. */
+  now?: number;
 }): Plan {
   const { issues, config, registry, focus, history } = input;
   const recentStarts = input.recentStarts ?? new Map<string, number>();
+  const now = input.now ?? Date.now();
   const loops = issueLoops(registry);
   const plan: Plan = {
     focus,
@@ -195,9 +198,17 @@ export function planBoard(input: {
         wait("last run ended without a hand-over; the orchestrator must resume or release it");
         continue;
       }
+      if (!inSchedule(loop.schedule, now)) {
+        wait(
+          `${loop.name} is outside its schedule ${loop.schedule?.from}–${loop.schedule?.to} UTC`,
+        );
+        continue;
+      }
       const starts = recentStarts.get(issue.identifier) ?? 0;
-      if (registry.maxRunsPerDay !== null && starts >= registry.maxRunsPerDay) {
-        wait(`started ${starts} times in 24 h (cap ${registry.maxRunsPerDay})`);
+      const startsCap =
+        loop.startsPerDay === undefined ? registry.maxRunsPerDay : loop.startsPerDay;
+      if (startsCap !== null && starts >= startsCap) {
+        wait(`started ${starts} times in 24 h (cap ${startsCap})`);
         continue;
       }
       const running = live.get(loop.name) ?? 0;

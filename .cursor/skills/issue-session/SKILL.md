@@ -29,7 +29,7 @@ From the human message, collect:
 2. **Batch mode** — `parallel` only when the human said parallel / samtidigt. Otherwise **sequential**.
 3. **Order** — if the human listed identifiers in order, keep that order. Otherwise `dispatch.priorityOrder`, oldest first at the same rank.
 
-At queue-build time, a `Blocked` issue whose blockers are **all** `Done` or `Canceled` is moved to `To-do` first (`node scripts/linear.mjs state <KIT-n> "To-do"`); `session-check` says `move it to To-do first`. A `Blocked` issue with an unresolved blocker is skipped.
+At queue-build time, a `Blocked` issue whose blockers are **all** `Done` or `Canceled` is resumed in its Issue thread with `--resume`; it never goes back to `To-do` (ADR-0066). A `Blocked` issue with an unresolved blocker is skipped.
 
 ## Guardrails (every issue)
 
@@ -62,7 +62,7 @@ If status is `dispatch.state`, labelled `ready-for-agent`, unblocked, and Agent 
 
 If status is already `In Progress` with `ready-for-agent`: start or resume. Same branch, same PR.
 
-If the issue was in `Approval` waiting for a human and the human answered by moving it to `To-do`, it carries `needs-info` / `ready-for-human` and has no `ready-for-agent`, so it is not auto-dispatchable: it resumes only when a human-started session names it. `session-check` returns OPEN with `answered: ...`. On claiming it, swap the label back (`node scripts/linear.mjs label <KIT-n> swap needs-info ready-for-agent`, or from `ready-for-human`), write `Resumed: <date>` under `### Waiting`, and only then proceed, resuming from the workpad with `--resume` at the stage `### Waiting` names. Any answer goes back to `To-do`, never to a specific stage. `ready-for-agent`, `needs-info` and `ready-for-human` share Linear's single-select Triage label group (checked read-only: `groupType` is `singleSelect`), so a plain `label add` is rejected and the dispatch label would be lost. Use one atomic swap together with the state move: stop = `node scripts/linear.mjs label <KIT-n> swap ready-for-agent needs-info` (or `ready-for-human`) and `state <KIT-n> Approval`; resume (claim) = `label <KIT-n> swap needs-info ready-for-agent` (or from `ready-for-human`), then write `Resumed: <date>` under `### Waiting`.
+An answered `Approval` stays in `Approval` with `ready-for-agent` (the human swapped the help label back): resume it in its Issue thread with `--resume`, write `Resumed: <date>` under `### Waiting`, and continue from the workpad at the stage `### Waiting` names. It never goes back to `To-do` (ADR-0066). `ready-for-agent`, `needs-info` and `ready-for-human` share Linear's single-select Triage label group (checked read-only: `groupType` is `singleSelect`), so a plain `label add` is rejected and the dispatch label would be lost. Use one atomic swap together with the state move: stop = `node scripts/linear.mjs label <KIT-n> swap ready-for-agent needs-info` (or `ready-for-human`) and `state <KIT-n> Approval`; resume (claim) = `label <KIT-n> swap needs-info ready-for-agent` (or from `ready-for-human`), then write `Resumed: <date>` under `### Waiting`.
 
 If status is `In Review`, `Approval` (with neither `needs-info` nor `ready-for-human`), or `Merging`: join at the matching step below (review, approve+land, or land). `Approval` is cross-stage (ADR-0057): it also holds an issue that waits for a human mid-flow. `needs-info` = a question, `ready-for-human` = a yes/no decision or permission; neither = review green, the approver may merge. Only the move to `Merging` is merge permission.
 

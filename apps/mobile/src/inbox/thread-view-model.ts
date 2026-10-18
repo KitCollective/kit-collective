@@ -1,6 +1,7 @@
 import type {
   CollectionConversationDetail,
   CollectionConversationMessage,
+  CollectionConversationPeer,
 } from "@kit/api-contract";
 import { JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
 
@@ -198,4 +199,77 @@ export function threadItems(detail: CollectionConversationDetail): ThreadItem[] 
   }
 
   return items;
+}
+
+/** Index of the item for a message id, or null: where a waiting Indbakke row opens the thread. */
+export function threadItemIndex(items: ThreadItem[], messageId: string | null): number | null {
+  if (!messageId) {
+    return null;
+  }
+  const index = items.findIndex((item) => item.id === messageId);
+  return index === -1 ? null : index;
+}
+
+export type ConversationConfirmCopy = {
+  title: string;
+  consequence: string;
+  confirmLabel: string;
+};
+
+export type ConversationMore = {
+  profile: { handle: string; meta: string; href: string };
+  rows: {
+    report: { title: string };
+    block: { title: string };
+    delete: { title: string };
+  };
+  caption: string;
+  confirm: { block: ConversationConfirmCopy; delete: ConversationConfirmCopy };
+  reportedToast: string;
+};
+
+const MORE_CAPTION =
+  "Blokering skjuler samtalen for jer begge. Slet samtale fjerner den kun for dig — den anden kan stadig se tråden.";
+
+/** Banner text when Rapportér, Blokér, Slet samtale or loading the peer fails. */
+export const CONVERSATION_MORE_FAILURE = "Noget gik galt. Prøv igen.";
+
+/** City · n trøjer · Se profil; the city is dropped when the Collector shows none. */
+function peerProfileMeta(peer: CollectionConversationPeer): string {
+  const jerseys = peer.jerseyCount === 1 ? "1 trøje" : `${peer.jerseyCount} trøjer`;
+  return [peer.city, jerseys, "Se profil"].filter(Boolean).join(" · ");
+}
+
+/**
+ * Conversation → More Sheet (docs/design-system.md, Revision 2026-10-10): the peer in, the
+ * Sheet's rows, caption, both `confirm` Sheets and the Rapportér Toast / failure Banner text out.
+ */
+export function conversationMore(peer: CollectionConversationPeer): ConversationMore {
+  const { handle } = peer;
+  return {
+    profile: {
+      handle,
+      meta: peerProfileMeta(peer),
+      href: `/(tabs)/search/peer/${handle}`,
+    },
+    rows: {
+      report: { title: "Rapportér" },
+      block: { title: `Blokér ${handle}` },
+      delete: { title: "Slet samtale" },
+    },
+    caption: MORE_CAPTION,
+    confirm: {
+      block: {
+        title: `Blokér ${handle}?`,
+        consequence: `Samtalen med ${handle} skjules for jer begge.`,
+        confirmLabel: "Blokér",
+      },
+      delete: {
+        title: "Slet samtalen?",
+        consequence: `Samtalen fjernes kun for dig. ${handle} kan stadig se tråden.`,
+        confirmLabel: "Slet samtale",
+      },
+    },
+    reportedToast: "Samtalen er rapporteret",
+  };
 }

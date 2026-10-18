@@ -11,6 +11,33 @@
       "Confirm and Save",
       "Capture session"
     ],
+    "add-jersey-low-confidence": [
+      "Sheet",
+      "Photo slot",
+      "Banner",
+      "Chip",
+      "Button dock",
+      "Confirm and Save",
+      "Capture session"
+    ],
+    "add-jersey-vision-off": [
+      "Sheet",
+      "Switch",
+      "Photo slot",
+      "Chip",
+      "Button dock",
+      "Confirm and Save",
+      "Capture session"
+    ],
+    "add-jersey-vision-failure": [
+      "Sheet",
+      "Photo slot",
+      "Banner",
+      "Chip",
+      "Button dock",
+      "Confirm and Save",
+      "Capture session"
+    ],
     "collection": [
       "Collection grid",
       "Collection shortcuts (genveje)",

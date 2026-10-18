@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   completeOverviewDraft,
   firstUnsavedDraftId,
+  inBatches,
   inboxRow,
   nextUnsavedDraftId,
   overviewCaption,
@@ -12,8 +13,12 @@ import {
   overviewTitle,
   parkedRow,
   pendingSkeletonRows,
+  pendingUploadFailures,
+  retryUploadFailures,
   shouldOpenBulkOverview,
   shouldOpenUnassigned,
+  splitPreparedPhotos,
+  uploadFailureRow,
   visionOnForCapture,
 } from "../src/capture/captureOverview";
 import {
@@ -24,6 +29,7 @@ import {
   createCaptureSession,
   createMemoryCaptureSessionStore,
   discardUnboundPhoto,
+  groupingPriorGroups,
   markGroupingSettled,
   markOverviewSession,
   parkSession,
@@ -38,6 +44,7 @@ import {
   unparkSession,
 } from "../src/capture/captureSession";
 import type { CaptureSessionState } from "../src/capture/captureSessionTypes";
+import { buildGroupingSuggestRequest } from "../src/capture/groupingSuggestRequest";
 
 const URIS = Array.from({ length: 12 }, (_, index) => `file:///photos/p-${index}.jpg`);
 
@@ -396,5 +403,164 @@ describe("leaving the overview", () => {
   it("parks when only loose photos are left", () => {
     const state = markOverviewSession(createCaptureSession(URIS.slice(0, 4)));
     expect(overviewLeaveAction(state)).toBe("park");
+  });
+});
+
+describe("upload failure row", () => {
+  it("names the failed photos in the inbox slot, with the lock's caption and pill", () => {
+    expect(uploadFailureRow(2)).toEqual({
+      count: 2,
+      title: "2 fotos blev ikke uploadet",
+      caption: "De ligger stadig på telefonen",
+      pill: "Prøv igen",
+      thumbUris: [],
+    });
+  });
+
+  it("words one failed photo in the singular", () => {
+    expect(uploadFailureRow(1)?.title).toBe("1 foto blev ikke uploadet");
+  });
+
+  it("is gone at zero, and shows at most three thumbs", () => {
+    expect(uploadFailureRow(0)).toBeNull();
+    expect(uploadFailureRow(5, URIS.slice(0, 5))?.thumbUris).toEqual(URIS.slice(0, 3));
+  });
+
+  it("splits a prepare run into the photos to send and the URIs that failed", () => {
+    const uris = URIS.slice(0, 3);
+    const results: PromiseSettledResult<string>[] = [
+      { status: "fulfilled", value: "a" },
+      { status: "rejected", reason: new Error("heic") },
+      { status: "fulfilled", value: "c" },
+    ];
+    expect(splitPreparedPhotos(uris, results)).toEqual({
+      photos: ["a", "c"],
+      failedUris: [uris[1]],
+    });
+  });
+
+  it("cuts a big pile into batches that keep the order", () => {
+    const batches = inBatches(
+      Array.from({ length: 16 }, (_, index) => index),
+      4,
+    );
+    expect(batches.map((batch) => batch.length)).toEqual([4, 4, 4, 4]);
+    expect(batches.flat()).toEqual(Array.from({ length: 16 }, (_, index) => index));
+    expect(inBatches([1, 2, 3], 2)).toEqual([[1, 2], [3]]);
+    expect(inBatches([], 4)).toEqual([]);
+  });
+
+  it("only counts failed photos that are still loose in the session", () => {
+    const session = createCaptureSession(URIS.slice(0, 4));
+    const bound = bindUnboundPhotoToDraft(session, URIS[1]!, session.activeDraftId);
+    expect(pendingUploadFailures([URIS[0]!, URIS[1]!, "file:///gone.jpg"], bound)).toEqual([
+      URIS[0],
+    ]);
+    expect(pendingUploadFailures([], bound)).toEqual([]);
+  });
+});
+
+describe("Prøv igen on the upload failure row", () => {
+  const FAILED = URIS.slice(0, 2);
+  const prepared = (uris: string[]) => ({ photos: uris.map((uri) => `p:${uri}`), failedUris: [] });
+  /** A send that records what it was given and answers with a job id. */
+  const recordingSend = (calls: string[][]) => async (photos: string[]) => {
+    calls.push(photos);
+    return "job-1";
+  };
+
+  it("clears the row when every failed photo prepares and the follow-up run starts", async () => {
+    const calls: string[][] = [];
+    const outcome = await retryUploadFailures({
+      uris: FAILED,
+      prepare: async (uris) => prepared(uris),
+      send: recordingSend(calls),
+    });
+    expect(outcome).toEqual({ stillFailed: [], jobId: "job-1" });
+    expect(calls).toEqual([FAILED.map((uri) => `p:${uri}`)]);
+    expect(uploadFailureRow(outcome.stillFailed.length)).toBeNull();
+  });
+
+  it("keeps the row for the photos that fail to prepare again, and sends the others", async () => {
+    const calls: string[][] = [];
+    const outcome = await retryUploadFailures({
+      uris: FAILED,
+      prepare: async (uris) => ({ photos: [`p:${uris[0]}`], failedUris: [uris[1]!] }),
+      send: recordingSend(calls),
+    });
+    expect(outcome).toEqual({ stillFailed: [FAILED[1]], jobId: "job-1" });
+    expect(calls).toEqual([[`p:${FAILED[0]}`]]);
+    expect(uploadFailureRow(outcome.stillFailed.length)?.title).toBe("1 foto blev ikke uploadet");
+  });
+
+  it("keeps the row for every photo when the send fails", async () => {
+    const outcome = await retryUploadFailures({
+      uris: FAILED,
+      prepare: async (uris) => prepared(uris),
+      send: async () => {
+        throw new Error("offline");
+      },
+    });
+    expect(outcome).toEqual({ stillFailed: FAILED, jobId: null });
+  });
+
+  it("keeps the row for every photo when the prepare itself throws", async () => {
+    const outcome = await retryUploadFailures({
+      uris: FAILED,
+      prepare: async () => {
+        throw new Error("no disk");
+      },
+      send: async () => "job-1",
+    });
+    expect(outcome).toEqual({ stillFailed: FAILED, jobId: null });
+  });
+
+  it("clears the row with no follow-up run when there is nothing to send", async () => {
+    // A lone retried photo with no jersey to join: the request builder returns null.
+    const session = createCaptureSession(URIS.slice(0, 4));
+    const outcome = await retryUploadFailures({
+      uris: [URIS[0]!],
+      prepare: async (uris) => prepared(uris),
+      send: async (photos) => {
+        const request = buildGroupingSuggestRequest({
+          sessionId: session.sessionId,
+          photos: photos.map((_, index) => ({
+            photoId: session.photoIdByUri![URIS[index]!]!,
+            contentBase64: "AAAA",
+          })),
+          priorGroups: groupingPriorGroups(session),
+        });
+        return request ? "job-1" : null;
+      },
+    });
+    expect(outcome).toEqual({ stillFailed: [], jobId: null });
+  });
+
+  it("sends the failed photos with the jerseys already found as priorGroups", async () => {
+    const session = groupedSession();
+    const photoId = session.photoIdByUri![session.unboundUris[0]!]!;
+    let sentRequest: ReturnType<typeof buildGroupingSuggestRequest> = null;
+    await retryUploadFailures({
+      uris: [session.unboundUris[0]!],
+      prepare: async () => ({ photos: [{ photoId, contentBase64: "AAAA" }], failedUris: [] }),
+      send: async (photos) => {
+        sentRequest = buildGroupingSuggestRequest({
+          sessionId: session.sessionId,
+          photos,
+          priorGroups: groupingPriorGroups(session),
+        });
+        return "job-1";
+      },
+    });
+    expect(sentRequest!.photos.map((photo) => photo.photoId)).toEqual([photoId]);
+    expect(sentRequest!.priorGroups?.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Vision failed overview state", () => {
+  it("words one saved photo in the singular", () => {
+    expect(overviewTitle({ analyzing: false, totalPhotos: 1, jerseyCount: 0 })).toBe(
+      "1 foto er gemt",
+    );
   });
 });

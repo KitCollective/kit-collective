@@ -3,11 +3,12 @@ import { useTypography } from "@/theme/brand-fonts";
 import { radius } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-export type AvatarSize = "lg" | "md";
+export type AvatarSize = "lg" | "md" | "sm";
 
 const AVATAR_SIZES: Record<AvatarSize, number> = {
   lg: 64,
   md: 56,
+  sm: 44,
 };
 
 type AvatarProps = {
@@ -33,12 +34,15 @@ export function Avatar({ handle, uri, uriHeaders, size = "lg" }: AvatarProps) {
   const theme = useTheme();
   const typography = useTypography();
   const dimension = AVATAR_SIZES[size];
+  // The lock sets the fallback initials in `type.label` at `sm` and `type.heading-sm` above it.
+  const initialsStyle = size === "sm" ? typography.label : typography.headingSm;
 
   if (uri) {
     return (
       <Image
         accessibilityIgnoresInvertColors
         source={{ uri, headers: uriHeaders }}
+        resizeMode="cover"
         style={[
           styles.circle,
           {
@@ -66,7 +70,7 @@ export function Avatar({ handle, uri, uriHeaders, size = "lg" }: AvatarProps) {
     >
       <Text
         style={[
-          typography.headingSm,
+          initialsStyle,
           {
             color: theme.contentPrimary,
           },
