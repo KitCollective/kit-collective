@@ -59,7 +59,7 @@ export async function prView(pr) {
       "--repo",
       config().github.ownerRepo,
       "--json",
-      "headRefOid,title,body,headRefName",
+      "headRefOid,title,body,headRefName,mergeable",
     ]),
   );
 }

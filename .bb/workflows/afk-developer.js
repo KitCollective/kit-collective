@@ -13,6 +13,7 @@ export const meta = {
       maxRounds: { type: "integer", minimum: 1, maximum: 5 },
       machine: { type: "string" },
       autoLand: { type: "boolean" },
+      mergeFirst: { type: "boolean" },
     },
   },
   outputSchema: {
@@ -70,6 +71,10 @@ if (!ISSUE.test(issue)) {
   return { issue, status: "refused", stoppedAt: "args", note: "issue must look like KIT-123" };
 }
 const resume = args.resume === true;
+// The PR conflicts with development (the dispatcher's merge stopped on a conflict, or resume-point says
+// CONFLICTING): the first Engineer round merges origin/development into the PR branch before anything is
+// reviewed. Before 2026-10-18 the dispatcher aborted and the issue sat in To-do (KIT-404, KIT-400).
+let mergeFirst = resume && args.mergeFirst === true;
 // At most five rounds (ADR-0066); from the third the Lead replans before the Engineer patches again.
 const maxRounds = Number.isInteger(args.maxRounds) ? Math.min(Math.max(args.maxRounds, 1), 5) : 5;
 const machine = typeof args.machine === "string" && /^[A-Za-z0-9_.-]{1,59}$/.test(args.machine) ? args.machine : "";
@@ -540,7 +545,20 @@ const ENGINEER_SCHEMA = {
   },
 };
 
-async function engineerPass(round, feedback, engineerModelAlias) {
+/**
+ * The merge round's opening (ADR-0066: a merge conflict is resolved inside the run, never by a person).
+ * The dispatcher leaves the worktree detached at origin/development when its own merge conflicted, so the
+ * Engineer checks the PR branch out first. Only the validated PR number enters the text.
+ */
+function mergeFirstNote(pr) {
+  return [
+    `First job of this round, before anything else: PR #${pr} conflicts with development. This worktree may be detached at origin/development (the dispatcher's merge stopped on the conflict). \`git fetch -q origin\`, check out the PR's branch (\`gh pr view ${pr} --json headRefName --jq .headRefName\`; \`git checkout -q -b <branch> origin/<branch>\` when it does not exist here, else \`git checkout -q <branch>\` and \`git merge -q --ff-only origin/<branch>\`), then \`git merge --no-edit origin/development\`.`,
+    "Resolve every conflict so both sides' features survive: read what each side meant (this issue and its PR, and the commits on development that touched the file: `git log origin/development -- <file>`) and combine them. Never take one side whole (no `-X ours`, `-X theirs`, `checkout --ours` or `--theirs` on a file both sides changed), and never drop the other side's lines, tests or registrations.",
+    "Then run the tests of every area the conflicts touched and the PR's own, fix what the merge broke, commit the merge and push it. Never rebase, force-push or rewrite pushed history. Note the merge and how each conflict was resolved under `### Notes` in the workpad. After that the round goes on as usual: the pre-review gate in implement/SKILL.md, then return ready.",
+  ].join("\n");
+}
+
+async function engineerPass(round, feedback, engineerModelAlias, mergeRound = false) {
   const knownPr = prNumber ?? resumePr;
   const resumeNote =
     knownPr !== null
@@ -550,6 +568,7 @@ async function engineerPass(round, feedback, engineerModelAlias) {
         : "Branch from origin/development, one PR into development.";
   const prompt = [
     `You are the Engineer for ${issue}. Read .cursor/skills/implement/SKILL.md and follow it, with /tdd and the Roles it names. ${resumeNote}`,
+    mergeRound && knownPr !== null ? mergeFirstNote(knownPr) : "",
     scenarioLine,
     "Read `### Plan` in the workpad when there is one. Copy the issue's write-scope: line into the PR body (plain globs, no backslashes).",
     `Wait for CI only in the foreground, in slices (a foreground command is capped at 10 minutes, and your shell tool backgrounds it after 2 unless you set the tool's timeout to 600000 ms, so set it): \`node scripts/wait-for-checks.mjs <pr> --timeout ${GATE_SLICE_SECONDS}\`. On exit 2 (still pending) run the same command again in the same turn, up to ${GATE_SLICES} times in all; only after that end with \`blocked ci-pending\`. Exit 5 means gh is unusable: report \`blocked\` with the verdict line and do not retry. Never start it in the background and end your turn.`,
@@ -630,13 +649,20 @@ let engineerThread = "";
 // findings are open against the head (resume-point.mjs) and the pre-review gate is open. Then the
 // run starts at round 0, which is the review alone and is not an Engineer round: maxRounds still
 // counts Engineer rounds. Any other answer builds first, as before.
+// A PR that conflicts with development is never reviewed as it is: the first round merges development in.
 let reviewAsIs = false;
+if (resume && resumePr === null) {
+  mergeFirst = false;
+}
 if (resume && resumePr !== null) {
   const point = await shAfter(carried.splice(0), "resume-point", "Pre-review gate", `node scripts/resume-point.mjs ${issue} --pr ${resumePr}`);
   if (!point || point.runner) {
     return stopped("resume-point", "stopped", { prNumber: resumePr, note: point?.line ?? "no output from resume-point" });
   }
-  if (point.code === 0) {
+  if (point.code === 1 && /^CLOSED: conflicting:/.test(point.line)) {
+    mergeFirst = true;
+  }
+  if (point.code === 0 && !mergeFirst) {
     phase("Pre-review gate");
     const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${resumePr} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [requestDeviceFlows(resumePr)], true, [requestDeviceFlows(resumePr)]);
     if (pre.runner) {
@@ -656,6 +682,7 @@ if (resume && resumePr !== null) {
       reviewAsIs = true;
     } else if (pre.code === 1) {
       feedback = `The pre-review gate is closed: ${pre.line}`;
+      mergeFirst = /PR is CONFLICTING/.test(pre.line);
     }
   }
 }
@@ -696,7 +723,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
     let engineer = null;
     for (let attempt = 1; attempt <= 2 && engineer === null; attempt += 1) {
       try {
-        engineer = await engineerPass(round, attempt === 1 ? feedback : `${feedback}\n(The previous attempt ended without a result. Resume where it stopped.)`, modelAlias);
+        engineer = await engineerPass(round, attempt === 1 ? feedback : `${feedback}\n(The previous attempt ended without a result. Resume where it stopped.)`, modelAlias, mergeFirst);
       } catch (error) {
         engineer = null;
       }
@@ -714,6 +741,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
     engineerThread = eThread;
     // The two log lines ride with the pre-review gate; a stop before the gate writes them alone.
     const engineerLog = [
+      ...(mergeFirst ? [logCmd("reason", `--issue ${issue} --code conflict`)] : []),
       logCmd("spawn", `--issue ${issue} --step engineer --thread ${eThread} --mode ${round > 1 || reviewAsIs ? "fix" : "start"} --provider ${PROVIDER} --model ${MODELS[modelAlias]}${machineFlag}`),
       logCmd("result", `--issue ${issue} --step engineer --outcome ${engineer.outcome} --usage-thread ${eThread}`),
     ];
@@ -742,6 +770,8 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
       }
       return stopped("engineer", "In Progress", { rounds, note: `Engineer failed: ${engineer.sentence}` });
     }
+    // The merge is the Engineer's to finish: a stop the Lead settles comes back to the same merge round.
+    mergeFirst = false;
     if (prNumber !== null && Number.isInteger(engineer.prNumber) && engineer.prNumber !== prNumber) {
       // A second PR for the same issue: stop before any gate reads it.
       await logEngineer();
@@ -781,6 +811,8 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ${reason}`)], true);
       if (again) {
         feedback = `The pre-review gate is closed: ${pre.line}`;
+        // Development moved again while the round ran: the next round opens with the merge.
+        mergeFirst = /PR is CONFLICTING/.test(pre.line);
         continue;
       }
       return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
