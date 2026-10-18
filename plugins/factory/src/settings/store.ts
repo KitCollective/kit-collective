@@ -5,13 +5,9 @@
 // `null` is a value like any other.
 import type Database from "better-sqlite3";
 
-/**
- * The tables are created in place rather than appended to the plugin's ordered migration list,
- * which belongs to src/core.ts and is positional: a second list on the same database would reuse
- * ids that list has already recorded.
- */
-const CREATE = [
-  `CREATE TABLE IF NOT EXISTS operating_settings (
+/** Appended after the run migrations in src/core.ts; never reorder. */
+export const SETTINGS_MIGRATIONS = [
+  `CREATE TABLE operating_settings (
      subject TEXT NOT NULL,
      key TEXT NOT NULL,
      value_json TEXT NOT NULL,
@@ -19,7 +15,7 @@ const CREATE = [
      changed_at INTEGER NOT NULL,
      PRIMARY KEY (subject, key)
    )`,
-  `CREATE TABLE IF NOT EXISTS operating_setting_log (
+  `CREATE TABLE operating_setting_log (
      id INTEGER PRIMARY KEY AUTOINCREMENT,
      subject TEXT NOT NULL,
      key TEXT NOT NULL,
@@ -68,7 +64,6 @@ interface LogRow {
 const wrap = (json: string | null) => (json === null ? undefined : { value: JSON.parse(json) });
 
 export function createSettingsStore(db: Database.Database) {
-  for (const statement of CREATE) db.exec(statement);
   const read = db.prepare("SELECT * FROM operating_settings WHERE subject = ? AND key = ?");
   const upsert = db.prepare(
     `INSERT INTO operating_settings (subject, key, value_json, changed_by, changed_at)

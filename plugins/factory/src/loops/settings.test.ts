@@ -9,7 +9,7 @@ import {
   type Registry,
 } from "../loop-registry.js";
 import { parseScheduler } from "../scheduler-config.js";
-import { createSettingsStore } from "../settings/store.js";
+import { createSettingsStore, SETTINGS_MIGRATIONS } from "../settings/store.js";
 
 const loop = {
   name: "Issue run",
@@ -141,7 +141,12 @@ describe("a Loop's starts per day in the plan", () => {
 });
 
 describe("the settings store", () => {
-  const open = () => createSettingsStore(new Database(":memory:"));
+  const migrated = () => {
+    const db = new Database(":memory:");
+    for (const statement of SETTINGS_MIGRATIONS) db.exec(statement);
+    return db;
+  };
+  const open = () => createSettingsStore(migrated());
 
   it("keeps one override per subject and key, with who and when, and logs each change", () => {
     const store = open();
@@ -174,7 +179,7 @@ describe("the settings store", () => {
   });
 
   it("is safe to open twice on one database", () => {
-    const db = new Database(":memory:");
+    const db = migrated();
     createSettingsStore(db).set("loop:A", "enabled", false, "Dana", 1);
     expect(createSettingsStore(db).overrides("loop:").size).toBe(1);
   });
