@@ -21,6 +21,7 @@ import { createSettingsStore, type Override } from "../settings/store.js";
 import { json } from "../shared/cli.js";
 import type { LoopChangeDto, LoopDto, LoopsDto } from "./contract.js";
 import { formatSetting, STARTS_PER_DAY_NOTE } from "./format.js";
+import { createProposals, REGISTRY_FILE } from "./proposal.js";
 
 const SUBJECT = "loop:";
 const LOG_LIMIT = 100;
@@ -70,6 +71,7 @@ function loopDto(registry: Registry, loop: Loop, own: Map<string, Override> | un
     name: loop.name,
     workflow: loop.workflow,
     trigger: triggerSummary(loop),
+    machines: loop.machines,
     settings: {
       enabled: setting(file.enabled, values.enabled, own?.get("enabled")),
       maxLive: setting(file.maxLive, values.maxLive, own?.get("maxLive")),
@@ -101,6 +103,7 @@ function describe(loops: LoopDto[]): string {
 
 export function createLoops(core: Core) {
   const store = createSettingsStore(core.bb.storage.database());
+  const proposals = createProposals(core);
 
   /** Every Loop's overrides by name, as the scheduler applies them. */
   function overrides(): LoopOverrides {
@@ -192,6 +195,23 @@ export function createLoops(core: Core) {
         core.changed();
       }
       return { ok: true as const };
+    },
+    async loops_proposals() {
+      return { proposals: await proposals.list("loop") };
+    },
+    /** Opens a pull request that edits the registry; no Operating setting or override changes. */
+    async loops_propose(input: { loop: string; text: string; by: string }) {
+      const known = (await fileRegistry()).loops.find((candidate) => candidate.name === input.loop);
+      if (known === undefined) throw new Error(`no Loop "${input.loop}" in ${REGISTRY_FILE}`);
+      return proposals.propose({
+        kind: "loop",
+        subject: known.name,
+        heading: `the Loop "${known.name}" in the Loop registry (${REGISTRY_FILE})`,
+        title: `Loop ${known.name}: change proposed in Optio`,
+        file: REGISTRY_FILE,
+        text: input.text,
+        by: input.by,
+      });
     },
     async loops_clear(input: { loop: string; key: string; by: string }) {
       const { loop, key } = await target(input.loop, input.key);

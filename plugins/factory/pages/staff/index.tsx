@@ -16,6 +16,7 @@ import type {
   MemoryDto,
   SessionDto,
 } from "../../src/staff/contract";
+import { ProposeChange, useName } from "../loops/propose";
 import { field, PANEL, when } from "../shared/common";
 import { Back, CheckboxRow, Empty, Labeled, Page, Problem, Rows, Section } from "../shared/layout";
 import type { Rpc } from "../shared/use-loaded";
@@ -946,7 +947,66 @@ function InstructionsTab({
   );
 }
 
-const TABS = ["Chat", "Memory", "Automations", "Settings"] as const;
+/**
+ * What a Staff member is and may do, read-only: their Charter file. A change opens a pull request
+ * (ADR-0065); the Settings tab holds only what Optio overrides without review.
+ */
+function CharterTab({ agent }: { agent: AgentDto }) {
+  const { rpc, value, error, report } = useLoaded(
+    (r) => r.call("agent_charter", { id: agent.id }),
+    `charter-${agent.id}`,
+  );
+  const [by, setBy] = useName();
+  return (
+    <Section title={value?.file ?? "Charter"}>
+      <Problem message={error} />
+      {value === null ? (
+        error === null ? (
+          <Empty>Loading…</Empty>
+        ) : null
+      ) : value.content === null ? (
+        <Empty>
+          {agent.name} has no Charter file. A Staff member is defined by their Charter in the
+          repository.
+        </Empty>
+      ) : (
+        <>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Read-only. Their tools, access, what they own and what they must never do change by a
+            reviewed pull request, not here.
+          </p>
+          <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-card px-4 py-3 text-xs">
+            {value.content}
+          </pre>
+          <Labeled label="Your name, recorded with each change">
+            <Input
+              className="max-w-xs"
+              value={by}
+              onChange={(event) => setBy(event.target.value)}
+              placeholder="Name"
+            />
+          </Labeled>
+          <ProposeChange
+            what={`${agent.name}'s Charter`}
+            by={by}
+            proposals={value.proposals}
+            onPropose={(text) =>
+              rpc.call("agent_propose", { id: agent.id, text, by: by.trim() }).then(
+                () => undefined,
+                (cause) => {
+                  report(cause);
+                  throw cause;
+                },
+              )
+            }
+          />
+        </>
+      )}
+    </Section>
+  );
+}
+
+const TABS = ["Chat", "Memory", "Automations", "Charter", "Settings"] as const;
 
 function AgentDetail({ id }: { id: string }) {
   const { rpc, value, error, report, act } = useLoaded(
@@ -1013,6 +1073,7 @@ function AgentDetail({ id }: { id: string }) {
               <FollowUps followUps={value.followUps} act={act} />
             </>
           ) : null}
+          {tab === "Charter" ? <CharterTab agent={value.agent} /> : null}
           {tab === "Settings" ? (
             <InstructionsTab agent={value.agent} projects={value.projects} act={act} />
           ) : null}
