@@ -175,7 +175,8 @@ name: kit-298
 - tapOn:
     id: composer-input
 - inputText: "Hej, har du den i M også?"
-- hideKeyboard
+# No hideKeyboard: the composer sits in a KeyboardAvoidingView, so Send stays tappable (hideKeyboard
+# fails on the hosted simulator when the field exposes no dismiss action).
 - runFlow: ../subflows/settle.yaml
 # AC 7: the reference is still shown with the first message ready to go with it.
 - takeScreenshot: kc__kit-298__04-first-message-with-reference
