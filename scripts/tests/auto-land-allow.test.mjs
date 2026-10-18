@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { isAutoLandCommand } from "../../.claude/hooks/auto-land-allow.mjs";
+import { isAfkStartCommand, isAutoLandCommand } from "../../.claude/hooks/auto-land-allow.mjs";
 
 const ROOT = join(fileURLToPath(new URL("..", import.meta.url)), "..");
 const HOOK = join(ROOT, ".claude", "hooks", "auto-land-allow.mjs");
@@ -66,4 +66,32 @@ test("anything else gets no opinion", () => {
     status: 0,
     stdout: "",
   });
+});
+
+test("Max's AFK developer start with autoLand is approved (KIT-290, KIT-296, 2026-10-18)", () => {
+  const out = hook(
+    `bb workflows run --file .bb/workflows/afk-developer.js --args '{"issue":"KIT-296","resume":true,"autoLand":true}'`,
+  );
+  assert.equal(out.status, 0);
+  assert.equal(JSON.parse(out.stdout).hookSpecificOutput.permissionDecision, "allow");
+  assert.equal(
+    isAfkStartCommand(
+      `bb workflows run --file .bb/workflows/afk-developer.js --args '{"issue":"KIT-394","autoLand":true}'`,
+    ),
+    true,
+  );
+});
+
+test("any other workflow start gets no opinion", () => {
+  for (const command of [
+    `bb workflows run --file .bb/workflows/afk-developer.js --args '{"issue":"KIT-296","merge":true}'`,
+    `bb workflows run --file .bb/workflows/afk-developer.js --args '{"autoLand":true}'`,
+    `bb workflows run --file .bb/workflows/afk-developer.js --args '{"issue":"KIT-296; rm -rf /","autoLand":true}'`,
+    `bb workflows run --file .bb/workflows/other.js --args '{"issue":"KIT-296"}'`,
+    `git push && bb workflows run --file .bb/workflows/afk-developer.js --args '{"issue":"KIT-296"}'`,
+    `bb workflows run --file .bb/workflows/afk-developer.js --args '{"issue":"KIT-296"}' && gh pr merge 1`,
+  ]) {
+    assert.equal(isAfkStartCommand(command), false, command);
+    assert.equal(hook(command).stdout, "", command);
+  }
 });
