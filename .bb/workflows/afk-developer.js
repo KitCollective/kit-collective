@@ -356,8 +356,40 @@ async function stopForHuman(phaseTitle, sentence, waiting = null) {
   return "Approval";
 }
 
-function stopped(stoppedAt, status, extra) {
-  return { issue, status, stoppedAt, ...extra };
+// Every return after `start` is logged writes one `end` line, so Max's tick knows the run has returned and
+// resumes it on its next tick. Without it Max could only tell a run that returned from one in a long silent
+// Engineer round by waiting RUN_STUCK_MINUTES (2026-10-18: KIT-298 hit the round cap at 22:55 and sat In
+// Review for two hours). A stop before `start` (harness, session-check) writes none: no run began, and a
+// session-check refusal can mean another run of the issue is still live. The reason is a fixed code, never
+// the note. Best effort: a failed write leaves the 120-minute rule to find the run.
+let startLogged = false;
+function endReason(result) {
+  if (result.stoppedAt === "loop") return "round-cap";
+  if (result.status === "Approval") return "needs-human";
+  if (result.status === "Blocked") return "blocked-by";
+  if (String(result.note ?? "").startsWith("runner-no-result")) return "runner-no-result";
+  if (result.verdict === "amber" || / \(still waiting after \d+ slices/.test(String(result.note ?? ""))) return "ci-pending";
+  return "unspecified";
+}
+async function stopped(stoppedAt, status, extra) {
+  const result = { issue, status, stoppedAt, ...extra };
+  if (startLogged) {
+    const verdict = pick(result.verdict, ["green", "amber", "red"]);
+    const flags = [
+      `--issue ${issue}`,
+      `--status "${status}"`,
+      `--stopped-at "${stoppedAt}"`,
+      `--reason ${endReason(result)}`,
+      ...(verdict ? [`--verdict ${verdict}`] : []),
+      ...(Number.isInteger(result.rounds) ? [`--round ${result.rounds}`] : []),
+    ];
+    try {
+      await runRaw("log:end", "Hand-over", [logCmd("end", flags.join(" "))], true);
+    } catch (error) {
+      // Best effort, as above.
+    }
+  }
+  return result;
 }
 
 // ---- Session ------------------------------------------------------------------------------------
@@ -406,6 +438,7 @@ const begun = await sh("start", "Session", [
   ...(resume ? [] : [`node scripts/linear.mjs state ${issue} "In Progress"`]),
   `node scripts/scenarios.mjs titles --issue ${issue}`,
 ]);
+startLogged = begun[0]?.code === 0 && !begun[0].runner;
 if (begun.length < startSteps || begun.slice(0, startSteps).some((r) => r.code !== 0)) {
   return stopped("start", "stopped", { note: begun.slice(0, startSteps).find((r) => r.code !== 0)?.line ?? "start step incomplete" });
 }
