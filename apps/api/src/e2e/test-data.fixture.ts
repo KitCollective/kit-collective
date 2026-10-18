@@ -18,10 +18,21 @@ export const TEST_SECOND_PEER_EMAIL = "e2e-second-peer@test.kitcollective";
 export const TEST_DATA_CATALOG = {
   clubs: ["FC København", "Brøndby IF", "AGF", "OB", "FC Midtjylland", "AaB"],
   nationalTeams: ["Danmark"],
+  /**
+   * The player and badge on the peer's open-for-bid jersey (KIT-294). Neither label may contain
+   * "ob" (the Discover typeahead matches `%q%`, and the flows search OB) or match a test handle.
+   */
+  players: ["Mads Vestergaard"],
+  badges: ["Pokalfinale 2023"],
 } as const;
+
+/** The squad number the fixture player wears for OB in OB's latest season. */
+export const TEST_PLAYER_SQUAD_NUMBER = 9;
 
 type ClubLabel = (typeof TEST_DATA_CATALOG.clubs)[number];
 type NationalTeamLabel = (typeof TEST_DATA_CATALOG.nationalTeams)[number];
+type PlayerLabel = (typeof TEST_DATA_CATALOG.players)[number];
+type BadgeLabel = (typeof TEST_DATA_CATALOG.badges)[number];
 
 export type FixtureSide =
   | { kind: "club"; label: ClubLabel }
@@ -36,6 +47,10 @@ export type FixtureJersey = {
   condition: JerseyCondition;
   private: boolean;
   biddingEnabled: boolean;
+  /** Printed player, resolved by label; the player's squad number comes from the catalog. */
+  player?: PlayerLabel;
+  /** Badges on the sleeve, resolved by label. */
+  patches?: BadgeLabel[];
   /** Shirt colour of the generated photos. */
   colour: string;
   photos: Array<{ id: string; role: PhotoRole }>;
@@ -109,11 +124,26 @@ export const TEST_JERSEYS: FixtureJersey[] = [
     condition: "used",
     private: false,
     biddingEnabled: true,
+    player: "Mads Vestergaard",
+    patches: ["Pokalfinale 2023"],
     colour: "#2f5fb3",
     photos: [
       { id: photoId(5, 1), role: "front" },
       { id: photoId(5, 2), role: "back" },
     ],
+  },
+  // Public and not open for bid (KIT-294): the peer's second jersey shows no Bud action.
+  {
+    id: jerseyId(6),
+    ownerId: TEST_PEER_ID,
+    side: { kind: "club", label: "OB" },
+    type: "away",
+    size: "m",
+    condition: "new",
+    private: false,
+    biddingEnabled: false,
+    colour: "#e8e8e8",
+    photos: [{ id: photoId(6, 1), role: "front" }],
   },
 ];
 

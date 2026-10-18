@@ -116,6 +116,18 @@ describe("send bid screen chrome (KIT-270)", () => {
     expect(source.indexOf("rememberBidSent")).toBeLessThan(source.indexOf("router.back()"));
   });
 
+  it("returns to the thread named by returnTo, else goes back (KIT-413)", () => {
+    const source = readScreen();
+
+    expect(source).toMatch(/const \{ jerseyId, returnTo \} = useLocalSearchParams/);
+    expect(source).toContain("sendBidExit(returnTo)");
+    expect(source).toContain('exit.kind === "back"');
+    expect(source).toContain("router.navigate(exit.href as Href)");
+    // The Toast handoff belongs to the back branch only: the thread has no detail waiting for it.
+    expect(source.indexOf('exit.kind === "back"')).toBeLessThan(source.indexOf("rememberBidSent("));
+    expect(source.indexOf("rememberBidSent(")).toBeLessThan(source.indexOf("router.back();"));
+  });
+
   it("summarises the jersey as club and season, type · size · condition, player · owner", () => {
     const source = readScreen();
 

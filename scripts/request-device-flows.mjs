@@ -2,7 +2,8 @@
 /**
  * Asks for the hosted Device flows run of a PR head (ADR-0059). The run is the macOS job of
  * .github/workflows/device-flows.yml, started by the `run-device-flows` label; it sets the
- * `Device flows` commit status that the pre-review gate waits for.
+ * `Device flows` commit status that the review gate waits for (the pre-review gate does not:
+ * the run goes on while the Reviewer reviews; ADR-0059, amendment of 2026-10-18).
  *
  * Usage: node scripts/request-device-flows.mjs <pr> --issue KIT-n
  * Nothing is asked for when the PR has no slice flow for the issue, or when the head already has

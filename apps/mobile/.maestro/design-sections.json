@@ -46,7 +46,16 @@
       "Switch",
       "Tab bar"
     ],
-    "search-bid": ["Search field", "List row", "Jersey tile", "Send bid", "Text field", "Tab bar"],
+    "search-bid": [
+      "Søg home and typeahead",
+      "Search field",
+      "Jersey tile",
+      "Foreign UserJersey detail",
+      "Button dock",
+      "Send bid",
+      "Toast",
+      "Tab bar"
+    ],
     "wishlist-paywall": ["Empty state", "Sheet", "Button", "List row", "Tab bar"]
   }
 }

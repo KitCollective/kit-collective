@@ -32,6 +32,13 @@ describe("BidCard (Revision 2026-10-10, KIT-297)", () => {
     expect(source).toMatch(/accessibilityLabel=\{card\.accessibility\.sendNewBid\}/);
   });
 
+  it("opens Send bud with the thread it was tapped in as returnTo (KIT-413)", () => {
+    const source = readFileSync(bidCardPath, "utf8");
+
+    expect(source).toContain("usePathname");
+    expect(source).toMatch(/onNavigate\(sendBidHrefReturningTo\(sendNewBidHref, pathname\)\)/);
+  });
+
   it("sets the amount in mono 28 with kr in mono 15, not bidCardAmountTypography", () => {
     const source = readFileSync(bidCardPath, "utf8");
 

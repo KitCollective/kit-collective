@@ -6,12 +6,16 @@
  *   node scripts/gate.mjs pre-review <pr> --issue KIT-n [--timeout s] [--require-scope]
  *       the gate before a reviewer exists: pnpm check:review-gate, doc references, the PR
  *       write-scope and wait-for-checks. It never reads the review matrix (the reviewer has not
- *       written it yet; ADR-0058). When the PR head holds the issue's slice flow
- *       (apps/mobile/.maestro/slices/<KEY>.yaml), the `Device flows` status is waited for with
- *       the checks (ADR-0059).
+ *       written it yet; ADR-0058). It never waits for the `Device flows` status either: the
+ *       hosted run is asked for as soon as the PR head exists and runs while the reviewer
+ *       reviews (ADR-0059, amendment of 2026-10-18).
  *   node scripts/gate.mjs review <pr> --issue KIT-n [--workpad <file>] [--timeout s] [--require-scope]
  *       the full gate, run only after the reviewer has written the matrix: everything above plus
- *       the matrix validation. Both must run from the PR's worktree (HEAD == the PR head, else exit 4).
+ *       the matrix validation. When the PR head holds the issue's slice flow
+ *       (apps/mobile/.maestro/slices/<KEY>.yaml), this gate also waits for the `Device flows`
+ *       status with the checks: a first `error` is held for its re-request, a red flow closes the
+ *       gate, and a run with no verdict closes it with `device-flows-no-verdict`.
+ *       Both must run from the PR's worktree (HEAD == the PR head, else exit 4).
  *       Mechanical steps run first and stop at the first failure; checks are awaited only when
  *       they are clean. The scope comes from the PR text (PR_TITLE/PR_BODY/PR_HEAD_REF), else from
  *       the Linear issue's `write-scope:` line; an issue scope the PR body lacks closes the gate
@@ -59,6 +63,7 @@ import {
   settleDeviceFlowsError,
   shouldLogGate,
   sliceFlowPath,
+  waitsForDeviceFlows,
 } from "./lib/gates.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -162,9 +167,13 @@ try {
       // so the mechanical steps above are subtracted from what the wait may use.
       const total = opt("--timeout") ?? "1800";
       let budget = remainingWaitSeconds(total, Date.now() - startedAt);
-      // A slice with its own Device flow is not ready for review before that flow has a verdict
-      // on this head (ADR-0059): a missing status waits, a red one closes.
-      const hasSliceFlow = await existsAtHead(sliceFlowPath(issue), view.headRefOid);
+      // A slice with its own Device flow does not land before that flow has a verdict on this
+      // head (ADR-0059). Only the full review gate waits for it: the hosted run goes on while the
+      // reviewer reviews, so the pre-review gate waits for the ordinary checks alone.
+      const hasSliceFlow = waitsForDeviceFlows(
+        sub,
+        full && (await existsAtHead(sliceFlowPath(issue), view.headRefOid)),
+      );
       const also = hasSliceFlow ? ["--also", DEVICE_FLOWS_CONTEXT] : [];
       // A first `error` is a run that is being asked for again: hold for it to start before the
       // checks are read, or the checks answer red at once and the slices burn (see the lib).

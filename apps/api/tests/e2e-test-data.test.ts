@@ -17,12 +17,13 @@ import {
   user,
   userJersey,
   userJerseyFavorite,
+  userJerseyPatch,
   userJerseyPhoto,
   wishlistEntry,
 } from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
-import { asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { createMemoryObjectStore } from "../dist/collection/object-store.js";
@@ -30,6 +31,7 @@ import { insertLocalFixtureCatalog } from "../dist/e2e/local-catalog.js";
 import {
   TEST_COLLECTOR_ID,
   TEST_DATA_CATALOG,
+  TEST_JERSEYS,
   TEST_PEER_ID,
   TEST_SECOND_PEER_HANDLE,
   TEST_SECOND_PEER_ID,
@@ -187,12 +189,49 @@ describe("device-flow test data", () => {
     expect(own.filter((row) => row.private)).toHaveLength(1);
     expect(own.filter((row) => row.biddingEnabled)).toHaveLength(0);
 
+    // The peer holds an open-for-bid jersey with size, condition, player and badge (KIT-294), and a
+    // public jersey that is not open for bid.
     const peerJerseys = await db
       .select()
       .from(userJersey)
-      .where(eq(userJersey.userId, TEST_PEER_ID));
-    expect(peerJerseys).toHaveLength(1);
-    expect(peerJerseys[0]).toMatchObject({ private: false, biddingEnabled: true });
+      .where(eq(userJersey.userId, TEST_PEER_ID))
+      .orderBy(asc(userJersey.id));
+    expect(peerJerseys.map((row) => row.id)).toEqual([TEST_JERSEYS[4]!.id, TEST_JERSEYS[5]!.id]);
+    const [openForBid, notOpenForBid] = peerJerseys;
+    expect(openForBid).toMatchObject({
+      private: false,
+      biddingEnabled: true,
+      size: TEST_JERSEYS[4]!.size,
+      condition: TEST_JERSEYS[4]!.condition,
+    });
+    expect(notOpenForBid).toMatchObject({ private: false, biddingEnabled: false });
+    const [playerLabelRow] = await db
+      .select()
+      .from(catalogLabel)
+      .where(
+        and(
+          eq(catalogLabel.entityType, "player"),
+          eq(catalogLabel.text, TEST_DATA_CATALOG.players[0]),
+        ),
+      );
+    expect(openForBid!.playerId).toBe(playerLabelRow!.entityId);
+    expect(notOpenForBid!.playerId).toBeNull();
+    const peerPatches = await db
+      .select({ userJerseyId: userJerseyPatch.userJerseyId, patchId: userJerseyPatch.patchId })
+      .from(userJerseyPatch)
+      .where(inArray(userJerseyPatch.userJerseyId, [openForBid!.id, notOpenForBid!.id]));
+    const [badgeLabelRow] = await db
+      .select()
+      .from(catalogLabel)
+      .where(
+        and(
+          eq(catalogLabel.entityType, "patch"),
+          eq(catalogLabel.text, TEST_DATA_CATALOG.badges[0]),
+        ),
+      );
+    expect(peerPatches).toEqual([
+      { userJerseyId: openForBid!.id, patchId: badgeLabelRow!.entityId },
+    ]);
 
     const photos = await db
       .select()
@@ -300,7 +339,7 @@ describe("device-flow test data", () => {
     const [peerJersey] = await db
       .select()
       .from(userJersey)
-      .where(eq(userJersey.userId, TEST_PEER_ID));
+      .where(eq(userJersey.id, TEST_JERSEYS[4]!.id));
     // The pair already has the fixture's Conversation, and a pair has one Conversation (KIT-295),
     // so the flow's Bud lands in that one.
     await db.insert(conversationMessage).values({
@@ -397,6 +436,23 @@ describe("device-flow test data", () => {
       new RegExp(TEST_DATA_CATALOG.nationalTeams[0]!),
     );
     expect(await db.select({ id: user.id }).from(user)).toHaveLength(1);
+  });
+
+  it("fails without writing when the fixture player or badge is missing from the catalog", async () => {
+    for (const [label, entityType] of [
+      [TEST_DATA_CATALOG.players[0], "player"],
+      [TEST_DATA_CATALOG.badges[0], "patch"],
+    ] as const) {
+      await resetDatabase(DATABASE_URL, migrationsFolder);
+      await insertLocalFixtureCatalog(db);
+      await db
+        .delete(catalogLabel)
+        .where(and(eq(catalogLabel.entityType, entityType), eq(catalogLabel.text, label)));
+      await expect(applyTestData({ db, objectStore, credentials: CREDENTIALS })).rejects.toThrow(
+        new RegExp(label),
+      );
+      expect(await db.select({ id: user.id }).from(user)).toHaveLength(0);
+    }
   });
 
   it("lets the test Collector sign in with the configured credentials", async () => {

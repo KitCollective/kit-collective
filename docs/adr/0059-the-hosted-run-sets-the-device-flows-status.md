@@ -34,3 +34,14 @@ The label started the run, the run set `pending` on the head at once, and when t
 Two changes follow. The job's limit is 90 minutes. And `error` is no longer a state that `request-device-flows.mjs` leaves alone: it means the run stopped before the flow finished, so the next request asks again; `failure` (a red flow) still waits for a new commit.
 
 Status: accepted; revisit after the first hosted slice run that reaches a verdict.
+
+## Amendment: Device flows run beside the review (Nicklas, 2026-10-18)
+
+Decision 3 is amended; its text above stays as written. Waiting for the hosted run in the pre-review gate held the Reviewer back for the whole run, about 13 to 14 minutes per head against about 3 for the ordinary checks. KIT-291 spent about 45 minutes in pre-review on 2026-10-18, waiting on two Device flows runs.
+
+- **`gate.mjs pre-review` waits for the ordinary checks only.** It no longer passes `--also "Device flows"` and neither settles nor folds the status. The AFK developer workflow still asks for the hosted run in the pre-review gate's own runner, right after the PR head exists, so the run goes on while the Reviewer reviews.
+- **`gate.mjs review` waits for the status** on a head that holds the slice flow, with all of the handling decision 3 and KIT-343 gave the pre-review gate: a first `error` is held for its re-request, `device-flows-no-verdict` and an exhausted `device-flows-pending` end `blocked needs-human` in `Approval` with no fix round. The workflow repeats the request in front of every slice of the review gate.
+- **A review gate closed by a red flow is an Engineer fix round**, as a red pre-review check is: the Engineer gets the failing line, fixes, pushes and asks for the run again; the new head goes through the pre-review gate and a fresh Reviewer, and the round counts toward the round cap. A green review of one head never counts for the next.
+- **The Engineer asks for the run and does not wait for it** before returning `ready` (`/implement` pre-review gate row 9).
+
+What this costs: "a Reviewer is never spawned on a head whose flow has not passed" no longer holds. A Reviewer pass can be spent on a head whose flow then turns red, the cost KIT-295 met; the Reviewer is told the status is not its to wait for or judge. No head reaches the receipt or auto-land without a green flow (ADR-0064 decision 1 is unchanged).

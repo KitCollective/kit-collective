@@ -1,4 +1,10 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(node scripts/linear.mjs comment-update:*)",
+      "Bash(node scripts/linear.mjs comment:*)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
