@@ -38,6 +38,38 @@ describe("foreign jersey detail screen chrome (KIT-290)", () => {
     expect(source).toContain("/(tabs)/search/send-bid/");
   });
 
+  it("reloads the jersey on every focus, so a sent bid shows the own bid row (KIT-291)", () => {
+    const source = screen();
+
+    expect(source).toContain("useFocusEffect");
+    expect(source).toContain("fetchPeerJersey");
+    expect(source).toContain("myPendingBid: peerJersey.myPendingBid");
+  });
+
+  it("docks the own bid row, not Send bud, and opens the thread of that Bud (KIT-291)", () => {
+    const source = screen();
+    const scrollClose = source.indexOf("</ScrollView>");
+    const row = source.indexOf("<OwnBidRow");
+
+    expect(row).toBeGreaterThan(scrollClose);
+    expect(source).toContain('dockState.kind === "own-pending"');
+    expect(source).toContain("/(tabs)/inbox/${dockState.conversationId}");
+    // The detail is a modal over the Søg tab; the Søg stack closes before the thread opens.
+    expect(source.indexOf("router.dismissAll()")).toBeGreaterThan(-1);
+    expect(source.indexOf("router.dismissAll()")).toBeLessThan(
+      source.indexOf("router.push(`/(tabs)/inbox/"),
+    );
+  });
+
+  it("shows the sent-bid Toast once from a handoff, through a host on this screen (KIT-291)", () => {
+    const source = screen();
+
+    expect(source).toContain("consumeBidSent");
+    expect(source).toContain("<Toast");
+    // Every host keeps the locked toastConfig: an error Toast routes to the last mounted host.
+    expect(source).toContain("config={{ ...toastConfig, ...bidSentToastConfig }}");
+  });
+
   it("puts the owner block last in the column, after the fact rows", () => {
     const source = screen();
 
@@ -53,6 +85,30 @@ describe("foreign jersey detail screen chrome (KIT-290)", () => {
 
   it("gives Favorit to the pager through the optional favorite prop", () => {
     expect(screen()).toContain("favorite={");
+  });
+});
+
+describe("own bid row and sent-bid Toast chrome (KIT-291)", () => {
+  it("builds the own bid row from lock tokens: fill.secondary, radius.md, 54 high, chevron", () => {
+    const source = read("src/search/own-bid-row.tsx");
+
+    expect(source).toContain("theme.fillSecondary");
+    expect(source).toContain("radius.md");
+    expect(source).toContain("ROW_HEIGHT = 54");
+    expect(source).toContain("chevron-forward");
+    expect(source).toContain("typography.mono");
+  });
+
+  it("builds the sent-bid Toast from the Toast tokens, without the danger border, icon or action", () => {
+    const source = read("src/search/bid-sent-toast.tsx");
+
+    expect(source).toContain("theme.fillSecondary");
+    expect(source).toContain("radius.md");
+    expect(source).toContain("typography.body");
+    expect(source).toContain("theme.contentPrimary");
+    expect(source).not.toContain("theme.danger");
+    expect(source).not.toContain("Ionicons");
+    expect(source).not.toContain("Prøv igen");
   });
 });
 
