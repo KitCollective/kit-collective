@@ -39,6 +39,7 @@ export default async function plugin(bb: BbPluginApi) {
     ...threads.rpc,
     inbox_list: inbox.list,
     inbox_answer: inbox.answer,
+    inbox_read: inbox.read,
     inbox_reject: inbox.reject,
   });
 

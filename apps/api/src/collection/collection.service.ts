@@ -887,12 +887,21 @@ export class CollectionService {
       throw new BadRequestException("Could not create message");
     }
 
-    await this.db
+    await this.touchConversation(this.db, conversationId);
+
+    return collectionSendMessageResponseSchema.parse({ messageId: insertedMessage.id });
+  }
+
+  // A new message or Bud bumps the Conversation and brings it back for any participant who hid it.
+  private async touchConversation(executor: Pick<Db, "update">, conversationId: string) {
+    await executor
       .update(conversation)
       .set({ updatedAt: new Date() })
       .where(eq(conversation.id, conversationId));
-
-    return collectionSendMessageResponseSchema.parse({ messageId: insertedMessage.id });
+    await executor
+      .update(conversationParticipant)
+      .set({ hiddenAt: null })
+      .where(eq(conversationParticipant.conversationId, conversationId));
   }
 
   async getConversationMessagePhotoBytes(
@@ -2268,10 +2277,7 @@ export class CollectionService {
       throw new BadRequestException("Could not create bid message");
     }
 
-    await this.db
-      .update(conversation)
-      .set({ updatedAt: new Date() })
-      .where(eq(conversation.id, conversationId));
+    await this.touchConversation(this.db, conversationId);
 
     return collectionSendBidResponseSchema.parse({
       conversationId,
