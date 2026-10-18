@@ -121,7 +121,7 @@ One bb thread titled "Max: status <date>" (its Linear calls carry `LINEAR_ACTOR=
 
 ## Live checks
 
-`staff/max/live-checks.js`, a script automation every 10 minutes ("Max: live checks") on the bb server, where Optio runs. An issue with a `live-check:` line has those checks (`scripts/lib/live-checks.mjs`) run once its PR is merged: the main checkout is fast-forwarded to `origin/development`, each check runs with `node scripts/live-check.mjs run <name>`, and Max comments the verdict lines on the issue. A failure moves the issue to Approval with `ready-for-human` and mentions Nicklas. The run itself never stops for such evidence. On 2026-10-17 KIT-359 and KIT-361 each waited for a person to reload Optio and run one command.
+`staff/max/live-checks.js`, a script automation every 10 minutes ("Max: live checks") on the bb server, where Optio runs. An issue with a `live-check:` line has those checks (`scripts/lib/live-checks.mjs`) run once its PR is merged: the main checkout is fast-forwarded to `origin/development`, each check runs with `node scripts/live-check.mjs run <name>`, and Max comments the verdict lines on the issue. A failure moves the issue to Approval with `ready-for-human` and mentions Nicklas. A check that could not reach the bb server (connection refused, reset or timed out) is run once more a minute later before it counts as a failure: on 2026-10-18 KIT-412 went back to Approval on such a line minutes after another reload of Optio. The run itself never stops for such evidence. On 2026-10-17 KIT-359 and KIT-361 each waited for a person to reload Optio and run one command.
 
 ## Not yet
 
