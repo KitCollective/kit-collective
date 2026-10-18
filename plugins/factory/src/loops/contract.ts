@@ -19,6 +19,8 @@ const loopDto = z.object({
   trigger: z.object({ kind: z.enum(["issue", "milestone-done"]), summary: z.string() }),
   /** The machines the file lets the Loop use. */
   machines: z.array(z.string()),
+  /** The workflow file's phase titles, in order: the roles it runs. Empty when the file cannot be read. */
+  roles: z.array(z.string()),
   settings: z.object({
     enabled: setting(settingSchemas.enabled),
     maxLive: setting(settingSchemas.maxLive),

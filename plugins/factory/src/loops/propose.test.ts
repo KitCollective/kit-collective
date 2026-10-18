@@ -28,6 +28,15 @@ const loop = {
   maxLive: 3,
 };
 const registry = JSON.stringify({ loops: [loop], flow: { maxRunsPerDay: 5 } });
+const workflow = `export const meta = {
+  name: "issue-run",
+  phases: [
+    { title: "Session", detail: "check" },
+    { title: "Engineer", detail: "implement" },
+    { title: "Reviewer", detail: "review" },
+  ],
+};
+`;
 const charter = "---\nname: Max\n---\n\n# Max\n\nNever merges.\n";
 
 type PullRequest =
@@ -42,6 +51,7 @@ async function load({ withCharter = true, board = true } = {}) {
   let pull: PullRequest = { outcome: "absent" };
   const files: Record<string, string> = {
     "factory.config.json": registry,
+    ".bb/workflows/issue-run.js": workflow,
     ...(withCharter ? { "staff/max.md": charter } : {}),
   };
   const host = createFakePluginHost({
@@ -117,6 +127,15 @@ const opened = {
 } as const;
 
 describe("proposing a change to a Loop", () => {
+  it("shows a Loop's roles from its workflow file, read-only", async () => {
+    const { rpc } = await load();
+    expect((await rpc("loops_list", null)).loops[0]?.roles).toEqual([
+      "Session",
+      "Engineer",
+      "Reviewer",
+    ]);
+  });
+
   it("starts a thread that opens a pull request against the lane with the text, and links it once it has", async () => {
     const { rpc, spawned, setPullRequest } = await load();
 
@@ -138,7 +157,8 @@ describe("proposing a change to a Loop", () => {
     expect(spawned[0]?.projectId).toBe("proj_1");
     const task = spawned[0]?.prompt ?? "";
     expect(task).toContain("Open one pull request that proposes a change to factory.config.json");
-    expect(task).toContain("--base main");
+    expect(task).toContain("--base development");
+    expect(task).not.toContain("--base main");
     expect(task).toContain("Make the trigger state Doing.");
     expect(task).toContain("Do not merge");
 

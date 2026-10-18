@@ -60,12 +60,14 @@ function LoopCard({
   write,
   proposals,
   propose,
+  onError,
 }: {
   loop: LoopDto;
   by: string;
   write: (key: string, value: unknown | undefined) => Promise<void>;
   proposals: ProposalDto[];
-  propose: (text: string) => Promise<void>;
+  propose: (text: string) => Promise<unknown>;
+  onError: (cause: unknown) => void;
 }) {
   const { enabled, maxLive, startsPerDay, schedule } = loop.settings;
   const [live, setLive] = useState(String(maxLive.value));
@@ -91,7 +93,13 @@ function LoopCard({
           <dt className="text-muted-foreground">Trigger</dt>
           <dd>{loop.trigger.summary}</dd>
           <dt className="text-muted-foreground">Workflow</dt>
-          <dd>{loop.workflow}, whose file sets the roles</dd>
+          <dd>{loop.workflow}</dd>
+          <dt className="text-muted-foreground">Roles</dt>
+          <dd>
+            {loop.roles.length === 0
+              ? `not readable from .bb/workflows/${loop.workflow}.js`
+              : loop.roles.join(" → ")}
+          </dd>
           <dt className="text-muted-foreground">Machines</dt>
           <dd>{loop.machines.join(", ")}</dd>
         </dl>
@@ -103,6 +111,7 @@ function LoopCard({
           by={by}
           proposals={proposals}
           onPropose={propose}
+          onError={onError}
         />
       </div>
       <SettingRow
@@ -270,14 +279,9 @@ export function Loops() {
               write={write(loop.name)}
               proposals={value.proposals.filter((proposal) => proposal.subject === loop.name)}
               propose={(text) =>
-                rpc.call("loops_propose", { loop: loop.name, text, by: by.trim() }).then(
-                  () => undefined,
-                  (cause) => {
-                    report(cause);
-                    throw cause;
-                  },
-                )
+                rpc.call("loops_propose", { loop: loop.name, text, by: by.trim() })
               }
+              onError={report}
             />
           ))}
       <Section title="Changes">

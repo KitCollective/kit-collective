@@ -64,7 +64,12 @@ const setting = <T>(file: T, value: T | undefined, override: Override | undefine
       : { by: override.by, at: iso(override.at) },
 });
 
-function loopDto(registry: Registry, loop: Loop, own: Map<string, Override> | undefined): LoopDto {
+function loopDto(
+  registry: Registry,
+  loop: Loop,
+  own: Map<string, Override> | undefined,
+  roles: string[],
+): LoopDto {
   const file = fileSettings(registry, loop);
   const values = parseOverrides(own);
   return {
@@ -72,6 +77,7 @@ function loopDto(registry: Registry, loop: Loop, own: Map<string, Override> | un
     workflow: loop.workflow,
     trigger: triggerSummary(loop),
     machines: loop.machines,
+    roles,
     settings: {
       enabled: setting(file.enabled, values.enabled, own?.get("enabled")),
       maxLive: setting(file.maxLive, values.maxLive, own?.get("maxLive")),
@@ -135,9 +141,36 @@ export function createLoops(core: Core) {
     return parsed.registry;
   }
 
+  /** The phase titles of `.bb/workflows/<workflow>.js`, which is where a Loop's roles are set. */
+  async function rolesOf(projectId: string, workflow: string): Promise<string[]> {
+    try {
+      const file = await core.bb.sdk.projects.fileContent({
+        projectId,
+        path: `.bb/workflows/${workflow}.js`,
+      });
+      const text =
+        file.contentEncoding === "base64"
+          ? Buffer.from(file.content, "base64").toString("utf8")
+          : file.content;
+      const phases = /phases:\s*\[([\s\S]*?)\n\s*\],/.exec(text)?.[1] ?? "";
+      return [...phases.matchAll(/title:\s*"([^"]+)"/g)].map((match) => match[1] ?? "");
+    } catch {
+      return [];
+    }
+  }
+
   async function list(named?: string): Promise<LoopsDto> {
     try {
       const registry = await fileRegistry(named);
+      const projectId = await project(named);
+      const workflows = [...new Set(registry.loops.map((loop) => loop.workflow))];
+      const roles = new Map(
+        await Promise.all(
+          workflows.map(
+            async (workflow) => [workflow, await rolesOf(projectId, workflow)] as const,
+          ),
+        ),
+      );
       const own = store.overrides(SUBJECT);
       const log = store.log(SUBJECT, LOG_LIMIT).map(
         (change): LoopChangeDto => ({
@@ -152,7 +185,12 @@ export function createLoops(core: Core) {
       return {
         error: null,
         loops: registry.loops.map((loop) =>
-          loopDto(registry, loop, own.get(`${SUBJECT}${loop.name}`)),
+          loopDto(
+            registry,
+            loop,
+            own.get(`${SUBJECT}${loop.name}`),
+            roles.get(loop.workflow) ?? [],
+          ),
         ),
         log,
       };

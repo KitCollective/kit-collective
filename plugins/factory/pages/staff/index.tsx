@@ -990,15 +990,8 @@ function CharterTab({ agent }: { agent: AgentDto }) {
             what={`${agent.name}'s Charter`}
             by={by}
             proposals={value.proposals}
-            onPropose={(text) =>
-              rpc.call("agent_propose", { id: agent.id, text, by: by.trim() }).then(
-                () => undefined,
-                (cause) => {
-                  report(cause);
-                  throw cause;
-                },
-              )
-            }
+            onPropose={(text) => rpc.call("agent_propose", { id: agent.id, text, by: by.trim() })}
+            onError={report}
           />
         </>
       )}

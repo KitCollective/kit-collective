@@ -8,7 +8,7 @@ import { when } from "../shared/common";
 
 const NAME_KEY = "optio.loops.by";
 
-/** The RPC has no caller identity, so the page asks who is changing a setting and remembers it. */
+/** The RPC has no caller identity, so the page asks who is proposing or changing and remembers it. */
 export function useName() {
   const [name, setName] = useState(() => globalThis.localStorage?.getItem(NAME_KEY) ?? "");
   const save = (next: string) => {
@@ -50,12 +50,15 @@ export function ProposeChange({
   by,
   proposals,
   onPropose,
+  onError,
 }: {
   /** What the change is about, for the button: "this Loop", "Max's Charter". */
   what: string;
   by: string;
   proposals: ProposalDto[];
-  onPropose: (text: string) => Promise<void>;
+  onPropose: (text: string) => Promise<unknown>;
+  /** Shows why a proposal failed; the form stays open with its text. */
+  onError: (cause: unknown) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -68,7 +71,10 @@ export function ProposeChange({
         setOpen(false);
         setSending(false);
       },
-      () => setSending(false),
+      (cause) => {
+        onError(cause);
+        setSending(false);
+      },
     );
   };
   return (

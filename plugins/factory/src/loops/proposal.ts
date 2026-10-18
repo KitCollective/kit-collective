@@ -11,6 +11,9 @@ import type { ProposalDto } from "./contract.js";
 /** The Loop registry's file in the project checkout. */
 export const REGISTRY_FILE = "factory.config.json";
 
+/** The branch a proposal's pull request targets: the integration lane, whatever branch the Board's machine runs. */
+export const PROPOSAL_BASE = "development";
+
 const KEY = "proposal:";
 const LIMIT = 20;
 
@@ -101,7 +104,7 @@ export function createProposals(core: Core) {
         heading: input.heading,
         file: input.file,
         title: input.title,
-        base: machine.branch.replace(/^origin\//, ""),
+        base: PROPOSAL_BASE,
         text,
         by: input.by,
         at,
@@ -132,18 +135,14 @@ export function createProposals(core: Core) {
 
   /** The pull request the proposal's thread opened, once it has; null while it has none. */
   async function pullRequestOf(record: ProposalRecord): Promise<ProposalDto["pr"]> {
-    try {
-      const thread = await bb.sdk.threads.get({ threadId: record.threadId });
-      if (thread.environmentId === null) return null;
-      const result = await bb.sdk.environments.pullRequest({
-        environmentId: thread.environmentId,
-      });
-      if (result.outcome !== "available") return null;
-      const { number, url, state } = result.pullRequest;
-      return { number, url, state: pullRequestState(state) };
-    } catch {
-      return null;
-    }
+    const thread = await bb.sdk.threads.get({ threadId: record.threadId }).catch(() => null);
+    if (thread === null || thread.environmentId === null) return null;
+    const result = await bb.sdk.environments
+      .pullRequest({ environmentId: thread.environmentId })
+      .catch(() => null);
+    if (result === null || result.outcome !== "available") return null;
+    const { number, url, state } = result.pullRequest;
+    return { number, url, state: pullRequestState(state) };
   }
 
   const dto = (record: ProposalRecord, pr: ProposalDto["pr"]): ProposalDto => ({
