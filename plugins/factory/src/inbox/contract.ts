@@ -23,6 +23,8 @@ const inboxCard = z.object({
   kind: z.enum(["review", "question"]),
   /** The question label the issue carries; null on a review. */
   label: z.string().nullable(),
+  /** The lettered choices (A, B, …) the ask offers, in order; empty when it offers none or on a review. */
+  choices: z.array(z.object({ letter: z.string(), text: z.string() })),
   /** What the run asked and the stage it came from; null on a review or when the workpad has none. */
   waiting: z
     .object({ ask: z.string(), stage: z.string(), asked: z.string().nullable() })
@@ -33,6 +35,9 @@ const inboxCard = z.object({
   since: z.string(),
 });
 
+/** What an action answers: why the Linear write failed, or null when it went through. */
+const settled = z.object({ error: z.string().nullable() });
+
 export const inboxContract = {
   inbox_list: {
     input: z.null(),
@@ -41,6 +46,16 @@ export const inboxContract = {
       error: z.string().nullable(),
       cards: z.array(inboxCard),
     }),
+  },
+  /** Writes `answer` as a comment, swaps the question label for the Loop's ready label and moves the issue to the Loop's state. */
+  inbox_answer: {
+    input: z.object({ identifier: z.string().min(1), answer: z.string() }),
+    output: settled,
+  },
+  /** The same for a green review, whose comment is the reason it goes back. */
+  inbox_reject: {
+    input: z.object({ identifier: z.string().min(1), comment: z.string() }),
+    output: settled,
   },
 };
 

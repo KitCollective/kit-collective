@@ -28,6 +28,33 @@ function parseWaiting(body: string): InboxCardDto["waiting"] {
   return { ask, stage: stage?.[1] ?? "", asked: stage?.[2]?.trim() || null };
 }
 
+/**
+ * The lettered choices an ask offers: `A)`, `(A)`, `A:` or `A.` markers that run A, B, … in order.
+ * Fewer than two letters is no choice, so a stray "A." in a sentence offers none.
+ */
+export function parseChoices(ask: string): InboxCardDto["choices"] {
+  const found: { letter: string; start: number; textStart: number }[] = [];
+  let from = 0;
+  for (let code = 65; code <= 90; code += 1) {
+    const letter = String.fromCharCode(code);
+    const marker = new RegExp(`(?:^|[\\s;,])(\\(${letter}\\)|${letter}[).:])(?=\\s)`, "g");
+    marker.lastIndex = from;
+    const match = marker.exec(ask);
+    if (match === null) break;
+    const start = match.index + match[0].length - match[1].length;
+    found.push({ letter, start, textStart: match.index + match[0].length });
+    from = match.index + match[0].length;
+  }
+  if (found.length < 2) return [];
+  return found.map((choice, index) => ({
+    letter: choice.letter,
+    text: ask
+      .slice(choice.textStart, found[index + 1]?.start ?? ask.length)
+      .replace(/[\s;,]*(?:\bor)?[\s;,]*$/i, "")
+      .trim(),
+  }));
+}
+
 function pullRequestOf(issue: WaitingIssue) {
   const found = issue.attachments.flatMap((attachment) => {
     const match = /\/pull\/(\d+)(?:[/?#]|$)/.exec(attachment.url);
@@ -66,11 +93,13 @@ export function buildCards(issues: WaitingIssue[], context: InboxContext): Inbox
         workpadHeading === null
           ? undefined
           : issue.comments.find((body) => body.trimStart().startsWith(workpadHeading));
+      const waiting = workpad === undefined ? null : parseWaiting(workpad);
       return {
         ...common,
         kind: "question",
         label,
-        waiting: workpad === undefined ? null : parseWaiting(workpad),
+        choices: waiting === null ? [] : parseChoices(waiting.ask),
+        waiting,
         review: null,
       };
     }
@@ -79,6 +108,7 @@ export function buildCards(issues: WaitingIssue[], context: InboxContext): Inbox
       ...common,
       kind: "review",
       label: null,
+      choices: [],
       waiting: null,
       // An untitled link carries its URL as the title, which says nothing about the change.
       review: {
