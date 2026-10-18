@@ -4,6 +4,7 @@ import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { boardContract } from "./board/contract.js";
 import { homeContract } from "./home/contract.js";
 import { inboxContract } from "./inbox/contract.js";
+import { loopsContract } from "./loops/contract.js";
 import { runsContract } from "./runs/contract.js";
 import { staffContract } from "./staff/contract.js";
 import { threadsContract } from "./threads/contract.js";
@@ -13,6 +14,7 @@ export const rpcContract = defineRpcContract({
   ...boardContract,
   ...runsContract,
   ...inboxContract,
+  ...loopsContract,
   ...homeContract,
   ...threadsContract,
 });

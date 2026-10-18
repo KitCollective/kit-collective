@@ -12,6 +12,7 @@ import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { Board } from "./pages/board";
 import { Waiting } from "./pages/home";
 import { Inbox } from "./pages/inbox";
+import { Loops } from "./pages/loops";
 import { Runs } from "./pages/runs";
 import { PANEL } from "./pages/shared/common";
 import { AgentPicker, Agents } from "./pages/staff";
@@ -43,5 +44,12 @@ export default definePluginApp((app) => {
     icon: "Bot",
     path: PANEL,
     component: AgentsPanel,
+  });
+  app.slots.navPanel({
+    id: "loops",
+    title: "Loops",
+    icon: "Repeat",
+    path: "loops",
+    component: Loops,
   });
 });
