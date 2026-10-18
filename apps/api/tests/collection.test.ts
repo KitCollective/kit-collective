@@ -2832,22 +2832,21 @@ describe("Collection /v1", () => {
     const prefix = photoPrefixFromStoredObjectKey(objectKey!);
     expect(prefix).not.toBeNull();
 
-    // The /original PUT enqueues a fire-and-forget derivative job; its last put is the lightbox.
+    // The wrapper goes in after the save's own derivatives are in place, so the only lightbox put
+    // it can see is the /original PUT's fire-and-forget derivative job (whose last put is the lightbox).
     const realPut = objectStore.putObject.bind(objectStore);
-    let armed = false;
     let derivativeJobDone!: () => void;
     const derivativeJobFinished = new Promise<void>((resolve) => {
       derivativeJobDone = resolve;
     });
     objectStore.putObject = async (key, bytes) => {
       await realPut(key, bytes);
-      if (armed && key === lightboxObjectKey(prefix!)) {
+      if (key === lightboxObjectKey(prefix!)) {
         derivativeJobDone();
       }
     };
 
     try {
-      armed = true;
       const originalUpload = await app.inject({
         method: "PUT",
         url: `/v1/collection/photos/${photoId}/original`,
