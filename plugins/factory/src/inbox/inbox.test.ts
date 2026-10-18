@@ -783,10 +783,10 @@ describe("approving from the Inbox", () => {
       expect(card).toMatchObject({ kind: "landing", landing: { phase: "approved" } });
       // The read started the landing again from the phase it had.
       await vi.waitFor(() => expect(machine.calls).toHaveLength(3));
-      expect(machine.calls.map((call) => (call.input as { step: string }).step)).toEqual([
-        "start",
-        "stop",
-        "start",
+      expect(machine.calls.map((call) => call.input)).toMatchObject([
+        { step: "start" },
+        { step: "stop" },
+        { step: "start" },
       ]);
     } finally {
       vi.unstubAllGlobals();
