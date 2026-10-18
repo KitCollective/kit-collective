@@ -28,6 +28,17 @@ export class VisionPremiumRequiredError extends Error {
   }
 }
 
+/** A non-ok Vision response; the status is what the identity log names. */
+export class VisionRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "VisionRequestError";
+    this.status = status;
+  }
+}
+
 async function throwIfPremiumRequired(response: Response): Promise<void> {
   if (response.status !== 402) {
     return;
@@ -56,7 +67,7 @@ export async function startVisionSuggest(
   await throwIfPremiumRequired(response);
 
   if (!response.ok) {
-    throw new Error("Kunne ikke starte Vision");
+    throw new VisionRequestError("Kunne ikke starte Vision", response.status);
   }
 
   const body = visionSuggestResponseSchema.parse(await response.json());
@@ -75,7 +86,7 @@ export async function fetchVisionJob(
   });
 
   if (!response.ok) {
-    throw new Error("Kunne ikke hente Vision-forslag");
+    throw new VisionRequestError("Kunne ikke hente Vision-forslag", response.status);
   }
 
   return visionJobResponseSchema.parse(await response.json());
@@ -110,7 +121,7 @@ export async function startUnsignedVisionSuggest(payload: VisionSuggestRequest):
   });
 
   if (!response.ok) {
-    throw new Error("Kunne ikke starte Vision");
+    throw new VisionRequestError("Kunne ikke starte Vision", response.status);
   }
 
   const body = visionSuggestResponseSchema.parse(await response.json());
@@ -125,7 +136,7 @@ export async function fetchUnsignedVisionJob(jobId: string): Promise<VisionJobRe
   });
 
   if (!response.ok) {
-    throw new Error("Kunne ikke hente Vision-forslag");
+    throw new VisionRequestError("Kunne ikke hente Vision-forslag", response.status);
   }
 
   return visionJobResponseSchema.parse(await response.json());
