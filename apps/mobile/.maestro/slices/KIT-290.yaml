@@ -106,8 +106,9 @@ name: kit-290
 - tapOn:
     id: foreign-jersey-owner-row
 # Peer Profil lists the owner's one jersey (OB) in a tile whose caption the detail does not have.
+# The tile is one accessible element labelled "OB, 2023/24 · Hjemme", so match the caption inside it.
 - extendedWaitUntil:
-    visible: "2023/24 · Hjemme"
+    visible: ".*2023/24 · Hjemme.*"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000
