@@ -39,7 +39,7 @@
   const issueSection = process.env.ISSUE_SECTION ?? "sec_qzij88jqc5";
   const landingStuckMinutes = Number(process.env.LANDING_STUCK_MINUTES ?? 30);
   const runStuckMinutes = Number(process.env.RUN_STUCK_MINUTES ?? 120);
-  const maxStartsPerDay = Number(process.env.MAX_STARTS_PER_DAY ?? 3);
+  const maxStartsPerDay = Number(process.env.MAX_STARTS_PER_DAY ?? 5); // factory.config.json flow.maxRunsPerDay
   const runCheckout = process.env.RUN_CHECKOUT ?? "/home/node/work/kit-collective";
   const dryRun = process.env.DRY_RUN === "1";
   const project = process.env.BB_PROJECT_ID ?? "proj_ywcvj7w835";
