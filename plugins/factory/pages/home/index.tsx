@@ -1,0 +1,74 @@
+// "Venter på dig" on bb's Home: how many cards wait in the Inbox and the newest few, each opening the
+// Inbox at its card. Read from Linear on mount and whenever Optio publishes a change; with nothing
+// waiting, and until the Inbox is set up, the section shows one quiet line.
+import { useBbNavigate, useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
+import { useCallback, useEffect, useState } from "react";
+import type { rpcContract } from "../../src/contract";
+import type { HomeDto } from "../../src/home/contract";
+import { DOT, INBOX } from "../shared/common";
+
+export function Waiting() {
+  const rpc = useRpc<typeof rpcContract>();
+  const navigate = useBbNavigate();
+  const [home, setHome] = useState<HomeDto | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const refetch = useCallback(() => {
+    rpc.call("home_waiting").then(
+      (next) => {
+        setHome(next);
+        setFailure(null);
+      },
+      (cause: unknown) => setFailure(cause instanceof Error ? cause.message : String(cause)),
+    );
+  }, [rpc]);
+  useEffect(refetch, [refetch]);
+  useRealtime("changed", refetch);
+
+  // A partial read names its error and still lists the cards it found, as the Inbox page does.
+  const problem = failure ?? home?.error ?? null;
+  const alert =
+    problem === null ? null : (
+      <p role="alert" className="text-sm text-destructive">
+        {problem}
+      </p>
+    );
+  if (home === null) {
+    return (
+      alert ?? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Reading Linear…
+        </p>
+      )
+    );
+  }
+  if (home.count === 0) {
+    return alert ?? <p className="text-sm text-muted-foreground">Nothing waits for you.</p>;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {alert}
+      <button
+        type="button"
+        className="self-start text-sm font-medium hover:underline"
+        onClick={() => navigate.toPluginPanel(INBOX, { subPath: "" })}
+      >
+        {home.count} in the Inbox
+      </button>
+      <ul className="flex flex-col gap-0.5">
+        {home.newest.map((card) => (
+          <li key={card.id}>
+            <button
+              type="button"
+              onClick={() => navigate.toPluginPanel(INBOX, { subPath: card.id })}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/50"
+            >
+              <span className={`size-2 shrink-0 rounded-full ${DOT[card.kind]}`} aria-hidden />
+              <span className="font-medium">{card.identifier}</span>
+              <span className="truncate">{card.title}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

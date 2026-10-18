@@ -19,6 +19,7 @@ import { type BbPluginApi, defineCli } from "@get-bb/plugin-sdk";
 import { createBoard } from "./src/board/index.js";
 import { rpcContract } from "./src/contract.js";
 import { createCore } from "./src/core.js";
+import { createHome } from "./src/home/index.js";
 import { createInbox } from "./src/inbox/index.js";
 import { createReviewerProxy } from "./src/reviewer-proxy/index.js";
 import { createRuns } from "./src/runs/index.js";
@@ -31,6 +32,7 @@ export default async function plugin(bb: BbPluginApi) {
   const board = createBoard(core);
   const runs = createRuns(core);
   const inbox = createInbox(core);
+  const home = createHome({ inbox });
   const threads = createThreads(core);
   const reviewerProxy = createReviewerProxy({
     bb: core.bb,
@@ -43,6 +45,7 @@ export default async function plugin(bb: BbPluginApi) {
     ...board.rpc,
     ...runs.rpc,
     ...threads.rpc,
+    ...home.rpc,
     inbox_list: inbox.list,
     inbox_answer: inbox.answer,
     inbox_read: inbox.read,
