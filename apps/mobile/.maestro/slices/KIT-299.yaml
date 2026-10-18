@@ -56,11 +56,14 @@ name: kit-299
 - tapOn:
     id: conversation-more-report
 - extendedWaitUntil:
+    visible: "Samtalen er rapporteret"
+    timeout: 15000
+- takeScreenshot: kc__kit-299__02-reported-toast
+- extendedWaitUntil:
     visible:
       id: conversation-header
     timeout: 15000
 - runFlow: ../subflows/settle.yaml
-- takeScreenshot: kc__kit-299__02-reported-toast
 # AC 5: Blokér opens a Sheet confirm; Annuller blocks nothing.
 - tapOn:
     id: conversation-more
@@ -72,17 +75,16 @@ name: kit-299
     id: conversation-more-block
 - extendedWaitUntil:
     visible:
-      id: conversation-confirm-sheet
+      id: conversation-confirm-submit
     timeout: 15000
 - runFlow: ../subflows/settle.yaml
 - takeScreenshot: kc__kit-299__03-block-confirm
-- tapOn:
-    id: conversation-confirm-keep
+- tapOn: "Annuller"
 - extendedWaitUntil:
     visible:
       id: conversation-header
     timeout: 15000
-# AC 2: the profile row opens Peer Profil (it has no testID of its own; e2e_peer's OB jersey on it is the wait, by its copy; the tile has no testID there).
+# AC 2: the profile row opens Peer Profil. Peer Profil has no testID, so the flow waits for e2e_peer's OB jersey copy.
 - tapOn:
     id: conversation-more
 - extendedWaitUntil:
@@ -122,7 +124,7 @@ name: kit-299
     id: conversation-more-delete
 - extendedWaitUntil:
     visible:
-      id: conversation-confirm-sheet
+      id: conversation-confirm-submit
     timeout: 15000
 - runFlow: ../subflows/settle.yaml
 - takeScreenshot: kc__kit-299__05-delete-confirm

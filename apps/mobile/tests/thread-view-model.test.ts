@@ -292,7 +292,6 @@ describe("conversationMore (Conversation → More Sheet)", () => {
 
   it("builds the profile row: initial, Handle, city · n trøjer · Se profil, Peer Profil href", () => {
     expect(conversationMore(peer).profile).toEqual({
-      initial: "M",
       handle: PEER,
       meta: "København · 3 trøjer · Se profil",
       href: `/(tabs)/search/peer/${PEER}`,
@@ -318,39 +317,28 @@ describe("conversationMore (Conversation → More Sheet)", () => {
     expect(rows.delete.title).toBe("Slet samtale");
   });
 
-  it("says in words that Slet samtale deletes, so colour is not the only signal", () => {
-    expect(conversationMore(peer).rows.delete.accessibilityLabel).toBe(
-      "Slet samtale, fjerner samtalen kun for dig",
-    );
-  });
-
   it("explains blocking and deleting in the caption", () => {
     expect(conversationMore(peer).caption).toBe(
       "Blokering skjuler samtalen for jer begge. Slet samtale fjerner den kun for dig — den anden kan stadig se tråden.",
     );
   });
 
-  it("asks before Blokér and before Slet samtale, each with a consequence and a way out", () => {
+  it("asks before Blokér and before Slet samtale, each with a consequence", () => {
     const { confirm } = conversationMore(peer);
 
     expect(confirm.block).toEqual({
       title: `Blokér ${PEER}?`,
       consequence: `Samtalen med ${PEER} skjules for jer begge.`,
       confirmLabel: "Blokér",
-      keepLabel: "Annuller",
     });
     expect(confirm.delete).toEqual({
       title: "Slet samtalen?",
       consequence: `Samtalen fjernes kun for dig. ${PEER} kan stadig se tråden.`,
       confirmLabel: "Slet samtale",
-      keepLabel: "Annuller",
     });
   });
 
-  it("words the Rapportér Toast and the failure Banner", () => {
-    const more = conversationMore(peer);
-
-    expect(more.reportedToast).toBe("Samtalen er rapporteret");
-    expect(more.failureBanner).toBe("Noget gik galt. Prøv igen.");
+  it("words the Rapportér Toast", () => {
+    expect(conversationMore(peer).reportedToast).toBe("Samtalen er rapporteret");
   });
 });

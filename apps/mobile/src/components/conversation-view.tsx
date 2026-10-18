@@ -26,12 +26,13 @@ import {
   sendConversationMessage,
 } from "@/api/conversations";
 import { useAuth } from "@/auth/AuthProvider";
+import { ConfirmSheet } from "@/components/account-ui";
 import { BidCard } from "@/components/bid-card";
 import { Banner } from "@/components/catalog-ui";
 import { ChatBubble } from "@/components/chat-bubble";
 import { MessageComposer } from "@/components/message-composer";
 import { IconButton } from "@/components/ui";
-import { ConversationConfirmSheet, ConversationMoreSheet } from "@/inbox/conversation-more-sheets";
+import { ConversationMoreSheet } from "@/inbox/conversation-more-sheets";
 import {
   CONVERSATION_MORE_FAILURE,
   conversationMore,
@@ -45,7 +46,7 @@ import { useTheme } from "@/theme/use-theme";
 type ConversationViewProps = {
   conversationId: string;
   onBack: () => void;
-  /** Deprecated and ignored: More is a Sheet over the thread now, it no longer routes. The wide Indbakke (KIT-296) still passes it. */
+  /** @deprecated Ignored: More is a Sheet over the thread now, it no longer routes. The wide Indbakke (KIT-296) still passes it. */
   onOpenDetails?: () => void;
   onConversationOpened?: () => void;
   /** After Blokér or Slet samtale ran; the Collector goes back to Indbakke. Defaults to `onBack`. */
@@ -447,10 +448,13 @@ export function ConversationView({
             onBlock={() => chooseMoreAction("block")}
             onDelete={() => chooseMoreAction("delete")}
           />
-          <ConversationConfirmSheet
+          <ConfirmSheet
             visible={confirmOpen}
-            copy={more.confirm[confirmKind]}
+            title={more.confirm[confirmKind].title}
+            consequence={more.confirm[confirmKind].consequence}
+            confirmLabel={more.confirm[confirmKind].confirmLabel}
             loading={confirming}
+            confirmTestID="conversation-confirm-submit"
             onConfirm={() => void runConfirmed()}
             onDismiss={() => setConfirmOpen(false)}
           />

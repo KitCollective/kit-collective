@@ -49,7 +49,20 @@ describe("Conversation More Sheet replaces Detaljer (KIT-299)", () => {
     expect(sheets).toMatch(/ListPeerStubRow/);
     expect(sheets).toMatch(/ListNavigateRow/);
     expect(sheets).toMatch(/<ListDangerRow[\s\S]*conversation-more-delete/);
-    expect(sheets).toMatch(/variant="destructive"/);
-    expect(sheets).toMatch(/variant="tertiary"/);
+    // Hairline between Rapportér and Blokér, as the lock's List row asks.
+    expect(sheets).toMatch(
+      /conversation-more-report[\s\S]*<ProfileRowDivider \/>[\s\S]*conversation-more-block/,
+    );
+    // Not announced by colour alone: the row reads "Slet samtale" and carries a trash icon.
+    expect(sheets).toMatch(/icon="trash-outline"/);
+  });
+
+  it("confirms through the locked ConfirmSheet, not a copy of it", () => {
+    const view = readFileSync(conversationViewPath, "utf8");
+    const sheets = readFileSync(moreSheetsPath, "utf8");
+
+    expect(view).toMatch(/import \{ ConfirmSheet \} from "@\/components\/account-ui"/);
+    expect(view).toMatch(/<ConfirmSheet[\s\S]*more\.confirm\[confirmKind\]/);
+    expect(sheets).not.toMatch(/variant="destructive"/);
   });
 });

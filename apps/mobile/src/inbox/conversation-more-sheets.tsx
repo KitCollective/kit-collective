@@ -4,10 +4,10 @@ import {
   ListDangerRow,
   ListNavigateRow,
   ListPeerStubRow,
+  ProfileRowDivider,
   ProfileSurfaceGroup,
 } from "@/components/profile-ui";
-import { Button } from "@/components/ui";
-import type { ConversationConfirmCopy, ConversationMore } from "@/inbox/thread-view-model";
+import type { ConversationMore } from "@/inbox/thread-view-model";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -55,15 +55,13 @@ export function ConversationMoreSheet({
             />
           </ProfileSurfaceGroup>
         </View>
-        {/* One group per row: the navigate row has no hairline to divide two rows in one group. */}
         <ProfileSurfaceGroup>
           <ListNavigateRow
             title={more.rows.report.title}
             onPress={onReport}
             testID="conversation-more-report"
           />
-        </ProfileSurfaceGroup>
-        <ProfileSurfaceGroup>
+          <ProfileRowDivider />
           <ListNavigateRow
             title={more.rows.block.title}
             onPress={onBlock}
@@ -84,57 +82,8 @@ export function ConversationMoreSheet({
   );
 }
 
-type ConversationConfirmSheetProps = {
-  visible: boolean;
-  copy: ConversationConfirmCopy;
-  loading: boolean;
-  onConfirm: () => void;
-  onDismiss: () => void;
-};
-
-/** Blokér / Slet samtale `confirm`: title, consequence, `destructive` action and a quiet way out. */
-export function ConversationConfirmSheet({
-  visible,
-  copy,
-  loading,
-  onConfirm,
-  onDismiss,
-}: ConversationConfirmSheetProps) {
-  const theme = useTheme();
-  const typography = useTypography();
-
-  return (
-    <Sheet visible={visible} title={copy.title} onDismiss={onDismiss}>
-      <View style={styles.body} testID="conversation-confirm-sheet">
-        <Text style={[typography.body, { color: theme.contentSecondary }]}>{copy.consequence}</Text>
-        <View style={styles.actions}>
-          <Button
-            label={copy.confirmLabel}
-            variant="destructive"
-            width="fill"
-            loading={loading}
-            onPress={onConfirm}
-            testID="conversation-confirm-submit"
-          />
-          <Button
-            label={copy.keepLabel}
-            variant="tertiary"
-            width="fill"
-            disabled={loading}
-            onPress={onDismiss}
-            testID="conversation-confirm-keep"
-          />
-        </View>
-      </View>
-    </Sheet>
-  );
-}
-
 const styles = StyleSheet.create({
   body: {
     gap: space.gapLg,
-  },
-  actions: {
-    gap: space.gapSm,
   },
 });

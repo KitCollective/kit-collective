@@ -205,25 +205,22 @@ export type ConversationConfirmCopy = {
   title: string;
   consequence: string;
   confirmLabel: string;
-  keepLabel: string;
 };
 
 export type ConversationMore = {
-  profile: { initial: string; handle: string; meta: string; href: string };
+  profile: { handle: string; meta: string; href: string };
   rows: {
     report: { title: string };
     block: { title: string };
-    delete: { title: string; accessibilityLabel: string };
+    delete: { title: string };
   };
   caption: string;
   confirm: { block: ConversationConfirmCopy; delete: ConversationConfirmCopy };
   reportedToast: string;
-  failureBanner: string;
 };
 
 const MORE_CAPTION =
   "Blokering skjuler samtalen for jer begge. Slet samtale fjerner den kun for dig — den anden kan stadig se tråden.";
-const MORE_KEEP_LABEL = "Annuller";
 
 /** Banner text when Rapportér, Blokér, Slet samtale or loading the peer fails. */
 export const CONVERSATION_MORE_FAILURE = "Noget gik galt. Prøv igen.";
@@ -242,7 +239,6 @@ export function conversationMore(peer: CollectionConversationPeer): Conversation
   const { handle } = peer;
   return {
     profile: {
-      initial: headerInitial(handle),
       handle,
       meta: peerProfileMeta(peer),
       href: `/(tabs)/search/peer/${handle}`,
@@ -250,10 +246,7 @@ export function conversationMore(peer: CollectionConversationPeer): Conversation
     rows: {
       report: { title: "Rapportér" },
       block: { title: `Blokér ${handle}` },
-      delete: {
-        title: "Slet samtale",
-        accessibilityLabel: "Slet samtale, fjerner samtalen kun for dig",
-      },
+      delete: { title: "Slet samtale" },
     },
     caption: MORE_CAPTION,
     confirm: {
@@ -261,16 +254,13 @@ export function conversationMore(peer: CollectionConversationPeer): Conversation
         title: `Blokér ${handle}?`,
         consequence: `Samtalen med ${handle} skjules for jer begge.`,
         confirmLabel: "Blokér",
-        keepLabel: MORE_KEEP_LABEL,
       },
       delete: {
         title: "Slet samtalen?",
         consequence: `Samtalen fjernes kun for dig. ${handle} kan stadig se tråden.`,
         confirmLabel: "Slet samtale",
-        keepLabel: MORE_KEEP_LABEL,
       },
     },
     reportedToast: "Samtalen er rapporteret",
-    failureBanner: CONVERSATION_MORE_FAILURE,
   };
 }
