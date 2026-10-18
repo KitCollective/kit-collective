@@ -21,8 +21,9 @@
 # that the tab badge counts unread Conversations (apps/api/tests/conversations.test.ts); every
 # row's text, unread state and accessible name (apps/mobile/src/inbox/inbox-view-model.test.ts).
 # Not reachable on a phone simulator: the wide layout with the list beside the open thread
-# (criterion 11, width >= 1024). The thread opens at the newest message, not scrolled to the
-# Bud: that belongs to the Conversation issues (KIT-297 to KIT-299).
+# (criterion 11, width >= 1024). That a waiting row opens the thread scrolled to its Bud
+# (criterion 3) is proved by threadItemIndex in apps/mobile/tests/thread-view-model.test.ts; the
+# fixture threads are short, so on screen the Bud is visible either way.
 #
 # Taps are by testID (inbox-row-<message id or conversation id>, inbox-empty-*), except the
 # native tab bar (by label), the thread's Detaljer rows and the system alert (by copy).
@@ -64,7 +65,7 @@ name: kit-296
 - assertVisible: "e2e_peer, Bud på 250 kr · Afventer dit svar, [^,]*, ulæst"
 - runFlow: ../subflows/settle.yaml
 - takeScreenshot: kc__kit-296__02-samtaler-rows-with-bud-sentence-and-unread-dot
-# AC 3: a waiting row opens the thread with that collector.
+# AC 3: a waiting row opens the thread at that Bud (the route carries its message id).
 - tapOn:
     id: inbox-row-e2e00000-0000-4000-8000-000000000505
 - extendedWaitUntil:
