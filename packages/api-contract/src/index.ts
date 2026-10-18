@@ -210,12 +210,8 @@ export {
   catalogStatsSchema,
 } from "./catalog/stats.js";
 export {
-  type CollectionActivity,
-  type CollectionActivityItem,
   type CollectionRespondBidRequest,
   type CollectionRespondBidResponse,
-  collectionActivityItemSchema,
-  collectionActivitySchema,
   collectionRespondBidRequestSchema,
   collectionRespondBidResponseSchema,
 } from "./collection/activity.js";
@@ -281,9 +277,13 @@ export {
 } from "./collection/conversation-moderation.js";
 export {
   type CollectionConversation,
+  type CollectionConversationLatest,
   type CollectionConversations,
+  type CollectionWaitingBid,
+  collectionConversationLatestSchema,
   collectionConversationSchema,
   collectionConversationsSchema,
+  collectionWaitingBidSchema,
 } from "./collection/conversations.js";
 export {
   type CollectionAddFavoriteRequest,

@@ -75,17 +75,11 @@ export class CollectionController {
 
   @Get("collection/conversations")
   @UseGuards(JwtAuthGuard)
-  listConversations(@CurrentUser() user: JwtPayload) {
-    return this.collectionService.listConversations(user.sub);
-  }
-
-  @Get("collection/activity")
-  @UseGuards(JwtAuthGuard)
-  listActivity(
+  listConversations(
     @CurrentUser() user: JwtPayload,
     @Headers("accept-language") acceptLanguage?: string,
   ) {
-    return this.collectionService.listActivity(user.sub, resolveLocale(acceptLanguage));
+    return this.collectionService.listConversations(user.sub, resolveLocale(acceptLanguage));
   }
 
   @Get("collection/conversations/:conversationId")

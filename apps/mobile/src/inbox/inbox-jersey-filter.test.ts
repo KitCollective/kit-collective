@@ -1,4 +1,4 @@
-import type { CollectionActivityItem, CollectionConversation } from "@kit/api-contract";
+import type { CollectionConversation, CollectionWaitingBid } from "@kit/api-contract";
 import { describe, expect, it } from "vitest";
 import { filterInboxByJersey } from "@/inbox/inbox-jersey-filter";
 
@@ -14,81 +14,79 @@ function conversation(id: string): CollectionConversation {
     id,
     peerHandle: `peer-${id.slice(-2)}`,
     peerInitial: "P",
-    snippet: "Hej",
+    peerAvatarUrl: null,
+    latest: { kind: "text", text: "Hej" },
     updatedAt: "2026-10-01T10:00:00.000Z",
     unread: false,
   };
 }
 
-function activity(
-  id: string,
+function bid(
+  messageId: string,
   conversationId: string,
   userJerseyId: string | null,
-  kitLine: string,
-): CollectionActivityItem {
+  clubLabel: string,
+  seasonLabel: string,
+): CollectionWaitingBid {
   return {
-    id,
+    messageId,
     conversationId,
     userJerseyId,
-    title: "Bud på trøjen",
-    kitLine,
+    bidderHandle: "peer",
     amountDkk: 400,
-    status: "pending",
-    fromHandle: "peer",
-    unread: false,
-    updatedAt: "2026-10-01T10:00:00.000Z",
+    createdAt: "2026-10-01T10:00:00.000Z",
+    jersey: { clubLabel, seasonLabel, type: "Hjemme" },
+    thumbUrl: null,
   };
 }
 
 describe("filterInboxByJersey", () => {
-  const conversations = [conversation(C1), conversation(C2), conversation(C3)];
-  const items = [
-    activity("00000000-0000-4000-8000-0000000000d1", C1, JERSEY_A, "FC København 2023/24"),
-    activity("00000000-0000-4000-8000-0000000000d2", C2, JERSEY_A, "FC København 2023/24"),
-    activity("00000000-0000-4000-8000-0000000000d3", C3, JERSEY_B, "AGF 2022/23"),
-    activity("00000000-0000-4000-8000-0000000000d4", C3, null, "Slettet trøje"),
-  ];
+  const response = {
+    conversations: [conversation(C1), conversation(C2), conversation(C3)],
+    waiting: [
+      bid("00000000-0000-4000-8000-0000000000d1", C1, JERSEY_A, "FC København", "2023/24"),
+      bid("00000000-0000-4000-8000-0000000000d2", C2, JERSEY_A, "FC København", "2023/24"),
+      bid("00000000-0000-4000-8000-0000000000d3", C3, JERSEY_B, "AGF", "2022/23"),
+      bid("00000000-0000-4000-8000-0000000000d4", C3, null, "Slettet", "2020/21"),
+    ],
+  };
 
   it("passes everything through when no jersey is set", () => {
-    const result = filterInboxByJersey(conversations, items, null);
-    expect(result.conversations).toBe(conversations);
-    expect(result.activityItems).toBe(items);
+    const result = filterInboxByJersey(response, null);
+    expect(result.conversations).toBe(response.conversations);
+    expect(result.waiting).toBe(response.waiting);
     expect(result.kitLine).toBeNull();
   });
 
   it("treats undefined and an empty id like no filter", () => {
-    expect(filterInboxByJersey(conversations, items, undefined).activityItems).toBe(items);
-    expect(filterInboxByJersey(conversations, items, "").activityItems).toBe(items);
+    expect(filterInboxByJersey(response, undefined).waiting).toBe(response.waiting);
+    expect(filterInboxByJersey(response, "").waiting).toBe(response.waiting);
   });
 
-  it("keeps only the activity items of the jersey", () => {
-    const result = filterInboxByJersey(conversations, items, JERSEY_A);
-    expect(result.activityItems.map((item) => item.conversationId)).toEqual([C1, C2]);
+  it("keeps only the waiting Buds of the jersey", () => {
+    const result = filterInboxByJersey(response, JERSEY_A);
+    expect(result.waiting.map((item) => item.conversationId)).toEqual([C1, C2]);
   });
 
-  it("keeps only the conversations that appear among the filtered activity items", () => {
-    const result = filterInboxByJersey(conversations, items, JERSEY_A);
+  it("keeps only the Conversations that hold a waiting Bud on the jersey", () => {
+    const result = filterInboxByJersey(response, JERSEY_A);
     expect(result.conversations.map((item) => item.id)).toEqual([C1, C2]);
   });
 
-  it("does not match through an item of another jersey or a deleted one", () => {
-    const result = filterInboxByJersey(conversations, items, JERSEY_B);
+  it("does not match through a Bud on another jersey or a deleted one", () => {
+    const result = filterInboxByJersey(response, JERSEY_B);
     expect(result.conversations.map((item) => item.id)).toEqual([C3]);
-    expect(result.activityItems).toHaveLength(1);
+    expect(result.waiting).toHaveLength(1);
   });
 
-  it("reads the kit line from the first matching activity item", () => {
-    expect(filterInboxByJersey(conversations, items, JERSEY_B).kitLine).toBe("AGF 2022/23");
+  it("reads the kit line (club and season) from the first matching Bud", () => {
+    expect(filterInboxByJersey(response, JERSEY_B).kitLine).toBe("AGF 2022/23");
   });
 
   it("returns empty lists and no kit line when nothing matches", () => {
-    const result = filterInboxByJersey(
-      conversations,
-      items,
-      "00000000-0000-4000-8000-0000000000ff",
-    );
+    const result = filterInboxByJersey(response, "00000000-0000-4000-8000-0000000000ff");
     expect(result.conversations).toEqual([]);
-    expect(result.activityItems).toEqual([]);
+    expect(result.waiting).toEqual([]);
     expect(result.kitLine).toBeNull();
   });
 });

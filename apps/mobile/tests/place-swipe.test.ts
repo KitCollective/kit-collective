@@ -148,13 +148,15 @@ describe("place overview cache", () => {
 
   it("hydrates a later read from the written snapshot", () => {
     writePlaceOverview("inbox", {
+      waiting: [],
       conversations: [],
-      activityItems: [],
+      unreadCount: 0,
     });
 
     expect(readPlaceOverview("inbox")).toEqual({
+      waiting: [],
       conversations: [],
-      activityItems: [],
+      unreadCount: 0,
     });
   });
 

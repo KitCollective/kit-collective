@@ -1091,7 +1091,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Anatomy**: Title (`body` / `label`). Kit line (`mono`: club · season · type). Amount (`mono` 20px) in the **card body**, never over a jersey photo. Status (`mono`, `content.muted`: e.g. Afventer). Source handle. Trailing chevron (tap affordance). Optional jersey thumb is not required this gap — flag if a host adds one.
 
-**Properties**: `title`, `kitLine`, `amount`, `status`, `fromHandle`, `unread`, `onPress`.
+**Properties**: `title`, `kitLine`, `amount`, `status`, `unread`, `onPress`.
 
 **Variants**: None. Event kind is copy, not a color variant.
 

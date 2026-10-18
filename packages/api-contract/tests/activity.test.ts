@@ -1,49 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  collectionActivityItemSchema,
-  collectionActivitySchema,
   collectionRespondBidRequestSchema,
   collectionRespondBidResponseSchema,
 } from "../src/collection/activity.js";
-
-describe("collectionActivitySchema", () => {
-  it("accepts a bid activity projection item", () => {
-    const item = {
-      id: "00000000-0000-0000-0000-000000000001",
-      conversationId: "00000000-0000-0000-0000-000000000002",
-      userJerseyId: "00000000-0000-0000-0000-000000000003",
-      title: "Nyt bud på din trøje",
-      kitLine: "F.C. København · 2024/25 · Hjemme",
-      amountDkk: 500,
-      status: "pending" as const,
-      fromHandle: "mikkel_fck",
-      unread: true,
-      updatedAt: "2026-08-30T12:00:00.000Z",
-    };
-
-    expect(collectionActivityItemSchema.parse(item)).toEqual(item);
-    expect(collectionActivitySchema.parse({ items: [item] })).toEqual({ items: [item] });
-  });
-
-  it("allows a null jersey id once the UserJersey is deleted and requires the field", () => {
-    const item = {
-      id: "00000000-0000-0000-0000-000000000001",
-      conversationId: "00000000-0000-0000-0000-000000000002",
-      userJerseyId: null,
-      title: "Bud afvist",
-      kitLine: "F.C. København · 2024/25 · Hjemme",
-      amountDkk: 500,
-      status: "declined" as const,
-      fromHandle: "mikkel_fck",
-      unread: false,
-      updatedAt: "2026-08-30T12:00:00.000Z",
-    };
-
-    expect(collectionActivityItemSchema.parse(item).userJerseyId).toBeNull();
-    const { userJerseyId: _omitted, ...withoutJerseyId } = item;
-    expect(collectionActivityItemSchema.safeParse(withoutJerseyId).success).toBe(false);
-  });
-});
 
 describe("collectionRespondBidRequestSchema", () => {
   it("accepts accept or decline", () => {
