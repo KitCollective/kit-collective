@@ -92,8 +92,9 @@ const MODELS = {
   // The Reviewer on GLM 5.3 through Optio's proxy (ADR-0067): what the run log records for it. The
   // agent() call names a catalog carrier, because `bb workflows validate` only accepts catalog models.
   glm: "z-ai/glm-5.3",
-  // The catalog model the GLM reviewer's agent() call names; Optio's proxy never sends it on.
-  glmCarrier: "claude-haiku-4-5-20251001",
+  // The catalog model the GLM reviewer's agent() call names; Optio's proxy never sends it on. Haiku
+  // 4.5 has no auto mode, so its reviewer asked a person before each command (KIT-425, 2026-10-18).
+  glmCarrier: "claude-haiku-5-5",
 };
 /** Spawns a high-reasoning worker on the aliased model: one literal agent() call per alias. */
 function spawn(alias, prompt, label, phaseTitle, schema) {
@@ -109,7 +110,7 @@ function spawn(alias, prompt, label, phaseTitle, schema) {
   if (alias === "glm") {
     // Carrier: Optio's proxy sends this thread's calls as GLM 5.3 (the title ends in :openrouter), and
     // `bb optio reviewer-served` must confirm it before the review counts as green.
-    return agent(prompt, { label: `${label}:openrouter`, phase: phaseTitle, schema, provider: "claude-code", model: "claude-haiku-4-5-20251001", reasoningLevel: "low" });
+    return agent(prompt, { label: `${label}:openrouter`, phase: phaseTitle, schema, provider: "claude-code", model: "claude-haiku-5-5", reasoningLevel: "low" });
   }
   throw new Error(`afk-developer has no model for alias ${alias}`);
 }
