@@ -30,7 +30,7 @@ async function load() {
     },
   });
   await plugin(host.bb);
-  return host.harness.behavior;
+  return { ...host.harness.behavior, cli: host.harness.behavior.runCli };
 }
 
 const context = (threadId: string) => ({ threadId, projectId: "p", hostId: "h" });
@@ -85,7 +85,45 @@ describe("the reviewer proxy (ADR-0067)", () => {
     });
   });
 
-  it("refuses a forged token, a token for a thread it does not proxy, and a Claude model id", async () => {
+  it("sends a carrier (a Claude catalog id) as GLM 5.3 and records the thread as served", async () => {
+    const upstream = vi.fn(
+      async (_url: string, _init: RequestInit) =>
+        new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", upstream);
+    const behavior = await load();
+    const before = await behavior.cli(["reviewer-served", "--thread", "thr_review1"]);
+    expect(before.exitCode).toBe(1);
+    expect(before.stdout).toMatch(/^NOT SERVED thr_review1/);
+    const token = await tokenFor(behavior, "thr_review1");
+    for (let i = 0; i < 2; i += 1) {
+      await behavior.fetchHttp("POST", "/reviewer/v1/messages", {
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", messages: [] }),
+      });
+    }
+    const [, init] = upstream.mock.calls[0] ?? [];
+    expect(JSON.parse(String(init?.body)).model).toBe("z-ai/glm-5.3");
+    const after = await behavior.cli(["reviewer-served", "--thread", "thr_review1"]);
+    expect(after.exitCode).toBe(0);
+    expect(after.stdout).toBe("SERVED thr_review1 as z-ai/glm-5.3 (2 calls)");
+  });
+
+  it("does not count a failed upstream call as served", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 404 })),
+    );
+    const behavior = await load();
+    const token = await tokenFor(behavior, "thr_review1");
+    await behavior.fetchHttp("POST", "/reviewer/v1/messages", {
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", messages: [] }),
+    });
+    expect((await behavior.cli(["reviewer-served", "--thread", "thr_review1"])).exitCode).toBe(1);
+  });
+
+  it("refuses a forged token and a token for a thread it does not proxy", async () => {
     const upstream = vi.fn();
     vi.stubGlobal("fetch", upstream);
     const behavior = await load();
@@ -96,8 +134,6 @@ describe("the reviewer proxy (ADR-0067)", () => {
       });
     expect((await call(`thr_review1.${"0".repeat(40)}`)).status).toBe(401);
     expect((await call("thr_claude1.abc")).status).toBe(401);
-    const token = await tokenFor(behavior, "thr_review1");
-    expect((await call(token, "claude-opus-5-5")).status).toBe(400);
     expect(upstream).not.toHaveBeenCalled();
   });
 });

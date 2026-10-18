@@ -1,14 +1,17 @@
-// A reviewer on another vendor's model (ADR-0067). A workflow can spawn a Claude Code reviewer whose
-// thread title ends in `:openrouter` and whose model is an OpenRouter model id (`vendor/model`). For
-// that thread only, Optio points Claude Code at its own route below, which forwards each Anthropic
-// Messages call to OpenRouter with the key from the server's key file. The key never reaches the
-// thread: the thread gets a per-thread token, checked here. Any other thread is left alone.
+// A reviewer on another vendor's model (ADR-0067). A workflow spawns a Claude Code reviewer whose
+// thread title ends in `:openrouter`. For that thread only, Optio points Claude Code at its own route
+// below, which forwards each Anthropic Messages call to OpenRouter with the key from the server's key
+// file. The key never reaches the thread: the thread gets a per-thread token, checked here. Any other
+// thread is left alone.
 //
-// It fails closed: if this env is not applied, Claude Code sends the OpenRouter model id to
-// Anthropic, which refuses it, so a reviewer never runs on a model nobody chose.
+// `bb workflows validate` only accepts a model from Claude Code's catalog, so the workflow names a
+// catalog model as a carrier and the route sends OpenRouter's model instead (an OpenRouter id in the
+// request is forwarded as it is). Every thread the route serves is recorded, and
+// `bb optio reviewer-served --thread <id>` answers whether it was: a review the proxy never served ran
+// on the carrier, and the workflow does not count it as green.
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import type { BbPluginApi } from "@get-bb/plugin-sdk";
+import { type BbPluginApi, cliCommand } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
 /** The thread titles that take the proxy. */
@@ -16,9 +19,12 @@ export const PROXIED_TITLE = /^reviewer:.+:openrouter$/;
 /** An OpenRouter model id: `vendor/model`, never a Claude id. */
 const OPENROUTER_MODEL = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i;
 const UPSTREAM = "https://openrouter.ai/api/v1/messages";
+/** The OpenRouter model a carrier request is sent as. Hard-coded until Operating settings choose it. */
+export const REVIEWER_MODEL = "z-ai/glm-5.3";
+const servedKey = (threadId: string) => `reviewerServed:${threadId}`;
 const ROUTE = "/reviewer/v1/messages";
 /** The part of an Anthropic Messages body the proxy reads; the rest is forwarded as it came. */
-const messagesBody = z.object({ model: z.string().regex(OPENROUTER_MODEL) }).passthrough();
+const messagesBody = z.object({ model: z.string().min(1) }).passthrough();
 const SECRET_KEY = "reviewerProxySecret";
 /** Where the route is mounted for the host (`/api/v1/plugins/<id>/http/...`). */
 const mountedAt = (pluginId: string) => `/api/v1/plugins/${pluginId}/http/reviewer`;
@@ -125,7 +131,7 @@ export function createReviewerProxy(deps: ReviewerProxyDeps) {
               type: "error",
               error: {
                 type: "invalid_request_error",
-                message: "the model must be an OpenRouter model id (vendor/model)",
+                message: "expected an Anthropic Messages body with a model",
               },
             },
             400,
@@ -146,6 +152,8 @@ export function createReviewerProxy(deps: ReviewerProxyDeps) {
             503,
           );
         }
+        // A carrier (a Claude id) goes out as the reviewer model; an OpenRouter id goes out as it is.
+        const model = OPENROUTER_MODEL.test(parsed.data.model) ? parsed.data.model : REVIEWER_MODEL;
         // No endpoint that may train on the code.
         const upstream = await forward(UPSTREAM, {
           method: "POST",
@@ -155,9 +163,19 @@ export function createReviewerProxy(deps: ReviewerProxyDeps) {
             "anthropic-version": c.req.header("anthropic-version") ?? "2023-06-01",
             "x-title": "Optio reviewer",
           },
-          body: JSON.stringify({ ...parsed.data, provider: { data_collection: "deny" } }),
+          body: JSON.stringify({ ...parsed.data, model, provider: { data_collection: "deny" } }),
         });
-        deps.bb.log.info(`reviewer proxy: ${threadId} ${parsed.data.model} -> ${upstream.status}`);
+        deps.bb.log.info(
+          `reviewer proxy: ${threadId} ${parsed.data.model} as ${model} -> ${upstream.status}`,
+        );
+        if (upstream.ok) {
+          const before = await deps.bb.storage.kv.get<{ calls?: number }>(servedKey(threadId));
+          await deps.bb.storage.kv.set(servedKey(threadId), {
+            model,
+            calls: (typeof before?.calls === "number" ? before.calls : 0) + 1,
+            at: new Date().toISOString(),
+          });
+        }
         return new Response(upstream.body, {
           status: upstream.status,
           headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
@@ -167,5 +185,35 @@ export function createReviewerProxy(deps: ReviewerProxyDeps) {
     );
   }
 
-  return { register, env, verify };
+  /** Whether the route served a thread, and as which model. */
+  async function served(threadId: string): Promise<{ model: string; calls: number } | null> {
+    const record = await deps.bb.storage.kv.get<{ model?: unknown; calls?: unknown }>(
+      servedKey(threadId),
+    );
+    return record && typeof record.model === "string" && typeof record.calls === "number"
+      ? { model: record.model, calls: record.calls }
+      : null;
+  }
+
+  const command = cliCommand({
+    summary: "Say whether the reviewer proxy served a thread, and as which model",
+    description:
+      "Exit 0 with SERVED when the proxy forwarded at least one call of the thread to OpenRouter; exit 1 with NOT SERVED otherwise. The AFK developer workflow asks before it counts a proxied review as green.",
+    options: { thread: { type: "string", description: "The reviewer thread id" } },
+    async run({ options }) {
+      const threadId = typeof options.thread === "string" ? options.thread : "";
+      if (!/^thr_[a-z0-9]+$/.test(threadId)) {
+        return { exitCode: 2, stdout: "usage: bb optio reviewer-served --thread thr_x" };
+      }
+      const record = await served(threadId);
+      return record === null
+        ? {
+            exitCode: 1,
+            stdout: `NOT SERVED ${threadId}: the proxy forwarded no call of this thread`,
+          }
+        : { exitCode: 0, stdout: `SERVED ${threadId} as ${record.model} (${record.calls} calls)` };
+    },
+  });
+
+  return { register, env, verify, served, cli: { "reviewer-served": command } };
 }

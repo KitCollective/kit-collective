@@ -84,6 +84,11 @@ const MODELS = {
   sonnet: "claude-sonnet-5-5",
   fable: "claude-fable-5-1",
   haiku: "claude-haiku-5-5",
+  // The Reviewer on GLM 5.3 through Optio's proxy (ADR-0067): what the run log records for it. The
+  // agent() call names a catalog carrier, because `bb workflows validate` only accepts catalog models.
+  glm: "z-ai/glm-5.3",
+  // The catalog model the GLM reviewer's agent() call names; Optio's proxy never sends it on.
+  glmCarrier: "claude-haiku-4-5-20251001",
 };
 /** Spawns a high-reasoning worker on the aliased model: one literal agent() call per alias. */
 function spawn(alias, prompt, label, phaseTitle, schema) {
@@ -96,14 +101,17 @@ function spawn(alias, prompt, label, phaseTitle, schema) {
   if (alias === "sonnet") {
     return agent(prompt, { label, phase: phaseTitle, schema, provider: "claude-code", model: "claude-sonnet-5-5", reasoningLevel: "high" });
   }
+  if (alias === "glm") {
+    // Carrier: Optio's proxy sends this thread's calls as GLM 5.3 (the title ends in :openrouter), and
+    // `bb optio reviewer-served` must confirm it before the review counts as green.
+    return agent(prompt, { label: `${label}:openrouter`, phase: phaseTitle, schema, provider: "claude-code", model: "claude-haiku-4-5-20251001", reasoningLevel: "low" });
+  }
   throw new Error(`afk-developer has no model for alias ${alias}`);
 }
 // The Reviewer never runs on the Engineer's model (audit-receipt --require-different-model).
-// GLM 5.3 reviews every Engineer: never the Engineer's model or vendor (ADR-0067).
-// GLM 5.3 through Optio's proxy (ADR-0067) is off until its model passes `bb workflows validate`, which
-// checks a literal model against the provider's catalog on the machine (2026-10-18: "Model mismatch for
-// literal workflow selection claude-code/z-ai/glm-5.3/high" stopped every run). Back to Opus, Fable for an Opus Engineer.
-const reviewerAlias = (engineerAlias) => (engineerAlias === "opus" ? "fable" : "opus");
+// GLM 5.3 reviews every Engineer: never the Engineer's model or vendor (ADR-0067). The literal is a
+// catalog carrier, since `bb workflows validate` refused an OpenRouter id (2026-10-18).
+const reviewerAlias = () => "glm";
 
 // The only Linear states this workflow may write. Merging, Post-Merge and Done are a human's
 // (or /land's) to set, so they are not in the list and `move` throws on them.
@@ -884,9 +892,16 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.
   const receiptCmd = `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread}${engineerThread ? ` --implementer-thread ${engineerThread}` : ""} --require-different-model --dry-run`;
   // `auto-land.mjs enabled` rides in the same runner (it only reads the config and the kill file), so the default path spends no extra runner.
-  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd, "node scripts/auto-land.mjs enabled"], true, true);
+  // A proxied review counts only when Optio's proxy served its thread: otherwise it ran on the carrier.
+  const proxied = rAlias === "glm";
+  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd, "node scripts/auto-land.mjs enabled", ...(proxied ? [`bb optio reviewer-served --thread ${rThread}`] : [])], true, true);
   const enabledAnswer = dry[1];
+  const servedAnswer = dry[2];
   dry = dry.slice(0, 1);
+  if (proxied && (!servedAnswer || servedAnswer.runner || servedAnswer.code !== 0 || !/^SERVED /.test(servedAnswer.line ?? ""))) {
+    await sh("log:receipt", "Review gate", [logCmd("reason", `--issue ${issue} --code evidence-gap`)], true);
+    return stopped("receipt", "In Review", { prNumber, rounds, verdict: "green", receipt: servedAnswer?.line ?? "no answer from reviewer-served", note: `the reviewer proxy did not serve ${rThread}, so the review ran on the carrier model: ${servedAnswer?.line ?? "no answer"}` });
+  }
   // A Reviewer that returned its verdict through the result tool can end on another sentence, and
   // the receipt reads only the thread's last text (KIT-283 and KIT-286, 2026-10-14). The Reviewer
   // is asked once for the line, as bb-orchestrate allows, and the receipt is tried again. The message

@@ -69,7 +69,9 @@ async function run({
           custom ??
           (command.includes("start-decision.mjs")
             ? { code: 0, line: JSON.stringify(decision) }
-            : { code: 0, line: "OPEN: fine" });
+            : command.startsWith("bb optio reviewer-served")
+              ? { code: 0, line: "SERVED thr_rev as z-ai/glm-5.3 (3 calls)" }
+              : { code: 0, line: "OPEN: fine" });
         // A `shell` answer with its own `exit` plays a runner that did not relay the printed marker.
         results.push({ exit: result.exit ?? `KIT-EXIT:${result.code}`, line: result.line });
         if (result.code !== 0 && !prompt.includes("Run every command even when one fails.")) break;
@@ -223,10 +225,8 @@ test("the Reviewer runs on another model than the Engineer, and both spawns are 
     new RegExp(`--thread ${ENGINEER_THREAD} .*--provider claude-code --model claude-sonnet-5-5`),
   );
   const spawnReviewer = commands.find((c) => c.includes("spawn") && c.includes("--step reviewer"));
-  assert.match(
-    spawnReviewer,
-    new RegExp(`--thread ${REVIEWER_THREAD} .*--model ${reviewer.options.model}`),
-  );
+  // The proxied Reviewer is logged as the model that ran (GLM 5.3), not the carrier it names (ADR-0067).
+  assert.match(spawnReviewer, new RegExp(`--thread ${REVIEWER_THREAD} .*--model z-ai/glm-5.3`));
   assert.match(
     commands.find((c) => c.includes("audit-receipt.mjs")),
     new RegExp(`--thread ${REVIEWER_THREAD} --implementer-thread ${ENGINEER_THREAD}`),
@@ -1234,7 +1234,7 @@ test("a resume whose head is ready goes straight to the Reviewer: no Engineer, a
   assert.equal(result.prNumber, 55);
   assert.equal(result.rounds, 0);
   const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:"));
-  assert.equal(reviewer.options.label, "reviewer:KIT-9:r0");
+  assert.equal(reviewer.options.label, "reviewer:KIT-9:r0:openrouter");
   assert.equal(commands.filter((c) => c.includes('state KIT-9 "In Progress"')).length, 1);
   assert.ok(commands.some((c) => c.includes("--code engineer-skipped")));
   assert.equal(
@@ -1760,14 +1760,35 @@ test("the Reviewer marks each finding gating or nit and says what green looks li
   assert.match(reviewer.prompt, /what green looks like/);
 });
 
-test("the Reviewer is Opus for a Sonnet Engineer and Fable once an Engineer round ran Opus", async () => {
+test("the Reviewer is GLM 5.3 through Optio's proxy on a catalog carrier, for every Engineer (ADR-0067)", async () => {
   const sonnet = await run();
   const r1 = agentSpawns(sonnet.spawns).find((s) => s.options.label.startsWith("reviewer:"));
-  assert.equal(r1.options.label, "reviewer:KIT-9:r1");
-  assert.equal(r1.options.model, "claude-opus-5-5");
+  assert.equal(r1.options.label, "reviewer:KIT-9:r1:openrouter");
+  assert.equal(r1.options.model, "claude-haiku-4-5-20251001");
+  assert.equal(r1.options.reasoningLevel, "low");
+  assert.ok(
+    sonnet.commands.some((c) =>
+      /--step reviewer .*--provider claude-code --model z-ai\/glm-5.3/.test(c),
+    ),
+  );
+  assert.ok(sonnet.commands.some((c) => /^bb optio reviewer-served --thread thr_/.test(c)));
   const opus = await run({ startDecision: { engineerModel: "opus" } });
   const r2 = agentSpawns(opus.spawns).find((s) => s.options.label.startsWith("reviewer:"));
-  assert.equal(r2.options.model, "claude-fable-5-1");
+  assert.equal(r2.options.model, "claude-haiku-4-5-20251001");
+});
+
+test("a green review the proxy never served ran on the carrier: it holds In Review and is not green", async () => {
+  const { result, commands } = await run({
+    shell: (c) =>
+      c.startsWith("bb optio reviewer-served")
+        ? { code: 1, line: "NOT SERVED thr_rev: the proxy forwarded no call of this thread" }
+        : undefined,
+  });
+  assert.equal(result.status, "In Review");
+  assert.equal(result.stoppedAt, "receipt");
+  assert.match(result.note, /did not serve/);
+  assert.ok(commands.some((c) => c.includes("--code evidence-gap")));
+  assert.ok(!commands.some((c) => c.includes("auto-land.mjs start")));
 });
 
 test("every agent() call names provider, model and reasoningLevel together, as bb workflows validate demands (2026-10-18)", () => {

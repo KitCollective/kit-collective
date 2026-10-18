@@ -32,10 +32,11 @@ export default async function plugin(bb: BbPluginApi) {
   const runs = createRuns(core);
   const inbox = createInbox(core);
   const threads = createThreads(core);
-  createReviewerProxy({
+  const reviewerProxy = createReviewerProxy({
     bb: core.bb,
     keyFile: async () => (await core.settings.get()).linearApiKeyFile,
-  }).register();
+  });
+  reviewerProxy.register();
 
   bb.rpc.register(rpcContract, {
     ...staff.rpc,
@@ -52,7 +53,7 @@ export default async function plugin(bb: BbPluginApi) {
     defineCli({
       name: "optio",
       summary: "Standing agents: their brief and memory, their runs, and the orchestrator's board",
-      commands: { ...staff.cli, ...board.cli, inbox: inbox.command },
+      commands: { ...staff.cli, ...board.cli, inbox: inbox.command, ...reviewerProxy.cli },
     }),
   );
 }
