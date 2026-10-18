@@ -69,7 +69,9 @@ async function run({
           custom ??
           (command.includes("start-decision.mjs")
             ? { code: 0, line: JSON.stringify(decision) }
-            : { code: 0, line: "OPEN: fine" });
+            : command.startsWith("bb optio reviewer-served")
+              ? { code: 0, line: "SERVED thr_rev as z-ai/glm-5.3 (3 calls)" }
+              : { code: 0, line: "OPEN: fine" });
         // A `shell` answer with its own `exit` plays a runner that did not relay the printed marker.
         results.push({ exit: result.exit ?? `KIT-EXIT:${result.code}`, line: result.line });
         if (result.code !== 0 && !prompt.includes("Run every command even when one fails.")) break;
@@ -223,10 +225,8 @@ test("the Reviewer runs on another model than the Engineer, and both spawns are 
     new RegExp(`--thread ${ENGINEER_THREAD} .*--provider claude-code --model claude-sonnet-5-5`),
   );
   const spawnReviewer = commands.find((c) => c.includes("spawn") && c.includes("--step reviewer"));
-  assert.match(
-    spawnReviewer,
-    new RegExp(`--thread ${REVIEWER_THREAD} .*--model ${reviewer.options.model}`),
-  );
+  // The proxied Reviewer is logged as the model that ran (GLM 5.3), not the carrier it names (ADR-0067).
+  assert.match(spawnReviewer, new RegExp(`--thread ${REVIEWER_THREAD} .*--model z-ai/glm-5.3`));
   assert.match(
     commands.find((c) => c.includes("audit-receipt.mjs")),
     new RegExp(`--thread ${REVIEWER_THREAD} --implementer-thread ${ENGINEER_THREAD}`),
@@ -345,7 +345,10 @@ test("a red review loops once to a fix pass, logs the red audit, and stops at th
     sentence: "AC 2 is not met",
     threadId: REVIEWER_THREAD,
   };
-  const { result, commands, spawns } = await run({ reviewer: () => red });
+  const { result, commands, spawns } = await run({
+    args: { issue: "KIT-9", maxRounds: 2 },
+    reviewer: () => red,
+  });
   // Out of rounds a person acts: Approval + ready-for-human, and the status says what Linear shows.
   assert.equal(result.status, "Approval");
   assert.equal(result.stoppedAt, "review gate");
@@ -377,7 +380,8 @@ test("a red review with only light findings at the cap gets one extra round, and
     light: true,
   };
   // Light red three times: rounds 1 and 2, then the one extra round, then a person.
-  const capped = await run({ reviewer: () => light });
+  const two = { issue: "KIT-9", maxRounds: 2 };
+  const capped = await run({ args: two, reviewer: () => light });
   assert.equal(capped.result.status, "Approval");
   assert.equal(capped.result.rounds, 3);
   assert.equal(capped.commands.filter((c) => c.includes("--code light-extra-round")).length, 1);
@@ -387,13 +391,14 @@ test("a red review with only light findings at the cap gets one extra round, and
   );
   // Light red at the cap, then green: the extra round reaches Approval through the normal green path.
   const fixed = await run({
+    args: two,
     reviewer: (n) =>
       n <= 2 ? light : { verdict: "green", sha: SHA, sentence: "ok", threadId: REVIEWER_THREAD },
   });
   assert.equal(fixed.result.rounds, 3);
   assert.ok(fixed.commands.some((c) => c.includes("audit-receipt")));
   // A red that is not light at the cap gets no extra round.
-  const heavy = await run({ reviewer: () => ({ ...light, light: false }) });
+  const heavy = await run({ args: two, reviewer: () => ({ ...light, light: false }) });
   assert.equal(heavy.result.rounds, 2);
   assert.ok(!heavy.commands.some((c) => c.includes("light-extra-round")));
 });
@@ -1214,11 +1219,12 @@ test("autoLand must be a boolean in the input schema, and never changes how the 
   });
   for (const spawn of agentSpawns(spawns)) {
     assert.equal(spawn.options.provider, "claude-code");
+    // The Reviewer runs on an OpenRouter model through Optio's proxy (ADR-0067); everyone else on Claude.
     assert.match(spawn.options.model, /^claude-/);
   }
 });
 
-test("a resume whose head is ready goes straight to the Reviewer: no Engineer, no In Progress (KIT-295)", async () => {
+test("a resume whose head is ready goes straight to the Reviewer: no Engineer, and In Progress rides with the resume point (KIT-295, ADR-0066)", async () => {
   const { result, commands, spawns } = await run({
     args: { issue: "KIT-9", resume: true },
     shell: resumeShell(0),
@@ -1228,8 +1234,8 @@ test("a resume whose head is ready goes straight to the Reviewer: no Engineer, n
   assert.equal(result.prNumber, 55);
   assert.equal(result.rounds, 0);
   const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:"));
-  assert.equal(reviewer.options.label, "reviewer:KIT-9:r0");
-  assert.ok(!commands.some((c) => c.includes('state KIT-9 "In Progress"')));
+  assert.equal(reviewer.options.label, "reviewer:KIT-9:r0:openrouter");
+  assert.equal(commands.filter((c) => c.includes('state KIT-9 "In Progress"')).length, 1);
   assert.ok(commands.some((c) => c.includes("--code engineer-skipped")));
   assert.equal(
     commands.filter(isPre).length,
@@ -1673,4 +1679,127 @@ test("a failing titles command does not stop the start, and a failing start step
     shell: (c) => (c.includes("start-decision") ? { code: 4, line: "nope" } : undefined),
   });
   assert.equal(stop.result.stoppedAt, "start");
+});
+
+test("five rounds by default, and from the third the Lead replans before the Engineer (ADR-0066)", async () => {
+  const red = {
+    verdict: "red",
+    sha: SHA,
+    rows: ["spec-ac"],
+    sentence: "AC 2 is not met",
+    threadId: REVIEWER_THREAD,
+  };
+  const { result, spawns, commands } = await run({ reviewer: () => red });
+  assert.equal(result.status, "Approval");
+  assert.equal(result.rounds, 5);
+  const labels = agentSpawns(spawns).map((s) => s.options.label);
+  assert.equal(labels.filter((l) => l.startsWith("engineer:")).length, 5);
+  // Two replans at most in a run: before rounds 3 and 4.
+  assert.equal(labels.filter((l) => l === "lead:KIT-9:replan").length, 2);
+  assert.ok(labels.indexOf("lead:KIT-9:replan") < labels.indexOf("engineer:KIT-9:r3"));
+  assert.equal(commands.filter((c) => c.includes("--mode replan")).length, 2);
+  const replan = agentSpawns(spawns).find((s) => s.options.label === "lead:KIT-9:replan");
+  assert.match(replan.prompt, /mode replan/);
+  assert.match(replan.prompt, /AC 2 is not met/);
+});
+
+test("an Engineer stop the Lead can settle is settled inside the run, never Approval (ADR-0066)", async () => {
+  const { result, spawns, commands } = await run({
+    engineer: (n) =>
+      n === 1
+        ? {
+            outcome: "blocked",
+            sentence: "needs-human: the overview needs a file outside the write-scope",
+            threadId: ENGINEER_THREAD,
+          }
+        : { outcome: "ready", sentence: "done", threadId: ENGINEER_THREAD, prNumber: 77 },
+  });
+  const labels = agentSpawns(spawns).map((s) => s.options.label);
+  assert.ok(labels.includes("lead:KIT-9:replan"));
+  assert.equal(labels.filter((l) => l.startsWith("engineer:")).length, 2);
+  const second = agentSpawns(spawns).filter((s) => s.options.label.startsWith("engineer:"))[1];
+  assert.match(second.prompt, /The Lead settled your stop/);
+  assert.notEqual(result.stoppedAt, "engineer");
+  assert.ok(
+    !commands.some((c) => c.includes("swap ready-for-agent ready-for-human")) ||
+      result.status === "Approval",
+  );
+});
+
+test("a Human call from the Lead goes to Approval; a blocked-by stop goes to Blocked without a replan", async () => {
+  const human = await run({
+    engineer: () => ({
+      outcome: "blocked",
+      sentence: "needs-human: AC 3 conflicts with the design lock",
+      threadId: ENGINEER_THREAD,
+    }),
+    lead: {
+      outcome: "stop",
+      sentence: "AC 3 conflicts with the design lock: which wins?",
+      threadId: "thr_lead0001",
+    },
+  });
+  assert.equal(human.result.status, "Approval");
+  assert.equal(human.result.stoppedAt, "lead");
+  assert.match(human.result.note, /Human call/);
+  const blockedBy = await run({
+    engineer: () => ({
+      outcome: "blocked",
+      sentence: "blocked-by KIT-12: the API lands there",
+      threadId: ENGINEER_THREAD,
+    }),
+  });
+  assert.ok(!agentSpawns(blockedBy.spawns).some((s) => s.options.label === "lead:KIT-9:replan"));
+  assert.equal(blockedBy.result.status, "Blocked");
+});
+
+test("the Reviewer marks each finding gating or nit and says what green looks like (ADR-0066)", async () => {
+  const { spawns } = await run();
+  const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:"));
+  assert.match(reviewer.prompt, /`gating` or `nit`/);
+  assert.match(reviewer.prompt, /what green looks like/);
+});
+
+test("the Reviewer is GLM 5.3 through Optio's proxy on a catalog carrier, for every Engineer (ADR-0067)", async () => {
+  const sonnet = await run();
+  const r1 = agentSpawns(sonnet.spawns).find((s) => s.options.label.startsWith("reviewer:"));
+  assert.equal(r1.options.label, "reviewer:KIT-9:r1:openrouter");
+  assert.equal(r1.options.model, "claude-haiku-4-5-20251001");
+  assert.equal(r1.options.reasoningLevel, "low");
+  assert.ok(
+    sonnet.commands.some((c) =>
+      /--step reviewer .*--provider claude-code --model z-ai\/glm-5.3/.test(c),
+    ),
+  );
+  assert.ok(sonnet.commands.some((c) => /^bb optio reviewer-served --thread thr_/.test(c)));
+  const opus = await run({ startDecision: { engineerModel: "opus" } });
+  const r2 = agentSpawns(opus.spawns).find((s) => s.options.label.startsWith("reviewer:"));
+  assert.equal(r2.options.model, "claude-haiku-4-5-20251001");
+});
+
+test("a green review the proxy never served ran on the carrier: it holds In Review and is not green", async () => {
+  const { result, commands } = await run({
+    shell: (c) =>
+      c.startsWith("bb optio reviewer-served")
+        ? { code: 1, line: "NOT SERVED thr_rev: the proxy forwarded no call of this thread" }
+        : undefined,
+  });
+  assert.equal(result.status, "In Review");
+  assert.equal(result.stoppedAt, "receipt");
+  assert.match(result.note, /did not serve/);
+  assert.ok(commands.some((c) => c.includes("--code evidence-gap")));
+  assert.ok(!commands.some((c) => c.includes("auto-land.mjs start")));
+});
+
+test("every agent() call names provider, model and reasoningLevel together, as bb workflows validate demands (2026-10-18)", () => {
+  // The GLM reviewer shipped without reasoningLevel and validate refused the whole workflow for an hour.
+  // Each call runs from its `agent(` to the next one; the options sit inside that stretch.
+  const calls = SOURCE.split(/\bagent\(/)
+    .slice(1)
+    .filter((call) => /provider:\s*"/.test(call.split(/\bagent\(/)[0]));
+  assert.ok(calls.length >= 4, `found ${calls.length} agent() calls with a provider`);
+  for (const call of calls.map((c) => c.slice(0, c.search(/provider:\s*"/) + 400))) {
+    assert.match(call, /model:/, call);
+    assert.match(call, /reasoningLevel:/, call);
+  }
 });

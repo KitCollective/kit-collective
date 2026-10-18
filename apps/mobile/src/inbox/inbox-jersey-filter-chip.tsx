@@ -5,7 +5,7 @@ import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 type InboxJerseyFilterChipProps = {
-  /** The jersey's kit line (club and season); null while the activity has not loaded. */
+  /** The jersey's kit line (club and season); null while the Indbakke has not loaded. */
   kitLine: string | null;
   onClear: () => void;
 };

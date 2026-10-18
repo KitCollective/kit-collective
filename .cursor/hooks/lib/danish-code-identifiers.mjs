@@ -13,6 +13,7 @@ export const DANISH_IDENTIFIER_STEMS = [
   "moerktilstand",
   "brugernavn",
   "komigang",
+  "indbakke",
   "tilfoej",
   "tilføj",
   "fortsaet",

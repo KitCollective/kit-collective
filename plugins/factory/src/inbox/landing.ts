@@ -82,6 +82,8 @@ export function outcomeOf(
 /** A landing record as its own card, for an issue that is not in the Inbox state: no Inbox action. */
 export function landingCard(record: LandingRecord, verdict: string | null): InboxCardDto {
   return {
+    // The issue's own id, as on its review card: an open card stays open once it is approved.
+    id: record.identifier,
     identifier: record.identifier,
     title: record.title,
     url: record.url,
@@ -91,6 +93,8 @@ export function landingCard(record: LandingRecord, verdict: string | null): Inbo
     choices: [],
     waiting: null,
     review: { verdict, change: record.change },
+    mention: null,
+    alarm: null,
     since: record.approvedAt,
     landing: { phase: record.phase, line: record.line, at: record.at },
   };

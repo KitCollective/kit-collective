@@ -6,10 +6,11 @@ import { CHANGED } from "../contract.js";
 import type { Core } from "../core.js";
 import { GATE_CALL_TIMEOUT_MS, LAND_HOST_TIMEOUT_MS } from "../host-contract.js";
 import { parseRegistry } from "../loop-registry.js";
-import { buildCards, pullRequestOf } from "./cards.js";
+import { alarmCards, buildCards, mentionCards, pullRequestOf, withNotices } from "./cards.js";
 import { type InboxCardDto, type InboxConfig, inboxConfig } from "./contract.js";
 import { createLandings, landingCard } from "./landing.js";
 import { approveIssue, fetchWaiting, settleIssue } from "./linear.js";
+import { fetchAlarmThread, fetchMentions, markMentionRead } from "./notices.js";
 
 const CONFIG_KEY = "inbox";
 
@@ -38,12 +39,15 @@ function describe(cards: InboxCardDto[]): string {
     ...cards.map((card) => {
       const pull = card.pullRequest === null ? "" : ` PR #${card.pullRequest.number}`;
       const landing = card.landing === null ? "" : ` [landing ${card.landing.phase}]`;
-      const detail =
-        card.kind === "question"
-          ? `${card.label ?? "question"}: ${card.waiting?.ask ?? "no question in the workpad"}`
-          : card.kind === "landing"
-            ? `approved: ${card.landing?.line ?? "not started yet"}`
-            : `review: ${card.review?.verdict ?? "no verdict recorded"}`;
+      const detail = {
+        question: () =>
+          `${card.label ?? "question"}: ${card.waiting?.ask ?? "no question in the workpad"}`,
+        review: () => `review: ${card.review?.verdict ?? "no verdict recorded"}`,
+        mention: () =>
+          `mention by ${card.mention?.author ?? "someone"}: ${card.mention?.comment ?? ""}`,
+        alarm: () => `alarm: ${card.alarm?.problems.join("; ") || "no problem listed"}`,
+        landing: () => `approved: ${card.landing?.line ?? "not started yet"}`,
+      }[card.kind]();
       return `${card.identifier}${pull} ${card.title} (${detail})${landing}`;
     }),
   ].join("\n");
@@ -106,36 +110,68 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     deps.gateRuns.latestReview(identifier, 0)?.verdictLine ?? null;
 
   /**
-   * The cards, read from Linear now, and the landings approved here. A landing whose issue is in the
-   * Inbox state rides on that issue's card, which keeps its own actions. A landing still on its way
-   * shows as a card of its own (kind `landing`, no Inbox action), and a done one shows once. A stopped
-   * landing whose issue is not in the Inbox state any more was taken up elsewhere, so it is dropped. A
-   * landing without a driver (after a plugin reload, or a failed slice) gets one again.
+   * The cards, read from Linear now, and the landings approved here. The waiting issues, the mentions
+   * and the alarms are three reads: one that fails is named in `error` and the others still show.
+   *
+   * A landing whose issue is in the Inbox state rides on that issue's card, which keeps its own
+   * actions. A landing still on its way shows as a card of its own (kind `landing`, no Inbox action),
+   * and a done one shows once. A stopped landing whose issue is not in the Inbox state any more was
+   * taken up elsewhere, so it is dropped. A landing without a driver (after a plugin reload, or a
+   * failed slice) gets one again. When the waiting issues cannot be read, the landings are shown and
+   * driven but none is dropped, since nothing says where their issues are.
    */
   async function list() {
     try {
       const { setting, registry, teamKey } = await resolve();
-      const issues = await fetchWaiting(await deps.linearApiKey(), teamKey, setting.state);
-      const cards = buildCards(issues, {
-        config: setting,
-        workpadHeading: registry.workpadHeading,
-        verdictOf,
-      });
+      const key = await deps.linearApiKey();
+      const [waiting, mentions, alarm] = await Promise.allSettled([
+        fetchWaiting(key, teamKey, setting.state),
+        fetchMentions(key),
+        setting.alarmIssue === undefined
+          ? Promise.resolve(null)
+          : fetchAlarmThread(key, setting.alarmIssue),
+      ]);
+      const errors: string[] = [];
+      const failed = (what: string, outcome: PromiseSettledResult<unknown>) => {
+        if (outcome.status === "rejected") {
+          const reason: unknown = outcome.reason;
+          errors.push(`${what}: ${reason instanceof Error ? reason.message : String(reason)}`);
+        }
+      };
+      failed("waiting issues", waiting);
+      failed("mentions", mentions);
+      failed("alarms", alarm);
+      const issueCards =
+        waiting.status === "fulfilled"
+          ? buildCards(waiting.value, {
+              config: setting,
+              workpadHeading: registry.workpadHeading,
+              verdictOf,
+            })
+          : [];
       const records = await landings.all();
       landings.resume(records);
       const own: InboxCardDto[] = [];
       for (const record of records) {
-        const card = cards.find((one) => one.identifier === record.identifier);
+        const card = issueCards.find((one) => one.identifier === record.identifier);
         if (card !== undefined) {
           card.landing = { phase: record.phase, line: record.line, at: record.at };
         } else if (record.phase !== "stopped") {
           own.push(landingCard(record, verdictOf(record.identifier)));
         }
-        const over = record.phase === "done" || (record.phase === "stopped" && card === undefined);
+        const over =
+          record.phase === "done" ||
+          (record.phase === "stopped" && card === undefined && waiting.status === "fulfilled");
         if (over) await landings.remove(record.identifier);
       }
-      own.sort((a, b) => Date.parse(a.since) - Date.parse(b.since));
-      return { error: null, cards: [...own, ...cards] };
+      const notices = [
+        ...(mentions.status === "fulfilled" ? mentionCards(mentions.value) : []),
+        ...(alarm.status === "fulfilled" && alarm.value !== null ? alarmCards(alarm.value) : []),
+      ];
+      return {
+        error: errors.length === 0 ? null : errors.join("; "),
+        cards: withNotices(issueCards, [...own, ...notices]),
+      };
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error), cards: [] };
     }
@@ -169,6 +205,20 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
       });
       // The issue is handed back, so a landing that stopped on it is over.
       await landings.remove(identifier);
+      deps.bb.realtime.publish(CHANGED, {}); // open pages read again
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /** Handling a mention (opening it or dismissing it) marks its notification read in Linear. */
+  async function read({ notificationId }: { notificationId: string }) {
+    try {
+      if ((await config()) === null) {
+        throw new Error(`the Inbox is not set up: run \`${SETUP}\` (docs/agents/optio.md)`);
+      }
+      await markMentionRead(await deps.linearApiKey(), notificationId);
       deps.bb.realtime.publish(CHANGED, {}); // open pages read again
       return { error: null };
     } catch (error) {
@@ -230,8 +280,9 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
   }
 
   const command = cliCommand({
-    summary: "List what waits for a person in the Inbox: reviews first, then questions",
-    description: `With --state and --labels it sets where the Inbox looks instead: the state issues wait in, and the labels that mark a question. --project names the bb project whose factory.config.json gives the Linear team; without it the Board's project is used. --approve-to, --land-host and --land-checkout set what Approve does: the merge-permission state, and the runs machine and the main checkout the landing script runs in; given alone they change only those. --off switches the Inbox off.`,
+    summary:
+      "List what waits for a person in the Inbox: landings, reviews, then questions, mentions and alarms",
+    description: `With --state and --labels it sets where the Inbox looks instead: the state issues wait in, and the labels that mark a question. --project names the bb project whose factory.config.json gives the Linear team; without it the Board's project is used. --alarm-issue names the issue the watchdog comments on; without it there are no alarm cards. --approve-to, --land-host and --land-checkout set what Approve does: the merge-permission state, and the runs machine and the main checkout the landing script runs in; given alone they change only those. --off switches the Inbox off.`,
     options: {
       json: { type: "boolean", description: "Emit machine-readable JSON" },
       state: { type: "string", description: "Set the state issues wait in" },
@@ -239,6 +290,10 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
       project: {
         type: "string",
         description: "Set the bb project to read factory.config.json from",
+      },
+      "alarm-issue": {
+        type: "string",
+        description: "Set the issue whose watchdog alarm comments show as cards",
       },
       off: { type: "boolean", description: "Switch the Inbox off" },
       "approve-to": {
@@ -291,6 +346,9 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
                   state: options.state,
                   questionLabels: options.labels?.split(",").map((label) => label.trim()),
                   ...(options.project === undefined ? {} : { projectId: options.project }),
+                  ...(options["alarm-issue"] === undefined
+                    ? {}
+                    : { alarmIssue: options["alarm-issue"] }),
                   ...(approveTo === undefined ? {} : { approveTo }),
                   ...(landHost === undefined ? {} : { landHost }),
                   ...(landCheckout === undefined ? {} : { landCheckout }),
@@ -299,7 +357,7 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
           });
           if (!parsed.success) {
             throw new PluginCliError(
-              "--state, --project, --approve-to, --land-host and every label must be non-empty, and --land-checkout an absolute path",
+              "--state, --project, --alarm-issue, --approve-to, --land-host and every label must be non-empty, and --land-checkout an absolute path",
               { code: "invalid_config" },
             );
           }
@@ -319,5 +377,5 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     },
   });
 
-  return { list, answer, reject, approve, command };
+  return { list, answer, reject, read, approve, command };
 }

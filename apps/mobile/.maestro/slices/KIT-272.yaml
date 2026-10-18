@@ -144,22 +144,12 @@ name: kit-272
 - tapOn:
     text: Fotos
     optional: true
-- waitForAnimationToEnd:
-    timeout: 8000
-# iOS sometimes shows a "Private access to photos" banner that pushes the grid down.
-# Close it first, so the first cell is where it is without the banner.
-- runFlow:
-    when:
-      visible: "Privat adgang til fotos|Private Access to Photos"
-    commands:
-      - tapOn:
-          point: 91%,23%
-      - waitForAnimationToEnd:
-          timeout: 3000
+# The system photo picker has no stable ids: the first cell by point, then Done by its text. The
+# banner subflow first closes iOS's Private Access banner, which moves the grid.
+- runFlow: ../subflows/photo-picker-banner.yaml
 - tapOn:
     point: 16%,25%
-- tapOn:
-    point: 90%,16%
+- runFlow: ../subflows/photo-picker-done.yaml
 # Without a Vision answer for an anonymous collector the failure screen shows first, and
 # Udfyld selv opens the sheet over it. When Vision answers, the sheet opens by itself.
 - extendedWaitUntil:

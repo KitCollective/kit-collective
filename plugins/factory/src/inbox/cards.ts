@@ -1,6 +1,7 @@
 // One card for every issue waiting for a person, built from what Linear says now.
 import type { InboxCardDto, InboxConfig } from "./contract.js";
 import type { WaitingIssue } from "./linear.js";
+import type { AlarmThread, Mention } from "./notices.js";
 
 /** What the Inbox needs besides the issues: the config, the workpad heading and the recorded verdict. */
 interface InboxContext {
@@ -76,16 +77,19 @@ function sinceOf(issue: WaitingIssue, state: string): string {
   ).toISOString();
 }
 
-/** Reviews first, then questions, oldest first inside each kind. */
+/** Reviews first, then questions, oldest first inside each kind. Mentions and alarms come after, see `withNotices`. */
 export function buildCards(issues: WaitingIssue[], context: InboxContext): InboxCardDto[] {
   const { config, workpadHeading, verdictOf } = context;
   const cards = issues.map((issue): InboxCardDto => {
     const pull = pullRequestOf(issue);
     const common = {
+      id: issue.identifier,
       identifier: issue.identifier,
       title: issue.title,
       url: issue.url,
       pullRequest: pull === null ? null : { number: pull.number, url: pull.url },
+      mention: null,
+      alarm: null,
       since: sinceOf(issue, config.state),
       landing: null,
     };
@@ -125,5 +129,95 @@ export function buildCards(issues: WaitingIssue[], context: InboxContext): Inbox
       rank(a) - rank(b) ||
       Date.parse(a.since) - Date.parse(b.since) ||
       a.identifier.localeCompare(b.identifier),
+  );
+}
+
+/** The problems an alarm comment lists: its bullets up to the "Already healed" part. */
+function alarmProblems(body: string): string[] {
+  const problems: string[] = [];
+  for (const line of body.split("\n")) {
+    if (/^\s*already healed/i.test(line)) break;
+    const bullet = /^\s*[-*]\s+(.*\S)\s*$/.exec(line)?.[1];
+    if (bullet !== undefined) problems.push(bullet);
+  }
+  return problems;
+}
+
+/** The first line says what the watchdog's comment is: an alarm, or the all clear after one. */
+function alarmKind(body: string): "alarm" | "clear" | null {
+  const first = body.trimStart().split("\n")[0] ?? "";
+  if (/watchdog\s*alarm/i.test(first)) return "alarm";
+  if (/watchdog:?\s*clear/i.test(first)) return "clear";
+  return null;
+}
+
+/** One card per alarm comment that no later comment of the watchdog cleared. */
+export function alarmCards(thread: AlarmThread): InboxCardDto[] {
+  let lastClear = -Infinity;
+  for (const comment of thread.comments) {
+    if (alarmKind(comment.body) === "clear") {
+      lastClear = Math.max(lastClear, Date.parse(comment.createdAt));
+    }
+  }
+  return thread.comments.flatMap((comment): InboxCardDto[] =>
+    alarmKind(comment.body) === "alarm" && Date.parse(comment.createdAt) > lastClear
+      ? [
+          {
+            id: `alarm:${comment.id}`,
+            identifier: thread.identifier,
+            title: thread.title,
+            url: comment.url,
+            pullRequest: null,
+            kind: "alarm",
+            label: null,
+            choices: [],
+            waiting: null,
+            review: null,
+            mention: null,
+            alarm: { problems: alarmProblems(comment.body) },
+            since: new Date(Date.parse(comment.createdAt)).toISOString(),
+            landing: null,
+          },
+        ]
+      : [],
+  );
+}
+
+export function mentionCards(mentions: Mention[]): InboxCardDto[] {
+  return mentions.map(
+    (mention): InboxCardDto => ({
+      id: `mention:${mention.notificationId}`,
+      identifier: mention.identifier,
+      title: mention.title,
+      url: mention.url,
+      pullRequest: null,
+      kind: "mention",
+      label: null,
+      choices: [],
+      waiting: null,
+      review: null,
+      mention: {
+        notificationId: mention.notificationId,
+        comment: mention.comment,
+        author: mention.author,
+      },
+      alarm: null,
+      since: new Date(Date.parse(mention.createdAt)).toISOString(),
+      landing: null,
+    }),
+  );
+}
+
+/**
+ * The landings first (an approved issue on its way to done), then approval and question cards as they
+ * are, then the mentions, then the alarms; oldest first inside each kind.
+ */
+export function withNotices(cards: InboxCardDto[], notices: InboxCardDto[]): InboxCardDto[] {
+  const rank = { landing: -1, review: 0, question: 1, mention: 2, alarm: 3 } as const;
+  return [...cards, ...notices].sort(
+    (a, b) =>
+      rank[a.kind] - rank[b.kind] ||
+      Date.parse(a.since) - Date.parse(b.since) ||
+      a.id.localeCompare(b.id),
   );
 }

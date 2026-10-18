@@ -311,6 +311,7 @@ jobs:
           scripts/tests/scenarios.test.mjs
           scripts/tests/holdout-guard.test.mjs
           scripts/tests/auto-land-allow.test.mjs
+          scripts/tests/reap-environments.test.mjs
           scripts/tests/milestone-scenarios-workflow.test.mjs
           scripts/tests/live-checks.test.mjs
 

@@ -20,6 +20,14 @@ test("flags the KIT-272 review 4 name that the first stem list missed", () => {
   );
 });
 
+test("flags the KIT-296 review name built on the Danish stem for inbox", () => {
+  const hits = findDanishCodeIdentifiers("+async function getIndbakke(token: string) {}");
+  assert.deepEqual(
+    hits.map((hit) => hit.name),
+    ["getIndbakke"],
+  );
+});
+
 test("flags Danish letters in a declared name but not in a string literal", () => {
   assert.equal(findDanishCodeIdentifiers("+const trøjeCount = 1;").length, 1);
   assert.equal(findDanishCodeIdentifiers("+const label = 'Tilføj trøje';").length, 0);

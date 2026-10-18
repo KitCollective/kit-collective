@@ -1,33 +1,43 @@
-import type { CollectionActivityItem, CollectionConversation } from "@kit/api-contract";
+import type { CollectionConversations } from "@kit/api-contract";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, useWindowDimensions, View } from "react-native";
-import { fetchActivity } from "@/api/activity";
+import {
+  ActivityIndicator,
+  SectionList,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { resolvePhotoUrl } from "@/api/collection";
 import { fetchConversations } from "@/api/conversations";
+import { resolvePeerAvatarUrl } from "@/api/peer-profile";
 import { useAuth } from "@/auth/AuthProvider";
-import { ActivityCard } from "@/components/activity-card";
 import { ConversationView } from "@/components/conversation-view";
 import { ScreenHeader } from "@/components/screen-header";
 import { tabBarContentInset } from "@/components/tab-bar-metrics";
 import { formatThreadTime, ThreadRow } from "@/components/thread-row";
-import { TopTabs } from "@/components/top-tabs";
-import { EmptyState } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { useInboxChrome } from "@/inbox/inbox-chrome";
 import { filterInboxByJersey } from "@/inbox/inbox-jersey-filter";
 import { InboxJerseyFilterChip } from "@/inbox/inbox-jersey-filter-chip";
-import { InboxInnerPager } from "@/navigation/inbox-inner-pager";
+import { buildInbox, type InboxRow, type InboxSection } from "@/inbox/inbox-view-model";
 import { registerPlaceHome, useIsPlaceHomeLive } from "@/navigation/place-homes";
 import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
 import { PlacePagerScreen } from "@/navigation/place-pager-screen";
-import { INBOX_TABS, type InboxTab } from "@/navigation/place-swipe";
-import { usePlaceSwipe } from "@/navigation/place-swipe-context";
+import { PLACE_HREFS } from "@/navigation/place-swipe";
 import { usePlaceOverview } from "@/navigation/use-place-overview";
-import { useReduceMotion } from "@/theme/use-reduce-motion";
+import { useTypography } from "@/theme/brand-fonts";
+import { space } from "@/theme/tokens";
 import { useStableSafeAreaInsets } from "@/theme/use-stable-safe-area-insets";
 import { useTheme } from "@/theme/use-theme";
 
 const WIDE_BREAKPOINT = 1024;
 const LIST_COLUMN_WIDTH = 360;
+
+const NO_INBOX: CollectionConversations = { waiting: [], conversations: [], unreadCount: 0 };
+
+type InboxListSection = InboxSection & { key: string; data: InboxRow[] };
 
 export default function InboxScreen() {
   return <PlacePagerScreen place="inbox" />;
@@ -36,51 +46,49 @@ export default function InboxScreen() {
 function InboxHome() {
   const { accessToken } = useAuth();
   const theme = useTheme();
+  const typography = useTypography();
   const router = useRouter();
   const { jerseyId: routeJerseyId } = useLocalSearchParams<{ jerseyId?: string }>();
   const insets = useStableSafeAreaInsets();
   const { setConversationVisible, refreshUnreadCount } = useInboxChrome();
-  const swipe = usePlaceSwipe();
-  const { setInboxTab } = swipe;
-  const reduceMotion = useReduceMotion();
   const { width } = useWindowDimensions();
   const isWide = width >= WIDE_BREAKPOINT;
   const tabBarPadding = tabBarContentInset(insets.bottom);
   const cachedInbox = usePlaceOverview("inbox");
   const isLive = useIsPlaceHomeLive("inbox");
   const [loading, setLoading] = useState(cachedInbox == null);
-  const [conversations, setConversations] = useState<CollectionConversation[]>(
-    cachedInbox?.conversations ?? [],
-  );
-  const [activityItems, setActivityItems] = useState<CollectionActivityItem[]>(
-    cachedInbox?.activityItems ?? [],
-  );
+  const [inbox, setInbox] = useState<CollectionConversations>(cachedInbox ?? NO_INBOX);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  // Counts opens: every tap on a row mounts a fresh thread, so a waiting row scrolls to its Bud again.
+  const [openCount, setOpenCount] = useState(0);
   // The jersey this Indbakke is filtered to (the own jersey detail's bid row). PlacePager also
   // renders this home as a neighbour page, so only the live copy reads the route param; it keeps
   // the value while blurred (a thread on top of Indbakke must not flash the unfiltered lists).
   const [jerseyFilterId, setJerseyFilterId] = useState<string | null>(null);
-  const activeTab = swipe.inboxTab;
-  const swipeInnerTabs = !isWide && !reduceMotion;
-
-  useEffect(() => {
-    if (!isLive) {
-      return;
-    }
-    swipe.inboxInnerConsumesSwipe.set(swipeInnerTabs && !loading);
-    return () => {
-      swipe.inboxInnerConsumesSwipe.set(false);
-    };
-  }, [isLive, loading, swipe.inboxInnerConsumesSwipe, swipeInnerTabs]);
+  const imageHeaders = useMemo(
+    () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined),
+    [accessToken],
+  );
 
   useEffect(() => {
     if (!cachedInbox) {
       return;
     }
-    setConversations(cachedInbox.conversations);
-    setActivityItems(cachedInbox.activityItems);
+    setInbox(cachedInbox);
     setLoading(false);
   }, [cachedInbox]);
+
+  // One request feeds the screen: the Indbakke response holds both sections.
+  const refreshInbox = useCallback(async () => {
+    if (!accessToken) {
+      return;
+    }
+
+    const response = await fetchConversations(accessToken);
+    setInbox(response);
+    writePlaceOverview("inbox", response);
+  }, [accessToken]);
 
   const loadInbox = useCallback(async () => {
     if (!accessToken) {
@@ -91,30 +99,18 @@ function InboxHome() {
       setLoading(true);
     }
     try {
-      const [conversationResponse, activityResponse] = await Promise.all([
-        fetchConversations(accessToken),
-        fetchActivity(accessToken),
-      ]);
-      setConversations(conversationResponse.conversations);
-      setActivityItems(activityResponse.items);
-      writePlaceOverview("inbox", {
-        conversations: conversationResponse.conversations,
-        activityItems: activityResponse.items,
-      });
+      await refreshInbox();
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, refreshInbox]);
 
   useEffect(() => {
     if (!isLive) {
       return;
     }
     setJerseyFilterId(routeJerseyId ?? null);
-    if (routeJerseyId) {
-      setInboxTab("Aktivitet");
-    }
-  }, [isLive, routeJerseyId, setInboxTab]);
+  }, [isLive, routeJerseyId]);
 
   useEffect(() => {
     if (!isLive) {
@@ -134,132 +130,136 @@ function InboxHome() {
   }, [isWide, selectedConversationId, setConversationVisible]);
 
   const handleConversationOpened = useCallback(async () => {
-    if (!accessToken) {
-      return;
-    }
-
-    const [conversationResponse, activityResponse] = await Promise.all([
-      fetchConversations(accessToken),
-      fetchActivity(accessToken),
-    ]);
-    setConversations(conversationResponse.conversations);
-    setActivityItems(activityResponse.items);
-    writePlaceOverview("inbox", {
-      conversations: conversationResponse.conversations,
-      activityItems: activityResponse.items,
-    });
+    await refreshInbox();
     await refreshUnreadCount();
-  }, [accessToken, refreshUnreadCount]);
+  }, [refreshInbox, refreshUnreadCount]);
 
-  const openConversation = (conversationId: string) => {
+  // A waiting row passes the Bud's message id; the thread opens at that Bud.
+  const openConversation = (conversationId: string, messageId: string | null) => {
     if (isWide) {
       setSelectedConversationId(conversationId);
+      setSelectedMessageId(messageId);
+      setOpenCount((count) => count + 1);
       return;
     }
-    router.push(`/(tabs)/inbox/${conversationId}`);
-  };
-
-  const selectTab = (tab: InboxTab) => {
-    swipe.setInboxTab(tab);
+    router.push(
+      messageId
+        ? `/(tabs)/inbox/${conversationId}?messageId=${messageId}`
+        : `/(tabs)/inbox/${conversationId}`,
+    );
   };
 
   const filtered = useMemo(
-    () => filterInboxByJersey(conversations, activityItems, jerseyFilterId),
-    [conversations, activityItems, jerseyFilterId],
+    () => filterInboxByJersey(inbox, jerseyFilterId),
+    [inbox, jerseyFilterId],
   );
+  const view = useMemo(() => buildInbox(filtered, formatThreadTime), [filtered]);
   const filterActive = jerseyFilterId !== null;
 
-  const messagesList =
-    filtered.conversations.length === 0 ? (
-      <EmptyState
-        title={filterActive ? "Ingen beskeder om trøjen" : "Ingen beskeder endnu"}
-        body={
-          filterActive
-            ? "Der er ingen samtaler om denne trøje lige nu."
-            : "Når en anden samler byder på en af dine trøjer, starter samtalen her."
-        }
-      />
-    ) : (
-      <FlatList
-        data={filtered.conversations}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View
-            style={
-              isWide && selectedConversationId === item.id
-                ? [
-                    styles.selectedRow,
-                    {
-                      backgroundColor: theme.fillSecondary,
-                      borderLeftColor: theme.fillPrimary,
-                    },
-                  ]
-                : undefined
-            }
-          >
-            <ThreadRow
-              handle={item.peerHandle}
-              initial={item.peerInitial}
-              snippet={item.snippet}
-              timeLabel={formatThreadTime(item.updatedAt)}
-              unread={item.unread}
-              onPress={() => openConversation(item.id)}
-            />
-          </View>
-        )}
-      />
-    );
+  const sections = useMemo(() => {
+    const list: InboxListSection[] = [];
+    if (view.waiting) {
+      list.push({ ...view.waiting, key: "waiting", data: view.waiting.rows });
+    }
+    if (view.conversations.rows.length > 0) {
+      list.push({ ...view.conversations, key: "conversations", data: view.conversations.rows });
+    }
+    return list;
+  }, [view]);
 
-  const activityList =
-    filtered.activityItems.length === 0 ? (
-      <EmptyState
-        title={filterActive ? "Ingen aktivitet om trøjen" : "Ingen aktivitet endnu"}
-        body={
-          filterActive
-            ? "Der er ingen bud eller svar om denne trøje lige nu."
-            : "Bud og svar vises her, når samtaler kommer i gang."
-        }
-      />
-    ) : (
-      <FlatList
-        data={filtered.activityItems}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: tabBarPadding }}
-        renderItem={({ item }) => (
-          <ActivityCard item={item} onPress={() => openConversation(item.conversationId)} />
-        )}
-      />
-    );
+  const renderRow = (row: InboxRow) => {
+    const selected = isWide && selectedConversationId === row.conversationId;
 
-  const chrome = (
-    <>
-      <ScreenHeader title="Indbakke" />
-      <TopTabs items={INBOX_TABS} active={activeTab} onChange={selectTab} />
-      {filterActive ? (
-        <InboxJerseyFilterChip
-          kitLine={filtered.kitLine}
-          onClear={() => router.setParams({ jerseyId: undefined })}
+    return (
+      <View
+        style={
+          selected
+            ? [
+                styles.selectedRow,
+                { backgroundColor: theme.fillSecondary, borderLeftColor: theme.fillPrimary },
+              ]
+            : undefined
+        }
+      >
+        <ThreadRow
+          variant={row.variant}
+          handle={row.handle}
+          jerseyLine={row.jerseyLine}
+          snippet={row.snippet}
+          timeLabel={row.timeLabel}
+          unread={row.unread}
+          initial={row.initial}
+          avatarUri={row.avatarUrl ? resolvePeerAvatarUrl(row.avatarUrl) : null}
+          thumbUri={row.thumbUrl ? resolvePhotoUrl(row.thumbUrl, "grid") : null}
+          imageHeaders={imageHeaders}
+          accessibilityLabel={row.accessibilityLabel}
+          testID={`inbox-row-${row.key}`}
+          onPress={() => openConversation(row.conversationId, row.messageId)}
         />
-      ) : null}
-    </>
+      </View>
+    );
+  };
+
+  const emptyState = filterActive ? (
+    <EmptyState title="Ingen bud om trøjen" body="Der er ingen bud om denne trøje lige nu." />
+  ) : (
+    <EmptyState
+      title="Ingen samtaler endnu"
+      body="En samtale starter med et bud eller en besked."
+      action={
+        <View style={styles.emptyActions}>
+          <Button
+            label="Find trøjer"
+            variant="primary"
+            testID="inbox-empty-find"
+            onPress={() => router.navigate(PLACE_HREFS.search)}
+          />
+          <Button
+            label="Åbn for bud"
+            variant="secondary"
+            testID="inbox-empty-open-for-bid"
+            onPress={() => router.navigate(PLACE_HREFS.collection)}
+          />
+        </View>
+      }
+    />
   );
 
-  const tabBody = loading ? (
+  const list = view.empty ? (
+    emptyState
+  ) : (
+    <SectionList
+      sections={sections}
+      keyExtractor={(row) => row.key}
+      stickySectionHeadersEnabled={false}
+      contentContainerStyle={{ paddingBottom: isWide ? tabBarPadding : 0 }}
+      renderSectionHeader={({ section }) => (
+        <View
+          testID={`inbox-section-${section.key}`}
+          accessibilityRole="header"
+          style={styles.sectionHeading}
+        >
+          <Text style={[typography.section, { color: theme.contentPrimary }]}>{section.title}</Text>
+          {section.count ? (
+            <Text
+              testID={`inbox-section-${section.key}-count`}
+              style={[typography.monoSm, { color: theme.contentMuted }]}
+            >
+              {section.count}
+            </Text>
+          ) : null}
+        </View>
+      )}
+      renderItem={({ item }) => renderRow(item)}
+    />
+  );
+
+  const body = loading ? (
     <View style={styles.loading}>
       <ActivityIndicator color={theme.contentPrimary} />
     </View>
-  ) : swipeInnerTabs ? (
-    <InboxInnerPager
-      enabled={isLive}
-      pageWidth={width}
-      header={chrome}
-      messages={messagesList}
-      activity={activityList}
-    />
-  ) : activeTab === "Aktivitet" ? (
-    activityList
   ) : (
-    messagesList
+    list
   );
 
   const listPanel = (
@@ -274,14 +274,14 @@ function InboxHome() {
         !isWide && { flex: 1, paddingBottom: tabBarPadding },
       ]}
     >
-      {swipeInnerTabs && !loading ? (
-        tabBody
-      ) : (
-        <>
-          {chrome}
-          {tabBody}
-        </>
-      )}
+      <ScreenHeader title="Indbakke" />
+      {filterActive ? (
+        <InboxJerseyFilterChip
+          kitLine={filtered.kitLine}
+          onClear={() => router.setParams({ jerseyId: undefined })}
+        />
+      ) : null}
+      {body}
     </View>
   );
 
@@ -292,7 +292,9 @@ function InboxHome() {
         <View style={styles.conversationColumn}>
           {selectedConversationId ? (
             <ConversationView
+              key={`${selectedConversationId}:${openCount}`}
               conversationId={selectedConversationId}
+              focusMessageId={selectedMessageId}
               onBack={() => setSelectedConversationId(null)}
               onOpenDetails={() => router.push(`/(tabs)/inbox/${selectedConversationId}/details`)}
               onConversationOpened={() => void handleConversationOpened()}
@@ -334,5 +336,17 @@ const styles = StyleSheet.create({
   },
   selectedRow: {
     borderLeftWidth: 2,
+  },
+  sectionHeading: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: space.gapSm,
+    paddingHorizontal: space.insetMd,
+    paddingTop: space.insetMd,
+    paddingBottom: space.insetSm,
+  },
+  emptyActions: {
+    alignItems: "center",
+    gap: space.gapSm,
   },
 });

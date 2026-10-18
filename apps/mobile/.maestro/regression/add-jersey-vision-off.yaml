@@ -25,16 +25,14 @@ name: add-jersey-vision-off
     id: capture-source-gallery
 - tapOn: Fotos
 # The system photo picker has no stable ids. The simulator's library holds the fixture photo,
-# newest first, among the iOS sample photos: the first cell, then the confirm button.
-- waitForAnimationToEnd:
-    timeout: 8000
-# A cold simulator shows the picker before its cells have loaded (the first flow of a run missed
-# its taps in the first hosted run), so pause before tapping.
-- runFlow: ../subflows/settle.yaml
+# newest first, among the iOS sample photos: the first cell by point, then Done by its text. The
+# banner subflow waits for the picker, pauses so a cold simulator has loaded its cells (the first
+# flow of a run missed its taps in the first hosted run), and closes iOS's Private Access banner,
+# which moves the grid.
+- runFlow: ../subflows/photo-picker-banner.yaml
 - tapOn:
     point: 16%,25%
-- tapOn:
-    point: 90%,12%
+- runFlow: ../subflows/photo-picker-done.yaml
 # Vision off sends nothing, so the block is the empty one from the first frame.
 - extendedWaitUntil:
     visible:
