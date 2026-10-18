@@ -795,7 +795,11 @@ test("a start-decision answered only with the exit line gets one more runner, th
   });
   assert.equal(result.status, "Approval");
   assert.equal(commands.filter((c) => c.includes("start-decision.mjs --issue KIT-9")).length, 2);
-  assert.equal(commands.filter((c) => c.includes("run-log.mjs start")).length, 1, "start is logged once");
+  assert.equal(
+    commands.filter((c) => c.includes("run-log.mjs start")).length,
+    1,
+    "start is logged once",
+  );
   assert.equal(commands.filter((c) => c.includes('state KIT-9 "In Progress"')).length, 1);
 });
 
@@ -2012,7 +2016,13 @@ test("the tick restarts a run that stopped before its PR (KIT-409, 2026-10-18)",
 
 test("the tick resumes a stopped run that has an open PR, as before", () => {
   const { resume } = stoppedRuns(
-    tickInput({ board: [{ key: "KIT-284", state: "In Review" }], events: [{ at: minutesAgo(130), event: "reason", issue: "KIT-284", code: "runner-no-result" }], prOf: (key) => (key === "KIT-284" ? { number: 301 } : undefined) }),
+    tickInput({
+      board: [{ key: "KIT-284", state: "In Review" }],
+      events: [
+        { at: minutesAgo(130), event: "reason", issue: "KIT-284", code: "runner-no-result" },
+      ],
+      prOf: (key) => (key === "KIT-284" ? { number: 301 } : undefined),
+    }),
   );
   assert.deepEqual(resume, [{ issue: "KIT-284", mode: "resume", pr: 301, quietMinutes: 130 }]);
 });
@@ -2027,7 +2037,11 @@ test("the tick leaves a run alone while it still logs, a landing, and issues it 
 });
 
 test("a stopped run at the attempt cap is a loop for Nicklas, never restarted, with or without a PR", () => {
-  const starts = [400, 300, 190].map((m) => ({ at: minutesAgo(m), event: "start", issue: "KIT-409" }));
+  const starts = [400, 300, 190].map((m) => ({
+    at: minutesAgo(m),
+    event: "start",
+    issue: "KIT-409",
+  }));
   for (const prOf of [() => undefined, () => ({ number: 9 })]) {
     const { resume, loops } = stoppedRuns(tickInput({ events: starts, prOf }));
     assert.deepEqual(resume, []);
@@ -2040,8 +2054,14 @@ test("a stopped run holds no live slot, and the tick restarts it with resume:tru
     join(fileURLToPath(new URL("../..", import.meta.url)), "staff/max/tick.js"),
     "utf8",
   );
-  assert.match(tick, /issue\.touchedMinutesAgo < liveWindowMinutes &&\s*!stoppedKeys\.has\(issue\.key\)/);
-  assert.ok(tick.indexOf("const live = ") > tick.indexOf("stoppedRuns({"), "live is counted after the stopped runs are known");
+  assert.match(
+    tick,
+    /issue\.touchedMinutesAgo < liveWindowMinutes &&\s*!stoppedKeys\.has\(issue\.key\)/,
+  );
+  assert.ok(
+    tick.indexOf("const live = ") > tick.indexOf("stoppedRuns({"),
+    "live is counted after the stopped runs are known",
+  );
   assert.match(tick, /mode restart \(no open PR[^\n]*still passes \\`"resume":true\\`/);
   assert.doesNotMatch(tick, /if \(!pr\) continue;\n\s*const starts/);
 });
