@@ -1,0 +1,28 @@
+# Confirms the system photo picker's selection. The picker's confirm button is its `Done` (found by
+# accessibility text: the system picker has no testID) and stays disabled until a cell is selected,
+# so wait for it to be enabled, then tap it. On a slow hosted simulator the tap can still be
+# swallowed, leaving the picker open; tap again while an enabled `Done` shows. Keyed on the picker's
+# own enabled `Done`, never on the picker or the Confirm hub not being visible: the app has no
+# `Done` label (no English one), so a repeat tap cannot land on app UI.
+appId: app.kitcollective.mobile
+---
+- extendedWaitUntil:
+    visible:
+      text: Done
+      enabled: true
+    timeout: 15000
+- tapOn:
+    text: Done
+    enabled: true
+- repeat:
+    while:
+      visible:
+        text: Done
+        enabled: true
+    times: 3
+    commands:
+      - runFlow: settle.yaml
+      - tapOn:
+          text: Done
+          enabled: true
+          optional: true

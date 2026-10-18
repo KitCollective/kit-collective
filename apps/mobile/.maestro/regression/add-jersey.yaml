@@ -23,31 +23,21 @@ name: add-jersey
     id: capture-source-gallery
 - tapOn: Fotos
 # The system photo picker has no stable ids. The simulator's library holds the
-# fixture photo, newest first, among the iOS sample photos: the first cell, then
-# the confirm button. On a slow hosted simulator the confirm tap can fire before
-# the selection is live and is swallowed, leaving the picker open. So wait for
-# the picker's selected footer (English: the hosted simulator's locale is fixed;
-# optional, in case the hierarchy does not expose it), tap, and tap again while
-# the picker still shows that footer. Never a retry keyed on Confirm not being
-# visible: a stray tap at the confirm point would land on the Confirm hub.
-- waitForAnimationToEnd:
-    timeout: 8000
+# fixture photo, newest first, among the iOS sample photos: the first cell by
+# point, then Done by its text. iOS sometimes shows a "Private Access to Photos"
+# banner that pushes the grid down about 162px, so the banner subflow waits for
+# the picker, pauses so a cold simulator has loaded its cells, and closes the
+# banner before the cell tap. The picker's Done stays disabled until a cell is
+# selected, and on a slow hosted simulator a tap can fire before the selection
+# is live and be swallowed, leaving the picker open. So the done subflow waits
+# for an enabled Done (English: the hosted simulator's locale is fixed), taps it,
+# and taps again while an enabled Done still shows. Never a retry keyed on
+# Confirm not being visible: a stray tap at the confirm point would land on the
+# Confirm hub.
+- runFlow: ../subflows/photo-picker-banner.yaml
 - tapOn:
     point: 16%,25%
-- extendedWaitUntil:
-    visible: 1 Photo
-    timeout: 15000
-    optional: true
-- tapOn:
-    point: 90%,12%
-- repeat:
-    while:
-      visible: 1 Photo
-    times: 3
-    commands:
-      - runFlow: ../subflows/settle.yaml
-      - tapOn:
-          point: 90%,12%
+- runFlow: ../subflows/photo-picker-done.yaml
 # Wait for the fixed Vision suggestion to land: a screenshot of the analysing
 # state would differ from run to run.
 - extendedWaitUntil:

@@ -18,27 +18,14 @@ name: kit-279
 - tapOn:
     id: capture-source-gallery
 - tapOn: Fotos
-# The system photo picker has no stable ids: the first cell, then confirm.
-- waitForAnimationToEnd:
-    timeout: 8000
+# The system photo picker has no stable ids: the first cell by point, then Done by its text. The
+# banner subflow first closes iOS's Private Access banner, which moves the grid.
+- runFlow: ../subflows/photo-picker-banner.yaml
 - tapOn:
     point: 16%,25%
-# Wait for the picker's selected footer, tap confirm, and tap again while the footer
-# shows (the reason is in regression/add-jersey.yaml).
-- extendedWaitUntil:
-    visible: 1 Photo
-    timeout: 15000
-    optional: true
-- tapOn:
-    point: 90%,12%
-- repeat:
-    while:
-      visible: 1 Photo
-    times: 3
-    commands:
-      - runFlow: ../subflows/settle.yaml
-      - tapOn:
-          point: 90%,12%
+# Tap the picker's Done once it is enabled, and again while it still shows (the reason is in
+# regression/add-jersey.yaml).
+- runFlow: ../subflows/photo-picker-done.yaml
 # AC 1: Resolved identity block with Ret, size and condition chips on the hub,
 # AC 8/9: photo strip shows the filled slot plus one Foto tile, index in header.
 - extendedWaitUntil:
