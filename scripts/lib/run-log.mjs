@@ -21,6 +21,7 @@ export const EVENTS = [
   "reason",
   "auto-land",
   "holdout",
+  "end",
 ];
 /** `scenario-judge` is the Milestone scenarios workflow's Scenario judge (KIT-353): flow writer and run judge. */
 export const STEPS = ["lead", "engineer", "reviewer", "lander", "scenario-judge"];
@@ -45,6 +46,38 @@ export const OUTCOMES = [
   "not-satisfied",
   "met",
   "not-met",
+];
+/**
+ * The `end` line an AFK developer run writes on every return after `start` (.bb/workflows/afk-developer.js):
+ * the Linear state it left the issue in and the step it stopped at. Max's tick resumes a run whose last line
+ * is `end` on its next tick instead of after RUN_STUCK_MINUTES (staff/max/tick.js).
+ */
+export const END_STATUSES = [
+  "stopped",
+  "In Progress",
+  "In Review",
+  "Approval",
+  "Blocked",
+  "Merging",
+  "Done",
+  "unknown",
+];
+export const END_STOPS = [
+  "start",
+  "start-decision",
+  "resume",
+  "lead",
+  "resume-point",
+  "pre-review gate",
+  "engineer",
+  "head-changed",
+  "reviewer",
+  "review gate",
+  "receipt",
+  "approval",
+  "auto-land",
+  "done",
+  "loop",
 ];
 export const GATES = ["review", "pre-review", "land", "session", "head", "scope", "checks"];
 export const GATE_OUTCOMES = ["open", "closed"];
@@ -96,6 +129,8 @@ export const REASON_CODES = [
   "integration-red",
   "land-gate-closed",
   "holdout-read",
+  // An AFK developer run that used its last round (the `end` line's reason).
+  "round-cap",
   // Milestone scenarios (KIT-353). Every `scenarios.mjs status --code` (ERROR_CODES in
   // scripts/lib/scenarios.mjs) is here too, so the workflow's `reason` line for it is never refused;
   // a test reads the workflow's list. `scenarios-refused` is a refused check, `status-failed` an
@@ -147,6 +182,9 @@ const FIELDS = {
   rows: (v) => Array.isArray(v) && v.length <= 20 && v.every((r) => ROW_IDS.includes(r)),
   code: (v) => REASON_CODES.includes(v),
   holdout: (v) => typeof v === "string" && HOLDOUT_FILE.test(v),
+  status: (v) => END_STATUSES.includes(v),
+  stoppedAt: (v) => END_STOPS.includes(v),
+  reason: (v) => REASON_CODES.includes(v),
 };
 
 /** Events a milestone run writes: for these `milestone` stands in for `issue` (exactly one of the two). */
@@ -162,6 +200,7 @@ const REQUIRED = {
   reason: ["issue", "code"],
   "auto-land": ["issue", "outcome"],
   holdout: ["code", "holdout"],
+  end: ["issue", "status", "stoppedAt", "reason"],
 };
 
 /**

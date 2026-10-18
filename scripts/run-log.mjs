@@ -7,6 +7,8 @@
  *     [--thread thr_x] [--provider p] [--model m] [--outcome o] [--tokens-in n|null]
  *     [--tokens-out n|null] [--usage-thread thr_x] [--verdict v] [--round n] [--sha s]
  *     [--rows a,b] [--code c] [--gate g] [--mode m] [--machine host]
+ *   node scripts/run-log.mjs end --issue KIT-1 --status "In Review" --stopped-at "review gate"
+ *     --reason ci-pending [--verdict v] [--round n]   the AFK developer run's last line
  *   node scripts/run-log.mjs <start|spawn|result|reason> --milestone <project-slug>/<milestone-slug> ...
  *     the same for a Milestone scenarios run (KIT-353), which belongs to a milestone, not an issue
  *   node scripts/run-log.mjs usage <thread>   print token usage of a bb thread as JSON
@@ -74,7 +76,7 @@ try {
     process.stdout.write(
       `${rest.includes("--json") ? JSON.stringify(report, null, 2) : renderReport(report)}\n`,
     );
-  } else if (["start", "spawn", "result", "gate", "audit", "reason"].includes(command)) {
+  } else if (["start", "spawn", "result", "gate", "audit", "reason", "end"].includes(command)) {
     const flags = parseFlags(rest);
     if (flags.usageThread) {
       Object.assign(flags, usageOf(flags.usageThread));
@@ -84,7 +86,7 @@ try {
     process.stdout.write(`logged ${command}\n`);
   } else {
     process.stderr.write(
-      "usage: run-log.mjs <start|spawn|result|gate|audit|reason|usage|report|path> ...\n",
+      "usage: run-log.mjs <start|spawn|result|gate|audit|reason|end|usage|report|path> ...\n",
     );
     process.exit(2);
   }

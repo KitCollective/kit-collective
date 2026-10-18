@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { END_STATUSES, END_STOPS, validateEvent } from "../lib/run-log.mjs";
 
 /**
  * The AFK developer workflow runs in bb's QuickJS sandbox, which this repo cannot start. These tests
@@ -115,6 +116,10 @@ const lastState = (commands) =>
     .filter((c) => /linear\.mjs state /.test(c))
     .map((c) => /"([^"]+)"$/.exec(c)[1])
     .at(-1);
+
+/** The run's last line, `run-log.mjs end`, is a log line, not a step: tests of the steps leave it out. */
+const isEnd = (c) => c.startsWith("node scripts/run-log.mjs end ");
+const steps = (commands) => commands.filter((c) => !isEnd(c));
 
 const agentSpawns = (spawns) =>
   spawns.filter((s) => !s.options.schema?.required?.includes("results"));
@@ -355,7 +360,7 @@ test("a red review loops once to a fix pass, logs the red audit, and stops at th
   assert.equal(result.rounds, 2);
   assert.ok(commands.some((c) => c.includes("label KIT-9 swap ready-for-agent ready-for-human")));
   assert.equal(lastState(commands), "Approval");
-  assert.equal(commands.filter((c) => c.includes("--verdict red")).length, 2);
+  assert.equal(steps(commands).filter((c) => c.includes("--verdict red")).length, 2);
   assert.ok(commands.some((c) => c.includes('state KIT-9 "In Progress"')));
   assert.ok(
     agentSpawns(spawns).filter((s) => s.options.label.startsWith("engineer:")).length === 2,
@@ -367,7 +372,7 @@ test("a red review loops once to a fix pass, logs the red audit, and stops at th
   assert.deepEqual(waitingCmds(commands), [
     'node scripts/linear.mjs waiting KIT-9 --stage "review gate" --ask "needs-human: round cap reached after a red review, the findings are under ### Review feedback"',
   ]);
-  assert.equal(commands.at(-1), waitingCmds(commands)[0]);
+  assert.equal(steps(commands).at(-1), waitingCmds(commands)[0]);
 });
 
 test("a red review with only light findings at the cap gets one extra round, and that one only", async () => {
@@ -479,7 +484,7 @@ test("an amber review (checks pending) holds In Review and posts nothing", async
     }),
   });
   assert.equal(result.status, "In Review");
-  assert.ok(!commands.some((c) => c.includes("audit-receipt") || c.includes("--verdict")));
+  assert.ok(!steps(commands).some((c) => c.includes("audit-receipt") || c.includes("--verdict")));
 });
 
 test("a Lead plan-approval ends the run in Approval before any Engineer", async () => {
@@ -539,7 +544,7 @@ test("hostile text from the Reviewer never reaches a command", async () => {
       threadId: REVIEWER_THREAD,
     }),
   });
-  assert.ok(!badSha.commands.some((c) => c.includes("--verdict red")));
+  assert.ok(!steps(badSha.commands).some((c) => c.includes("--verdict red")));
   const badVerdict = await run({
     reviewer: () => ({ verdict: "green; id", sha: SHA, sentence: "x", threadId: REVIEWER_THREAD }),
   });
@@ -1054,7 +1059,7 @@ test("a gate-detected needs-human stop fills ### Waiting with linear.mjs waiting
     shell: (c) => (isReviewGate(c) ? { code: 1, line: NO_VERDICT_LINE } : undefined),
   });
   assert.deepEqual(waitingCmds(noVerdict.commands), [WAITING_DEVICE_FLOWS]);
-  assert.equal(noVerdict.commands.at(-1), WAITING_DEVICE_FLOWS);
+  assert.equal(steps(noVerdict.commands).at(-1), WAITING_DEVICE_FLOWS);
   assert.equal(lastState(noVerdict.commands), "Approval");
   assert.ok(
     noVerdict.commands.findIndex((c) => c.includes('state KIT-9 "Approval"')) <
@@ -1212,7 +1217,7 @@ test("autoLand true: green hands the issue to auto-land start with --force-enabl
   assert.ok(commands.findIndex((c) => c.includes("audit-receipt.mjs post")) < start);
   assert.notEqual(lastState(commands), "Approval", "Approval is the exception exit, not a step");
   // The workflow itself still never merges, posts a receipt for real, or sets a merge state.
-  for (const command of commands) {
+  for (const command of steps(commands)) {
     assert.doesNotMatch(command, /"(Merging|Post-Merge|Done)"/);
     assert.doesNotMatch(command, /gh pr merge|merge-lock|sync-pr|--auto\b/);
     if (command.includes("audit-receipt.mjs")) assert.match(command, /--dry-run/);
@@ -1419,7 +1424,7 @@ test("a fresh run, and a resume without a PR, never ask for the resume point", a
 const runners = (spawns) => spawns.filter((s) => s.options.schema?.required?.includes("results"));
 const labels = (spawns) => runners(spawns).map((s) => s.options.label);
 
-test("a green run spends nine runners: the log lines ride with the gates, and the proxied Reviewer's thread is looked up by title", async () => {
+test("a green run spends ten runners: the log lines ride with the gates, the end line has its own, and the proxied Reviewer's thread is looked up by title", async () => {
   const { result, commands, spawns } = await run();
   assert.equal(result.status, "Approval");
   assert.deepEqual(labels(spawns), [
@@ -1432,6 +1437,7 @@ test("a green run spends nine runners: the log lines ride with the gates, and th
     "gate:review",
     "receipt:dry-run",
     "linear:Approval",
+    "log:end",
   ]);
   const at = (needle) => commands.findIndex((c) => c.includes(needle));
   assert.ok(at("--step engineer --outcome ready") >= 0);
@@ -1542,6 +1548,7 @@ test("a resume that reviews the head as it is writes both skip lines on runners 
     "gate:review",
     "receipt:dry-run",
     "linear:Approval",
+    "log:end",
   ]);
   const point = runners(spawns).find((s) => s.options.label === "resume-point").prompt;
   assert.match(point, /--code lead-skipped/);
@@ -2085,88 +2092,87 @@ test("the dispatch tick starts a conflicting resume with mergeFirst, a flag the 
   assert.match(meta, /mergeFirst: \{ type: "boolean" \}/);
 });
 
-/** Max's tick's stoppedRuns, from the tick's own source (it is a self-contained function above the IIFE). */
-const stoppedRuns = (() => {
-  const tick = readFileSync(
-    join(fileURLToPath(new URL("../..", import.meta.url)), "staff/max/tick.js"),
-    "utf8",
-  );
-  const from = tick.indexOf("function stoppedRuns(");
-  const to = tick.indexOf("// end stoppedRuns");
-  assert.ok(from >= 0 && to > from, "tick.js defines stoppedRuns");
-  return new Function(`${tick.slice(from, to)}; return stoppedRuns;`)();
-})();
-
-const NOW = Date.parse("2026-10-18T20:30:00Z");
-const minutesAgo = (m) => new Date(NOW - m * 60000).toISOString();
-const tickInput = (overrides = {}) => ({
-  board: [{ key: "KIT-409", state: "In Progress" }],
-  events: [
-    { at: minutesAgo(190), event: "gate", issue: "KIT-409", gate: "session", outcome: "open" },
-    { at: minutesAgo(187), event: "start", issue: "KIT-409" },
-  ],
-  prOf: () => undefined,
-  skip: new Set(),
-  now: NOW,
-  runStuckMinutes: 120,
-  maxStartsPerDay: 3,
-  ...overrides,
-});
-
-test("the tick restarts a run that stopped before its PR (KIT-409, 2026-10-18)", () => {
-  const { resume, loops } = stoppedRuns(tickInput());
-  assert.deepEqual(resume, [{ issue: "KIT-409", mode: "restart", pr: null, quietMinutes: 187 }]);
-  assert.deepEqual(loops, []);
-});
-
-test("the tick resumes a stopped run that has an open PR, as before", () => {
-  const { resume } = stoppedRuns(
-    tickInput({
-      board: [{ key: "KIT-284", state: "In Review" }],
-      events: [
-        { at: minutesAgo(130), event: "reason", issue: "KIT-284", code: "runner-no-result" },
-      ],
-      prOf: (key) => (key === "KIT-284" ? { number: 301 } : undefined),
-    }),
-  );
-  assert.deepEqual(resume, [{ issue: "KIT-284", mode: "resume", pr: 301, quietMinutes: 130 }]);
-});
-
-test("the tick leaves a run alone while it still logs, a landing, and issues it never ran", () => {
-  const recent = tickInput({ events: [{ at: minutesAgo(30), event: "start", issue: "KIT-409" }] });
-  assert.deepEqual(stoppedRuns(recent).resume, []);
-  assert.deepEqual(stoppedRuns(tickInput({ skip: new Set(["KIT-409"]) })).resume, []);
-  assert.deepEqual(stoppedRuns(tickInput({ events: [] })).resume, []);
-  for (const state of ["To-do", "Approval", "Blocked", "Merging"])
-    assert.deepEqual(stoppedRuns(tickInput({ board: [{ key: "KIT-409", state }] })).resume, []);
-});
-
-test("a stopped run at the attempt cap is a loop for Nicklas, never restarted, with or without a PR", () => {
-  const starts = [400, 300, 190].map((m) => ({
-    at: minutesAgo(m),
-    event: "start",
-    issue: "KIT-409",
-  }));
-  for (const prOf of [() => undefined, () => ({ number: 9 })]) {
-    const { resume, loops } = stoppedRuns(tickInput({ events: starts, prOf }));
-    assert.deepEqual(resume, []);
-    assert.deepEqual(loops, ["KIT-409"]);
+/** The `end` event a `run-log.mjs end` command would append, as run-log.mjs parses its flags. */
+const endEvent = (command) => {
+  const event = { event: "end" };
+  for (const [, key, quoted, bare] of command.matchAll(/--([a-z-]+) (?:"([^"]*)"|(\S+))/g)) {
+    const name = key.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    event[name] = name === "round" ? Number(bare) : (quoted ?? bare);
   }
+  return event;
+};
+
+test("an amber review at the end of a run writes one end line, so Max resumes it on the next tick (KIT-298)", async () => {
+  const { result, commands } = await run({
+    reviewer: () => ({
+      verdict: "amber",
+      sha: SHA,
+      sentence: "pending",
+      threadId: REVIEWER_THREAD,
+    }),
+  });
+  assert.equal(result.status, "In Review");
+  const ends = commands.filter(isEnd);
+  assert.equal(ends.length, 1);
+  assert.equal(commands.at(-1), ends[0]);
+  assert.match(
+    ends[0],
+    /^node scripts\/run-log\.mjs end --issue KIT-9 --status "In Review" --stopped-at "reviewer" --reason ci-pending --verdict amber --round \d+$/,
+  );
+  assert.deepEqual(validateEvent(endEvent(ends[0])), []);
 });
 
-test("a stopped run holds no live slot, and the tick restarts it with resume:true (the session check refuses a fresh run In Progress)", () => {
-  const tick = readFileSync(
-    join(fileURLToPath(new URL("../..", import.meta.url)), "staff/max/tick.js"),
-    "utf8",
-  );
-  assert.match(
-    tick,
-    /issue\.touchedMinutesAgo < liveWindowMinutes &&\s*!stoppedKeys\.has\(issue\.key\)/,
-  );
-  assert.ok(
-    tick.indexOf("const live = ") > tick.indexOf("stoppedRuns({"),
-    "live is counted after the stopped runs are known",
-  );
-  assert.match(tick, /mode restart \(no open PR[^\n]*still passes \\`"resume":true\\`/);
-  assert.doesNotMatch(tick, /if \(!pr\) continue;\n\s*const starts/);
+test("every return after start writes exactly one valid end line, last, with status and stop of the result", async () => {
+  const red = {
+    verdict: "red",
+    sha: SHA,
+    rows: ["spec"],
+    sentence: "x",
+    threadId: REVIEWER_THREAD,
+  };
+  const runs = [
+    await run(),
+    await run({ args: { issue: "KIT-9", maxRounds: 1 }, reviewer: () => red }),
+    await run({ args: { issue: "KIT-9", autoLand: true }, shell: autoLandShell() }),
+    await run({ engineer: () => new Error("no result") }),
+    await run({
+      lead: { outcome: "plan-approval", sentence: "ask", threadId: "thr_lead0001" },
+      startDecision: { plan: true },
+    }),
+  ];
+  for (const { result, commands } of runs) {
+    const ends = commands.filter(isEnd);
+    assert.equal(ends.length, 1, result.stoppedAt);
+    assert.equal(commands.at(-1), ends[0]);
+    const event = endEvent(ends[0]);
+    assert.deepEqual(validateEvent(event), [], ends[0]);
+    assert.equal(event.status, result.status);
+    assert.equal(event.stoppedAt, result.stoppedAt);
+  }
+  assert.equal(endEvent(runs[1].commands.at(-1)).reason, "needs-human");
+});
+
+test("a stop before start is logged writes no end line: no run began, and another may be live", async () => {
+  const harness = await run({
+    shell: (c) => (isHarnessDiff(c) ? { code: 1, line: "" } : undefined),
+  });
+  const session = await run({
+    shell: (c) => (c.includes("session-check") ? { code: 1, line: "CLOSED: run live" } : undefined),
+  });
+  const startFailed = await run({
+    shell: (c) => (c.includes("run-log.mjs start") ? { code: 2, line: "bad" } : undefined),
+  });
+  for (const { commands } of [harness, session, startFailed]) assert.ok(!commands.some(isEnd));
+});
+
+test("every stop point and status the workflow returns after start is in the run log's end vocabulary", () => {
+  const calls = [...SOURCE.matchAll(/\bstopped\("([^"]+)", (?:"([^"]+)"|\w+)/g)];
+  assert.ok(calls.length > 20);
+  // harness and session-check return before start is logged and write no end line.
+  for (const [, stoppedAt, status] of calls.filter(
+    (c) => !["harness", "session-check"].includes(c[1]),
+  )) {
+    assert.ok(END_STOPS.includes(stoppedAt), stoppedAt);
+    if (status !== undefined) assert.ok(END_STATUSES.includes(status), status);
+  }
 });
