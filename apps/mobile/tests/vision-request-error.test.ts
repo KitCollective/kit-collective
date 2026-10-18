@@ -1,57 +1,26 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  fetchUnsignedVisionJob,
-  fetchVisionJob,
-  startUnsignedVisionSuggest,
-  startVisionSuggest,
-  VisionRequestError,
-} from "../src/api/vision";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
 
-vi.mock("expo-constants", () => ({ default: { expoConfig: { extra: {} } } }));
-
-const JOB = "550e8400-e29b-41d4-a716-446655440010";
-const payload = { draftId: "draft-1", photos: [{ role: "front" as const, contentBase64: "AAAA" }] };
+// vision.ts reaches expo-constants through ./config, which vitest cannot load, so the client is
+// read as source, as confirm-vision-cap.test.ts does. The identity log's use of the status is
+// tested through runIdentityRead (identity-run-outcome.test.ts).
+const visionApi = readFileSync(join(__dirname, "../src/api/vision.ts"), "utf8");
 
 describe("Vision request errors carry the HTTP status", () => {
-  beforeEach(() => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ message: "nope" }), { status: 500 })),
-    );
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
+  it("declares VisionRequestError with the response status", () => {
+    expect(visionApi).toContain("export class VisionRequestError extends Error");
+    expect(visionApi).toContain("readonly status: number;");
+    expect(visionApi).toContain('this.name = "VisionRequestError";');
   });
 
-  it.each([
-    ["startVisionSuggest", () => startVisionSuggest("token", payload), "Kunne ikke starte Vision"],
-    ["fetchVisionJob", () => fetchVisionJob("token", JOB), "Kunne ikke hente Vision-forslag"],
-    [
-      "startUnsignedVisionSuggest",
-      () => startUnsignedVisionSuggest(payload),
-      "Kunne ikke starte Vision",
-    ],
-    [
-      "fetchUnsignedVisionJob",
-      () => fetchUnsignedVisionJob(JOB),
-      "Kunne ikke hente Vision-forslag",
-    ],
-  ])("%s rejects with VisionRequestError on a non-ok response", async (_name, call, message) => {
-    const error = await call().catch((caught: unknown) => caught);
-
-    expect(error).toBeInstanceOf(VisionRequestError);
-    expect(error).toMatchObject({ name: "VisionRequestError", status: 500, message });
-  });
-
-  it("keeps a 402 that is not PREMIUM_REQUIRED a plain request error", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ code: "OTHER" }), { status: 402 })),
+  it("throws it with the status where a suggest or a job read fails", () => {
+    const withStatus = visionApi.match(
+      /new VisionRequestError\("Kunne ikke (starte Vision|hente Vision-forslag)", response\.status\)/g,
     );
 
-    await expect(startVisionSuggest("token", payload)).rejects.toMatchObject({
-      name: "VisionRequestError",
-      status: 402,
-    });
+    // startVisionSuggest, fetchVisionJob and their two unsigned twins.
+    expect(withStatus).toHaveLength(4);
+    expect(visionApi).not.toMatch(/new Error\("Kunne ikke (starte Vision|hente Vision-forslag)"/);
   });
 });

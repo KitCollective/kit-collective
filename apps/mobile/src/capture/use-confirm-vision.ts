@@ -5,13 +5,6 @@ import type {
   VisionSuggestRequest,
 } from "@kit/api-contract";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchClubSeasons } from "@/api/catalog";
-import {
-  fetchVisionJob,
-  startVisionSuggest,
-  VisionPremiumRequiredError,
-  VisionRequestError,
-} from "@/api/vision";
 import {
   catalogSideId,
   selectDraftKitType,
@@ -60,6 +53,16 @@ const IDENTITY_BUILD_BUDGET_MS = 45_000;
 const VISION_POLL_INTERVAL_MS = 2_000;
 const VISION_IDENTITY_DEBOUNCE_MS = 500;
 
+/**
+ * The API clients load on first use, as identitySuggestRequest does with photoBytes: their config
+ * pulls in expo-constants, which vitest cannot load, and `runIdentityRead` is tested on its own.
+ */
+const loadVisionApi = () => import("@/api/vision");
+const loadCatalogApi = () => import("@/api/catalog");
+
+const fetchClubSeasons: typeof import("@/api/catalog").fetchClubSeasons = async (...args) =>
+  (await loadCatalogApi()).fetchClubSeasons(...args);
+
 /** Release builds keep only error-level JS logs in the simulator os_log. */
 export type IdentityRunLog = { info(line: string): void; error(line: string): void };
 
@@ -84,7 +87,8 @@ export type IdentityReadDeps = {
 };
 
 function identityErrorCode(error: unknown): string {
-  if (error instanceof VisionRequestError) {
+  // A VisionRequestError, matched by shape so the run never loads the API client.
+  if (error instanceof Error && "status" in error && typeof error.status === "number") {
     return `HTTP ${error.status}`;
   }
   return error instanceof Error ? error.message : String(error);
@@ -293,6 +297,7 @@ export function useConfirmVision({
     }
 
     const startJob = async (payload: VisionSuggestRequest) => {
+      const { startVisionSuggest, VisionPremiumRequiredError } = await loadVisionApi();
       return startVisionSuggest(accessToken, payload).catch(async (error) => {
         if (!(error instanceof VisionPremiumRequiredError)) {
           throw error;
@@ -338,7 +343,8 @@ export function useConfirmVision({
               sessionDraftsRef.current.find((entry) => entry.id === next.id) ?? next,
             ),
           startJob,
-          fetchJob: (nextJobId) => fetchVisionJob(accessToken, nextJobId),
+          fetchJob: async (nextJobId) =>
+            (await loadVisionApi()).fetchVisionJob(accessToken, nextJobId),
           onJobStarted: (nextJobId) => {
             if (syncChrome()) {
               setJobId(nextJobId);
@@ -426,6 +432,7 @@ export function useConfirmVision({
       }
 
       try {
+        const { fetchVisionJob } = await loadVisionApi();
         const job = await fetchVisionJob(accessToken, jobId);
         if (cancelled || job.status === "pending") {
           return;

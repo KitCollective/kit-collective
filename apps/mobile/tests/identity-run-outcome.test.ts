@@ -1,11 +1,13 @@
 import type { VisionJobResponse, VisionSuggestRequest } from "@kit/api-contract";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { VisionRequestError } from "../src/api/vision";
 import { IDENTITY_TIMEOUT_ERROR } from "../src/capture/identityDraftQueue";
 import { IDENTITY_PHOTOS_EMPTY } from "../src/capture/identitySuggestRequest";
 import { type IdentityReadDeps, runIdentityRead } from "../src/capture/use-confirm-vision";
 
-vi.mock("expo-constants", () => ({ default: { expoConfig: { extra: {} } } }));
+/** What `VisionRequestError` (src/api/vision.ts) is: an Error with the response status. */
+function visionRequestError(message: string, status: number): Error {
+  return Object.assign(new Error(message), { name: "VisionRequestError", status });
+}
 
 const DRAFT = "draft-1";
 const JOB = "550e8400-e29b-41d4-a716-446655440010";
@@ -104,7 +106,7 @@ describe("runIdentityRead outcome lines", () => {
   it("names the start stage and the HTTP status before settling idle when the POST fails", async () => {
     const { deps, events } = harness({
       startJob: vi.fn(async () => {
-        throw new VisionRequestError("Kunne ikke starte Vision", 500);
+        throw visionRequestError("Kunne ikke starte Vision", 500);
       }),
     });
     await run(deps);

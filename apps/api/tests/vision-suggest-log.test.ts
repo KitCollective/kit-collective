@@ -5,6 +5,7 @@ import {
   billingPaywallErrorSchema,
   identitySessionSchema,
   VISION_MATCHER_JERSEY_CAP,
+  type VisionSuggestRequest,
   visionSuggestResponseSchema,
 } from "@kit/api-contract";
 import { createDb, resetDatabase, visionLog } from "@kit/db";
@@ -40,12 +41,16 @@ async function registerSession(app: NestFastifyApplication, email: string) {
   return identitySessionSchema.parse(JSON.parse(response.body));
 }
 
-function suggestIdentity(app: NestFastifyApplication, accessToken: string, payload: unknown) {
+function suggestIdentity(
+  app: NestFastifyApplication,
+  accessToken: string,
+  payload: VisionSuggestRequest,
+) {
   return app.inject({
     method: "POST",
     url: "/v1/collection/vision/suggest",
     headers: { authorization: `Bearer ${accessToken}` },
-    payload: payload as Record<string, unknown>,
+    payload,
   });
 }
 
