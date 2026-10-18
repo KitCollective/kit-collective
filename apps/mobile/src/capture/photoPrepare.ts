@@ -221,6 +221,10 @@ async function readPreparedDevicePhoto(
   return pending;
 }
 
+/**
+ * Warms the display, strip and lightbox copies. Not visionIdentity: its read bypasses the cache,
+ * so a warm copy would be a second prepare nothing reads.
+ */
 export function warmDevicePrepareForDraft(
   draft: CaptureJerseyDraft,
   adapter: PhotoManipulatorAdapter,
@@ -232,11 +236,6 @@ export function warmDevicePrepareForDraft(
     scheduleDevicePhotoPrepare(photo.uri, photo.role, "display", adapter);
     scheduleDevicePhotoPrepare(photo.uri, photo.role, "strip", adapter);
     scheduleDevicePhotoPrepare(photo.uri, photo.role, "lightbox", adapter);
-  }
-
-  const firstBound = draft.photos.find((photo) => photo.role !== null);
-  if (firstBound?.role) {
-    scheduleDevicePhotoPrepare(firstBound.uri, firstBound.role, "visionIdentity", adapter);
   }
 }
 
