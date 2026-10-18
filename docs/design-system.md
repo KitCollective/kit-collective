@@ -1514,7 +1514,7 @@ Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *05 Søg 
 
 **Purpose**: Show another collector's jersey with the facts that decide a bid, and one way to bid.
 
-**Composition** (one scrolling column, the same as Own UserJersey detail; Tab bar hidden):
+**Composition** (one scrolling column, the same as Own UserJersey detail; Tab bar hidden on iOS, where the screen is a full-screen modal over the tabs. On Android the Material bar stays: react-native-screens falls back to a push inside the Søg stack, and hiding `NativeTabs` remounts the navigator (Hide behavior). Nicklas, 2026-10-18, KIT-290):
 1. **Photo**: 4:5, full width, swipe between photos. Round `surface` Back, Favorit and More buttons over it, and the count pill bottom-right. No thumb strip.
 2. **Title block**: a `caption` line with the type, plus **· Åben for bud** when it is; the club or national team in `display` 32; the season in `numeral` 44 trailing on the same baseline.
 3. **Player row** (only with a player): `fill.secondary`, `radius.md`, Number emblem `lg`, player name, `caption` **Spiller på ryggen**. No chevron; it is not editable.
@@ -1529,7 +1529,7 @@ Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *05 Søg 
 
 **More** opens a Sheet with **Rapportér** and **Blokér**.
 
-**Unsupported**: The immersive photo stage with a bottom sheet. The owner between the title and the facts. **Send bud** on a jersey that is not åben for bud. **Byd igen** beside a pending bid. Other collectors' amounts. An amount on the photo. Editing. Tab bar on this screen.
+**Unsupported**: The immersive photo stage with a bottom sheet. The owner between the title and the facts. **Send bud** on a jersey that is not åben for bud. **Byd igen** beside a pending bid. Other collectors' amounts. An amount on the photo. Editing. Tab bar on this screen on iOS.
 
 **Gaps** (flag, do not invent): the dock after a bid is accepted or declined; dark mode.
 
