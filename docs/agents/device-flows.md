@@ -27,13 +27,13 @@ Regression flows (`E2E_FLOWS=regression`): run them at a milestone, before a pro
 | `search-bid` | Test Collector | `01-typeahead`, `02-catalog-drill`, `03-foreign-detail`, `04-send-bid`, `05-amount-entered`, `06-bid-sent` |
 | `wishlist-paywall` | second test Collector | `01-wishlist`, `02-paywall` |
 
-The three `add-jersey-*` flows beyond `add-jersey` pick the one photo of the one-photo simulator. The Data drill that Vælg opens has no `testID` on its club, season and type controls (and the club picker's rows), so `add-jersey-vision-failure` taps them by a pattern on their copy (`.*AaB.*`, `.*2023/24.*`, `.*Hjemme.*`, the drill's `Gem`) and goes on to Save by hand; `add-jersey-vision-off` stops at the opened drill and asserts it by the copy of its first row. Add the testIDs to the drill to replace the copy taps.
+The three `add-jersey-*` flows beyond `add-jersey` pick the fixture photo, the newest in the simulator's library. The Data drill that Vælg opens has no `testID` on its club, season and type controls (and the club picker's rows), so `add-jersey-vision-failure` taps them by a pattern on their copy (`.*AaB.*`, `.*2023/24.*`, `.*Hjemme.*`, the drill's `Gem`) and goes on to Save by hand; `add-jersey-vision-off` stops at the opened drill and asserts it by the copy of its first row. Add the testIDs to the drill to replace the copy taps.
 
 Every flow first calls `POST /v1/e2e/test-data`, so flows are independent and a re-run starts from the same rows. A screenshot is `kc__<flow>__<step>.png`; a recording is `kc__<flow>.mp4`.
 
 ### The fixed Vision answer
 
-The reset takes an optional JSON body, `{"vision": "<case>"}`, that picks what the fixed Vision of the Test Collector answers until the next reset (the case lives in the API process). `reset-test-data.js` sends it when a `VISION` is defined, and `subflows/sign-in.yaml` passes the `VISION` its caller gives it (none means an empty body and the API's default, `resolved`). It sets no `env:` default of its own: Maestro defines a header `env:` after the caller's value, so a default there overrides every caller.
+The reset takes an optional JSON body, `{"vision": "<case>"}`, that picks what the fixed Vision of the Test Collector answers until the next reset (the case lives in the API process). `reset-test-data.js` sends it when a `VISION` is defined, and `subflows/sign-in.yaml` passes the `VISION` its caller gives it (none means `{}` and the API's default, `resolved`). It sets no `env:` default of its own: Maestro defines a header `env:` after the caller's value, so a default there overrides every caller.
 
 | `vision` | The Test Collector's Vision answers |
 | --- | --- |
@@ -69,7 +69,8 @@ Flows tap by `testID`, so a copy change does not break a flow. The exceptions, e
 - the app's own upload source sheet option `Fotos` (a system action sheet), by label;
 - the system photo picker: the first cell and its confirm button, by screen point, on a simulator whose library holds the iOS sample photos and the fixture, which is the newest and so the first cell; a flow with several photos taps the cells by screen point too, three to a row, newest first;
 - iOS's "save password" prompt: `Ikke nu` / `Not Now`, by text, when it shows;
-- two waits for text: the Saved sheet's count line (`Trøje nr. n i din samling`, which fills in after the sheet opens) and the first row of the Data drill; they assert, they never tap.
+- two waits for text: the Saved sheet's count line (`Trøje nr. n i din samling`, which fills in after the sheet opens) and the first row of the Data drill; they assert, they never tap;
+- the Data drill's picks (club, season, type) and its `Gem`, which `add-jersey-vision-failure` taps by a pattern on their copy until the drill has testIDs.
 
 When a slice adds a control a flow must tap, add the `testID` in the same PR. Adding a `testID` is not a UI change; do not restyle a screen to make a flow pass.
 

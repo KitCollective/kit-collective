@@ -1,7 +1,7 @@
 # Tilføj trøje with the Vision switch off on the start sheet (KIT-284): one photo lands on Confirm
 # with the empty identity block ("Vision er slået fra", Vælg), and Vælg opens the Data drill.
-# The picks inside the Data drill (club, season, type) have no testIDs, so the flow stops at the
-# opened drill and does not Save. Tapping them by copy would break on a text change.
+# The flow stops at the opened drill and does not Save: add-jersey-vision-failure walks the drill
+# and Saves by hand.
 appId: app.kitcollective.mobile
 name: add-jersey-vision-off
 ---
@@ -24,8 +24,8 @@ name: add-jersey-vision-off
 - tapOn:
     id: capture-source-gallery
 - tapOn: Fotos
-# The system photo picker has no stable ids. The flows' simulator holds exactly
-# one fixture photo, newest first: the first cell, then the confirm button.
+# The system photo picker has no stable ids. The simulator's library holds the fixture photo,
+# newest first, among the iOS sample photos: the first cell, then the confirm button.
 - waitForAnimationToEnd:
     timeout: 8000
 # A cold simulator shows the picker before its cells have loaded (the first flow of a run missed

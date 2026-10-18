@@ -1,7 +1,7 @@
 # Tilføj trøje when Vision is not sure (identity confidence 60, KIT-284): the identity block asks
 # "Brug forslaget" / "Vælg selv", Save stays off until one is pressed. Here the suggestion is
 # accepted, then size and condition, Gem and the Saved sheet. The Data drill that "Vælg selv"
-# opens has no testIDs yet, so that branch is not walked (see add-jersey-vision-off for the drill).
+# opens has no testIDs yet, so that branch is not walked (add-jersey-vision-failure walks the drill).
 appId: app.kitcollective.mobile
 name: add-jersey-low-confidence
 ---
@@ -20,8 +20,8 @@ name: add-jersey-low-confidence
 - tapOn:
     id: capture-source-gallery
 - tapOn: Fotos
-# The system photo picker has no stable ids. The flows' simulator holds exactly
-# one fixture photo, newest first: the first cell, then the confirm button.
+# The system photo picker has no stable ids. The simulator's library holds the fixture photo,
+# newest first, among the iOS sample photos: the first cell, then the confirm button.
 - waitForAnimationToEnd:
     timeout: 8000
 # A cold simulator shows the picker before its cells have loaded (the first flow of a run missed

@@ -1,4 +1,5 @@
 import type { Db } from "@kit/db";
+import { Logger } from "@nestjs/common";
 import { resolveCatalogSide } from "../e2e/catalog-side.js";
 import {
   DEFAULT_VISION_CASE,
@@ -32,16 +33,20 @@ export function setFixedVisionCase(visionCase: VisionCase): void {
  * and resolves against the catalog at hand. The answer is the active case.
  */
 export class FixedVisionAdapter implements VisionAdapter {
+  private readonly logger = new Logger(FixedVisionAdapter.name);
+
   constructor(private readonly db: Db) {}
 
-  async infer(_photos: VisionIdentityPhotoInput[]): Promise<VisionInferenceResult | null> {
+  async infer(photos: VisionIdentityPhotoInput[]): Promise<VisionInferenceResult | null> {
     const answer = FIXED_VISION_CASES[activeCase];
+    this.logger.log(`identity read, case ${activeCase}, ${photos.length} photo(s)`);
     if (answer === "fails") {
       throw new Error("Fixed Vision is set to fail");
     }
     const confidence = answer.identityConfidence;
     const side = await resolveCatalogSide(this.db, FIXED_VISION_SUGGESTION.side);
     if (!side) {
+      this.logger.warn("identity read: the fixed side is not in the catalog");
       return null;
     }
     return {
@@ -65,6 +70,7 @@ export class FixedVisionAdapter implements VisionAdapter {
     photos: VisionGroupingPhotoInput[],
   ): Promise<VisionGroupingInferenceResult | null> {
     const answer = FIXED_VISION_CASES[activeCase];
+    this.logger.log(`grouping read, case ${activeCase}, ${photos.length} photo(s)`);
     if (answer === "fails") {
       throw new Error("Fixed Vision is set to fail");
     }

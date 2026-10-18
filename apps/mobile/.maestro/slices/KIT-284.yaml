@@ -22,9 +22,8 @@
 # - Vision failing on Confirm for one photo is the same regression flow, not repeated here.
 #
 # The picker points below are those of KIT-282 (first cell at 16%,25%, row pitch about 15% of the
-# height on an iPhone 17), carried over to five rows, and a scroll for the sixteenth photo. The
-# hosted run on the PR head passed with all sixteen taps landing; if a picker changes, only the
-# points change.
+# height on an iPhone 17), carried over to five rows, and a scroll for the sixteenth photo. If a
+# picker changes, only the points change.
 appId: app.kitcollective.mobile
 name: kit-284
 ---

@@ -21,8 +21,8 @@ name: add-jersey-vision-failure
 - tapOn:
     id: capture-source-gallery
 - tapOn: Fotos
-# The system photo picker has no stable ids. The flows' simulator holds exactly
-# one fixture photo, newest first: the first cell, then the confirm button.
+# The system photo picker has no stable ids. The simulator's library holds the fixture photo,
+# newest first, among the iOS sample photos: the first cell, then the confirm button.
 - waitForAnimationToEnd:
     timeout: 8000
 # A cold simulator shows the picker before its cells have loaded (the first flow of a run missed
