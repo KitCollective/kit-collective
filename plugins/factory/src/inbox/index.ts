@@ -4,9 +4,10 @@
 import { type BbPluginApi, cliCommand, PluginCliError } from "@get-bb/plugin-sdk";
 import { CHANGED } from "../contract.js";
 import { parseRegistry } from "../loop-registry.js";
-import { buildCards } from "./cards.js";
+import { alarmCards, buildCards, mentionCards, withNotices } from "./cards.js";
 import { type InboxCardDto, type InboxConfig, inboxConfig } from "./contract.js";
 import { fetchWaiting, settleIssue } from "./linear.js";
+import { fetchAlarmThread, fetchMentions, markMentionRead } from "./notices.js";
 
 const CONFIG_KEY = "inbox";
 
@@ -30,10 +31,14 @@ function describe(cards: InboxCardDto[]): string {
     `${cards.length} waiting in the Inbox`,
     ...cards.map((card) => {
       const pull = card.pullRequest === null ? "" : ` PR #${card.pullRequest.number}`;
-      const detail =
-        card.kind === "question"
-          ? `${card.label ?? "question"}: ${card.waiting?.ask ?? "no question in the workpad"}`
-          : `review: ${card.review?.verdict ?? "no verdict recorded"}`;
+      const detail = {
+        question: () =>
+          `${card.label ?? "question"}: ${card.waiting?.ask ?? "no question in the workpad"}`,
+        review: () => `review: ${card.review?.verdict ?? "no verdict recorded"}`,
+        mention: () =>
+          `mention by ${card.mention?.author ?? "someone"}: ${card.mention?.comment ?? ""}`,
+        alarm: () => `alarm: ${card.alarm?.problems.join("; ") || "no problem listed"}`,
+      }[card.kind]();
       return `${card.identifier}${pull} ${card.title} (${detail})`;
     }),
   ].join("\n");
@@ -68,17 +73,48 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     return { setting, registry: registry.registry, teamKey };
   }
 
-  /** The cards, read from Linear now; nothing is kept between calls. */
+  /**
+   * The cards, read from Linear now; nothing is kept between calls. The waiting issues, the mentions
+   * and the alarms are three reads: one that fails is named in `error` and the others still show.
+   */
   async function list() {
     try {
       const { setting, registry, teamKey } = await resolve();
-      const issues = await fetchWaiting(await deps.linearApiKey(), teamKey, setting.state);
-      const cards = buildCards(issues, {
-        config: setting,
-        workpadHeading: registry.workpadHeading,
-        verdictOf: (identifier) => deps.gateRuns.latestReview(identifier, 0)?.verdictLine ?? null,
-      });
-      return { error: null, cards };
+      const key = await deps.linearApiKey();
+      const [waiting, mentions, alarm] = await Promise.allSettled([
+        fetchWaiting(key, teamKey, setting.state),
+        fetchMentions(key),
+        setting.alarmIssue === undefined
+          ? Promise.resolve(null)
+          : fetchAlarmThread(key, setting.alarmIssue),
+      ]);
+      const errors: string[] = [];
+      const failed = (what: string, outcome: PromiseSettledResult<unknown>) => {
+        if (outcome.status === "rejected") {
+          const reason: unknown = outcome.reason;
+          errors.push(`${what}: ${reason instanceof Error ? reason.message : String(reason)}`);
+        }
+      };
+      failed("waiting issues", waiting);
+      failed("mentions", mentions);
+      failed("alarms", alarm);
+      const issueCards =
+        waiting.status === "fulfilled"
+          ? buildCards(waiting.value, {
+              config: setting,
+              workpadHeading: registry.workpadHeading,
+              verdictOf: (identifier) =>
+                deps.gateRuns.latestReview(identifier, 0)?.verdictLine ?? null,
+            })
+          : [];
+      const notices = [
+        ...(mentions.status === "fulfilled" ? mentionCards(mentions.value) : []),
+        ...(alarm.status === "fulfilled" && alarm.value !== null ? alarmCards(alarm.value) : []),
+      ];
+      return {
+        error: errors.length === 0 ? null : errors.join("; "),
+        cards: withNotices(issueCards, notices),
+      };
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error), cards: [] };
     }
@@ -117,14 +153,29 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     }
   }
 
+  /** Handling a mention (opening it or dismissing it) marks its notification read in Linear. */
+  async function read({ notificationId }: { notificationId: string }) {
+    try {
+      if ((await config()) === null) {
+        throw new Error(`the Inbox is not set up: run \`${SETUP}\` (docs/agents/optio.md)`);
+      }
+      await markMentionRead(await deps.linearApiKey(), notificationId);
+      deps.bb.realtime.publish(CHANGED, {}); // open pages read again
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
   const answer = ({ identifier, answer }: { identifier: string; answer: string }) =>
     settle(identifier, answer, true);
   const reject = ({ identifier, comment }: { identifier: string; comment: string }) =>
     settle(identifier, comment, false);
 
   const command = cliCommand({
-    summary: "List what waits for a person in the Inbox: reviews first, then questions",
-    description: `With --state and --labels it sets where the Inbox looks instead: the state issues wait in, and the labels that mark a question. --project names the bb project whose factory.config.json gives the Linear team; without it the Board's project is used. --off switches the Inbox off.`,
+    summary:
+      "List what waits for a person in the Inbox: reviews first, then questions, mentions and alarms",
+    description: `With --state and --labels it sets where the Inbox looks instead: the state issues wait in, and the labels that mark a question. --project names the bb project whose factory.config.json gives the Linear team; without it the Board's project is used. --alarm-issue names the issue the watchdog comments on; without it there are no alarm cards. --off switches the Inbox off.`,
     options: {
       json: { type: "boolean", description: "Emit machine-readable JSON" },
       state: { type: "string", description: "Set the state issues wait in" },
@@ -132,6 +183,10 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
       project: {
         type: "string",
         description: "Set the bb project to read factory.config.json from",
+      },
+      "alarm-issue": {
+        type: "string",
+        description: "Set the issue whose watchdog alarm comments show as cards",
       },
       off: { type: "boolean", description: "Switch the Inbox off" },
     },
@@ -146,11 +201,13 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
             state: options.state,
             questionLabels: options.labels.split(",").map((label) => label.trim()),
             ...(options.project === undefined ? {} : { projectId: options.project }),
+            ...(options["alarm-issue"] === undefined ? {} : { alarmIssue: options["alarm-issue"] }),
           });
           if (!parsed.success) {
-            throw new PluginCliError("--state, --project and every label must be non-empty", {
-              code: "invalid_config",
-            });
+            throw new PluginCliError(
+              "--state, --project, --alarm-issue and every label must be non-empty",
+              { code: "invalid_config" },
+            );
           }
           await deps.bb.storage.kv.set(CONFIG_KEY, parsed.data);
         }
@@ -168,5 +225,5 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     },
   });
 
-  return { list, answer, reject, command };
+  return { list, answer, reject, read, command };
 }
