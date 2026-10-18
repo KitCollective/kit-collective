@@ -29,8 +29,13 @@ const inboxCard = z.object({
     .nullable(),
   /** The recorded review verdict and the pull request's title; null on a question. */
   review: z.object({ verdict: z.string().nullable(), change: z.string().nullable() }).nullable(),
-  /** When the issue entered the state (ISO). */
+  /** When the issue entered the state (ISO); for a Staff question, when it was asked. */
   since: z.string(),
+  /**
+   * Set on a Staff question only: the Staff chat it was asked in, which the person answers in. The
+   * card leaves the Inbox once they have.
+   */
+  chat: z.object({ threadId: z.string() }).optional(),
 });
 
 export const inboxContract = {

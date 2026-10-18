@@ -1,4 +1,4 @@
-// The staff area: the Agents page, its agents, their chat, memory, automations, follow-ups,
+// The staff area: the Staff page, its agents, their chat, memory, automations, follow-ups,
 // Linear triggers and instructions, and the composer's agent picker.
 import { useBbNavigate, useComposer } from "@get-bb/plugin-sdk/app";
 import type { ComponentType } from "react";
@@ -21,17 +21,22 @@ import { Back, CheckboxRow, Empty, Labeled, Page, Problem, Rows, Section } from 
 import type { Rpc } from "../shared/use-loaded";
 import { useLoaded } from "../shared/use-loaded";
 
-// ---- Agent list ------------------------------------------------------------------------------
+// ---- Staff list ------------------------------------------------------------------------------
 
-function AgentList() {
+function StaffList() {
   const navigate = useBbNavigate();
-  const { value, error } = useLoaded((rpc) => rpc.call("agents_list"), "list");
+  const { value, error, rpc, report } = useLoaded((rpc) => rpc.call("staff_list"), "list");
   const open = (subPath: string) => navigate.toPluginPanel(PANEL, { subPath });
+  /** Opens the Staff member's one standing chat; Optio makes it the first time. */
+  const chat = (agentId: string) =>
+    rpc
+      .call("staff_chat_open", { agentId })
+      .then(({ threadId }) => navigate.toThread(threadId), report);
   return (
     <Page>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          Standing agents with their own instructions, memory and recurring tasks.
+          The Staff, each with their one standing chat. Other agents are listed below them.
         </p>
         <div className="flex shrink-0 gap-2">
           <Button variant="outline" onClick={() => open("runs")}>
@@ -51,40 +56,81 @@ function AgentList() {
       <Problem message={error} />
       <div className="mt-4">
         {value === null ? (
-          <Empty>Loading agents…</Empty>
-        ) : value.agents.length === 0 ? (
-          <Empty>No agents yet. Create one for each area you want a standing expert in.</Empty>
+          <Empty>Loading the Staff…</Empty>
+        ) : value.staff.length === 0 && value.others.length === 0 ? (
+          <Empty>No Staff yet. A Staff member is an agent with a Charter in its project.</Empty>
         ) : (
-          <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
-            {value.agents.map((agent) => (
-              <li key={agent.id}>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent"
-                  onClick={() => open(agent.id)}
-                >
-                  <Icon
-                    name="Bot"
-                    className={cn("size-5 shrink-0", !agent.enabled && "text-muted-foreground")}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {agent.name}
-                      {agent.enabled ? null : (
-                        <span className="ml-2 font-normal text-muted-foreground">off</span>
-                      )}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {agent.description || "No description"}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {agent.memories} memories · {agent.automations} automations
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <>
+            {value.staff.length === 0 ? (
+              <Empty>No agent has a Charter yet.</Empty>
+            ) : (
+              <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+                {value.staff.map((member) => (
+                  <li key={member.agentId} className="flex items-center">
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-accent"
+                      onClick={() => chat(member.agentId)}
+                    >
+                      <Icon name="MessageSquare" className="size-5 shrink-0" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-foreground">
+                          {member.name}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {member.title}
+                        </span>
+                      </span>
+                    </button>
+                    <Button
+                      variant="ghost"
+                      className="mr-2 shrink-0"
+                      onClick={() => open(member.agentId)}
+                    >
+                      Settings
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {value.others.length === 0 ? null : (
+              <>
+                <h3 className="mb-2 mt-6 text-xs font-medium uppercase text-muted-foreground">
+                  Other agents
+                </h3>
+                <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+                  {value.others.map((agent) => (
+                    <li key={agent.id}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent"
+                        onClick={() => open(agent.id)}
+                      >
+                        <Icon
+                          name="Bot"
+                          className={cn(
+                            "size-5 shrink-0",
+                            !agent.enabled && "text-muted-foreground",
+                          )}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-foreground">
+                            {agent.name}
+                            {agent.enabled ? null : (
+                              <span className="ml-2 font-normal text-muted-foreground">off</span>
+                            )}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {agent.description || "No description"}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </>
         )}
       </div>
     </Page>
@@ -1060,7 +1106,7 @@ export function Agents({
   views: Readonly<Record<string, ComponentType>>;
 }) {
   const path = subPath.replace(/^\/+|\/+$/g, "");
-  if (path === "") return <AgentList />;
+  if (path === "") return <StaffList />;
   if (path === "new") return <NewAgent />;
   if (Object.hasOwn(views, path)) {
     const View = views[path];

@@ -9,6 +9,7 @@ import { fetchLinearOptions } from "../linear-api.js";
 import { assertCron, renderBrief } from "../sessions.js";
 import { json } from "../shared/cli.js";
 import type { Run } from "../store.js";
+import { createStaffChats } from "./chats.js";
 import type { staffContract } from "./contract.js";
 
 function describeRun(run: Run): string {
@@ -39,7 +40,14 @@ export function createStaff(core: Core) {
     return { threadId: run.threadId };
   };
 
+  const chats = createStaffChats(core);
+
   const rpc: PluginRpcHandlers<typeof staffContract> = {
+    staff_list: () => chats.list(),
+    async staff_chat_open({ agentId }) {
+      return { threadId: await chats.open(agentId) };
+    },
+    staff_chat_header: ({ threadId }) => chats.header(threadId),
     async agents_list() {
       const projects = await bb.sdk.projects.list();
       return {
@@ -194,6 +202,56 @@ export function createStaff(core: Core) {
       run(input) {
         const agent = cliAgent(input.positionals.agent);
         return { exitCode: 0, stdout: renderBrief(agent, agents.memories(agent.id)) };
+      },
+    }),
+    chat: cliCommand({
+      summary:
+        "Print the thread id of a Staff member's standing Staff chat; Optio makes the chat the first time",
+      positionals: [agentPositional],
+      options: { json },
+      async run(input) {
+        const agent = cliAgent(input.positionals.agent);
+        let threadId: string;
+        try {
+          threadId = await chats.open(agent.id);
+        } catch (error) {
+          throw new PluginCliError(error instanceof Error ? error.message : String(error), {
+            code: "not_staff",
+          });
+        }
+        return {
+          exitCode: 0,
+          stdout: input.options.json ? JSON.stringify({ threadId }) : threadId,
+        };
+      },
+    }),
+    ask: cliCommand({
+      summary:
+        "Ask the person something that is theirs to decide: it shows in their Inbox as a card linking to your Staff chat, and leaves it when they answer there",
+      positionals: [
+        agentPositional,
+        {
+          name: "question",
+          description: "The question, with what you recommend",
+          required: true,
+          variadic: true,
+        },
+      ],
+      async run(input, ctx) {
+        const agent = cliAgent(input.positionals.agent);
+        const question = input.positionals.question.join(" ").trim();
+        if (question === "" || question.length > 4000) {
+          throw new PluginCliError("a question is 1 to 4000 characters", { code: "invalid_value" });
+        }
+        let threadId: string;
+        try {
+          ({ threadId } = await chats.ask(agent.id, question, ctx.threadId));
+        } catch (error) {
+          throw new PluginCliError(error instanceof Error ? error.message : String(error), {
+            code: "ask_failed",
+          });
+        }
+        return { exitCode: 0, stdout: `Asked in the Staff chat ${threadId}` };
       },
     }),
     "memory add": cliCommand({
@@ -405,5 +463,5 @@ export function createStaff(core: Core) {
     }),
   };
 
-  return { rpc, cli };
+  return { rpc, cli, openQuestions: chats.openQuestions };
 }

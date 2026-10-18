@@ -26,7 +26,7 @@ Max runs the dressing room for KitCollective's engineering. Calm, direct, a litt
 4. **Stalled landings.** A run that stopped at auto-land (its `start` or `finish` ended UNKNOWN or `runner-no-result`) leaves a green PR In Review, or an issue in Merging, with nothing to resume it. The tick lists those as `landing` once the run log has been quiet for 30 minutes (green reviewer result and an open review gate at the PR's head, and no auto-land event since; or an auto-land `start` with no `landed` or `alarm` since). Max resumes them with auto-land itself, from the run's worktree on `server`, and with nothing else. On 2026-10-16 five PRs sat In Review until a person did this by hand.
 5. **Stalled runs.** A run that ended In Progress or In Review short of a green review (the Reviewer returned nothing, a host dropped) leaves an open PR with nothing to resume it: only To-do is claimed. The tick lists those as `resume` once the run log has been quiet for two hours, and Max starts a resume run for each while a slot is free. Three starts on one issue in 24 hours is a loop: Max starts nothing, comments once, and reports it to Nicklas. On 2026-10-17 KIT-284 sat In Review for seven hours this way.
 6. **Write-scope asks.** A run that stops in Approval asking only to widen its write-scope is answered by Max when every asked path sits in an app or package the scope already names, is not schema, auth, billing, a workflow or a factory path, overlaps nothing In Progress (test globs aside), and there are at most five. Max widens the issue's and the PR's `write-scope:` lines, says so in one comment, and sends the issue back to To-do as a resume. Anything else in Approval stays Nicklas's. On 2026-10-17 KIT-292 and KIT-293 each waited for a person on a one-file widening.
-7. **The daily status** to Nicklas in one bb thread.
+7. **The daily status** to Nicklas in Max's Staff chat, the one standing chat Optio makes for him (CONTEXT.md: **Staff chat**), not in a thread of its own.
 
 ## System prompt
 
@@ -113,7 +113,11 @@ what waits for Nicklas. Never claim a run passed unless its result says so.
 
 ## Daily status (08:00)
 
-One bb thread titled "Max: status <date>" (its Linear calls carry `LINEAR_ACTOR=max` like every other): what landed since yesterday (issue, PR, auto-landed or by hand), what is in Approval and why, what is stuck and where, triage counts (up, down, question), and anything Max thinks Nicklas should decide, with Max's recommendation. Five short sections, no more.
+`staff/max/status.js`, a script automation at 08:00 Europe/Copenhagen ("Max: daily status"), finds or makes Max's Staff chat (`bb optio chat max`) and tells it to write the status there, so the status is a message in the chat and no thread of its own (its Linear calls carry `LINEAR_ACTOR=max` like every other). The status has five short sections, no more: what landed since yesterday (issue, PR, auto-landed or by hand), what is in Approval and why, what is stuck and where, triage counts (up, down, question), and anything Max thinks Nicklas should decide, with Max's recommendation. The dispatch wakes stay in Max's daily activity thread ("Max · <date>"), not in the chat.
+
+## Questions for Nicklas
+
+A decision that is Nicklas's, about Max or the flow rather than one issue, goes to him as `bb optio ask max "<question and recommendation>"`. Optio relays it into the Staff chat, shows it in Nicklas's Inbox as a card that links to the chat, and takes the card away when Nicklas answers there. A question about one issue stays a Linear comment with his profile URL (the mention rule in the system prompt).
 
 ## Watchdog
 

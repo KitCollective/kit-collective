@@ -81,7 +81,48 @@ const linearTrigger = z.object({
 
 const started = z.object({ threadId: z.string() });
 
+/** What a Staff chat's header shows about its Staff member. */
+const staffHeader = z.object({
+  agentId: z.string(),
+  name: z.string(),
+  title: z.string(),
+  status: z.enum(["on", "off", "paused"]),
+  /** When the newest daily activity thread was last active (ms); null when there is none yet. */
+  lastHeartbeat: z.number().nullable(),
+  /** The Charter's budget as written; `used` is null while nothing measures it. */
+  budget: z.object({ limit: z.string().nullable(), used: z.string().nullable() }),
+});
+
 export const staffContract = {
+  staff_list: {
+    input: z.null(),
+    output: z.object({
+      /** The agents that have a Charter, each with their standing chat once it exists. */
+      staff: z.array(
+        z.object({
+          agentId: z.string(),
+          name: z.string(),
+          title: z.string(),
+          chatThreadId: z.string().nullable(),
+        }),
+      ),
+      /** The agents without a Charter, so their pages stay reachable. */
+      others: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          description: z.string(),
+          enabled: z.boolean(),
+        }),
+      ),
+    }),
+  },
+  staff_chat_open: { input: z.object({ agentId: z.string() }).strict(), output: started },
+  staff_chat_header: {
+    input: z.object({ threadId: z.string() }).strict(),
+    /** Null when the thread is not a Staff chat. */
+    output: staffHeader.nullable(),
+  },
   agents_list: {
     input: z.null(),
     output: z.object({
@@ -178,3 +219,4 @@ export type AutomationDto = z.infer<typeof automation>;
 export type SessionDto = z.infer<typeof session>;
 export type FollowUpDto = z.infer<typeof followUp>;
 export type LinearTriggerDto = z.infer<typeof linearTrigger>;
+export type StaffHeaderDto = z.infer<typeof staffHeader>;

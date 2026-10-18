@@ -12,7 +12,7 @@ const CONFIG_KEY = "inbox";
 
 /** What the Inbox reads from the rest of the plugin; `Board` is the stored board config. */
 export interface InboxDeps<Board extends { teamKey: string; projectId: string }> {
-  bb: Pick<BbPluginApi, "storage" | "realtime">;
+  bb: Pick<BbPluginApi, "storage" | "realtime" | "server">;
   /** The stored board config, or null when the Board was never set up; the Inbox does not need it. */
   storedScheduler: () => Promise<Board | null>;
   /** The text of a bb project's `factory.config.json`; throws when it cannot be read. */
@@ -20,6 +20,10 @@ export interface InboxDeps<Board extends { teamKey: string; projectId: string }>
   linearApiKey: () => Promise<string>;
   /** The review gate record: the newest run for an issue. */
   gateRuns: { latestReview(issue: string, since: number): { verdictLine: string | null } | null };
+  /** The questions Staff members have put to the person in their Staff chats and that are still open. */
+  staffQuestions: () => Promise<
+    { agentId: string; name: string; question: string; askedAt: number; chatThreadId: string }[]
+  >;
 }
 
 const SETUP = "bb optio inbox --state <state> --labels <question labels> --project <bb project id>";
@@ -47,8 +51,46 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     return stored === undefined || stored === null ? null : inboxConfig.parse(stored);
   }
 
-  /** The cards, read from Linear now; nothing is kept between calls. */
+  /** One card per open Staff question, oldest first, linking to the chat it was asked in. */
+  async function staffCards(): Promise<InboxCardDto[]> {
+    const base = deps.bb.server.experimental_appUrl ?? deps.bb.server.loopbackBaseUrl;
+    return (await deps.staffQuestions())
+      .sort((a, b) => a.askedAt - b.askedAt)
+      .map(
+        (question): InboxCardDto => ({
+          identifier: question.name,
+          title: `Question in ${question.name}'s Staff chat`,
+          url: `${base}/thread/${question.chatThreadId}`,
+          pullRequest: null,
+          // A question, so the page shows it as one and never as a review that is ready to merge.
+          kind: "question",
+          label: question.name,
+          waiting: {
+            ask: question.question,
+            stage: "Staff chat",
+            asked: new Date(question.askedAt).toISOString().slice(0, 10),
+          },
+          review: null,
+          since: new Date(question.askedAt).toISOString(),
+          chat: { threadId: question.chatThreadId },
+        }),
+      );
+  }
+
+  /** The cards: Linear's, read now, then the Staff questions; nothing is kept between calls. */
   async function list() {
+    const linear = await linearCards();
+    try {
+      return { error: linear.error, cards: [...linear.cards, ...(await staffCards())] };
+    } catch (error) {
+      return {
+        error: linear.error ?? (error instanceof Error ? error.message : String(error)),
+        cards: linear.cards,
+      };
+    }
+  }
+
+  async function linearCards() {
     try {
       const setting = await config();
       if (setting === null) {

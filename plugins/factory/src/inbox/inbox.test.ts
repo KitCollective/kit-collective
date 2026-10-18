@@ -32,20 +32,27 @@ const registry = JSON.stringify({
   agent: { workpadHeading: "## Workpad" },
 });
 
-async function load(registryText = registry, { board = true } = {}) {
+async function load(registryText = registry, { board = true, threads = {} } = {}) {
   const host = createFakePluginHost({
     pluginId: "optio",
     settings: { linearWebhookSecret: "whsec", linearApiKey: "lin_key" },
     agentSkillIds: ["optio"],
     sdk: {
+      threads,
       projects: {
         list: async () => [{ id: "proj_1", name: "acme" }],
-        fileContent: async () => ({
-          content: registryText,
-          contentEncoding: "utf8",
-          mimeType: "application/json",
-          sizeBytes: registryText.length,
-        }),
+        fileContent: async ({ path }: { path: string }) => {
+          // A Charter under staff/, the registry for anything else.
+          const content = path.startsWith("staff/")
+            ? "---\ntitle: Engineering Manager\n---\n"
+            : registryText;
+          return {
+            content,
+            contentEncoding: "utf8",
+            mimeType: "application/json",
+            sizeBytes: content.length,
+          };
+        },
       },
     },
   });
@@ -135,10 +142,14 @@ const linear = (rows: () => Entry[]) =>
   });
 
 /** The plugin with the Inbox set up on `Waiting`, and Linear behind `fetch`. */
-async function inboxOn(rows: () => Entry[] = () => entries, registryText = registry) {
+async function inboxOn(
+  rows: () => Entry[] = () => entries,
+  registryText = registry,
+  threads: Record<string, unknown> = {},
+) {
   const fetchMock = linear(rows);
   vi.stubGlobal("fetch", fetchMock);
-  const loaded = await load(registryText);
+  const loaded = await load(registryText, { threads });
   const set = await loaded.cli(["inbox", "--state", "Waiting", "--labels", "asks, decide"]);
   expect(set.exitCode).toBe(0);
   return { ...loaded, fetchMock };
@@ -288,6 +299,132 @@ describe("the Inbox", () => {
       const { rpc, cli } = await load(registry, { board: false });
       await cli(["inbox", "--state", "Waiting", "--labels", "asks", "--project", "proj_1"]);
       expect((await rpc("inbox_list", null)).error).toContain("linear.teamKey");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("Staff questions in the Inbox", () => {
+  /** Threads where the project holds a Charter for `max`, and the chat's timeline is `timeline()`. */
+  const staffThreads = (timeline: () => unknown[], sent: string[] = []) => ({
+    spawn: async () => ({ id: "thr_chat" }),
+    get: async () => ({ status: "idle", archivedAt: null }),
+    list: async () => [],
+    timeline: async () => ({ rows: timeline() }),
+    send: async ({ input }: { input: { text: string }[] }) => {
+      sent.push(input.map((part) => part.text).join(""));
+      return {};
+    },
+  });
+  const withMax = async (rows: () => Entry[], threads: Record<string, unknown>) => {
+    const loaded = await inboxOn(rows, registry, threads);
+    await loaded.rpc("agent_create", {
+      name: "Max",
+      description: "",
+      projectId: "proj_1",
+      instructions: "x",
+      enabled: true,
+      httpTrigger: false,
+    });
+    return loaded;
+  };
+  const reply = (text: string, createdAt: number) => ({
+    kind: "conversation",
+    role: "user",
+    initiator: "user",
+    senderThreadId: null,
+    text,
+    createdAt,
+  });
+
+  it("shows a card after the Linear cards, linking to the chat, until the person answers there", async () => {
+    let rows: unknown[] = [];
+    const sent: string[] = [];
+    try {
+      const { rpc, cli } = await withMax(
+        () => entries,
+        staffThreads(() => rows, sent),
+      );
+      const asked = await cli(["ask", "max", "Ship", "the", "paywall", "Friday?"]);
+      expect(asked.exitCode).toBe(0);
+      // Asked from outside the chat, so the question was relayed into it first.
+      expect(sent).toEqual(["[optio ask] Ship the paywall Friday?"]);
+
+      const inbox = await rpc("inbox_list", null);
+      expect(inbox.cards.map((card) => card.identifier)).toEqual([
+        "ENG-1",
+        "ENG-2",
+        "ENG-3",
+        "Max",
+      ]);
+      expect(inbox.cards[3]).toMatchObject({
+        kind: "question",
+        label: "Max",
+        title: "Question in Max's Staff chat",
+        pullRequest: null,
+        review: null,
+        waiting: { ask: "Ship the paywall Friday?", stage: "Staff chat" },
+        chat: { threadId: "thr_chat" },
+      });
+      expect(inbox.cards[3]?.url).toContain("thr_chat");
+
+      // Optio's own messages and an agent's do not answer it.
+      rows = [
+        reply("[optio status] daily status", Date.now() + 10),
+        {
+          ...reply("the agent says", Date.now() + 10),
+          initiator: "agent",
+          senderThreadId: "thr_x",
+        },
+        { ...reply("old", Date.now() - 60_000) },
+      ];
+      expect((await rpc("inbox_list", null)).cards).toHaveLength(4);
+
+      // The person writes in the chat, here inside a turn row.
+      rows = [...rows, { kind: "turn", children: [reply("Yes, Friday.", Date.now() + 20)] }];
+      expect((await rpc("inbox_list", null)).cards.map((card) => card.identifier)).toEqual([
+        "ENG-1",
+        "ENG-2",
+        "ENG-3",
+      ]);
+      // Gone for good: a later message does not bring it back.
+      rows = [];
+      expect((await rpc("inbox_list", null)).cards).toHaveLength(3);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not relay a question that Max asks from inside the chat", async () => {
+    const sent: string[] = [];
+    try {
+      const { rpc, cli } = await withMax(
+        () => entries,
+        staffThreads(() => [], sent),
+      );
+      await rpc("staff_chat_open", { agentId: "max" });
+      const run = await cli(["ask", "max", "In the chat?"], { threadId: "thr_chat" });
+      expect(run.exitCode).toBe(0);
+      expect(sent).toEqual([]);
+      expect((await rpc("inbox_list", null)).cards.at(-1)?.identifier).toBe("Max");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps the Staff card when Linear cannot be read", async () => {
+    const sent: string[] = [];
+    try {
+      const { rpc, cli } = await withMax(
+        () => entries,
+        staffThreads(() => [], sent),
+      );
+      await cli(["inbox", "--off"]);
+      await cli(["ask", "max", "Still there?"]);
+      const inbox = await rpc("inbox_list", null);
+      expect(inbox.error).toContain("not set up");
+      expect(inbox.cards.map((card) => card.identifier)).toEqual(["Max"]);
     } finally {
       vi.unstubAllGlobals();
     }
