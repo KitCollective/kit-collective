@@ -10,6 +10,7 @@ import { addFavorite, fetchFavorites, removeFavorite } from "@/api/favorites";
 import { blockPeer, reportPeer } from "@/api/moderation";
 import { useAuth } from "@/auth/AuthProvider";
 import { Sheet } from "@/components/catalog-ui";
+import { toastConfig } from "@/components/toast-config";
 import { Button, ButtonDock, IconButton } from "@/components/ui";
 import {
   JerseyFactRow,
@@ -248,11 +249,13 @@ export default function ForeignJerseyDetailScreen() {
 
       {/*
         This screen is a full-screen modal on iOS, a native surface the root <Toast> cannot cover:
-        the host lives here, like the (capture) group's. bottomOffset clears the dock.
+        the host lives here, like the (capture) group's. It carries the locked `toastConfig` too: Toast
+        routes every show to the last mounted host, so an `error` Toast must keep its danger chrome.
+        bottomOffset clears the dock.
         docs/design-system.md → Toast → Placement.
       */}
       <Toast
-        config={bidSentToastConfig}
+        config={{ ...toastConfig, ...bidSentToastConfig }}
         position="bottom"
         bottomOffset={Math.max(insets.bottom, space.insetMd) + BID_ROW_DOCK_CLEARANCE}
       />

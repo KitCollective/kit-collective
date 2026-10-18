@@ -130,6 +130,13 @@ describe("send bid screen chrome (KIT-270)", () => {
     expect(source).not.toContain("Seneste bud");
   });
 
+  it("remembers the sent-bid Toast only when back lands on this jersey's detail (KIT-291)", () => {
+    const source = readScreen();
+
+    expect(source).toContain("sitsDirectlyAboveForeignJerseyOf");
+    expect(source).toMatch(/if \(peerJersey && landsOnJerseyDetail\) \{\s+rememberBidSent/);
+  });
+
   it("keeps the documented test ids", () => {
     const source = readScreen();
 

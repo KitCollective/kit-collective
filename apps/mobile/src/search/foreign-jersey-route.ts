@@ -11,3 +11,22 @@ export const FOREIGN_JERSEY_ROUTE = "[jerseyId]";
 export function sitsAboveForeignJersey(routeNames: readonly string[], index: number): boolean {
   return routeNames.slice(0, index).includes(FOREIGN_JERSEY_ROUTE);
 }
+
+type StackRoute = { name: string; params?: object };
+
+/**
+ * True when the route at `index` sits directly on top of the detail of this same jersey, so
+ * going back lands on it. Send bud also opens from an Indbakke thread (Send nyt bud), where
+ * going back lands on the thread and the detail, if any, shows another jersey.
+ */
+export function sitsDirectlyAboveForeignJerseyOf(
+  routes: readonly StackRoute[],
+  index: number,
+  jerseyId: string,
+): boolean {
+  const below = routes[index - 1];
+  if (!below || below.name !== FOREIGN_JERSEY_ROUTE) {
+    return false;
+  }
+  return (below.params as { jerseyId?: string } | undefined)?.jerseyId === jerseyId;
+}

@@ -61,7 +61,8 @@ describe("foreign jersey detail screen chrome (KIT-290)", () => {
 
     expect(source).toContain("consumeBidSent");
     expect(source).toContain("<Toast");
-    expect(source).toContain("config={bidSentToastConfig}");
+    // Every host keeps the locked toastConfig: an error Toast routes to the last mounted host.
+    expect(source).toContain("config={{ ...toastConfig, ...bidSentToastConfig }}");
   });
 
   it("puts the owner block last in the column, after the fact rows", () => {

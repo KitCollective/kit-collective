@@ -22,7 +22,10 @@ import { Banner } from "@/components/catalog-ui";
 import { Button, IconButton } from "@/components/ui";
 import { normalizeBidAmountInput, sendBidButton } from "@/search/bid-rules";
 import { rememberBidSent } from "@/search/bid-sent-handoff";
-import { sitsAboveForeignJersey } from "@/search/foreign-jersey-route";
+import {
+  sitsAboveForeignJersey,
+  sitsDirectlyAboveForeignJerseyOf,
+} from "@/search/foreign-jersey-route";
 import { sendBidDockBottomPadding } from "@/search/send-bid-layout";
 import { buildSendBidSummary } from "@/search/send-bid-summary";
 import { useBrandFontsEnabled, useTypography } from "@/theme/brand-fonts";
@@ -118,6 +121,15 @@ export default function SendBidScreen() {
     );
   });
 
+  // The detail of this jersey is what back returns to. From an Indbakke thread (Send nyt bud) it
+  // is not, and the Toast must not wait for a later visit to the detail.
+  const [landsOnJerseyDetail] = useState(() => {
+    const state = navigation.getState();
+    return (
+      !!state && !!jerseyId && sitsDirectlyAboveForeignJerseyOf(state.routes, state.index, jerseyId)
+    );
+  });
+
   const parsedAmount = Number.parseInt(amount, 10);
   const submitButton = sendBidButton(amount);
   const canSubmit = !submitButton.disabled && !submitting;
@@ -132,7 +144,7 @@ export default function SendBidScreen() {
     try {
       await sendBid(accessToken, jerseyId, { amountDkk: parsedAmount });
       // The detail under this screen shows the Toast once, when it regains focus.
-      if (peerJersey) {
+      if (peerJersey && landsOnJerseyDetail) {
         rememberBidSent(jerseyId, peerJersey.ownerHandle);
       }
       router.back();
