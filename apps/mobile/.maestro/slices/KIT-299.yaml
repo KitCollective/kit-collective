@@ -1,0 +1,143 @@
+# KIT-299: More as a Sheet in the thread (Indbakke 1.0).
+#
+# design-sections: Conversation, Sheet, List row, Banner, Toast
+#
+# FIXTURE THIS FLOW READS (apps/api/src/e2e/test-data.fixture.ts): the Test Collector's thread
+# with e2e_peer (...0501), which holds the pending Buds the other slices read. The flow opens it
+# from Indbakke, opens More, walks Rapportér (Toast, stays in the thread), the Blokér confirm
+# (cancelled, so e2e_peer is not blocked), the Peer Profil row, and ends with Slet samtale.
+#
+# Not on a screen here, proved by tests instead: a thread a Collector hid comes back, unread,
+# when the other Collector writes or sends a Bud (apps/api/tests/conversation-moderation.test.ts),
+# what More offers and every accessible name (apps/mobile/tests/thread-view-model.test.ts), and
+# that a failed action shows a Banner and changes nothing: a simulator cannot make the API fail
+# on request.
+#
+# One tap is not by testID: the Thread row. It has none, and it lives in
+# src/components/thread-row.tsx, outside this issue's write-scope. The row is matched on its
+# accessibility name, which starts with the fixture Handle (as in KIT-295 and KIT-297).
+appId: app.kitcollective.mobile
+name: kit-299
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-299
+- tapOn: Indbakke
+- extendedWaitUntil:
+    visible: "e2e_peer, .*"
+    timeout: 15000
+- tapOn: "e2e_peer, .*"
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+# AC 1: More opens a Sheet over the thread (there is no Detaljer screen to land on).
+- tapOn:
+    id: conversation-more
+- extendedWaitUntil:
+    visible:
+      id: conversation-more-sheet
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+# AC 2, 3, 4, 10: the profile row (initial, Handle, city · n trøjer · Se profil, chevron), Rapportér,
+# Blokér with the Handle, Slet samtale in danger, and the caption under them.
+- assertVisible:
+    id: conversation-more-profile
+- assertVisible:
+    id: conversation-more-report
+- assertVisible:
+    id: conversation-more-block
+- assertVisible:
+    id: conversation-more-delete
+- takeScreenshot: kc__kit-299__01-more-sheet
+# AC 7: Rapportér confirms with a Toast and the Collector stays in the thread.
+- tapOn:
+    id: conversation-more-report
+- extendedWaitUntil:
+    visible: "Samtalen er rapporteret"
+    timeout: 15000
+- takeScreenshot: kc__kit-299__02-reported-toast
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+# AC 5: Blokér opens a Sheet confirm; Annuller blocks nothing.
+- tapOn:
+    id: conversation-more
+- extendedWaitUntil:
+    visible:
+      id: conversation-more-sheet
+    timeout: 15000
+- tapOn:
+    id: conversation-more-block
+- extendedWaitUntil:
+    visible:
+      id: conversation-confirm-submit
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-299__03-block-confirm
+- tapOn: "Annuller"
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+# AC 2: the profile row opens Peer Profil. Peer Profil has no testID, so the flow waits for e2e_peer's OB jersey copy.
+- tapOn:
+    id: conversation-more
+- extendedWaitUntil:
+    visible:
+      id: conversation-more-sheet
+    timeout: 15000
+- tapOn:
+    id: conversation-more-profile
+- extendedWaitUntil:
+    visible: ".*OB.*"
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-299__04-peer-profile
+# The profile is a Søg tab route, so there is no back to the thread. Indbakke still holds the thread
+# on top of its stack; when it shows the list instead, the row opens it again (as in KIT-297).
+- tapOn: Indbakke
+- waitForAnimationToEnd:
+    timeout: 5000
+- runFlow:
+    when:
+      notVisible:
+        id: conversation-header
+    commands:
+      - tapOn: "e2e_peer, .*"
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+# AC 6: Slet samtale opens a Sheet confirm and hides the thread only after the Collector confirms.
+- tapOn:
+    id: conversation-more
+- extendedWaitUntil:
+    visible:
+      id: conversation-more-sheet
+    timeout: 15000
+- tapOn:
+    id: conversation-more-delete
+- extendedWaitUntil:
+    visible:
+      id: conversation-confirm-submit
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-299__05-delete-confirm
+- tapOn:
+    id: conversation-confirm-submit
+# AC 6: afterwards the Collector is back in Indbakke and the thread is gone from the list.
+- extendedWaitUntil:
+    notVisible:
+      id: conversation-header
+    timeout: 15000
+- extendedWaitUntil:
+    notVisible: "e2e_peer, .*"
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-299__06-back-in-indbakke
+- stopRecording

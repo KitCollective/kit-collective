@@ -42,8 +42,6 @@ function LeadingSlot({
       );
     case "avatar": {
       const avatarUri = resolvePeerAvatarUrl(leading.avatarUrl);
-      // Avatar has no 44 size (`md` is 56, the closest); the centred slot lets it overhang evenly
-      // so the text column stays aligned with the other rows. Flagged as a design gap.
       return (
         <Avatar
           handle={leading.handle}
@@ -51,7 +49,7 @@ function LeadingSlot({
           uriHeaders={
             accessToken && avatarUri ? { Authorization: `Bearer ${accessToken}` } : undefined
           }
-          size="md"
+          size="sm"
         />
       );
     }

@@ -55,6 +55,7 @@ import {
   killSwitch,
   latestCheckRuns,
   maxPerDay,
+  prCheckRuns,
   prReadiness,
   queueState,
   receiptRefusal,
@@ -418,8 +419,17 @@ async function start() {
       `repos/${repo}/commits/${head}/check-runs?per_page=100`,
     ]),
   );
+  const dispatched = JSON.parse(
+    await gh([
+      "api",
+      `repos/${repo}/actions/runs?head_sha=${head}&event=workflow_dispatch&per_page=100`,
+    ]),
+  );
   const checks = latestCheckRuns(
-    (Array.isArray(pages) ? pages : [pages]).flatMap((page) => page?.check_runs ?? []),
+    prCheckRuns(
+      (Array.isArray(pages) ? pages : [pages]).flatMap((page) => page?.check_runs ?? []),
+      (dispatched?.workflow_runs ?? []).map((run) => run.check_suite_id),
+    ),
   );
   // A check still running is not a refusal: run start again, as for the gate (exit 3).
   if (checks.some((check) => check.conclusion === null)) {

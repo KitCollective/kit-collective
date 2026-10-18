@@ -392,6 +392,7 @@ async function discoverJerseyIds(app: NestFastifyApplication, session: Session):
 
 describe("Collection /v1", () => {
   let app: NestFastifyApplication;
+  let realPutObject: ObjectStoreAdapter["putObject"];
 
   beforeAll(async () => {
     process.env.DATABASE_URL = DATABASE_URL;
@@ -407,6 +408,8 @@ describe("Collection /v1", () => {
     app.setGlobalPrefix("v1");
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
+    const objectStore = app.get<ObjectStoreAdapter>(OBJECT_STORE);
+    realPutObject = objectStore.putObject.bind(objectStore);
   });
 
   afterAll(async () => {
@@ -414,6 +417,8 @@ describe("Collection /v1", () => {
   });
 
   beforeEach(async () => {
+    // A test that forgets its `finally` must not leak a fake putObject into the next test.
+    app.get<ObjectStoreAdapter>(OBJECT_STORE).putObject = realPutObject;
     await clearAuthThrottleHits();
   });
 
@@ -2829,35 +2834,65 @@ describe("Collection /v1", () => {
 
     await waitForDerivativeObjects(objectStore, objectKey!);
 
-    const originalUpload = await app.inject({
-      method: "PUT",
-      url: `/v1/collection/photos/${photoId}/original`,
-      headers: { authorization: `Bearer ${session.accessToken}` },
-      payload: { contentBase64: JPEG_BASE64 },
-    });
-    expect(originalUpload.statusCode).toBe(204);
-
     const prefix = photoPrefixFromStoredObjectKey(objectKey!);
     expect(prefix).not.toBeNull();
-    const variantKeys = [
-      variantObjectKey(prefix!, "grid"),
-      stripObjectKey(prefix!),
-      lightboxObjectKey(prefix!),
-      originalObjectKey(prefix!),
-    ];
-    for (const key of variantKeys) {
-      expect(await objectStore.objectExists(key)).toBe(true);
-    }
 
-    const deleteResponse = await app.inject({
-      method: "DELETE",
-      url: `/v1/collection/jerseys/${jersey.id}`,
-      headers: { authorization: `Bearer ${session.accessToken}` },
+    // The wrapper goes in after the save's own derivatives are in place, so the only lightbox put
+    // it can see is the /original PUT's fire-and-forget derivative job (whose last put is the lightbox).
+    const realPut = objectStore.putObject.bind(objectStore);
+    let derivativeJobDone!: () => void;
+    const derivativeJobFinished = new Promise<void>((resolve) => {
+      derivativeJobDone = resolve;
     });
-    expect(deleteResponse.statusCode).toBe(204);
+    objectStore.putObject = async (key, bytes) => {
+      await realPut(key, bytes);
+      if (key === lightboxObjectKey(prefix!)) {
+        derivativeJobDone();
+      }
+    };
 
-    for (const key of photoObjectKeysForDeletion(objectKey!)) {
-      expect(await objectStore.objectExists(key)).toBe(false);
+    try {
+      const originalUpload = await app.inject({
+        method: "PUT",
+        url: `/v1/collection/photos/${photoId}/original`,
+        headers: { authorization: `Bearer ${session.accessToken}` },
+        payload: { contentBase64: JPEG_BASE64 },
+      });
+      expect(originalUpload.statusCode).toBe(204);
+
+      let deadline: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        derivativeJobFinished,
+        new Promise<never>((_, reject) => {
+          deadline = setTimeout(
+            () => reject(new Error("Timed out waiting for the original's derivative job")),
+            5000,
+          );
+        }),
+      ]).finally(() => clearTimeout(deadline));
+
+      const variantKeys = [
+        variantObjectKey(prefix!, "grid"),
+        stripObjectKey(prefix!),
+        lightboxObjectKey(prefix!),
+        originalObjectKey(prefix!),
+      ];
+      for (const key of variantKeys) {
+        expect(await objectStore.objectExists(key)).toBe(true);
+      }
+
+      const deleteResponse = await app.inject({
+        method: "DELETE",
+        url: `/v1/collection/jerseys/${jersey.id}`,
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      });
+      expect(deleteResponse.statusCode).toBe(204);
+
+      for (const key of photoObjectKeysForDeletion(objectKey!)) {
+        expect(await objectStore.objectExists(key)).toBe(false);
+      }
+    } finally {
+      objectStore.putObject = realPut;
     }
   });
 

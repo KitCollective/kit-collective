@@ -295,7 +295,7 @@ function SearchHome() {
                                 ? { Authorization: `Bearer ${accessToken}` }
                                 : undefined
                             }
-                            size="md"
+                            size="sm"
                           />
                           <View style={styles.collectorText}>
                             <Text
