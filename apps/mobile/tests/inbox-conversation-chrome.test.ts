@@ -26,6 +26,19 @@ describe("inbox conversation chrome (KIT-118)", () => {
     expect(layoutSource).not.toContain("hideForWideConversation");
   });
 
+  it("opens a waiting row at its Bud every time on the wide layout (KIT-296)", () => {
+    const inboxSource = readFileSync(inboxIndexPath, "utf8");
+    const viewSource = readFileSync(conversationViewPath, "utf8");
+
+    // Every open mounts a fresh thread, so a re-opened conversation scrolls to its Bud again.
+    expect(inboxSource).toMatch(
+      /<ConversationView\s+key=\{`\$\{selectedConversationId\}:\$\{openCount\}`\}/,
+    );
+    expect(inboxSource).toMatch(/setOpenCount\(/);
+    // And a reused view starts over when the conversation or the Bud changes.
+    expect(viewSource).toMatch(/focusRequest\.current = \{ key, scrolled: false \}/);
+  });
+
   it("refreshes inbox unread after conversation GET succeeds", () => {
     const inboxSource = readFileSync(inboxIndexPath, "utf8");
     const viewSource = readFileSync(conversationViewPath, "utf8");

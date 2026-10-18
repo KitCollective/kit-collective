@@ -60,6 +60,8 @@ function InboxHome() {
   const [inbox, setInbox] = useState<CollectionConversations>(cachedInbox ?? NO_INBOX);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  // Counts opens: every tap on a row mounts a fresh thread, so a waiting row scrolls to its Bud again.
+  const [openCount, setOpenCount] = useState(0);
   // The jersey this Indbakke is filtered to (the own jersey detail's bid row). PlacePager also
   // renders this home as a neighbour page, so only the live copy reads the route param; it keeps
   // the value while blurred (a thread on top of Indbakke must not flash the unfiltered lists).
@@ -137,6 +139,7 @@ function InboxHome() {
     if (isWide) {
       setSelectedConversationId(conversationId);
       setSelectedMessageId(messageId);
+      setOpenCount((count) => count + 1);
       return;
     }
     router.push(
@@ -289,6 +292,7 @@ function InboxHome() {
         <View style={styles.conversationColumn}>
           {selectedConversationId ? (
             <ConversationView
+              key={`${selectedConversationId}:${openCount}`}
               conversationId={selectedConversationId}
               focusMessageId={selectedMessageId}
               onBack={() => setSelectedConversationId(null)}

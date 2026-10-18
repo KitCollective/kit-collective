@@ -52,7 +52,7 @@ type ConversationViewProps = {
   onConversationOpened?: () => void;
   /** After Blokér or Slet samtale ran; the Collector goes back to Indbakke. Defaults to `onBack`. */
   onConversationHidden?: () => void;
-  /** A message to open the thread at (a waiting Indbakke row passes its Bud); without it the thread opens at the newest message. */
+  /** A message to open the thread at (a waiting Indbakke row passes its Bud); without it the thread opens at its top. */
   focusMessageId?: string | null;
 };
 
@@ -94,7 +94,7 @@ export function ConversationView({
   const pendingMoreAction = useRef<MoreAction | null>(null);
   const listRef = useRef<FlatList>(null);
   // The thread scrolls to the focused message once per (conversation, message), not on every reload.
-  const focusedKey = useRef<string | null>(null);
+  const focusRequest = useRef<{ key: string; scrolled: boolean }>({ key: "", scrolled: false });
 
   const imageHeaders = useMemo(
     () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined),
@@ -130,12 +130,16 @@ export function ConversationView({
   const more = useMemo(() => (peer ? conversationMore(peer) : null), [peer]);
 
   useEffect(() => {
-    const index = threadItemIndex(items, focusMessageId);
     const key = `${conversationId}:${focusMessageId}`;
-    if (index === null || focusedKey.current === key) {
+    // A reused view (the wide Indbakke) can come back to a key it already scrolled to after another conversation: a new key starts over.
+    if (focusRequest.current.key !== key) {
+      focusRequest.current = { key, scrolled: false };
+    }
+    const index = threadItemIndex(items, focusMessageId);
+    if (index === null || focusRequest.current.scrolled) {
       return;
     }
-    focusedKey.current = key;
+    focusRequest.current.scrolled = true;
     listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.3 });
   }, [items, focusMessageId, conversationId]);
 
