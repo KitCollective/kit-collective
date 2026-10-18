@@ -166,6 +166,19 @@ describe("the standing Staff chat", () => {
     expect(spawns()).toHaveLength(1);
   });
 
+  it("is not made again when the host cannot be reached", async () => {
+    const failing = new Map<string, Error>();
+    const { rpc, agent, spawns } = await load({ failing });
+    await agent("max", "Max");
+    const first = await rpc("staff_chat_open", { agentId: "max" });
+    failing.set(
+      first.threadId,
+      Object.assign(new Error("getaddrinfo ENOTFOUND bb.local"), { code: "ENOTFOUND" }),
+    );
+    await expect(rpc("staff_chat_open", { agentId: "max" })).rejects.toThrow(/ENOTFOUND/);
+    expect(spawns()).toHaveLength(1);
+  });
+
   it("is refused for an agent with no Charter", async () => {
     const { rpc, agent, spawns } = await load();
     await agent("orchestrator", "Orchestrator");

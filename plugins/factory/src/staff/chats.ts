@@ -32,13 +32,17 @@ export type StaffStatus = "on" | "off" | "paused";
 const dailyThread = (name: string) => new RegExp(`^${escapeRegExp(name)} · \\d{4}-\\d{2}-\\d{2}`);
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Whether bb's answer to a thread read says the thread does not exist. */
+/**
+ * Whether bb's answer to a thread read says the thread does not exist: status 404 or an exact
+ * not-found code. Not the message: a network error such as `getaddrinfo ENOTFOUND` is not a missing
+ * thread, and a second standing chat must not be made for it.
+ */
 function isNotFound(error: unknown): boolean {
-  const text = (key: string) =>
+  const field = (key: string) =>
     typeof error === "object" && error !== null && key in error
       ? String(Reflect.get(error, key))
       : "";
-  return text("status") === "404" || /not.?found/i.test(`${text("code")} ${text("message")}`);
+  return field("status") === "404" || /^(thread_)?not_found$/i.test(field("code"));
 }
 
 const userRow = z.object({

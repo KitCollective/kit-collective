@@ -293,7 +293,7 @@ function Detail({
             className="hover:underline"
             onClick={card.kind === "mention" ? mention.open : undefined}
           >
-            {card.chat === undefined ? "Open in Linear" : "Open the Staff chat"}
+            Open in Linear
           </a>
           {card.pullRequest === null ? null : (
             <a
@@ -368,8 +368,7 @@ function Detail({
       {card.landing === null ? null : <Landing landing={card.landing} />}
       {card.kind === "review" ? <Approve key={card.id} card={card} /> : null}
       {/* A landing card's issue has left the Inbox state: there is nothing to answer or reject. */}
-      {/* A Staff question is answered in its Staff chat, not through Linear. */}
-      {(card.kind === "question" && card.chat === undefined) || card.kind === "review" ? (
+      {card.kind === "question" || card.kind === "review" ? (
         <Reply key={card.id} card={card} onSent={onSent} />
       ) : null}
     </article>
