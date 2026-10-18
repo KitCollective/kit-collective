@@ -14,8 +14,7 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../../src/contract";
 import type { InboxCardDto, InboxDto } from "../../src/inbox/contract";
-
-const PATH = "inbox";
+import { DOT, INBOX } from "../shared/common";
 
 function kindLabel(card: InboxCardDto): string {
   switch (card.kind) {
@@ -42,13 +41,6 @@ function preview(card: InboxCardDto): string {
       return card.review?.verdict ?? "No review verdict recorded.";
   }
 }
-
-const DOT: Record<InboxCardDto["kind"], string> = {
-  review: "bg-emerald-500",
-  question: "bg-amber-500",
-  mention: "bg-sky-500",
-  alarm: "bg-red-500",
-};
 
 function waited(since: string): string {
   const minutes = Math.max(0, Math.round((Date.now() - Date.parse(since)) / 60_000));
@@ -330,8 +322,8 @@ export function Inbox({ subPath }: PluginNavPanelProps) {
   const problem = failure ?? inbox?.error ?? null;
   const cards = inbox?.cards ?? [];
   const open = cards.find((card) => card.id === subPath) ?? null;
-  const show = (id: string) => navigate.toPluginPanel(PATH, { subPath: id });
-  const back = () => navigate.toPluginPanel(PATH, { subPath: "" });
+  const show = (id: string) => navigate.toPluginPanel(INBOX, { subPath: id });
+  const back = () => navigate.toPluginPanel(INBOX, { subPath: "" });
 
   return (
     <div className="flex h-full min-h-0 flex-1">

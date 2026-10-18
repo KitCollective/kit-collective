@@ -6,7 +6,6 @@
 import { cliCommand } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
 import type { Core } from "../core.js";
-import { inboxConfig } from "../inbox/contract.js";
 import {
   fileSettings,
   type Loop,
@@ -24,7 +23,6 @@ import type { LoopChangeDto, LoopDto, LoopsDto } from "./contract.js";
 import { formatSetting, STARTS_PER_DAY_NOTE } from "./format.js";
 
 const SUBJECT = "loop:";
-const INBOX_KEY = "inbox"; // where `bb optio inbox` keeps its config (src/inbox/index.ts)
 const LOG_LIMIT = 100;
 
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -101,7 +99,12 @@ function describe(loops: LoopDto[]): string {
   return `${text}\n\nstartsPerDay: ${STARTS_PER_DAY_NOTE}`;
 }
 
-export function createLoops(core: Core) {
+/** What the Loops read from the Inbox area: the bb project it was set up with, if any. */
+export interface LoopsDeps {
+  inbox: { projectId(): Promise<string | undefined> };
+}
+
+export function createLoops(core: Core, { inbox }: LoopsDeps) {
   const store = createSettingsStore(core.bb.storage.database());
 
   /** Every Loop's overrides by name, as the scheduler applies them. */
@@ -122,8 +125,8 @@ export function createLoops(core: Core) {
     if (named !== undefined) return named;
     const board = await core.storedScheduler();
     if (board !== null) return board.projectId;
-    const inbox = inboxConfig.safeParse(await core.bb.storage.kv.get<unknown>(INBOX_KEY));
-    if (inbox.success && inbox.data.projectId !== undefined) return inbox.data.projectId;
+    const inboxProject = await inbox.projectId();
+    if (inboxProject !== undefined) return inboxProject;
     throw new Error(
       "no bb project to read factory.config.json from: set up the Board, run `bb optio inbox --project <bb project id>`, or pass --project (docs/agents/optio.md)",
     );

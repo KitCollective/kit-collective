@@ -1,4 +1,4 @@
-// bb-plugin-optio — the Agents page and the Inbox.
+// bb-plugin-optio — the Agents page, the Inbox and the Home section.
 //
 // Compiled by `bb plugin build` into dist/app.js + dist/app.css. React and
 // @get-bb/plugin-sdk/app are provided by the BB app at load time (never bundled),
@@ -10,6 +10,7 @@
 // every Loop ("runs"); the staff area owns the panel and the board and runs areas hand it theirs.
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { Board } from "./pages/board";
+import { Waiting } from "./pages/home";
 import { Inbox } from "./pages/inbox";
 import { Loops } from "./pages/loops";
 import { Runs } from "./pages/runs";
@@ -28,6 +29,7 @@ export default definePluginApp((app) => {
     scopes: ["thread", "new-thread"],
     actions: [{ id: "pick-agent", component: AgentPicker }],
   });
+  app.slots.homepageSection({ id: "waiting", title: "Venter på dig", component: Waiting });
   // bb lists the panels in the order they are registered, so the Inbox comes first.
   app.slots.navPanel({
     id: "inbox",
