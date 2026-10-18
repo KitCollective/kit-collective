@@ -135,7 +135,16 @@ function extraAnswer(
     });
   }
   if (operation === "Mentions") {
-    return respondWith({ notifications: { ...page, nodes: extras.notifications ?? [] } });
+    // Pages the notifications as Linear does: the cursor is the offset of the next page.
+    const all = extras.notifications ?? [];
+    const start = Number(variables.after ?? 0);
+    const end = start + Number(variables.first);
+    return respondWith({
+      notifications: {
+        pageInfo: { hasNextPage: end < all.length, endCursor: String(end) },
+        nodes: all.slice(start, end),
+      },
+    });
   }
   if (operation === "Read") {
     const id = String(variables.id);
@@ -693,6 +702,37 @@ describe("mentions and watchdog alarms in the Inbox", () => {
       expect(extras.marked?.[0]?.id).toBe("n-1");
       expect(Number.isNaN(Date.parse(extras.marked?.[0]?.readAt ?? ""))).toBe(false);
       expect((await rpc("inbox_list", null)).cards.map((card) => card.id)).toEqual(["mention:n-2"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("finds an unread mention however far back the notification list goes", async () => {
+    const busy = Array.from({ length: 1200 }, (_, index) =>
+      mention(`n-${index}`, { type: "issueAssignedToYou" }),
+    );
+    const extras: Extras = { notifications: [...busy, mention("n-old")] };
+    try {
+      const { rpc } = await inboxOn(() => [], registry, extras);
+      const { cards, error } = await rpc("inbox_list", null);
+      expect(error).toBeNull();
+      expect(cards.map((card) => card.id)).toEqual(["mention:n-old"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("names the cap instead of hiding older mentions when the list is longer than it reads", async () => {
+    const extras: Extras = {
+      notifications: Array.from({ length: 10_001 }, (_, index) =>
+        mention(`n-${index}`, { type: "issueAssignedToYou" }),
+      ),
+    };
+    try {
+      const { rpc } = await inboxOn(() => [], registry, extras);
+      const { error } = await rpc("inbox_list", null);
+      expect(error).toContain("mentions");
+      expect(error).toContain("more than 10000 notifications");
     } finally {
       vi.unstubAllGlobals();
     }

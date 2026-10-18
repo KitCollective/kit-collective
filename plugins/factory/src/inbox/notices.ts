@@ -5,9 +5,9 @@ import { call } from "./linear.js";
 
 /** Notification types Linear sends when someone mentions the key owner. */
 const MENTION_TYPES = new Set(["issueMention", "issueCommentMention"]);
-const NOTIFICATION_PAGE = 50;
-/** Newest first, so an unread mention older than this many notifications is no longer news. */
-const NOTIFICATION_PAGES = 10;
+const NOTIFICATION_PAGE = 100;
+/** An unread mention can be as old as the inbox, so the read goes to the end and says so when it cannot. */
+const NOTIFICATION_PAGES = 100;
 const COMMENT_PAGE = 50;
 const COMMENT_PAGES = 20;
 
@@ -57,7 +57,7 @@ const notifications = z.object({
   }),
 });
 
-/** The unread, unarchived mentions of the key owner, as Linear lists them (newest first). */
+/** The unread, unarchived mentions of the key owner, as Linear lists them (newest first), from every page of the inbox. */
 export async function fetchMentions(
   apiKey: string,
   fetchImpl: typeof fetch = fetch,
@@ -85,10 +85,12 @@ export async function fetchMentions(
         createdAt: node.createdAt,
       });
     }
-    if (!pageInfo.hasNextPage) break;
+    if (!pageInfo.hasNextPage) return found;
     after = pageInfo.endCursor;
   }
-  return found;
+  throw new Error(
+    `Linear has more than ${NOTIFICATION_PAGE * NOTIFICATION_PAGES} notifications; older unread mentions are not shown`,
+  );
 }
 
 /** Marks one notification read in Linear, as the key owner. */
