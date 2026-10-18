@@ -1647,6 +1647,84 @@ test("the Reviewer prompt asks for the result line as its last text, after the w
   assert.match(reviewer, /write that line as your last text, after every other tool call/);
 });
 
+test("the Reviewer prompt says how to write the matrix and never to look for a token (KIT-298)", async () => {
+  const { spawns } = await run();
+  const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:")).prompt;
+  assert.match(reviewer, /node scripts\/linear\.mjs issue KIT-9/);
+  assert.match(reviewer, /`## Agent Workpad`/);
+  assert.match(reviewer, /`### Review matrix` section replaced/);
+  assert.match(reviewer, /node scripts\/linear\.mjs comment-update <id> --body-file <file>/);
+  assert.match(reviewer, /never check env vars for a token/);
+  assert.match(reviewer, /error output in your summary and return amber with the row workpad/);
+});
+
+const NO_MATRIX = "CLOSED (review): matrix: row `spec-ac` is missing";
+
+test("a green review whose gate is closed on the matrix asks the Reviewer once to write it, then runs the gate again (KIT-298)", async () => {
+  let gates = 0;
+  const { result, commands } = await run({
+    shell: (c) => {
+      if (!isReviewGate(c)) return undefined;
+      gates += 1;
+      return gates === 1 ? { code: 1, line: NO_MATRIX } : { code: 0, line: "OPEN (review): fine" };
+    },
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(commands.filter(isReviewGate).length, 2);
+  const tells = commands.filter((c) => c.startsWith("bb thread tell thr_reviewer01 "));
+  assert.equal(tells.length, 1);
+  assert.match(tells[0], /node scripts\/linear\.mjs comment-update <id> --body-file <file>/);
+  assert.match(tells[0], new RegExp(`AUDIT-RESULT KIT-9 green ${SHA}"$`));
+  assert.doesNotMatch(tells[0], /`/, "no backtick reaches the shell");
+  const at = (needle) => commands.findIndex((c) => c.startsWith(needle));
+  const secondGate = commands.findLastIndex(isReviewGate);
+  assert.ok(at("bb thread unarchive thr_reviewer01") < at("bb thread tell"));
+  assert.ok(at("bb thread tell") < at("bb thread wait thr_reviewer01"));
+  assert.ok(at("bb thread wait thr_reviewer01") < secondGate);
+  assert.equal(
+    commands.filter((c) => c.includes("--step reviewer") && c.includes(" spawn ")).length,
+    1,
+    "the reviewer's log lines are not written twice",
+  );
+});
+
+test("the matrix ask is not made for a red review, another closed step or a failed tell", async () => {
+  const red = await run({
+    shell: (c) => (isReviewGate(c) ? { code: 1, line: NO_MATRIX } : undefined),
+    reviewer: () => ({
+      verdict: "red",
+      sha: SHA,
+      rows: ["spec-ac"],
+      sentence: "AC 2 unmet",
+      threadId: REVIEWER_THREAD,
+    }),
+  });
+  assert.ok(!red.commands.some((c) => c.startsWith("bb thread tell")));
+
+  const scope = await run({
+    shell: (c) =>
+      isReviewGate(c)
+        ? { code: 1, line: "CLOSED (review): scope: outside write-scope" }
+        : undefined,
+  });
+  assert.ok(!scope.commands.some((c) => c.startsWith("bb thread tell")));
+
+  const tellFailed = await run({
+    shell: (c) =>
+      isReviewGate(c)
+        ? { code: 1, line: NO_MATRIX }
+        : c.startsWith("bb thread tell")
+          ? { code: 1, line: "HTTP 409" }
+          : undefined,
+  });
+  const firstRound = tellFailed.commands.slice(
+    0,
+    tellFailed.commands.findIndex((c) => c.startsWith("bb thread tell")) + 1,
+  );
+  assert.equal(firstRound.filter(isReviewGate).length, 1, "no second gate when the ask failed");
+  assert.equal(tellFailed.result.stoppedAt, "review gate");
+});
+
 // ---- Scenario titles in the Engineer prompt (KIT-351) -----------------------------------------------
 
 const TITLES = [
