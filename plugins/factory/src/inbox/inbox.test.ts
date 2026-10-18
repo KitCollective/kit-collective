@@ -158,6 +158,7 @@ describe("the Inbox", () => {
         pullRequest: { number: 7, url: "https://github.com/acme/app/pull/7" },
         kind: "review",
         label: null,
+        choices: [],
         waiting: null,
         review: { verdict: "review: open (0 findings)", change: "ENG-1: Add the thing" },
         since: "2026-10-05T00:00:00.000Z",
@@ -288,6 +289,232 @@ describe("the Inbox", () => {
       const { rpc, cli } = await load(registry, { board: false });
       await cli(["inbox", "--state", "Waiting", "--labels", "asks", "--project", "proj_1"]);
       expect((await rpc("inbox_list", null)).error).toContain("linear.teamKey");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("offers the lettered choices of an ask as buttons, in order", async () => {
+    const asks = [
+      "Which? (A) run it on the Mac, (B) skip the flow, or (C) wait",
+      "Which? A) run it on the Mac; B) skip the flow",
+      "Sent by Dr. A. Smith, no choice here",
+      "Only one: A) the Mac",
+    ];
+    try {
+      const { rpc } = await inboxOn(() =>
+        asks.map((ask, index) => ({
+          ...older,
+          identifier: `ENG-${20 + index}`,
+          comments: [workpad(ask, "plan")],
+        })),
+      );
+      const { cards } = await rpc("inbox_list", null);
+      expect(cards.map((card) => card.choices)).toEqual([
+        [
+          { letter: "A", text: "run it on the Mac" },
+          { letter: "B", text: "skip the flow" },
+          { letter: "C", text: "wait" },
+        ],
+        [
+          { letter: "A", text: "run it on the Mac" },
+          { letter: "B", text: "skip the flow" },
+        ],
+        [],
+        [],
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+/** A fake Linear that also takes writes: a comment is kept, a move changes the rows. */
+function linearWithWrites(rows: Entry[], fail: { move?: boolean; comment?: boolean } = {}) {
+  const writes: { query: string; variables: Record<string, unknown> }[] = [];
+  const ids: Record<string, string> = {
+    asks: "l-asks",
+    decide: "l-decide",
+    "triage-me": "l-other",
+    "agent-ready": "l-ready",
+  };
+  const moved = new Set<string>();
+  const comments = new Map<string, string>();
+  const read = linear(() => rows.filter((entry) => !moved.has(entry.identifier)));
+  const respond = (data: unknown) => new Response(JSON.stringify({ data }));
+  const mock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+    const { query, variables } = JSON.parse(String(init?.body)) as {
+      query: string;
+      variables: Record<string, unknown>;
+    };
+    if (query.includes("query Waiting")) return read();
+    if (query.includes("query Settle")) {
+      const entry = rows.find((row) => row.identifier === variables.id);
+      return respond({
+        issue:
+          entry === undefined
+            ? null
+            : {
+                id: `id-${entry.identifier}`,
+                state: { name: moved.has(entry.identifier) ? "Ready" : "Waiting" },
+                labels: { nodes: entry.labels.map((name) => ({ id: ids[name], name })) },
+                team: {
+                  key: "ENG",
+                  states: {
+                    nodes: [
+                      { id: "s-ready", name: "Ready" },
+                      { id: "s-wait", name: "Waiting" },
+                    ],
+                  },
+                },
+              },
+        issueLabels: { nodes: [{ id: "l-ready", team: { key: "ENG" } }] },
+      });
+    }
+    writes.push({ query, variables });
+    if (query.includes("commentCreate")) {
+      if (fail.comment)
+        return new Response(JSON.stringify({ errors: [{ message: "comment refused" }] }), {
+          status: 400,
+        });
+      comments.set("c-1", String(variables.body));
+      return respond({ commentCreate: { success: true, comment: { id: "c-1" } } });
+    }
+    if (query.includes("commentDelete")) {
+      comments.delete(String(variables.id));
+      return respond({ commentDelete: { success: true } });
+    }
+    if (fail.move)
+      return new Response(JSON.stringify({ errors: [{ message: "move refused" }] }), {
+        status: 400,
+      });
+    moved.add(String(variables.id).replace("id-", ""));
+    return respond({ issueUpdate: { success: true } });
+  });
+  return { mock, writes, comments, moved };
+}
+
+const waitingQuestion: Entry = {
+  ...older,
+  labels: ["decide", "triage-me"],
+  comments: [workpad("Which? (A) one, (B) two", "plan")],
+};
+
+describe("answering and rejecting from the Inbox", () => {
+  async function inboxWith(rows: Entry[], fail = {}) {
+    const fake = linearWithWrites(rows, fail);
+    vi.stubGlobal("fetch", fake.mock);
+    const loaded = await load();
+    await loaded.cli(["inbox", "--state", "Waiting", "--labels", "asks, decide"]);
+    return { ...loaded, ...fake };
+  }
+  const identifiers = async (rpc: Rpc) =>
+    (await rpc("inbox_list", null)).cards.map((card) => card.identifier);
+
+  it("writes the answer as a comment, swaps the question label for the Loop's and moves the issue", async () => {
+    try {
+      const { rpc, writes, comments } = await inboxWith([waitingQuestion, reviewed]);
+      expect(await rpc("inbox_answer", { identifier: "ENG-2", answer: "  A  " })).toEqual({
+        error: null,
+      });
+      expect([...comments.values()]).toEqual(["A"]);
+      // The unrelated label stays, the question label goes, the Loop's label and state come.
+      expect(writes.find((write) => write.query.includes("issueUpdate"))?.variables).toEqual({
+        id: "id-ENG-2",
+        stateId: "s-ready",
+        labelIds: ["l-other", "l-ready"],
+      });
+      expect(await identifiers(rpc)).toEqual(["ENG-1"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("rejects a green review with the comment, back to the Loop's state and label", async () => {
+    try {
+      const { rpc, writes, comments } = await inboxWith([waitingQuestion, reviewed]);
+      expect(
+        await rpc("inbox_reject", { identifier: "ENG-1", comment: "Fix the empty state." }),
+      ).toEqual({
+        error: null,
+      });
+      expect([...comments.values()]).toEqual(["Fix the empty state."]);
+      expect(writes.find((write) => write.query.includes("issueUpdate"))?.variables).toEqual({
+        id: "id-ENG-1",
+        stateId: "s-ready",
+        labelIds: ["l-ready"],
+      });
+      expect(await identifiers(rpc)).toEqual(["ENG-2"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("refuses an empty answer and a rejection without a comment, writing nothing", async () => {
+    try {
+      const { rpc, writes } = await inboxWith([waitingQuestion, reviewed]);
+      expect((await rpc("inbox_answer", { identifier: "ENG-2", answer: "  " })).error).toContain(
+        "answer",
+      );
+      expect((await rpc("inbox_reject", { identifier: "ENG-1", comment: "\n" })).error).toContain(
+        "comment",
+      );
+      expect(writes).toEqual([]);
+      expect(await identifiers(rpc)).toEqual(["ENG-1", "ENG-2"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("refuses a card of the other kind or one that left the state, writing nothing", async () => {
+    try {
+      const { rpc, writes } = await inboxWith([waitingQuestion, reviewed]);
+      expect((await rpc("inbox_answer", { identifier: "ENG-1", answer: "yes" })).error).toContain(
+        "a review now",
+      );
+      expect((await rpc("inbox_reject", { identifier: "ENG-2", comment: "no" })).error).toContain(
+        "a question now",
+      );
+      expect((await rpc("inbox_answer", { identifier: "ENG-404", answer: "yes" })).error).toContain(
+        "no issue ENG-404",
+      );
+      expect(writes).toEqual([]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("leaves the card as it was and says why when the comment is refused", async () => {
+    try {
+      const { rpc, comments } = await inboxWith([waitingQuestion], { comment: true });
+      const result = await rpc("inbox_answer", { identifier: "ENG-2", answer: "A" });
+      expect(result.error).toContain("comment refused");
+      expect(comments.size).toBe(0);
+      expect(await identifiers(rpc)).toEqual(["ENG-2"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("takes the comment back and keeps the card when the move is refused", async () => {
+    try {
+      const { rpc, comments } = await inboxWith([waitingQuestion], { move: true });
+      const result = await rpc("inbox_answer", { identifier: "ENG-2", answer: "A" });
+      expect(result.error).toContain("move refused");
+      expect(comments.size).toBe(0);
+      expect(await identifiers(rpc)).toEqual(["ENG-2"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("says so when the Inbox is not set up", async () => {
+    vi.stubGlobal("fetch", linearWithWrites([waitingQuestion]).mock);
+    try {
+      const { rpc } = await load();
+      expect((await rpc("inbox_answer", { identifier: "ENG-2", answer: "A" })).error).toContain(
+        "not set up",
+      );
     } finally {
       vi.unstubAllGlobals();
     }

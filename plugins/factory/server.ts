@@ -38,6 +38,8 @@ export default async function plugin(bb: BbPluginApi) {
     ...runs.rpc,
     ...threads.rpc,
     inbox_list: inbox.list,
+    inbox_answer: inbox.answer,
+    inbox_reject: inbox.reject,
   });
 
   bb.cli.register(

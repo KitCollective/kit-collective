@@ -67,7 +67,92 @@ function Row({ card, open, onOpen }: { card: InboxCardDto; open: boolean; onOpen
   );
 }
 
-function Detail({ card, onBack }: { card: InboxCardDto; onBack: () => void }) {
+const field =
+  "min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/**
+ * The reply to a card: an answer for a question (with the run's lettered choices as buttons), a
+ * required comment for a green review's Reject. The write goes to Linear as the key's owner; on a failure
+ * the card stays and the reason shows under the field, on success the card leaves the Inbox.
+ */
+function Reply({ card, onSent }: { card: InboxCardDto; onSent: () => void }) {
+  const rpc = useRpc<typeof rpcContract>();
+  const question = card.kind === "question";
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const send = (body: string) => {
+    setSending(true);
+    setFailure(null);
+    const sent = question
+      ? rpc.call("inbox_answer", { identifier: card.identifier, answer: body })
+      : rpc.call("inbox_reject", { identifier: card.identifier, comment: body });
+    sent.then(
+      (result) => {
+        setSending(false);
+        if (result.error === null) onSent();
+        else setFailure(result.error);
+      },
+      (cause: unknown) => {
+        setSending(false);
+        setFailure(cause instanceof Error ? cause.message : String(cause));
+      },
+    );
+  };
+  const label = question ? "Answer" : "Reject with a comment";
+  return (
+    <section className="flex flex-col gap-2">
+      {card.choices.length === 0 ? null : (
+        <div className="flex flex-wrap gap-2">
+          {card.choices.map((choice) => (
+            <Button
+              key={choice.letter}
+              variant="outline"
+              disabled={sending}
+              onClick={() => send(choice.letter)}
+            >
+              {choice.letter} · {choice.text}
+            </Button>
+          ))}
+        </div>
+      )}
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        {label}
+        <textarea
+          className={cn(field, "text-foreground")}
+          value={text}
+          disabled={sending}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={question ? "Write your answer…" : "What has to change…"}
+        />
+      </label>
+      <div className="flex items-center gap-3">
+        <Button
+          variant={question ? "default" : "destructive"}
+          disabled={sending || text.trim() === ""}
+          onClick={() => send(text)}
+        >
+          {question ? "Send answer" : "Reject"}
+        </Button>
+        {failure === null ? null : (
+          <p role="alert" className="text-sm text-destructive">
+            {failure}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Detail({
+  card,
+  onBack,
+  onSent,
+}: {
+  card: InboxCardDto;
+  onBack: () => void;
+  onSent: () => void;
+}) {
   const question = card.kind === "question";
   return (
     <article className="flex flex-col gap-4">
@@ -125,6 +210,7 @@ function Detail({ card, onBack }: { card: InboxCardDto; onBack: () => void }) {
           </p>
         </section>
       )}
+      <Reply key={card.identifier} card={card} onSent={onSent} />
     </article>
   );
 }
@@ -209,7 +295,14 @@ export function Inbox({ subPath }: PluginNavPanelProps) {
         )}
       >
         {open !== null ? (
-          <Detail card={open} onBack={back} />
+          <Detail
+            card={open}
+            onBack={back}
+            onSent={() => {
+              back();
+              refetch();
+            }}
+          />
         ) : (
           <p className="pt-10 text-center text-sm text-muted-foreground">
             {cards.length === 0 ? "" : "Choose a message."}

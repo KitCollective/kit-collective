@@ -6,7 +6,7 @@ import { CHANGED } from "../contract.js";
 import { parseRegistry } from "../loop-registry.js";
 import { buildCards } from "./cards.js";
 import { type InboxCardDto, type InboxConfig, inboxConfig } from "./contract.js";
-import { fetchWaiting } from "./linear.js";
+import { fetchWaiting, settleIssue } from "./linear.js";
 
 const CONFIG_KEY = "inbox";
 
@@ -47,29 +47,35 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     return stored === undefined || stored === null ? null : inboxConfig.parse(stored);
   }
 
+  /** Where the Inbox looks and who it asks: its setting, the registry and the Linear team. */
+  async function resolve() {
+    const setting = await config();
+    if (setting === null) {
+      throw new Error(`the Inbox is not set up: run \`${SETUP}\` (docs/agents/optio.md)`);
+    }
+    // The Inbox's own project first, the Board's when it has none: it never needs the Board.
+    const board = setting.projectId === undefined ? await deps.storedScheduler() : null;
+    const projectId = setting.projectId ?? board?.projectId;
+    if (projectId === undefined) {
+      throw new Error(`the Inbox has no project: run \`${SETUP}\` (docs/agents/optio.md)`);
+    }
+    const registry = parseRegistry(await deps.projectConfigText(projectId));
+    if (!registry.ok) throw new Error(registry.error);
+    const teamKey = registry.registry.teamKey ?? board?.teamKey;
+    if (teamKey === undefined) {
+      throw new Error("factory.config.json names no Linear team: set linear.teamKey");
+    }
+    return { setting, registry: registry.registry, teamKey };
+  }
+
   /** The cards, read from Linear now; nothing is kept between calls. */
   async function list() {
     try {
-      const setting = await config();
-      if (setting === null) {
-        throw new Error(`the Inbox is not set up: run \`${SETUP}\` (docs/agents/optio.md)`);
-      }
-      // The Inbox's own project first, the Board's when it has none: it never needs the Board.
-      const board = setting.projectId === undefined ? await deps.storedScheduler() : null;
-      const projectId = setting.projectId ?? board?.projectId;
-      if (projectId === undefined) {
-        throw new Error(`the Inbox has no project: run \`${SETUP}\` (docs/agents/optio.md)`);
-      }
-      const registry = parseRegistry(await deps.projectConfigText(projectId));
-      if (!registry.ok) throw new Error(registry.error);
-      const teamKey = registry.registry.teamKey ?? board?.teamKey;
-      if (teamKey === undefined) {
-        throw new Error("factory.config.json names no Linear team: set linear.teamKey");
-      }
+      const { setting, registry, teamKey } = await resolve();
       const issues = await fetchWaiting(await deps.linearApiKey(), teamKey, setting.state);
       const cards = buildCards(issues, {
         config: setting,
-        workpadHeading: registry.registry.workpadHeading,
+        workpadHeading: registry.workpadHeading,
         verdictOf: (identifier) => deps.gateRuns.latestReview(identifier, 0)?.verdictLine ?? null,
       });
       return { error: null, cards };
@@ -77,6 +83,44 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
       return { error: error instanceof Error ? error.message : String(error), cards: [] };
     }
   }
+
+  /**
+   * Hands the issue back to the Loop that starts issues: the comment is the key owner's (the Linear key
+   * is theirs), the question label goes, the Loop's label and state come. A failed write is reported
+   * and leaves the issue as it was, so the card stays.
+   */
+  async function settle(identifier: string, comment: string, expectQuestion: boolean) {
+    try {
+      const text = comment.trim();
+      if (text === "") {
+        throw new Error(expectQuestion ? "write an answer first" : "a rejection needs a comment");
+      }
+      const { setting, registry, teamKey } = await resolve();
+      const loop = registry.loops.find((one) => one.enabled && one.trigger.kind === "issue");
+      if (loop === undefined || loop.trigger.kind !== "issue") {
+        throw new Error("factory.config.json has no enabled Loop to hand the issue back to");
+      }
+      await settleIssue(await deps.linearApiKey(), {
+        identifier,
+        teamKey,
+        comment: text,
+        waitingState: setting.state,
+        dropLabels: setting.questionLabels,
+        expectQuestion,
+        toState: loop.trigger.state,
+        toLabel: loop.trigger.label,
+      });
+      deps.bb.realtime.publish(CHANGED, {}); // open pages read again
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  const answer = ({ identifier, answer }: { identifier: string; answer: string }) =>
+    settle(identifier, answer, true);
+  const reject = ({ identifier, comment }: { identifier: string; comment: string }) =>
+    settle(identifier, comment, false);
 
   const command = cliCommand({
     summary: "List what waits for a person in the Inbox: reviews first, then questions",
@@ -124,5 +168,5 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
     },
   });
 
-  return { list, command };
+  return { list, answer, reject, command };
 }
