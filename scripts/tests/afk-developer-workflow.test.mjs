@@ -1777,3 +1777,16 @@ test("the Reviewer is GLM 5.3 through Optio's proxy, for a Sonnet and an Opus En
   const r2 = agentSpawns(opus.spawns).find((s) => s.options.label.startsWith("reviewer:"));
   assert.equal(r2.options.model, "z-ai/glm-5.3");
 });
+
+test("every agent() call names provider, model and reasoningLevel together, as bb workflows validate demands (2026-10-18)", () => {
+  // The GLM reviewer shipped without reasoningLevel and validate refused the whole workflow for an hour.
+  // Each call runs from its `agent(` to the next one; the options sit inside that stretch.
+  const calls = SOURCE.split(/\bagent\(/)
+    .slice(1)
+    .filter((call) => /provider:\s*"/.test(call.split(/\bagent\(/)[0]));
+  assert.ok(calls.length >= 4, `found ${calls.length} agent() calls with a provider`);
+  for (const call of calls.map((c) => c.slice(0, c.search(/provider:\s*"/) + 400))) {
+    assert.match(call, /model:/, call);
+    assert.match(call, /reasoningLevel:/, call);
+  }
+});
