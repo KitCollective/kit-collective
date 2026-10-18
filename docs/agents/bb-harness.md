@@ -96,7 +96,7 @@ With auto-land on (the `autoLand` arg, or `flow.autoLand.enabled` in `factory.co
 
 **Auto-land in auto permission mode.** The runner threads and Max's thread run Claude Code in permission mode `auto`, whose classifier refused `auto-land.mjs start ... --force-enabled` as a safety bypass (2026-10-17: KIT-384, KIT-319 and KIT-372 all stopped with `runner-no-result` and the command had never run). The PreToolUse hook `.claude/hooks/auto-land-allow.mjs` approves exactly one shape, `node scripts/auto-land.mjs start|finish <pr> --issue KIT-n` with auto-land's own flags (optionally in the runner's `( ... ); echo "KIT-EXIT:$?"` wrapper), and gives no opinion on anything else. A runner whose shell still refuses a command reports `DENIED`, and the stop note names the refusal. Max's stuck-at-auto-land routine (`staff/max/tick.js`) resumes a run whose last event is `runner-no-result` on the next tick; otherwise it waits `LANDING_STUCK_MINUTES` (30) after the run's last event.
 
-An issue gets at most `flow.maxRunsPerDay` runs (factory.config.json, 3) in 24 hours, resumes included: the session check refuses the next one and names the cap. Raising it is a committed change by a person, never something a run does for itself.
+An issue gets at most `flow.maxRunsPerDay` runs (factory.config.json, 5; raised from 3 on 2026-10-18 after infrastructure stops used up the starts of KIT-290) in 24 hours, resumes included: the session check refuses the next one and names the cap. Raising it is a committed change by a person, never something a run does for itself.
 
 ## Start Milestone scenarios
 
