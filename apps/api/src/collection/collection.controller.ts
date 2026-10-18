@@ -266,6 +266,23 @@ export class CollectionController {
     return this.collectionService.listPeerJerseys(user.sub, peerId, resolveLocale(acceptLanguage));
   }
 
+  @Get("collection/peers/:peerId/conversation")
+  @UseGuards(JwtAuthGuard)
+  lookupPeerConversation(@CurrentUser() user: JwtPayload, @Param("peerId") peerId: string) {
+    return this.collectionService.lookupPeerConversation(user.sub, peerId);
+  }
+
+  @Post("collection/peers/:peerId/messages")
+  @HttpCode(201)
+  @UseGuards(JwtAuthGuard)
+  sendPeerMessage(
+    @CurrentUser() user: JwtPayload,
+    @Param("peerId") peerId: string,
+    @Body() body: unknown,
+  ) {
+    return this.collectionService.sendPeerMessage(user.sub, peerId, body);
+  }
+
   @Get("collection/favorites")
   @UseGuards(JwtAuthGuard)
   listFavorites(
