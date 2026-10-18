@@ -1,5 +1,6 @@
 import {
   authEvent,
+  authThrottleHit,
   collectionShortcut,
   conversation,
   conversationMessage,
@@ -23,9 +24,11 @@ import bcrypt from "bcryptjs";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { writeStripAndLightboxVariants } from "../collection/photo-derivatives.js";
+import { setFixedVisionCase } from "../vision/fixed-vision.adapter.js";
 import { type ResolvedSide, resolveCatalogSide } from "./catalog-side.js";
 import { renderFixturePhoto } from "./fixture-photo.js";
 import {
+  DEFAULT_VISION_CASE,
   type FixtureSide,
   TEST_COLLECTOR_HANDLE,
   TEST_COLLECTOR_ID,
@@ -41,6 +44,7 @@ import {
   TEST_TWO_BIDDER_BIDS,
   TEST_UNANSWERED_BID,
   TEST_WISHLIST_ENTRY,
+  type VisionCase,
 } from "./test-data.fixture.js";
 
 export type TestDataCredentials = {
@@ -111,14 +115,16 @@ function variantKeys(objectKey: string): string[] {
 /**
  * Puts the test Collectors into the known state the device flows start
  * from. Idempotent. Reads the catalog; writes only rows owned by, or pointing
- * at, the test Collectors.
+ * at, the test Collectors. `vision` picks the fixed Vision answer the test
+ * Collector gets from here on; omitted, it is the default (KIT-284).
  */
 export async function applyTestData(input: {
   db: Db;
   objectStore: ObjectStoreAdapter;
   credentials: TestDataCredentials;
+  vision?: VisionCase;
 }): Promise<void> {
-  const { db, objectStore, credentials } = input;
+  const { db, objectStore, credentials, vision = DEFAULT_VISION_CASE } = input;
   const catalog = await resolveFixtureCatalog(db);
   await assertIdentityFree(db, credentials);
   // SAFETY: fixture sides are typed from TEST_DATA_CATALOG, and resolveFixtureCatalog
@@ -226,6 +232,17 @@ export async function applyTestData(input: {
     await tx.delete(collectionShortcut).where(inArray(collectionShortcut.userId, TEST_IDS));
     await tx.delete(session).where(inArray(session.userId, TEST_IDS));
     await tx.delete(authEvent).where(inArray(authEvent.userId, TEST_IDS));
+    // Five sign-in code requests per e-mail in 15 minutes throttle the sixth; a run of flows signs
+    // in once each, so the test Collectors' own counts start from zero (KIT-284).
+    await tx.delete(authThrottleHit).where(
+      and(
+        inArray(authThrottleHit.bucket, ["email_request", "email_failure"]),
+        inArray(
+          authThrottleHit.bucketKey,
+          hashed.map((account) => account.email),
+        ),
+      ),
+    );
 
     for (const jersey of TEST_JERSEYS) {
       const side = sideOf(jersey.side);
@@ -352,4 +369,5 @@ export async function applyTestData(input: {
       );
     }
   }
+  setFixedVisionCase(vision);
 }

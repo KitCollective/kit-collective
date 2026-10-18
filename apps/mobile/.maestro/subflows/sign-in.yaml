@@ -1,5 +1,10 @@
 # Cold start, known test data, signed in through the Kom i gang sheet with the e-mail code.
 # Callers pass EMAIL (the collector's address). There is no password on this path.
+# Callers may pass VISION, the fixed Vision answer for this run: resolved, low-confidence,
+# mixed-grouping or failure (KIT-284). A caller that passes none gets the API's default
+# (resolved). Do not give VISION a default in an `env:` header here: Maestro defines the header
+# after the caller's value, so the default would win over every caller (the first hosted run of
+# KIT-284 got `resolved` for `mixed-grouping`).
 appId: app.kitcollective.mobile
 ---
 - runScript:
@@ -7,6 +12,7 @@ appId: app.kitcollective.mobile
     env:
       API_URL: ${MAESTRO_API_URL}
       TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+      VISION: "${typeof VISION === 'undefined' ? '' : VISION}"
 - launchApp:
     clearState: true
     clearKeychain: true

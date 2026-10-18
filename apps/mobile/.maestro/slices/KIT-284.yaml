@@ -1,0 +1,253 @@
+# Device flow for KIT-284: a pile of 16 photos with mixed grouping confidence, then Vision failing.
+# design-sections: Capture session, Confirm and Save, Button dock, List row, Button
+#
+# simulator-photos: fck-white-home-front, fck-white-home-back, arsenal-red-home-125-front, arsenal-red-home-125-back, italy-blue-home-front, italy-blue-home-back, brazil-yellow-home-2014-front, brazil-yellow-home-2014-back, barca-blue-away-2007-front, barca-blue-away-2007-back, mancity-sky-home-front, mancity-sky-home-back, juventus-pink-away-front, juventus-pink-away-back, psg-white-jordan-front, psg-white-jordan-back
+#   ^ eight different shirts with a front and a back each (catalog.json). The picker shows the
+#     last name first, top left, three cells to a row, so the cells read psg-back, psg-front,
+#     juventus-back, ... and every two cells in tap order are one shirt.
+#
+# Two parts, each with its own sign-in because the fixed Vision answer is set by the reset call:
+#   1. VISION mixed-grouping: 16 photos in eight groups of two with confidence 90, 60, 30 in turn.
+#      90 and 60 bind (60 reads Tjek), 30 leaves its photos in the inbox.
+#   2. VISION failure: four photos, Vision does not answer, Prøv Vision igen and Sortér selv.
+# The reset also ends the Test Collector's sessions, so the second part signs in again.
+#
+# Not on screen, on purpose:
+# - AC 1 (a photo that cannot be prepared is named and retryable, the rest carries on): a prepare
+#   failure cannot be forced on a simulator. captureOverview and the grouping hook tests cover it
+#   (the overview-upload-failed row is never shown by a flow).
+# - Vælg after a failed identity read, with the Data drill: add-jersey-vision-failure in
+#   regression/ shows the empty identity block, picks by hand and Saves; add-jersey-vision-off
+#   shows the empty block and the opened drill.
+# - Vision failing on Confirm for one photo is the same regression flow, not repeated here.
+#
+# The picker points below are those of KIT-282 (first cell at 16%,25%, row pitch about 15% of the
+# height on an iPhone 17), carried over to five rows, and a scroll for the sixteenth photo. If a
+# picker changes, only the points change.
+appId: app.kitcollective.mobile
+name: kit-284
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      VISION: mixed-grouping
+- startRecording: kc__kit-284
+- tapOn:
+    id: collection-add
+- extendedWaitUntil:
+    visible:
+      id: capture-source-gallery
+    timeout: 10000
+- tapOn:
+    id: capture-source-gallery
+- tapOn: Fotos
+# The system photo picker has no stable ids: sixteen cells, then confirm. Five rows of three fit
+# on the screen (rows at 25%, 40%, 55%, 70%, 85% of the height; columns at 16%, 50%, 83%).
+- waitForAnimationToEnd:
+    timeout: 8000
+- tapOn:
+    point: 16%,25%
+- tapOn:
+    point: 50%,25%
+- tapOn:
+    point: 83%,25%
+- tapOn:
+    point: 16%,40%
+- tapOn:
+    point: 50%,40%
+- tapOn:
+    point: 83%,40%
+- tapOn:
+    point: 16%,55%
+- tapOn:
+    point: 50%,55%
+- tapOn:
+    point: 83%,55%
+- tapOn:
+    point: 16%,70%
+- tapOn:
+    point: 50%,70%
+- tapOn:
+    point: 83%,70%
+- tapOn:
+    point: 16%,85%
+- tapOn:
+    point: 50%,85%
+- tapOn:
+    point: 83%,85%
+# The sixteenth photo is a sixth row, below the screen. Scroll the picker to its end, where that
+# row sits at the bottom, and tap its only cell (left).
+- swipe:
+    start: 50%,75%
+    end: 50%,20%
+    duration: 600
+- swipe:
+    start: 50%,75%
+    end: 50%,20%
+    duration: 600
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    point: 16%,85%
+- tapOn:
+    point: 90%,12%
+# Sixteen photos with Vision on open the overview; wait for the grouping to be done, so the frame
+# is the settled one (the progress bar and skeleton rows are KIT-282's frame).
+- extendedWaitUntil:
+    visible:
+      id: overview-title
+    timeout: 30000
+# A hosted simulator prepares sixteen photos slowly: the first hosted run was still sorting after
+# 120 s with no request sent yet, so the wait is long. A device does it in seconds.
+- extendedWaitUntil:
+    notVisible:
+      id: overview-progress
+    timeout: 360000
+- extendedWaitUntil:
+    visible:
+      id: overview-row-0
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: overview-inbox
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+# AC (mixed confidence): groups at 90 and 60 bind as jerseys (60 with the Tjek status), and the
+# 30 groups leave their photos in the inbox row.
+- takeScreenshot: kc__kit-284__01-overview-bound-tjek-inbox
+# AC (pile review): Gennemgå opens Confirm for the first unsaved draft, the Tjek one; with more
+# than one unsaved the dock reads Gem og næste.
+- tapOn:
+    id: overview-primary
+- extendedWaitUntil:
+    visible:
+      id: confirm-identity-resolved
+    timeout: 90000
+- tapOn:
+    id: detail-size-m
+- tapOn:
+    id: detail-condition-used
+- extendedWaitUntil:
+    visible:
+      id: confirm-save
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-284__02-confirm-gem-og-naeste
+# AC (pile review): Gem og næste advances to the next unsaved draft.
+- tapOn:
+    id: confirm-save
+- extendedWaitUntil:
+    visible:
+      id: confirm-identity-resolved
+    timeout: 90000
+- tapOn:
+    id: detail-size-m
+- tapOn:
+    id: detail-condition-used
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-284__03-next-unsaved-draft
+# Part 2: Vision does not answer. The reset sets the fixed answer and ends the session, so sign in
+# again (the library keeps the sixteen photos, newest first, as in KIT-282's cells).
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      VISION: failure
+- tapOn:
+    id: collection-add
+- extendedWaitUntil:
+    visible:
+      id: capture-source-gallery
+    timeout: 10000
+- tapOn:
+    id: capture-source-gallery
+- tapOn: Fotos
+- waitForAnimationToEnd:
+    timeout: 8000
+- tapOn:
+    point: 16%,25%
+- tapOn:
+    point: 50%,25%
+- tapOn:
+    point: 83%,25%
+- tapOn:
+    point: 16%,40%
+- tapOn:
+    point: 90%,12%
+# AC (Vision did not answer): the overview says so with Prøv Vision igen and Sortér selv, and the
+# photos are kept in the inbox row. The caption is the id's text, so a frame of the grouping in
+# flight (no caption) is never taken.
+- extendedWaitUntil:
+    visible:
+      id: overview-caption
+      text: "Vision svarede ikke"
+    timeout: 120000
+- extendedWaitUntil:
+    visible:
+      id: overview-tertiary
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: overview-inbox
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-284__04-vision-did-not-answer
+# AC (retry): Prøv Vision igen asks again. The fixed Vision still fails, so the same screen
+# returns. Let the reading state pass if it shows (never screenshotted), then wait for the caption.
+- tapOn:
+    id: overview-primary
+- extendedWaitUntil:
+    visible:
+      id: overview-progress
+    timeout: 3000
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: overview-caption
+      text: "Vision svarede ikke"
+    timeout: 120000
+- extendedWaitUntil:
+    notVisible:
+      id: overview-progress
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-284__05-retry-fails-again
+# AC (photos kept): the four photos are still in the session. The inbox row opens the screen with
+# them, none lost and none picked twice.
+- tapOn:
+    id: overview-inbox
+- extendedWaitUntil:
+    visible:
+      id: unassigned-title
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: unassigned-photo-3
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-284__06-photos-kept-unassigned
+# AC (Sortér selv): back on the overview, Sortér selv opens Confirm on a fresh jersey with the four
+# photos waiting under "fotos uden trøje" (the unbound row), so the collector sorts by hand.
+- tapOn:
+    id: unassigned-back
+- extendedWaitUntil:
+    visible:
+      id: overview-tertiary
+    timeout: 10000
+- tapOn:
+    id: overview-tertiary
+- extendedWaitUntil:
+    visible:
+      id: confirm-save
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-284__07-sorter-selv-confirm
+- stopRecording

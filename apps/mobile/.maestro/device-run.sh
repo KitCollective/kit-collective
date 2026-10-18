@@ -5,7 +5,7 @@
 # flow and publishes the evidence, then stops the API and lets the next in.
 #
 #   apps/mobile/.maestro/device-run.sh                 the slice flow of this branch's issue
-#   E2E_FLOWS=regression apps/mobile/.maestro/device-run.sh   the five regression flows
+#   E2E_FLOWS=regression apps/mobile/.maestro/device-run.sh   the eight regression flows
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"

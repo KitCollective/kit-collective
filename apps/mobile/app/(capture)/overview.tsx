@@ -12,7 +12,9 @@ import {
   overviewRows,
   overviewTitle,
   pendingSkeletonRows,
+  pendingUploadFailures,
   unsavedDraftCount,
+  uploadFailureRow,
 } from "@/capture/captureOverview";
 import {
   addJerseyDraft,
@@ -122,6 +124,10 @@ export default function CaptureOverviewScreen() {
   const totalPhotos = state.orderedUris.length;
   const skeletons = pendingSkeletonRows({ analyzing, unboundCount });
   const inbox = analyzing ? null : inboxRow(state);
+  // The failed photos are still in the pile; the upload failure takes the inbox slot and the
+  // inbox row follows it.
+  const failedUris = pendingUploadFailures(grouping.uploadFailed, state);
+  const uploadFailure = analyzing ? null : uploadFailureRow(failedUris.length, failedUris);
   const firstUnsaved = rows.find((row) => row.kind === "draft") ?? null;
   const visionFailed = grouping.failed && rows.length === 0 && !analyzing;
   const dock = overviewDock({
@@ -223,6 +229,17 @@ export default function CaptureOverviewScreen() {
               </View>
             ) : null}
           </View>
+        ) : null}
+
+        {uploadFailure ? (
+          <SessionSummaryRow
+            testID="overview-upload-failed"
+            thumbUris={uploadFailure.thumbUris}
+            title={uploadFailure.title}
+            caption={uploadFailure.caption}
+            pillLabel={uploadFailure.pill}
+            onPress={() => void grouping.retryUpload()}
+          />
         ) : null}
 
         {inbox ? (
