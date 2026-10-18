@@ -258,6 +258,17 @@ export function riskClass({ description, labels, files, lines, issue, maxLines =
  * to the green one (KIT-365, 2026-10-17: refused as pr-not-ready with the newest run green).
  * @param {Array<{ name: string, conclusion: string | null, started_at?: string, id?: number }>} runs
  */
+/**
+ * The check runs that judge the PR: those of a check suite a workflow_dispatch run made are left out.
+ * A dispatched run is a manual one (the regression flows on request), not the PR's own gate: KIT-284
+ * on 2026-10-18 was refused on a dispatched Device flows run that failed two seconds after the PR's
+ * own run had passed.
+ */
+export function prCheckRuns(runs, dispatchedSuites) {
+  const skip = new Set((dispatchedSuites ?? []).map(Number));
+  return (Array.isArray(runs) ? runs : []).filter((run) => !skip.has(Number(run?.check_suite?.id)));
+}
+
 export function latestCheckRuns(runs) {
   const newest = new Map();
   for (const run of Array.isArray(runs) ? runs : []) {
