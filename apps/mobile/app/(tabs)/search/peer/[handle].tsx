@@ -1,6 +1,6 @@
 import type { CollectionDiscoverJersey, IdentityPeerProfile } from "@kit/api-contract";
 import { formatProfileLocationCaption, KIT_TYPE_LABELS_DA } from "@kit/domain";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,6 +25,8 @@ import { Sheet } from "@/components/catalog-ui";
 import { JerseyTile } from "@/components/jersey-tile";
 import { DrillHeader, PeerIdentityCard, ProfileSurfaceGroup } from "@/components/profile-ui";
 import { Button, EmptyState, IconButton } from "@/components/ui";
+import { peerThreadHref } from "@/inbox/thread-view-model";
+import { sitsAboveForeignJersey } from "@/search/foreign-jersey-route";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -33,7 +35,8 @@ export default function PeerProfileScreen() {
   const { handle } = useLocalSearchParams<{ handle: string }>();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { accessToken } = useAuth();
+  const navigation = useNavigation();
+  const { accessToken, user } = useAuth();
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
@@ -139,6 +142,27 @@ export default function PeerProfileScreen() {
     void runModeration("Blokér", () => blockPeer(accessToken!, profile.id));
   };
 
+  // Above a foreign jersey this screen is part of a full-screen modal over the Søg tab: a push into
+  // the Indbakke tab alone opens the thread behind it (as the jersey dock does). Close the Søg
+  // stack first.
+  const handleWriteMessage = () => {
+    if (!profile) {
+      return;
+    }
+    const state = navigation.getState();
+    if (
+      state &&
+      sitsAboveForeignJersey(
+        state.routes.map((candidate) => candidate.name),
+        state.index,
+      )
+    ) {
+      router.dismissAll();
+    }
+    // SAFETY: the view-model builds only routes that exist under app/(tabs).
+    router.push(peerThreadHref(profile.id) as Href);
+  };
+
   if (loading) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.fillSecondary }]}>
@@ -188,15 +212,26 @@ export default function PeerProfileScreen() {
           { paddingBottom: insets.bottom + space.insetLg },
         ]}
         ListHeaderComponent={
-          <ProfileSurfaceGroup>
-            <PeerIdentityCard
-              handle={profile.handle}
-              locationCaption={locationCaption}
-              aboutMe={profile.aboutMe}
-              avatarUri={resolvePeerAvatarUrl(profile.avatarUrl)}
-              avatarHeaders={avatarHeaders}
-            />
-          </ProfileSurfaceGroup>
+          <View style={styles.header}>
+            <ProfileSurfaceGroup>
+              <PeerIdentityCard
+                handle={profile.handle}
+                locationCaption={locationCaption}
+                aboutMe={profile.aboutMe}
+                avatarUri={resolvePeerAvatarUrl(profile.avatarUrl)}
+                avatarHeaders={avatarHeaders}
+              />
+            </ProfileSurfaceGroup>
+            {user?.id === profile.id ? null : (
+              <Button
+                label="Skriv besked"
+                testID="peer-profile-write"
+                variant="primary"
+                width="fill"
+                onPress={handleWriteMessage}
+              />
+            )}
+          </View>
         }
         ListEmptyComponent={
           <EmptyState title="Ingen trøjer endnu" body="Samleren har ingen synlige trøjer." />
@@ -247,6 +282,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: space.gapMd,
+  },
+  header: {
     gap: space.gapMd,
   },
   listContent: {

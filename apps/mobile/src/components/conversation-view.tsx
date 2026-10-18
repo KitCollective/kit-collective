@@ -1,5 +1,4 @@
 import type { CollectionConversationDetail, CollectionConversationPeer } from "@kit/api-contract";
-import * as ImagePicker from "expo-image-picker";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -33,10 +32,14 @@ import { ChatBubble } from "@/components/chat-bubble";
 import { MessageComposer } from "@/components/message-composer";
 import { IconButton } from "@/components/ui";
 import { ConversationMoreSheet } from "@/inbox/conversation-more-sheets";
+import { JerseyReferenceRow } from "@/inbox/jersey-reference-row";
+import { pickMessageImage } from "@/inbox/pick-message-image";
 import {
   CONVERSATION_MORE_FAILURE,
   conversationMore,
   headerInitial,
+  type JerseyReference,
+  sendMessageBody,
   threadItemIndex,
   threadItems,
 } from "@/inbox/thread-view-model";
@@ -52,6 +55,8 @@ type ConversationViewProps = {
   onConversationHidden?: () => void;
   /** A message to open the thread at (a waiting Indbakke row passes its Bud); without it the thread opens at its top. */
   focusMessageId?: string | null;
+  /** The jersey the thread was opened from: shown above the field until dismissed, sent with the first message, then gone. */
+  reference?: JerseyReference | null;
 };
 
 type MoreAction = "profile" | "report" | "block" | "delete";
@@ -62,12 +67,66 @@ const HEADER_INITIAL_SIZE = 32;
 /** System line: max 300 wide (Conversation, Composition 4). */
 const SYSTEM_LINE_MAX_WIDTH = 300;
 
+type ConversationHeaderProps = {
+  handle: string;
+  onBack: () => void;
+  /** Without it the header has no More (a thread that does not exist yet has nothing to report, block or delete). */
+  onMore?: () => void;
+};
+
+/** Conversation → Header (composition 1): Back, a 32px round initial, the Handle and More. */
+export function ConversationHeader({ handle, onBack, onMore }: ConversationHeaderProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View
+      testID="conversation-header"
+      style={[
+        styles.header,
+        { paddingTop: insets.top + space.insetSm, borderBottomColor: theme.borderSubtle },
+      ]}
+    >
+      <IconButton name="Tilbage" icon="arrow-back" onPress={onBack} />
+      <View style={styles.headerCenter}>
+        <View
+          style={[styles.headerInitial, { backgroundColor: theme.fillSecondary }]}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          <Text style={[typography.headingSm, { color: theme.contentPrimary }]}>
+            {headerInitial(handle)}
+          </Text>
+        </View>
+        {/* The lock says `label` 16 / 600; there is no 600 Plex face, so `label` stays at 500 (design gap). */}
+        <Text
+          style={[typography.label, styles.headerHandle, { color: theme.contentPrimary }]}
+          numberOfLines={1}
+          accessibilityRole="header"
+        >
+          {handle}
+        </Text>
+      </View>
+      {onMore ? (
+        <IconButton
+          testID="conversation-more"
+          name="Mere"
+          icon="ellipsis-horizontal"
+          onPress={onMore}
+        />
+      ) : null}
+    </View>
+  );
+}
+
 export function ConversationView({
   conversationId,
   onBack,
   onConversationOpened,
   onConversationHidden,
   focusMessageId = null,
+  reference: initialReference = null,
 }: ConversationViewProps) {
   const { accessToken } = useAuth();
   const theme = useTheme();
@@ -80,6 +139,8 @@ export function ConversationView({
   const [draft, setDraft] = useState("");
   const [pendingImageBase64, setPendingImageBase64] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<{ id: string; text: string } | null>(null);
+  // Dismissed by the Collector, or gone after the first message that carried it.
+  const [reference, setReference] = useState<JerseyReference | null>(initialReference);
   const [respondingBidId, setRespondingBidId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [peer, setPeer] = useState<CollectionConversationPeer | null>(null);
@@ -237,22 +298,10 @@ export function ConversationView({
   };
 
   const handleAttach = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      return;
+    const base64 = await pickMessageImage();
+    if (base64) {
+      setPendingImageBase64(base64);
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.9,
-      base64: true,
-    });
-
-    if (result.canceled || !result.assets[0]?.base64) {
-      return;
-    }
-
-    setPendingImageBase64(result.assets[0].base64);
   };
 
   const handleSend = async () => {
@@ -268,14 +317,20 @@ export function ConversationView({
     setSending(true);
     setError(null);
     try {
-      await sendConversationMessage(accessToken, conversationId, {
-        text: trimmed || undefined,
-        contentBase64: pendingImageBase64 ?? undefined,
-        replyToMessageId: replyTo?.id,
-      });
+      await sendConversationMessage(
+        accessToken,
+        conversationId,
+        sendMessageBody({
+          text: trimmed,
+          imageBase64: pendingImageBase64,
+          replyToMessageId: replyTo?.id,
+          reference,
+        }),
+      );
       setDraft("");
       setPendingImageBase64(null);
       setReplyTo(null);
+      setReference(null);
       await loadConversation();
     } catch {
       setError("Beskeden kunne ikke sendes.");
@@ -326,40 +381,11 @@ export function ConversationView({
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={insets.top}
     >
-      <View
-        testID="conversation-header"
-        style={[
-          styles.header,
-          { paddingTop: insets.top + space.insetSm, borderBottomColor: theme.borderSubtle },
-        ]}
-      >
-        <IconButton name="Tilbage" icon="arrow-back" onPress={onBack} />
-        <View style={styles.headerCenter}>
-          <View
-            style={[styles.headerInitial, { backgroundColor: theme.fillSecondary }]}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          >
-            <Text style={[typography.headingSm, { color: theme.contentPrimary }]}>
-              {headerInitial(detail.peerHandle)}
-            </Text>
-          </View>
-          {/* The lock says `label` 16 / 600; there is no 600 Plex face, so `label` stays at 500 (design gap). */}
-          <Text
-            style={[typography.label, styles.headerHandle, { color: theme.contentPrimary }]}
-            numberOfLines={1}
-            accessibilityRole="header"
-          >
-            {detail.peerHandle}
-          </Text>
-        </View>
-        <IconButton
-          testID="conversation-more"
-          name="Mere"
-          icon="ellipsis-horizontal"
-          onPress={() => void handleOpenMore()}
-        />
-      </View>
+      <ConversationHeader
+        handle={detail.peerHandle}
+        onBack={onBack}
+        onMore={() => void handleOpenMore()}
+      />
 
       {error ? (
         <Text style={[typography.caption, styles.error, { color: theme.contentSecondary }]}>
@@ -435,6 +461,7 @@ export function ConversationView({
               : undefined,
           };
 
+          const itemReference = item.reference;
           return (
             <Pressable
               onLongPress={() => {
@@ -443,6 +470,32 @@ export function ConversationView({
                 }
               }}
             >
+              {/*
+                The lock has no slot for the jersey a message is about on the receiver's side
+                (Chat bubble has none); the reference anatomy sits read-only above the bubble (design gap).
+              */}
+              {itemReference ? (
+                <View
+                  testID={`thread-message-reference-${item.id}`}
+                  style={[
+                    styles.bubbleReference,
+                    message.role === "outgoing"
+                      ? styles.referenceOutgoing
+                      : styles.referenceIncoming,
+                  ]}
+                >
+                  <JerseyReferenceRow
+                    caption={itemReference.caption}
+                    label={itemReference.label}
+                    thumbUri={
+                      itemReference.thumbPath
+                        ? resolvePhotoUrl(itemReference.thumbPath, "grid")
+                        : null
+                    }
+                    imageHeaders={imageHeaders}
+                  />
+                </View>
+              ) : null}
               <ChatBubble message={message} imageHeaders={imageHeaders} />
             </Pressable>
           );
@@ -454,6 +507,12 @@ export function ConversationView({
         onChangeText={setDraft}
         replyTo={replyTo?.text}
         onDismissReply={() => setReplyTo(null)}
+        reference={reference}
+        referenceThumbUri={
+          reference?.thumbPath ? resolvePhotoUrl(reference.thumbPath, "grid") : null
+        }
+        referenceImageHeaders={imageHeaders}
+        onDismissReference={() => setReference(null)}
         onAttach={() => void handleAttach()}
         onSend={() => void handleSend()}
         disabledSend={sending || (!draft.trim() && !pendingImageBase64)}
@@ -542,6 +601,17 @@ const styles = StyleSheet.create({
   },
   error: {
     paddingHorizontal: space.insetMd,
+  },
+  bubbleReference: {
+    maxWidth: 300,
+    marginHorizontal: space.insetMd,
+    marginBottom: space.gapSm,
+  },
+  referenceIncoming: {
+    alignSelf: "flex-start",
+  },
+  referenceOutgoing: {
+    alignSelf: "flex-end",
   },
   moreError: {
     paddingHorizontal: space.insetMd,
