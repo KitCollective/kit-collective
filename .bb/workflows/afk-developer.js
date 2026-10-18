@@ -84,10 +84,6 @@ const MODELS = {
   sonnet: "claude-sonnet-5-5",
   fable: "claude-fable-5-1",
   haiku: "claude-haiku-5-5",
-  // The Reviewer on another vendor's model, through Optio's proxy (ADR-0067). Still Claude Code; the
-  // thread title ends in `:openrouter`, which is what Optio routes. Hard-coded until Operating settings
-  // choose it. DeepSeek V4 Pro was tried beside it on 2026-10-18 and wrote its tool calls as text.
-  glm: "z-ai/glm-5.3",
 };
 /** Spawns a high-reasoning worker on the aliased model: one literal agent() call per alias. */
 function spawn(alias, prompt, label, phaseTitle, schema) {
@@ -100,14 +96,14 @@ function spawn(alias, prompt, label, phaseTitle, schema) {
   if (alias === "sonnet") {
     return agent(prompt, { label, phase: phaseTitle, schema, provider: "claude-code", model: "claude-sonnet-5-5", reasoningLevel: "high" });
   }
-  if (alias === "glm") {
-    return agent(prompt, { label: `${label}:openrouter`, phase: phaseTitle, schema, provider: "claude-code", model: "z-ai/glm-5.3", reasoningLevel: "high" });
-  }
   throw new Error(`afk-developer has no model for alias ${alias}`);
 }
 // The Reviewer never runs on the Engineer's model (audit-receipt --require-different-model).
 // GLM 5.3 reviews every Engineer: never the Engineer's model or vendor (ADR-0067).
-const reviewerAlias = () => "glm";
+// GLM 5.3 through Optio's proxy (ADR-0067) is off until its model passes `bb workflows validate`, which
+// checks a literal model against the provider's catalog on the machine (2026-10-18: "Model mismatch for
+// literal workflow selection claude-code/z-ai/glm-5.3/high" stopped every run). Back to Opus, Fable for an Opus Engineer.
+const reviewerAlias = (engineerAlias) => (engineerAlias === "opus" ? "fable" : "opus");
 
 // The only Linear states this workflow may write. Merging, Post-Merge and Done are a human's
 // (or /land's) to set, so they are not in the list and `move` throws on them.
