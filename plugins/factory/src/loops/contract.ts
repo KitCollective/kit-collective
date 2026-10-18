@@ -17,6 +17,10 @@ const loopDto = z.object({
   name: z.string(),
   workflow: z.string(),
   trigger: z.object({ kind: z.enum(["issue", "milestone-done"]), summary: z.string() }),
+  /** The machines the file lets the Loop use. */
+  machines: z.array(z.string()),
+  /** The workflow file's phase titles, in order: the roles it runs. Empty when the file cannot be read. */
+  roles: z.array(z.string()),
   settings: z.object({
     enabled: setting(settingSchemas.enabled),
     maxLive: setting(settingSchemas.maxLive),
@@ -38,6 +42,23 @@ const changeDto = z.object({
   at: z.string(),
 });
 
+/** A proposed change to what a Loop or Staff member is: the text, and the pull request once there is one. */
+export const proposalDto = z.object({
+  id: z.string(),
+  /** The Loop's name or the Staff member's agent id. */
+  subject: z.string(),
+  /** The file the pull request edits: `factory.config.json` or the Charter. */
+  file: z.string(),
+  text: z.string(),
+  by: z.string(),
+  at: z.string(),
+  threadId: z.string(),
+  /** Null until the proposal's thread has opened it. */
+  pr: z
+    .object({ number: z.number(), url: z.string(), state: z.enum(["open", "merged", "closed"]) })
+    .nullable(),
+});
+
 export const loopsContract = {
   loops_list: {
     input: z.null(),
@@ -55,12 +76,22 @@ export const loopsContract = {
       .strict(),
     output: ok,
   },
+  loops_proposals: {
+    input: z.null(),
+    /** Every proposal about a Loop, newest first. */
+    output: z.object({ proposals: z.array(proposalDto) }),
+  },
+  loops_propose: {
+    input: z.object({ loop: z.string().min(1), text: z.string().max(20_000), by }).strict(),
+    output: proposalDto,
+  },
   loops_clear: {
     input: z.object({ loop: z.string().min(1), key: z.string().min(1), by }).strict(),
     output: ok,
   },
 };
 
+export type ProposalDto = z.infer<typeof proposalDto>;
 export type LoopDto = z.infer<typeof loopDto>;
 export type LoopChangeDto = z.infer<typeof changeDto>;
 export type LoopsDto = z.infer<typeof loopsContract.loops_list.output>;

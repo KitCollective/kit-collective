@@ -3,7 +3,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { experimental_defineHostEntry } from "@get-bb/plugin-sdk";
-import { GATE_SCRIPT, hostContract, PROBE_SCRIPT } from "./src/host-contract.js";
+import { GATE_SCRIPT, hostContract, LAND_SCRIPT, PROBE_SCRIPT } from "./src/host-contract.js";
 import { runNodeScript } from "./src/host-run.js";
 
 const execFileAsync = promisify(execFile);
@@ -53,6 +53,33 @@ export const runGate = async (input: GateInput, context: { signal: AbortSignal }
   return { ...result, sha: stdout.trim() };
 };
 
+type LandInput = (typeof hostContract.run_land.input)["_output"];
+
+/**
+ * Runs one slice of the fixed landing script in the given checkout. The script's own wait ends
+ * before the host would kill it, so a slow merge queue answers with its waiting verdict (exit 3).
+ * A stop's reason is one argument (no shell), so its text cannot add a flag or a command.
+ */
+export const runLand = async (input: LandInput, context: { signal: AbortSignal }) => {
+  const { cwd, step, pr, issue, reason, timeoutMs } = input;
+  const hostTimeoutMs = timeoutMs ?? GATE_TIMEOUT_MS;
+  return runNodeScript({
+    cwd,
+    script: LAND_SCRIPT,
+    args: [
+      step,
+      String(pr),
+      "--issue",
+      issue,
+      "--timeout",
+      String(gateWaitSeconds(hostTimeoutMs)),
+      ...(reason === undefined ? [] : ["--reason", reason]),
+    ],
+    timeoutMs: hostTimeoutMs,
+    signal: context.signal,
+  });
+};
+
 const PR_HEAD_TIMEOUT_MS = 60_000;
 
 type PrHeadInput = (typeof hostContract.pr_head.input)["_output"];
@@ -69,5 +96,5 @@ export const prHead = async ({ repo, pr }: PrHeadInput, context: { signal: Abort
 
 export default experimental_defineHostEntry({
   contract: hostContract,
-  handlers: { run_probe: runProbe, run_gate: runGate, pr_head: prHead },
+  handlers: { run_probe: runProbe, run_gate: runGate, run_land: runLand, pr_head: prHead },
 });

@@ -21,6 +21,7 @@ import { createSettingsStore, type Override } from "../settings/store.js";
 import { json } from "../shared/cli.js";
 import type { LoopChangeDto, LoopDto, LoopsDto } from "./contract.js";
 import { formatSetting, STARTS_PER_DAY_NOTE } from "./format.js";
+import { createProposals, REGISTRY_FILE } from "./proposal.js";
 
 const SUBJECT = "loop:";
 const LOG_LIMIT = 100;
@@ -63,13 +64,20 @@ const setting = <T>(file: T, value: T | undefined, override: Override | undefine
       : { by: override.by, at: iso(override.at) },
 });
 
-function loopDto(registry: Registry, loop: Loop, own: Map<string, Override> | undefined): LoopDto {
+function loopDto(
+  registry: Registry,
+  loop: Loop,
+  own: Map<string, Override> | undefined,
+  roles: string[],
+): LoopDto {
   const file = fileSettings(registry, loop);
   const values = parseOverrides(own);
   return {
     name: loop.name,
     workflow: loop.workflow,
     trigger: triggerSummary(loop),
+    machines: loop.machines,
+    roles,
     settings: {
       enabled: setting(file.enabled, values.enabled, own?.get("enabled")),
       maxLive: setting(file.maxLive, values.maxLive, own?.get("maxLive")),
@@ -101,6 +109,7 @@ function describe(loops: LoopDto[]): string {
 
 export function createLoops(core: Core) {
   const store = createSettingsStore(core.bb.storage.database());
+  const proposals = createProposals(core);
 
   /** Every Loop's overrides by name, as the scheduler applies them. */
   function overrides(): LoopOverrides {
@@ -132,9 +141,36 @@ export function createLoops(core: Core) {
     return parsed.registry;
   }
 
+  /** The phase titles of `.bb/workflows/<workflow>.js`, which is where a Loop's roles are set. */
+  async function rolesOf(projectId: string, workflow: string): Promise<string[]> {
+    try {
+      const file = await core.bb.sdk.projects.fileContent({
+        projectId,
+        path: `.bb/workflows/${workflow}.js`,
+      });
+      const text =
+        file.contentEncoding === "base64"
+          ? Buffer.from(file.content, "base64").toString("utf8")
+          : file.content;
+      const phases = /phases:\s*\[([\s\S]*?)\n\s*\],/.exec(text)?.[1] ?? "";
+      return [...phases.matchAll(/title:\s*"([^"]+)"/g)].map((match) => match[1] ?? "");
+    } catch {
+      return [];
+    }
+  }
+
   async function list(named?: string): Promise<LoopsDto> {
     try {
       const registry = await fileRegistry(named);
+      const projectId = await project(named);
+      const workflows = [...new Set(registry.loops.map((loop) => loop.workflow))];
+      const roles = new Map(
+        await Promise.all(
+          workflows.map(
+            async (workflow) => [workflow, await rolesOf(projectId, workflow)] as const,
+          ),
+        ),
+      );
       const own = store.overrides(SUBJECT);
       const log = store.log(SUBJECT, LOG_LIMIT).map(
         (change): LoopChangeDto => ({
@@ -149,7 +185,12 @@ export function createLoops(core: Core) {
       return {
         error: null,
         loops: registry.loops.map((loop) =>
-          loopDto(registry, loop, own.get(`${SUBJECT}${loop.name}`)),
+          loopDto(
+            registry,
+            loop,
+            own.get(`${SUBJECT}${loop.name}`),
+            roles.get(loop.workflow) ?? [],
+          ),
         ),
         log,
       };
@@ -192,6 +233,23 @@ export function createLoops(core: Core) {
         core.changed();
       }
       return { ok: true as const };
+    },
+    async loops_proposals() {
+      return { proposals: await proposals.list("loop") };
+    },
+    /** Opens a pull request that edits the registry; no Operating setting or override changes. */
+    async loops_propose(input: { loop: string; text: string; by: string }) {
+      const known = (await fileRegistry()).loops.find((candidate) => candidate.name === input.loop);
+      if (known === undefined) throw new Error(`no Loop "${input.loop}" in ${REGISTRY_FILE}`);
+      return proposals.propose({
+        kind: "loop",
+        subject: known.name,
+        heading: `the Loop "${known.name}" in the Loop registry (${REGISTRY_FILE})`,
+        title: `Loop ${known.name}: change proposed in Optio`,
+        file: REGISTRY_FILE,
+        text: input.text,
+        by: input.by,
+      });
     },
     async loops_clear(input: { loop: string; key: string; by: string }) {
       const { loop, key } = await target(input.loop, input.key);
