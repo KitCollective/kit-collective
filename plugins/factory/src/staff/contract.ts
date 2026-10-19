@@ -91,7 +91,7 @@ const staffHeader = z.object({
   status: z.enum(["on", "off", "paused"]),
   /** When the newest daily activity thread was last active (ms); null when there is none yet. */
   lastHeartbeat: z.number().nullable(),
-  /** The Charter's budget as written; `used` is null while nothing measures it. */
+  /** The budget in force, as written: the override, else the Charter's; `used` is null while nothing measures it. */
   budget: z.object({ limit: z.string().nullable(), used: z.string().nullable() }),
   /** Who overrode what the header shows and when (ISO); null while the Charter's value is in force (ADR-0065). */
   overrides: z.object({
