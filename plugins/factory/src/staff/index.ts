@@ -8,10 +8,12 @@ import type { Core } from "../core.js";
 import { fetchLinearOptions } from "../linear-api.js";
 import { createProposals } from "../loops/proposal.js";
 import { assertCron, renderBrief } from "../sessions.js";
+import { createSettingsStore } from "../settings/store.js";
 import { json } from "../shared/cli.js";
 import type { Run } from "../store.js";
 import { createStaffChats } from "./chats.js";
 import type { staffContract } from "./contract.js";
+import { createStaffSettings } from "./settings.js";
 
 function describeRun(run: Run): string {
   return [
@@ -68,7 +70,9 @@ export function createStaff(core: Core) {
     return { threadId: run.threadId };
   };
 
-  const chats = createStaffChats(core);
+  const store = createSettingsStore(bb.storage.database());
+  const chats = createStaffChats(core, store);
+  const operating = createStaffSettings(core, store, chats.charterOf);
 
   const rpc: PluginRpcHandlers<typeof staffContract> = {
     staff_list: () => chats.list(),
@@ -76,6 +80,7 @@ export function createStaff(core: Core) {
       return { threadId: await chats.open(agentId) };
     },
     staff_chat_header: ({ threadId }) => chats.header(threadId),
+    ...operating.rpc,
     async agents_list() {
       const projects = await bb.sdk.projects.list();
       return {
@@ -230,6 +235,7 @@ export function createStaff(core: Core) {
   const agentPositional = { name: "agent", description: "Agent id", required: true } as const;
 
   const cli = {
+    ...operating.cli,
     list: cliCommand({
       summary: "List the agents",
       options: { json },

@@ -21,6 +21,7 @@ import { field, PANEL, when } from "../shared/common";
 import { Back, CheckboxRow, Empty, Labeled, Page, Problem, Rows, Section } from "../shared/layout";
 import type { Rpc } from "../shared/use-loaded";
 import { useLoaded } from "../shared/use-loaded";
+import { OperatingSettings } from "./settings";
 
 // ---- Staff list ------------------------------------------------------------------------------
 
@@ -1114,7 +1115,10 @@ function AgentDetail({ id }: { id: string }) {
           ) : null}
           {tab === "Charter" ? <CharterTab agent={value.agent} /> : null}
           {tab === "Settings" ? (
-            <InstructionsTab agent={value.agent} projects={value.projects} act={act} />
+            <>
+              <OperatingSettings agent={value.agent} />
+              <InstructionsTab agent={value.agent} projects={value.projects} act={act} />
+            </>
           ) : null}
         </>
       )}

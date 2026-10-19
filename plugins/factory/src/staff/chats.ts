@@ -6,7 +6,9 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Agent } from "../agent-store.js";
 import type { Core } from "../core.js";
+import type { SettingsStore } from "../settings/store.js";
 import { type Charter, charterPath, parseCharter } from "./charter.js";
+import { effectiveSettings, overridesOf, statusOf } from "./settings.js";
 
 /** Messages Optio sends into a chat begin with this, so they are never taken for the person's answer. */
 export const OPTIO_MESSAGE = "[optio";
@@ -67,7 +69,7 @@ function userRows(rows: unknown[]): { text: string; createdAt: number }[] {
   });
 }
 
-export function createStaffChats(core: Core) {
+export function createStaffChats(core: Core, store: SettingsStore) {
   const { bb, agents, sessions, settings, changed } = core;
   const kv = bb.storage.kv;
 
@@ -182,11 +184,9 @@ export function createStaffChats(core: Core) {
     if (agent === null) return null;
     const charter = await charterOf(agent);
     if (charter === null) return null;
-    const status: StaffStatus = !agent.enabled
-      ? "off"
-      : (await settings.get()).paused
-        ? "paused"
-        : "on";
+    // The member's Operating settings: an override of the Charter, or the Charter's own value.
+    const effective = effectiveSettings(charter, overridesOf(store, agent.id));
+    const status: StaffStatus = statusOf(agent.enabled, effective, (await settings.get()).paused);
     const daily = dailyThread(agent.name);
     const threads = await bb.sdk.threads
       .list({ projectId: agent.projectId, limit: 200 })
@@ -205,7 +205,7 @@ export function createStaffChats(core: Core) {
       status,
       lastHeartbeat,
       // The Charter states no measured use, and nothing else measures it either.
-      budget: { limit: charter.budget, used: null },
+      budget: { limit: effective.budget.value, used: null },
     };
   }
 
@@ -284,6 +284,6 @@ export function createStaffChats(core: Core) {
     });
   }
 
-  return { list, open, header, ask, openQuestions };
+  return { list, open, header, ask, openQuestions, charterOf };
 }
 export type StaffChats = ReturnType<typeof createStaffChats>;
