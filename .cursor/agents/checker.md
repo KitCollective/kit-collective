@@ -29,6 +29,8 @@ Fetch `get_issue` and `list_comments`. Reuse the existing workpad.
 
 The first `In Review` pass is a **full** review: every row below, written to workpad `### Review matrix` (row, `checked` / `N/A` / `finding`, evidence, SHA; template from `node scripts/review-matrix.mjs rows`). List every hard finding in this fail. Do not send work back for one class while leaving sibling classes unstated.
 
+An AFK developer review whose head is the last green head plus merges of `origin/development` only (the workflow decides this with `node scripts/review-mode.mjs`) is a delta review instead: the write-scope diff since that head, each merge's resolution, and the files both sides changed; every untouched row is carried forward with the new head as `at` and evidence `unchanged since <sha>` (code-review/SKILL.md, _Development-merge delta_).
+
 Later passes inherit the matrix and re-check only what `node scripts/review-matrix.mjs plan <workpad> <lastReviewSha>` lists. A row the diff did not touch is not re-judged and does not get a new finding; a regression a fix created is a touched row. No verdict until `node scripts/review-matrix.mjs validate <workpad>` exits 0 (ADR-0050).
 
 `names-english` and `docs-sync` are filled from `pnpm check:review-gate`, not from reading the diff by eye. Tag a finding that is only text or a name `[text]` / `[name]`; when all findings of a fail carry a tag, the fix is verified with `node scripts/classify-fix-diff.mjs <lastReviewSha>` (a `light` diff is read against the findings, no fresh review) and the fail does not count toward the loop cap.
@@ -56,7 +58,7 @@ Do not move status, and do not start the fail write-up, while any required check
 
 ## GitHub CI/CD
 
-The attached PR’s required GitHub checks are part of the verdict. Read check runs / status checks on the PR (`gh pr checks` or the GitHub API). Do not substitute a local test run for this gate.
+The attached PR’s required GitHub checks are part of the verdict. Read check runs / status checks on the PR (`gh pr checks` or the GitHub API). Do not substitute a local test run for this gate, and do not repeat one: a full suite, typecheck, lint or build that a required check ran green on the same head is not re-run. The check result is the evidence. Run one targeted test file at most, output trimmed (`| tail -30`), only to probe a gap you suspect.
 
 - **Pending** — wait until required checks complete: `node scripts/wait-for-checks.mjs <pr>` (one blocking command; never the watch flag, a sleep or a loop). Stay in `In Review`. Do not fail, do not pass.
 - **Red / failed required checks** — fail (same as a Spec/Standards miss).
