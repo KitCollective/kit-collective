@@ -771,6 +771,72 @@ if (carried.length > 0) {
   await sh("log:lead-skipped", "Lead", carried.splice(0), true);
 }
 
+/**
+ * Spawns one Reviewer: a fresh hidden thread on another model than the Engineer, labelled `label`, on the
+ * PR head (`since` set: a delta review since that green head). Returns the result (null when unusable), the
+ * thread id the receipt reads, Optio's reviewer-served answer for a proxied Reviewer, and the thread title.
+ */
+async function reviewHead(rAlias, rLabel, since) {
+  const proxied = rAlias === "glm";
+  // The exact title spawn() gives a proxied Reviewer's thread.
+  const rTitle = proxied ? `${rLabel}:openrouter` : rLabel;
+  let review = null;
+  try {
+    review = await spawn(
+      rAlias,
+      [
+        since
+          ? `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run its development-merge delta review (this checkout is the PR head; confirm with git rev-parse HEAD).`
+          : `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run it on the PR's merge-base diff (this checkout is the PR head; confirm with git rev-parse HEAD).`,
+        ...(since ? deltaReviewLines(since) : []),
+        ciEvidenceLine(prNumber),
+        "An acceptance criterion covered by a check on the issue's `live-check:` line runs after the merge on the owner's machine: in the spec-ac row its evidence is `deferred to live check <name>`, which is not a finding, as long as the code it checks is in the diff.",
+        "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
+        // A proxied Reviewer once checked the env for a token, found none and left the matrix in thread storage, so a green review closed the review gate (KIT-298, 2026-10-18).
+        `Write it this way: run node scripts/linear.mjs issue ${issue}, take the id of the comment that starts with \`## Agent Workpad\`, write that comment's body to a file with its \`### Review matrix\` section replaced (added when missing), and save it with node scripts/linear.mjs comment-update <id> --body-file <file>. The script finds the Linear key itself: never check env vars for a token and never keep the matrix anywhere else. If the call fails, put its error output in your summary and return amber with the row workpad.`,
+        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending or a failed workpad write). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
+        "Every finding names the file and line, what is wrong, and what green looks like, so the Engineer can check it, and is marked `gating` or `nit`. Only gating findings make the review red; nits go in the matrix and do not hold it (ADR-0066).",
+        "The `Device flows` status of a slice flow may still be running while you review: it is not a required check, not yours to wait for and not a finding. Review the flow file against the acceptance criteria; the review gate waits for the run.",
+        "On red, also return light: true only when every finding is light: the wording of a comment, a doc line, a name or a message, with no gap in behaviour, tests, an acceptance criterion, the design lock or the write-scope. Otherwise light: false.",
+      ].join("\n"),
+      rLabel,
+      "Reviewer",
+      {
+        type: "object",
+        required: ["verdict", "sha", "sentence", "threadId"],
+        additionalProperties: false,
+        properties: {
+          verdict: { enum: ["green", "amber", "red"] },
+          sha: { type: "string" },
+          rows: { type: "array", items: { type: "string" } },
+          sentence: { type: "string" },
+          threadId: { type: "string" },
+          light: { type: "boolean" },
+        },
+      },
+    );
+  } catch (error) {
+    review = null;
+  }
+  if (review && pick(review.verdict, ["green", "amber", "red"]) === null) {
+    review = null;
+  }
+  // A proxied Reviewer's thread comes from bb, never from the model: GLM 5.3 once reported the Issue
+  // thread's id as its own, so reviewer-served asked about the wrong thread and a served green review
+  // stopped as evidence-gap (KIT-400, 2026-10-18). Optio looks the thread up by the exact label the
+  // agent() call got and names it in its answer; that thread is the one logged, received and told.
+  let servedAnswer = null;
+  let rThread = review && THREAD.test(review.threadId) ? review.threadId : "";
+  if (review && proxied) {
+    servedAnswer = (await sh("reviewer-served", "Reviewer", [`bb optio reviewer-served --title ${rTitle}`], true, true))[0];
+    const named = servedAnswer && !servedAnswer.runner ? /^(?:NOT )?SERVED (thr_[a-z0-9]+)\b/.exec(servedAnswer.line ?? "") : null;
+    if (named && THREAD.test(named[1])) {
+      rThread = named[1];
+    }
+  }
+  return { review, thread: rThread, served: servedAnswer, title: rTitle };
+}
+
 // Set when a closing step of the previous round already moved the issue back to In Progress.
 let backInProgress = false;
 // A red review whose findings are all light (text, comments, names, doc wording) at the cap gets one
@@ -907,62 +973,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   const rAlias = reviewerAlias(modelAlias);
   const proxied = rAlias === "glm";
   const rLabel = `reviewer:${issue}:r${round}`;
-  // The exact title spawn() gives a proxied Reviewer's thread.
-  const rTitle = proxied ? `${rLabel}:openrouter` : rLabel;
-  let review = null;
-  try {
-    review = await spawn(
-      rAlias,
-      [
-        deltaSince
-          ? `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run its development-merge delta review (this checkout is the PR head; confirm with git rev-parse HEAD).`
-          : `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run it on the PR's merge-base diff (this checkout is the PR head; confirm with git rev-parse HEAD).`,
-        ...(deltaSince ? deltaReviewLines(deltaSince) : []),
-        ciEvidenceLine(prNumber),
-        "An acceptance criterion covered by a check on the issue's `live-check:` line runs after the merge on the owner's machine: in the spec-ac row its evidence is `deferred to live check <name>`, which is not a finding, as long as the code it checks is in the diff.",
-        "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
-        // A proxied Reviewer once checked the env for a token, found none and left the matrix in thread storage, so a green review closed the review gate (KIT-298, 2026-10-18).
-        `Write it this way: run node scripts/linear.mjs issue ${issue}, take the id of the comment that starts with \`## Agent Workpad\`, write that comment's body to a file with its \`### Review matrix\` section replaced (added when missing), and save it with node scripts/linear.mjs comment-update <id> --body-file <file>. The script finds the Linear key itself: never check env vars for a token and never keep the matrix anywhere else. If the call fails, put its error output in your summary and return amber with the row workpad.`,
-        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending or a failed workpad write). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
-        "Every finding names the file and line, what is wrong, and what green looks like, so the Engineer can check it, and is marked `gating` or `nit`. Only gating findings make the review red; nits go in the matrix and do not hold it (ADR-0066).",
-        "The `Device flows` status of a slice flow may still be running while you review: it is not a required check, not yours to wait for and not a finding. Review the flow file against the acceptance criteria; the review gate waits for the run.",
-        "On red, also return light: true only when every finding is light: the wording of a comment, a doc line, a name or a message, with no gap in behaviour, tests, an acceptance criterion, the design lock or the write-scope. Otherwise light: false.",
-      ].join("\n"),
-      rLabel,
-      "Reviewer",
-      {
-        type: "object",
-        required: ["verdict", "sha", "sentence", "threadId"],
-        additionalProperties: false,
-        properties: {
-          verdict: { enum: ["green", "amber", "red"] },
-          sha: { type: "string" },
-          rows: { type: "array", items: { type: "string" } },
-          sentence: { type: "string" },
-          threadId: { type: "string" },
-          light: { type: "boolean" },
-        },
-      },
-    );
-  } catch (error) {
-    review = null;
-  }
-  if (review && pick(review.verdict, ["green", "amber", "red"]) === null) {
-    review = null;
-  }
-  // A proxied Reviewer's thread comes from bb, never from the model: GLM 5.3 once reported the Issue
-  // thread's id as its own, so reviewer-served asked about the wrong thread and a served green review
-  // stopped as evidence-gap (KIT-400, 2026-10-18). Optio looks the thread up by the exact label the
-  // agent() call got and names it in its answer; that thread is the one logged, received and told.
-  let servedAnswer = null;
-  let rThread = review && THREAD.test(review.threadId) ? review.threadId : "";
-  if (review && proxied) {
-    servedAnswer = (await sh("reviewer-served", "Reviewer", [`bb optio reviewer-served --title ${rTitle}`], true, true))[0];
-    const named = servedAnswer && !servedAnswer.runner ? /^(?:NOT )?SERVED (thr_[a-z0-9]+)\b/.exec(servedAnswer.line ?? "") : null;
-    if (named && THREAD.test(named[1])) {
-      rThread = named[1];
-    }
-  }
+  let { review, thread: rThread, served: servedAnswer, title: rTitle } = await reviewHead(rAlias, rLabel, deltaSince);
   if (!review || !rThread) {
     await sh("log:no-result", "Reviewer", [logCmd("reason", `--issue ${issue} --code no-result-line`)], true);
     return stopped("reviewer", "In Review", { prNumber, rounds, note: "the Reviewer ended without a usable result or thread id" });
@@ -1053,33 +1064,56 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
     return stopped("review gate", state, { prNumber, rounds, verdict: review.verdict, note: why });
   }
   // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.
-  const receiptCmd = `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread}${engineerThread ? ` --implementer-thread ${engineerThread}` : ""} --require-different-model --dry-run`;
+  const receiptCmd = (thread) => `node scripts/audit-receipt.mjs post ${prNumber} --thread ${thread}${engineerThread ? ` --implementer-thread ${engineerThread}` : ""} --require-different-model --dry-run`;
+  // A proxied review counts only when Optio's proxy served its thread (asked right after the review, by title).
+  const servedOk = (answer) => !proxied || (!!answer && !answer.runner && answer.code === 0 && /^SERVED thr_/.test(answer.line ?? ""));
   // `auto-land.mjs enabled` rides in the same runner (it only reads the config and the kill file), so the default path spends no extra runner.
-  // A proxied review counts only when Optio's proxy served its thread (asked right after the review,
-  // by title): otherwise it ran on the carrier, and no receipt is tried.
-  if (proxied && (!servedAnswer || servedAnswer.runner || servedAnswer.code !== 0 || !/^SERVED thr_/.test(servedAnswer.line ?? ""))) {
+  // A review the proxy did not serve ran on the carrier, and no receipt is tried.
+  if (!servedOk(servedAnswer)) {
     await sh("log:receipt", "Review gate", [logCmd("reason", `--issue ${issue} --code evidence-gap`)], true);
     return stopped("receipt", "In Review", { prNumber, rounds, verdict: "green", receipt: servedAnswer?.line ?? "no answer from reviewer-served", note: `the reviewer proxy did not serve ${rTitle} (${rThread}), so the review ran on the carrier model: ${servedAnswer?.line ?? "no answer"}` });
   }
-  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd, "node scripts/auto-land.mjs enabled"], true, true);
+  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd(rThread), "node scripts/auto-land.mjs enabled"], true, true);
   const enabledAnswer = dry[1];
   dry = dry.slice(0, 1);
   // A Reviewer that returned its verdict through the result tool can end on another sentence, and
   // the receipt reads only the thread's last text (KIT-283 and KIT-286, 2026-10-14). The Reviewer
   // is asked once for the line, as bb-orchestrate allows, and the receipt is tried again. The message
   // is built from checked tokens only; the verdict is green, since only a green review gets here.
+  // GLM 5.3 once answered the ask with its result JSON instead of the line (KIT-404, 2026-10-18), so
+  // the ask says the line is plain text.
   const reviewSha = /^[0-9a-f]{40}$/i.test(review.sha) ? review.sha.toLowerCase() : "";
-  if (dry[0]?.code !== 0 && !dry[0]?.runner && reviewSha && /did not end with an exact AUDIT-RESULT line/.test(dry[0]?.line ?? "")) {
+  const noLine = (answer) => answer?.code !== 0 && !answer?.runner && /did not end with an exact AUDIT-RESULT line/.test(answer?.line ?? "");
+  if (reviewSha && noLine(dry[0])) {
     await sh("log:no-result", "Review gate", [
       logCmd("reason", `--issue ${issue} --code no-result-line`),
       `bb thread unarchive ${rThread}`,
     ], true);
     const asked = await sh("reviewer:result-line", "Review gate", [
-      `bb thread tell ${rThread} "Your review ended without the result line. Do not review again and change nothing. If the head is still ${reviewSha} and your verdict stands, reply with exactly one line and nothing else: AUDIT-RESULT ${issue} green ${reviewSha}"`,
+      `bb thread tell ${rThread} "Your review ended without the result line. Do not review again, change nothing and call no tool. If the head is still ${reviewSha} and your verdict stands, reply with this one line as plain text and nothing else: no JSON, no code block, no tool call and no result tool, since the receipt reads only your last text line. AUDIT-RESULT ${issue} green ${reviewSha}"`,
       `bb thread wait ${rThread} --timeout 600`,
     ]);
     if (asked.length === 2 && asked.every((r) => r.code === 0)) {
-      dry = await sh("receipt:dry-run", "Review gate", [receiptCmd], false, true);
+      dry = await sh("receipt:dry-run", "Review gate", [receiptCmd(rThread)], false, true);
+    }
+    // Still no line: one fresh Reviewer on the same head, inside this run, before stopping (KIT-404 sat
+    // In Review for 17 hours on 2026-10-18 after the ask). It is a delta review since this green head,
+    // so it re-reads the checks and carries the matrix forward. The receipt still reads only that new
+    // thread's own last text line; nothing is built from a model's result.
+    if (asked.length !== 2 || !asked.every((r) => r.code === 0) || noLine(dry[0])) {
+      await sh("log:fresh-reviewer", "Review gate", [logCmd("reason", `--issue ${issue} --code fresh-reviewer`)], true);
+      const fresh = await reviewHead(rAlias, `${rLabel}:fresh`, reviewSha);
+      const freshGreen = fresh.review && fresh.thread && fresh.review.verdict === "green" && String(fresh.review.sha).toLowerCase() === reviewSha;
+      if (freshGreen && servedOk(fresh.served)) {
+        rThread = fresh.thread;
+        dry = [await shAfter([
+          logCmd("spawn", `--issue ${issue} --step reviewer --thread ${rThread} --mode review --provider ${PROVIDER} --model ${MODELS[rAlias]}${machineFlag}`),
+          logCmd("result", `--issue ${issue} --step reviewer --outcome green --usage-thread ${rThread}`),
+        ], "receipt:dry-run", "Review gate", receiptCmd(rThread))];
+      } else {
+        const why = !freshGreen ? `the fresh Reviewer returned ${fresh.review ? `${fresh.review.verdict} on ${String(fresh.review.sha).slice(0, 12)}` : "no usable result"}` : `the reviewer proxy did not serve ${fresh.title}: ${fresh.served?.line ?? "no answer"}`;
+        dry = [{ code: 1, line: `REFUSED (receipt): no AUDIT-RESULT line after the ask, and ${why}` }];
+      }
     }
   }
   receipt = dry[0]?.line ?? "no output from audit-receipt";

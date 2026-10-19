@@ -38,7 +38,10 @@
 // KIT-409's run stopped at its first step with no PR, and because only issues with a PR were listed the
 // issue sat In Progress for three hours, holding its reserved write-scope over KIT-404. With an open PR
 // the entry resumes it; without one it restarts (mode "restart"). More than maxStartsPerDay starts in
-// 24 h is a loop: listed in loops, never started.
+// 24 h is a loop: listed in loops, never started. A green review that stopped at the receipt (no
+// AUDIT-RESULT line, even from the run's fresh Reviewer) is such a run too, marked after: "receipt": it is
+// resumed, never only retried as a landing. 2026-10-18: KIT-404's receipt was retried each tick, refused
+// each time, and the unchanged board kept Max silent for 17 hours.
 // Pure and self-contained, so scripts/tests/max-tick.test.mjs runs this very source.
 function stoppedRuns({ board, events, prOf, skip, now, runStuckMinutes, maxStartsPerDay }) {
   const resume = [];
@@ -64,9 +67,20 @@ function stoppedRuns({ board, events, prOf, skip, now, runStuckMinutes, maxStart
       mode: pr ? "resume" : "restart",
       pr: pr?.number ?? null,
       quietMinutes: Math.round((now - Date.parse(last.at)) / 60000),
+      ...(receiptStall(own) ? { after: "receipt" } : {}),
     });
   }
   return { resume, loops };
+}
+// A run whose last event is its `end` at the receipt, after a no-result-line or evidence-gap since its
+// start: the Reviewer's thread never gave a line the receipt accepts, so posting it again cannot pass.
+function receiptStall(own) {
+  const last = own.at(-1);
+  if (last?.event !== "end" || last.stoppedAt !== "receipt") return false;
+  const since = own.slice(own.findLastIndex((e) => e.event === "start") + 1);
+  return since.some(
+    (e) => e.event === "reason" && ["evidence-gap", "no-result-line"].includes(e.code),
+  );
 }
 // end stoppedRuns
 
@@ -390,6 +404,8 @@ function stoppedRuns({ board, events, prOf, skip, now, runStuckMinutes, maxStart
         (p) => p.headRefName.includes(`${slug}-`) || p.headRefName.endsWith(slug),
       );
       if (!pr || (step === "start" && pr.headRefOid !== sha)) continue;
+      // A receipt stall is a stopped run, resumed by stoppedRuns, not a landing (KIT-404).
+      if (step === "start" && receiptStall(own)) continue;
       const thread = /thr_[a-z0-9]+/.exec(pr.headRefName)?.[0] ?? null;
       const environmentId = threadList.find((t) => t.id === thread)?.environmentId ?? null;
       // A green review whose receipt was never posted (the run stopped on evidence-gap: the Reviewer
@@ -545,7 +561,7 @@ Order (ADR-0066): with a free slot, finish before you start: step 7 (landings), 
    Auto-land is the only route to a merge: never \`gh pr merge\`, never Merging or Done by hand, never a second run. Write no comment of your own: auto-land writes its own. If a call fails on its own tooling (git, gh, the lock), report the verdict line and leave the issue as it is.
 6c. Widen a write-scope, for each issue in approval. Read its workpad comment (the one starting \`## Agent Workpad\`) with \`LINEAR_ACTOR=max node scripts/linear.mjs issue <KIT-n>\`. Act only when \`### Waiting\` asks for nothing but a wider write-scope by named paths (files or globs), and every one of them: (a) sits under an app, package or plugin the issue's write-scope already names (apps/mobile, apps/api, apps/web, apps/admin, packages/<name>, plugins/<name>: Optio is plugins/factory); (b) is not schema, auth, billing or a workflow (packages/db/**, apps/api/src/identity/**, apps/api/src/billing/**, .github/**) and not a factory path (.bb/**, .factory/**, factory.config.json, scripts/**, staff/**); (c) does not overlap the write-scope of an issue In Progress, test globs aside; (d) there are at most five of them. Then: append them to the issue's \`write-scope:\` line (\`LINEAR_ACTOR=max node scripts/linear.mjs description <KIT-n> --body-file <file>\`, the description otherwise unchanged; plain globs, no backticks); append them the same way to the \`write-scope:\` line of the PR body (\`gh pr edit <pr> --body-file <file>\`); comment once "Max: widened the write-scope by <paths> (same area as <glob>, no overlap with In Progress)"; then \`LINEAR_ACTOR=max node scripts/linear.mjs label <KIT-n> swap ready-for-human ready-for-agent\`, leaving it in Approval: it is then an answered Approval, and you resume it as step 7a says, in this tick when a slot is free. If any condition fails, or the ask is anything else (a design call, an acceptance criterion, a live check, a factory path), change nothing and list the issue and its ask in your report: it is Nicklas's.
 7a. Resume answered Approvals, for each entry in answered, after step 7 and before 7b, 3 and 4, and only while a live slot is free (step 2 counts them). The person answered in a comment and swapped the help label to ready-for-agent; the issue stays in Approval until its run moves it. Skip it if \`bb workflows list\` shows an afk-developer run still running for the issue. Start it exactly as step 4 starts an issue with an open PR, in its own thread (args \`{"issue":"<KIT-n>","resume":true,"autoLand":true}\`; with no open PR, \`{"issue":"<KIT-n>","resume":true,"autoLand":true}\` too, since the branch exists), and comment once "Max: resumed <KIT-n> in its thread after Nicklas's answer". The run moves it to In Progress.
-7b. Resume stalled runs, for each entry in resume (a run that stopped In Progress or In Review, with or without a PR), before steps 3 and 4 (finishing a run comes before starting one) and only while a live slot is free (step 2 counts them). Skip it if \`bb workflows list\` shows an afk-developer run still running for the issue, or if \`LINEAR_ACTOR=max node scripts/linear.mjs issue <KIT-n>\` is no longer In Progress or In Review. Otherwise start it in its own thread as step 4 says, always with the args \`{"issue":"<KIT-n>","resume":true,"autoLand":true}\`: mode resume (an open PR) brings the worktree onto the PR branch first, mode restart (no open PR: the run stopped before it opened one, KIT-409 on 2026-10-18) brings it up to date with origin/development as step 4 does without a PR, and still passes \`"resume":true\`, because the session check refuses a fresh run on an issue that is already In Progress; with no PR the run's Engineer opens exactly one. Comment: resumed or restarted, the PR (or none), how long the run log had been quiet, the run id. For each entry in resumeLoops (three or more starts in 24 hours), start nothing: comment once that the issue keeps stopping and needs Nicklas, and list it in your report.
+7b. Resume stalled runs, for each entry in resume (a run that stopped In Progress or In Review, with or without a PR), before steps 3 and 4 (finishing a run comes before starting one) and only while a live slot is free (step 2 counts them). Skip it if \`bb workflows list\` shows an afk-developer run still running for the issue, or if \`LINEAR_ACTOR=max node scripts/linear.mjs issue <KIT-n>\` is no longer In Progress or In Review. Otherwise start it in its own thread as step 4 says, always with the args \`{"issue":"<KIT-n>","resume":true,"autoLand":true}\`: mode resume (an open PR) brings the worktree onto the PR branch first, mode restart (no open PR: the run stopped before it opened one, KIT-409 on 2026-10-18) brings it up to date with origin/development as step 4 does without a PR, and still passes \`"resume":true\`, because the session check refuses a fresh run on an issue that is already In Progress; with no PR the run's Engineer opens exactly one. Comment: resumed or restarted, the PR (or none), how long the run log had been quiet, the run id. An entry with after "receipt" is a green review whose Reviewer never gave the AUDIT-RESULT line the receipt reads, not even the run's fresh Reviewer: resume it like the others (its run reviews the head again and tries the receipt), never post the receipt yourself, and say so in the comment. For each entry in resumeLoops (three or more starts in 24 hours), start nothing: comment once that the issue keeps stopping and needs Nicklas, and list it in your report.
 8. Mentions. Mention Nicklas in a comment only for a question that is his to answer or for something that has waited on him for more than a day, by pasting his Linear profile URL https://linear.app/kitcollective/profiles/nicklas on its own in the comment, so it reaches his Linear inbox. Never mention him in a claim, a triage verdict, a hygiene move or the daily status. A decision that is his and that is about you or the flow, not about one issue, goes to him in your Staff chat: run \`bb optio ask max "<the question and what you recommend>"\`, which shows it in his Inbox until he answers in the chat. Ask each question once.
 9. Every comment you write starts with "Max:" and is written once: if the issue already has a Max comment saying the same thing, do not repeat it.
 
