@@ -454,7 +454,7 @@ test("the pre-review gate waits again on exit 3 and the matrix is not read befor
   });
   assert.equal(result.status, "Approval");
   assert.equal(commands.filter((c) => c.includes("gate.mjs pre-review")).length, 3);
-  assert.ok(!commands.some((c) => c.includes("review-matrix")));
+  assert.ok(!commands.some((c) => c.includes("scripts/review-matrix.mjs")));
 });
 
 test("an Engineer `blocked` moves to Approval with a label swap, or to Blocked with a relation", async () => {
@@ -1645,46 +1645,93 @@ test("the Reviewer is asked only once, and other refusals are not retried", asyn
   );
 });
 
-test("the Reviewer prompt asks for the result line as its last text, after the workpad write", async () => {
+test("the Reviewer prompt asks for the result line as its last text, after the matrix file", async () => {
   const { spawns } = await run();
   const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:")).prompt;
   assert.match(reviewer, /write that line as your last text, after every other tool call/);
 });
 
-test("the Reviewer prompt says how to write the matrix and never to look for a token (KIT-298)", async () => {
+const PUBLISH = `node scripts/linear.mjs review-matrix KIT-9 --head ${SHA}`;
+const isPublish = (c) => c.startsWith("node scripts/linear.mjs review-matrix ");
+const MATRIX_MISSING =
+  "linear: matrix-missing: the Reviewer wrote no .factory/review-matrix-KIT-9.md";
+
+test("the Reviewer writes the matrix to its file and never to Linear (KIT-298, KIT-404)", async () => {
   const { spawns } = await run();
   const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:")).prompt;
-  assert.match(reviewer, /node scripts\/linear\.mjs issue KIT-9/);
-  assert.match(reviewer, /`## Agent Workpad`/);
-  assert.match(reviewer, /`### Review matrix` section replaced/);
-  assert.match(reviewer, /node scripts\/linear\.mjs comment-update <id> --body-file <file>/);
-  assert.match(reviewer, /never check env vars for a token/);
-  assert.match(reviewer, /error output in your summary and return amber with the row workpad/);
+  assert.match(reviewer, /to the file \.factory\/review-matrix-KIT-9\.md in this checkout/);
+  assert.match(
+    reviewer,
+    /node scripts\/review-matrix\.mjs validate \.factory\/review-matrix-KIT-9\.md/,
+  );
+  assert.match(reviewer, /never call scripts\/linear\.mjs comment-update/);
+  assert.match(reviewer, /write nothing to Linear/);
+  // No workpad-write amber any more: amber is only for pending checks.
+  assert.doesNotMatch(reviewer, /row workpad|failed workpad write/);
+  assert.doesNotMatch(reviewer, /--body-file/);
 });
 
-const NO_MATRIX = "CLOSED (review): matrix: row `spec-ac` is missing";
+test("the workflow moves the matrix into the workpad in the review gate's own runner, right before the gate", async () => {
+  const { result, commands, spawns } = await run();
+  assert.equal(result.status, "Approval");
+  assert.deepEqual(commands.filter(isPublish), [PUBLISH]);
+  const at = (needle) => commands.findIndex((c) => c.startsWith(needle));
+  assert.ok(at("node scripts/run-log.mjs result --issue KIT-9 --step reviewer") < at(PUBLISH));
+  assert.ok(at(PUBLISH) < at("node scripts/gate.mjs review"));
+  const gateRunner = runners(spawns).find((s) => s.options.label === "gate:review").prompt;
+  assert.match(gateRunner, /linear\.mjs review-matrix KIT-9 --head/);
+  assert.match(gateRunner, /gate\.mjs review 77/);
+  // An earlier round's file is removed with the move to In Review, before the Reviewer starts.
+  assert.ok(
+    at("rm -f .factory/review-matrix-KIT-9.md") <
+      at("node scripts/run-log.mjs spawn --issue KIT-9 --step reviewer"),
+  );
+});
 
-test("a green review whose gate is closed on the matrix asks the Reviewer once to write it, then runs the gate again (KIT-298)", async () => {
-  let gates = 0;
+test("a Reviewer sha that is not 40 hex publishes nothing and is logged as matrix-invalid", async () => {
+  const { commands } = await run({
+    reviewer: () => ({
+      verdict: "red",
+      sha: "abc; rm -rf /",
+      rows: ["spec-ac"],
+      sentence: "x",
+      threadId: REVIEWER_THREAD,
+    }),
+  });
+  assert.ok(!commands.some(isPublish));
+  assert.ok(
+    commands.includes("node scripts/run-log.mjs reason --issue KIT-9 --code matrix-invalid"),
+  );
+});
+
+test("a green review whose file is missing asks the Reviewer once for the file, then publishes and gates again", async () => {
+  let publishes = 0;
   const { result, commands } = await run({
     shell: (c) => {
-      if (!isReviewGate(c)) return undefined;
-      gates += 1;
-      return gates === 1 ? { code: 1, line: NO_MATRIX } : { code: 0, line: "OPEN (review): fine" };
+      if (!isPublish(c)) return undefined;
+      publishes += 1;
+      return publishes === 1
+        ? { code: 1, line: MATRIX_MISSING }
+        : { code: 0, line: "c-pad: moved" };
     },
   });
   assert.equal(result.status, "Approval");
+  assert.ok(
+    commands.includes("node scripts/run-log.mjs reason --issue KIT-9 --code matrix-missing"),
+  );
+  assert.equal(commands.filter(isPublish).length, 2);
   assert.equal(commands.filter(isReviewGate).length, 2);
   const tells = commands.filter((c) => c.startsWith("bb thread tell thr_reviewer01 "));
   assert.equal(tells.length, 1);
-  assert.match(tells[0], /node scripts\/linear\.mjs comment-update <id> --body-file <file>/);
+  assert.match(tells[0], /\.factory\/review-matrix-KIT-9\.md/);
+  assert.match(tells[0], /Never call scripts\/linear\.mjs comment-update/);
   assert.match(tells[0], new RegExp(`AUDIT-RESULT KIT-9 green ${SHA}"$`));
   assert.doesNotMatch(tells[0], /`/, "no backtick reaches the shell");
+  assert.doesNotMatch(tells[0], /matrix-missing/, "the publish line stays out of the shell");
   const at = (needle) => commands.findIndex((c) => c.startsWith(needle));
-  const secondGate = commands.findLastIndex(isReviewGate);
   assert.ok(at("bb thread unarchive thr_reviewer01") < at("bb thread tell"));
-  assert.ok(at("bb thread tell") < at("bb thread wait thr_reviewer01"));
-  assert.ok(at("bb thread wait thr_reviewer01") < secondGate);
+  assert.ok(at("bb thread wait thr_reviewer01") < commands.findLastIndex(isPublish));
+  assert.ok(commands.findLastIndex(isPublish) < commands.findLastIndex(isReviewGate));
   assert.equal(
     commands.filter((c) => c.includes("--step reviewer") && c.includes(" spawn ")).length,
     1,
@@ -1692,41 +1739,80 @@ test("a green review whose gate is closed on the matrix asks the Reviewer once t
   );
 });
 
-test("the matrix ask is not made for a red review, another closed step or a failed tell", async () => {
-  const red = await run({
-    shell: (c) => (isReviewGate(c) ? { code: 1, line: NO_MATRIX } : undefined),
-    reviewer: () => ({
-      verdict: "red",
-      sha: SHA,
-      rows: ["spec-ac"],
-      sentence: "AC 2 unmet",
-      threadId: REVIEWER_THREAD,
-    }),
-  });
-  assert.ok(!red.commands.some((c) => c.startsWith("bb thread tell")));
+test("a green review whose matrix never reaches the workpad holds In Review, even when the gate is open", async () => {
+  for (const line of [MATRIX_MISSING, "linear: matrix-invalid: row `spec-ac` is missing"]) {
+    const { result, commands } = await run({
+      shell: (c) => (isPublish(c) ? { code: 1, line } : undefined),
+    });
+    assert.equal(result.status, "In Review");
+    assert.equal(result.stoppedAt, "review gate");
+    assert.equal(result.verdict, "amber");
+    assert.match(result.note, /did not reach the workpad/);
+    assert.equal(commands.filter((c) => c.startsWith("bb thread tell")).length, 1, "asked once");
+    assert.ok(!commands.some(isReceipt), "no receipt for a matrix the workpad lacks");
+    assert.equal(lastState(commands), "In Review");
+  }
+});
 
-  const scope = await run({
-    shell: (c) =>
-      isReviewGate(c)
-        ? { code: 1, line: "CLOSED (review): scope: outside write-scope" }
-        : undefined,
+test("a failed Linear write is logged as matrix-write-failed and holds In Review without asking the Reviewer", async () => {
+  const { result, commands } = await run({
+    shell: (c) => (isPublish(c) ? { code: 1, line: "linear: request failed: 503" } : undefined),
   });
-  assert.ok(!scope.commands.some((c) => c.startsWith("bb thread tell")));
+  assert.equal(result.status, "In Review");
+  assert.ok(
+    commands.includes("node scripts/run-log.mjs reason --issue KIT-9 --code matrix-write-failed"),
+  );
+  assert.ok(!commands.some((c) => c.startsWith("bb thread tell")));
+});
 
-  const tellFailed = await run({
+test("a red review whose file is missing is logged and still goes to the fix round, with no ask", async () => {
+  const { commands } = await run({
+    shell: (c) => (isPublish(c) ? { code: 1, line: MATRIX_MISSING } : undefined),
+    reviewer: (n) =>
+      n === 1
+        ? {
+            verdict: "red",
+            sha: SHA,
+            rows: ["spec-ac"],
+            sentence: "AC 2 unmet",
+            threadId: REVIEWER_THREAD,
+          }
+        : { verdict: "green", sha: SHA, sentence: "clean", threadId: REVIEWER_THREAD },
+  });
+  assert.ok(
+    commands.includes("node scripts/run-log.mjs reason --issue KIT-9 --code matrix-missing"),
+  );
+  assert.ok(commands.some((c) => c.includes("--verdict red --round")));
+  assert.ok(commands.some((c) => /spawn --issue KIT-9 --step engineer/.test(c)));
+});
+
+test("a shared runner that comes back short publishes again alone, then reads the gate again", async () => {
+  let gates = 0;
+  const { result, commands, spawns } = await run({
+    shell: (c) => {
+      if (!isReviewGate(c)) return undefined;
+      gates += 1;
+      return gates === 1 ? null : undefined;
+    },
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(commands.filter(isPublish).length, 2);
+  assert.ok(labels(spawns).includes("matrix:publish"));
+  assert.ok(commands.findLastIndex(isPublish) < commands.findLastIndex(isReviewGate));
+});
+
+test("the ask is not made for a failed tell, and no second publish follows it", async () => {
+  const { result, commands } = await run({
     shell: (c) =>
-      isReviewGate(c)
-        ? { code: 1, line: NO_MATRIX }
+      isPublish(c)
+        ? { code: 1, line: MATRIX_MISSING }
         : c.startsWith("bb thread tell")
           ? { code: 1, line: "HTTP 409" }
           : undefined,
   });
-  const firstRound = tellFailed.commands.slice(
-    0,
-    tellFailed.commands.findIndex((c) => c.startsWith("bb thread tell")) + 1,
-  );
-  assert.equal(firstRound.filter(isReviewGate).length, 1, "no second gate when the ask failed");
-  assert.equal(tellFailed.result.stoppedAt, "review gate");
+  assert.equal(commands.filter(isPublish).length, 1);
+  assert.equal(result.stoppedAt, "review gate");
+  assert.equal(result.status, "In Review");
 });
 
 // ---- Scenario titles in the Engineer prompt (KIT-351) -----------------------------------------------
@@ -2279,7 +2365,10 @@ test("the Reviewer reads the required checks on the head and never re-runs the s
   // The mode is asked for once, with the move to In Review, before the Reviewer starts.
   assert.deepEqual(commands.filter(isReviewMode), ["node scripts/review-mode.mjs KIT-9"]);
   const mode = commands.findIndex(isReviewMode);
-  assert.equal(commands[mode - 1], 'node scripts/linear.mjs state KIT-9 "In Review"');
+  assert.deepEqual(commands.slice(mode - 2, mode), [
+    'node scripts/linear.mjs state KIT-9 "In Review"',
+    "rm -f .factory/review-matrix-KIT-9.md",
+  ]);
   assert.ok(mode < commands.findIndex((c) => c.includes("--step reviewer")));
 });
 

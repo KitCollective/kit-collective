@@ -120,6 +120,11 @@ export const REASON_CODES = [
   "stale-audit",
   "receipt-refused",
   "review-gate-closed",
+  // The Reviewer's matrix file did not reach the workpad (afk-developer moves it, KIT-404): no file,
+  // a file the publish refused, or a Linear write that failed.
+  "matrix-missing",
+  "matrix-invalid",
+  "matrix-write-failed",
   "daily-cap",
   "breaker-open",
   "sync-changed-head",
