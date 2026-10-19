@@ -11,9 +11,17 @@ const CLI = fileURLToPath(new URL("../audit-receipt.mjs", import.meta.url));
 const HEAD = "c0ffee1234567890c0ffee1234567890c0ffee12";
 
 /** Fake `gh` and `bb` on PATH; the status POST is recorded in `calls`. */
-function world({ output, postFails = false, prViewError = "", statusesGetError = "" }) {
+function world({
+  output,
+  events = [],
+  postFails = false,
+  prViewError = "",
+  statusesGetError = "",
+}) {
   const dir = mkdtempSync(join(tmpdir(), "receipt-"));
   const calls = join(dir, "calls.txt");
+  const eventsFile = join(dir, "thread-log.json");
+  writeFileSync(eventsFile, JSON.stringify(events));
   const script = (name, body) => {
     writeFileSync(join(dir, name), `#!/bin/sh\n${body}\n`);
     chmodSync(join(dir, name), 0o755);
@@ -32,6 +40,7 @@ esac`,
     `case "$*" in
   *"thread show"*) echo '{"thread":{"id":"thr_rev12345","providerId":"codex","createdAt":1800000000000}}';;
   *"thread output"*) printf '%s' '{"output":${JSON.stringify(output)}}';;
+  *"thread log thr_rev12345 --all --json"*) cat "${eventsFile}";;
 esac`,
   );
   const log = join(dir, "run-log.jsonl");
@@ -54,6 +63,43 @@ test("a good result posts the status, then logs the audit", () => {
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(readFileSync(w.calls, "utf8"), /state=success/);
   assert.match(readFileSync(w.log, "utf8"), /"event":"audit".*"verdict":"green"/);
+});
+
+/** The recorded KIT-432 Reviewer thread (no final line, a final bb_workflow_result call), moved onto this world's thread and head. */
+const recorded = JSON.parse(
+  readFileSync(new URL("./fixtures/reviewer-thread-result-call.json", import.meta.url), "utf8")
+    .replaceAll("thr_dfv3s7iyyj", "thr_rev12345")
+    .replaceAll("75ee1d2e07902c84c8f66c3155d509575f4f6e43", HEAD),
+);
+
+test("a thread with no final line posts on its own final bb_workflow_result call, read from bb thread log", () => {
+  const w = world({ output: "Next I write the matrix.", events: recorded });
+  const result = w.run();
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(
+    result.stdout,
+    /^POSTED \(receipt\): kc\/audit success: .*verdict from the thread's result call\)$/m,
+  );
+  assert.match(readFileSync(w.calls, "utf8"), /state=success/);
+  assert.match(readFileSync(w.log, "utf8"), /"event":"audit","issue":"KIT-7","verdict":"green"/);
+});
+
+test("a line and a result call that disagree, or a call for another sha, post nothing", () => {
+  const disagree = world({ output: `AUDIT-RESULT KIT-7 red ${HEAD} spec-ac`, events: recorded });
+  const first = disagree.run();
+  assert.equal(first.status, 1);
+  assert.match(first.stdout, /^REFUSED \(receipt\): .*disagree/);
+  assert.equal(existsSync(disagree.calls), false);
+
+  const otherSha = JSON.parse(JSON.stringify(recorded).replaceAll(HEAD, "d".repeat(40)));
+  const stale = world({ output: "done", events: otherSha });
+  const second = stale.run();
+  assert.equal(second.status, 1);
+  assert.match(
+    second.stdout,
+    /^REFUSED \(receipt\): the thread's bb_workflow_result call audited dddddddddddd/,
+  );
+  assert.equal(existsSync(stale.calls), false);
 });
 
 test("an audit event that would be invalid is refused BEFORE anything is posted", () => {

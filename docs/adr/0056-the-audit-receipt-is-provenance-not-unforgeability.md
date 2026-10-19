@@ -20,3 +20,5 @@ It also appends the `audit` event to the run log. `audit-receipt.mjs check <pr>`
 Gives up: a repo token with `statuses: write` on the machine that runs the orchestrator.
 
 Status: accepted; revisit if bb gains a stop hook.
+
+Consequence (2026-10-19): besides the exact line, the receipt accepts the input of the Reviewer thread's own final `bb_workflow_result` call from that thread's event log (verdict, full head sha, rows); when both are present they must agree. See ADR-0058, consequence of 2026-10-19.
