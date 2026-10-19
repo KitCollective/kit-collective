@@ -27,6 +27,11 @@ const landing = z.object({
 const inboxListCard = inboxCard.extend({
   kind: z.enum([...inboxCard.shape.kind.options, "landing"]),
   landing: landing.nullable(),
+  /**
+   * Set on a Staff question only: the Staff chat it was asked in, which the person answers in. The
+   * card leaves the Inbox once they have. Home lists the card without it, as it does the landing.
+   */
+  chat: z.object({ threadId: z.string() }).optional(),
 });
 
 /**
