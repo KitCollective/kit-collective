@@ -27,11 +27,11 @@ describe("foreign jersey dock: Skriv til <handle> (KIT-298 AC 1, 2)", () => {
 
   it("docks a secondary Button Skriv til <handle> alone when the jersey is not åben for bud", () => {
     const source = jerseyScreen();
-    const none = source.indexOf('dockState.kind === "none"');
-    const own = source.indexOf('dockState.kind === "own-pending"', none);
-    const block = source.slice(none, own);
+    const messageOnly = source.indexOf('dockState.kind === "message-only"');
+    const own = source.indexOf('dockState.kind === "own-pending"', messageOnly);
+    const block = source.slice(messageOnly, own);
 
-    expect(none).toBeGreaterThan(-1);
+    expect(messageOnly).toBeGreaterThan(-1);
     expect(block).toContain("label={writeToPeerLabel(peerJersey.ownerHandle)}");
     expect(block).toContain('variant="secondary"');
     expect(block).not.toContain("Send bud");
