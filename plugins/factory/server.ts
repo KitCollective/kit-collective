@@ -32,7 +32,7 @@ export default async function plugin(bb: BbPluginApi) {
   const staff = createStaff(core);
   const board = createBoard(core);
   const runs = createRuns(core);
-  const inbox = createInbox(core);
+  const inbox = createInbox({ ...core, staffQuestions: staff.openQuestions });
   const loops = createLoops(core);
   const home = createHome({ inbox: { list: inbox.waiting } });
   const threads = createThreads(core);

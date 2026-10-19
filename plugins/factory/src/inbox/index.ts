@@ -8,6 +8,7 @@ import { GATE_CALL_TIMEOUT_MS, LAND_HOST_TIMEOUT_MS } from "../host-contract.js"
 import { parseRegistry } from "../loop-registry.js";
 import { alarmCards, buildCards, mentionCards, pullRequestOf, withNotices } from "./cards.js";
 import {
+  type InboxCardDto,
   type InboxConfig,
   type InboxDto,
   type InboxListCardDto,
@@ -20,9 +21,12 @@ import { fetchAlarmThread, fetchMentions, markMentionRead } from "./notices.js";
 
 const CONFIG_KEY = "inbox";
 
+/** A Staff question's card: the Inbox card plus the Staff chat it links to. */
+type StaffCard = InboxCardDto & { chat: { threadId: string } };
+
 /** What the Inbox reads from the rest of the plugin; `Board` is the stored board config. */
 export interface InboxDeps<Board extends { teamKey: string; projectId: string }> {
-  bb: Pick<BbPluginApi, "storage" | "realtime" | "log">;
+  bb: Pick<BbPluginApi, "storage" | "realtime" | "log" | "server">;
   /** The stored board config, or null when the Board was never set up; the Inbox does not need it. */
   storedScheduler: () => Promise<Board | null>;
   /** The text of a bb project's `factory.config.json`; throws when it cannot be read. */
@@ -30,6 +34,18 @@ export interface InboxDeps<Board extends { teamKey: string; projectId: string }>
   linearApiKey: () => Promise<string>;
   /** The review gate record: the newest run for an issue. */
   gateRuns: { latestReview(issue: string, since: number): { verdictLine: string | null } | null };
+  /** The questions Staff members have put to the person in their Staff chats and that are still open. */
+  staffQuestions: () => Promise<
+    {
+      id: string;
+      agentId: string;
+      name: string;
+      question: string;
+      askedAt: number;
+      chatThreadId: string;
+      chatHref: string;
+    }[]
+  >;
   /** The host bundle's client: the landing script runs on the runs machine through it. */
   hostClient: Pick<Core["hostClient"], "call">;
 }
@@ -78,6 +94,40 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
   async function config(): Promise<InboxConfig | null> {
     const stored = await deps.bb.storage.kv.get<unknown>(CONFIG_KEY);
     return stored === undefined || stored === null ? null : inboxConfig.parse(stored);
+  }
+
+  /** One card per open Staff question, oldest first, linking to the chat it was asked in. */
+  async function staffCards(): Promise<StaffCard[]> {
+    const base = (deps.bb.server.experimental_appUrl ?? deps.bb.server.loopbackBaseUrl).replace(
+      /\/+$/,
+      "",
+    );
+    return (await deps.staffQuestions())
+      .sort((a, b) => a.askedAt - b.askedAt)
+      .map(
+        (question): StaffCard => ({
+          // Unique per question: the page keys and opens a card by it.
+          id: `question:${question.id}`,
+          identifier: `${question.name}-${question.id}`,
+          title: `Question in ${question.name}'s Staff chat`,
+          url: `${base}${question.chatHref}`,
+          pullRequest: null,
+          // A question, so the page shows it as one and never as a review that is ready to merge.
+          kind: "question",
+          label: question.name,
+          choices: [],
+          waiting: {
+            ask: question.question,
+            stage: "Staff chat",
+            asked: new Date(question.askedAt).toISOString().slice(0, 10),
+          },
+          review: null,
+          mention: null,
+          alarm: null,
+          since: new Date(question.askedAt).toISOString(),
+          chat: { threadId: question.chatThreadId },
+        }),
+      );
   }
 
   /** Where the Inbox looks and who it asks: its setting, the registry and the Linear team. */
@@ -162,36 +212,58 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
 
   const failure = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-  /** What waits for a person, as Home lists it: the cards without the landings, which it leaves alone. */
-  async function waiting(): Promise<InboxDto> {
+  /** The Staff questions as cards; a read that fails is named in `error` and gives none. */
+  async function staffRead(): Promise<{ error: string | null; cards: StaffCard[] }> {
     try {
-      const { error, issueCards, notices } = await readCards();
-      return { error, cards: withNotices(issueCards, notices) };
+      return { error: null, cards: await staffCards() };
     } catch (error) {
       return { error: failure(error), cards: [] };
     }
   }
 
+  /** What waits for a person, as Home lists it: the cards without the landings, which it leaves alone. */
+  async function waiting(): Promise<InboxDto> {
+    try {
+      const read = await readCards();
+      const staff = await staffRead();
+      return {
+        error: read.error ?? staff.error,
+        // Home takes the shared card: the chat stays on the Inbox page's.
+        cards: [
+          ...withNotices(read.issueCards, read.notices),
+          ...staff.cards.map(({ chat: _chat, ...card }) => card),
+        ],
+      };
+    } catch (error) {
+      const staff = await staffRead();
+      return { error: failure(error), cards: staff.cards.map(({ chat: _chat, ...card }) => card) };
+    }
+  }
+
   /**
    * The cards and the landings approved here, as the Inbox page shows them: the landings of their own
-   * first, oldest first, then the cards in their order.
+   * first, oldest first, then the cards in their order: Linear's, then the Staff questions.
    *
    * A landing whose issue is in the Inbox state rides on that issue's card, which keeps its own
    * actions. A landing still on its way shows as a card of its own (kind `landing`, no Inbox action),
    * and a done one shows once. A stopped landing whose issue is not in the Inbox state any more was
    * taken up elsewhere, so it is dropped. A landing without a driver (after a plugin reload, or a
    * failed slice) gets one again. When the waiting issues cannot be read, the landings are shown and
-   * driven but none is dropped, since nothing says where their issues are.
+   * driven but none is dropped, since nothing says where their issues are. The Staff questions are a
+   * read of their own: one that fails is named in `error` and the other cards still show.
    */
   async function list(): Promise<InboxListDto> {
     try {
-      const { error, issueCards, notices, waitingRead } = await readCards();
+      const read = await readCards();
+      const { issueCards, notices, waitingRead } = read;
+      const staffOut = await staffRead();
+      const error = read.error ?? staffOut.error;
+      const staff = staffOut.cards;
       const records = await landings.all();
       landings.resume(records);
-      const cards: InboxListCardDto[] = withNotices(issueCards, notices).map((card) => ({
-        ...card,
-        landing: null,
-      }));
+      const cards: InboxListCardDto[] = [...withNotices(issueCards, notices), ...staff].map(
+        (card) => ({ ...card, landing: null }),
+      );
       const own: InboxListCardDto[] = [];
       for (const record of records) {
         // Only a waiting issue's card: a mention or an alarm on the issue is not the issue.
@@ -213,7 +285,11 @@ export function createInbox<Board extends { teamKey: string; projectId: string }
       own.sort((a, b) => Date.parse(a.since) - Date.parse(b.since) || a.id.localeCompare(b.id));
       return { error, cards: [...own, ...cards] };
     } catch (error) {
-      return { error: failure(error), cards: [] };
+      const staff = await staffRead();
+      return {
+        error: failure(error),
+        cards: staff.cards.map((card) => ({ ...card, landing: null })),
+      };
     }
   }
 
