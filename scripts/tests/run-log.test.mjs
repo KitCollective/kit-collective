@@ -337,3 +337,20 @@ test("an end line takes a fixed status, stop point and reason code, never free t
   const { reason, ...noReason } = end;
   assert.deepEqual(validateEvent(noReason), ["end needs reason"]);
 });
+
+test("an end line with reason infra-failure carries a fixed cause, and only such a line carries one", () => {
+  const end = { event: "end", issue: "KIT-1", status: "In Review", stoppedAt: "reviewer" };
+  assert.deepEqual(
+    validateEvent({ ...end, reason: "infra-failure", cause: "reviewer-fallback-failed" }),
+    [],
+  );
+  assert.deepEqual(
+    validateEvent({ ...end, reason: "infra-failure", cause: "runner-no-result" }),
+    [],
+  );
+  assert.ok(validateEvent({ ...end, reason: "infra-failure" }).length > 0);
+  assert.ok(validateEvent({ ...end, reason: "infra-failure", cause: "a 402" }).length > 0);
+  assert.ok(validateEvent({ ...end, reason: "ci-pending", cause: "runner-no-result" }).length > 0);
+  const reason = { event: "reason", issue: "KIT-1", code: "no-result-line" };
+  assert.ok(validateEvent({ ...reason, cause: "runner-no-result" }).length > 0);
+});

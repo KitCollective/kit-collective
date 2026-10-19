@@ -118,12 +118,36 @@ export function resumePoint({ head, issue, events, workpad = "", mergeable = "UN
 }
 
 /**
+ * An issue's starts in the 24 h before `now`, split by how each run ended. A start whose run's `end`
+ * line (the first one after it, before the next start) says reason infra-failure stopped on the
+ * machinery with no work product and is counted in `infra`; every other start, one with no `end` line
+ * included, is counted in `counted`. Max's tick (staff/max/tick.js) keeps a copy of this rule, and a
+ * test holds the two equal.
+ * @param {{ issue: string, events: Record<string, any>[], now?: number }} input
+ * @returns {{ counted: number, infra: number }}
+ */
+export function startCounts({ issue, events, now = Date.now() }) {
+  const own = events.filter((e) => e.issue === issue);
+  let counted = 0;
+  let infra = 0;
+  own.forEach((e, i) => {
+    if (e.event !== "start" || !(now - Date.parse(e.at) < 24 * 3600_000)) return;
+    const next = own.findIndex((n, j) => j > i && n.event === "start");
+    const end = own.slice(i + 1, next === -1 ? undefined : next).find((n) => n.event === "end");
+    if (end?.reason === "infra-failure") infra += 1;
+    else counted += 1;
+  });
+  return { counted, infra };
+}
+
+/**
  * Session-check: refuse a second run on one issue. Machine-agnostic: reads Linear state,
  * GitHub branches and PRs, and the central run log, never local worktrees.
  * @param {{
  *   issue: string, resume?: boolean, now?: number, liveMinutes?: number,
  *   linear: { state: string, labels: string[], blockedBy?: Array<{ identifier: string, state: string }> },
  *   branches: string[], openPrs: number[], events: Record<string, any>[], maxRunsPerDay?: number,
+ *   maxInfraRunsPerDay?: number,
  * }} input
  */
 export function sessionCheck({
@@ -132,6 +156,7 @@ export function sessionCheck({
   now = Date.now(),
   liveMinutes = 30,
   maxRunsPerDay = 3,
+  maxInfraRunsPerDay = 10,
   linear,
   branches,
   openPrs,
@@ -147,12 +172,17 @@ export function sessionCheck({
   }
   // The run cap holds on resume too: a resume is what a retrying orchestrator starts (KIT-295 ran
   // seven times in one night). Only runs that got past this check count, since `start` is logged after it.
-  const startsToday = events.filter(
-    (e) => e.issue === issue && e.event === "start" && now - Date.parse(e.at) < 24 * 3600_000,
-  ).length;
-  if (startsToday >= maxRunsPerDay) {
+  // A run that died on the machinery with no work product has its own, higher ceiling, so a broken
+  // provider neither eats the cap of real work nor loops forever (2026-10-19, OpenRouter's 402).
+  const { counted, infra } = startCounts({ issue, events, now });
+  if (counted >= maxRunsPerDay) {
     return closed(
-      `${issue} was started ${startsToday} times in the last 24 h (cap ${maxRunsPerDay}); a person raises flow.maxRunsPerDay in factory.config.json or waits`,
+      `${issue} was started ${counted} times in the last 24 h (cap ${maxRunsPerDay}${infra > 0 ? `, not counting ${infra} infrastructure failures` : ""}); a person raises flow.maxRunsPerDay in factory.config.json or waits`,
+    );
+  }
+  if (infra >= maxInfraRunsPerDay) {
+    return closed(
+      `${issue} had ${infra} runs end on an infrastructure failure in the last 24 h (cap ${maxInfraRunsPerDay}); a person fixes the provider and raises flow.maxInfraRunsPerDay in factory.config.json or waits`,
     );
   }
   // A blocker that is not Done or Canceled keeps any not-yet-finished issue out, in every state

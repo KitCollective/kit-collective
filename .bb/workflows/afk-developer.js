@@ -428,7 +428,20 @@ async function stopForHuman(phaseTitle, sentence, waiting = null) {
 // session-check refusal can mean another run of the issue is still live. The reason is a fixed code, never
 // the note. Best effort: a failed write leaves the 120-minute rule to find the run.
 let startLogged = false;
-function endReason(result) {
+// An infrastructure failure is a stop that left no work product: no Lead plan, no Engineer result and no
+// review verdict in this run, and the cause is the machinery, not a model's work. Such an end is logged
+// with reason infra-failure and a fixed cause, and the session check and Max's tick count those starts
+// against flow.maxInfraRunsPerDay instead of flow.maxRunsPerDay (2026-10-19: OpenRouter out of credit,
+// every GLM Reviewer died on its first call, and KIT-405, KIT-408, KIT-431 and KIT-432 each used up five
+// starts in about 90 minutes without a single review). Decided here, in code, never by a model.
+let workProduct = false;
+function infraCause(result, cause) {
+  if (workProduct) return null;
+  if (cause) return cause;
+  return String(result.note ?? "").startsWith("runner-no-result") ? "runner-no-result" : null;
+}
+function endReason(result, cause) {
+  if (infraCause(result, cause)) return "infra-failure";
   if (result.stoppedAt === "loop") return "round-cap";
   if (result.status === "Approval") return "needs-human";
   if (result.status === "Blocked") return "blocked-by";
@@ -436,15 +449,18 @@ function endReason(result) {
   if (result.verdict === "amber" || / \(still waiting after \d+ slices/.test(String(result.note ?? ""))) return "ci-pending";
   return "unspecified";
 }
-async function stopped(stoppedAt, status, extra) {
+/** `cause` names an infrastructure failure the note does not show (one of INFRA_CAUSES in scripts/lib/run-log.mjs). */
+async function stopped(stoppedAt, status, extra, cause = null) {
   const result = { issue, status, stoppedAt, ...extra };
   if (startLogged) {
     const verdict = pick(result.verdict, ["green", "amber", "red"]);
+    const infra = pick(infraCause(result, cause), ["runner-no-result", "reviewer-fallback-failed"]);
     const flags = [
       `--issue ${issue}`,
       `--status "${status}"`,
       `--stopped-at "${stoppedAt}"`,
-      `--reason ${endReason(result)}`,
+      `--reason ${endReason(result, cause)}`,
+      ...(infra ? [`--cause ${infra}`] : []),
       ...(verdict ? [`--verdict ${verdict}`] : []),
       ...(Number.isInteger(result.rounds) ? [`--round ${result.rounds}`] : []),
     ];
@@ -650,6 +666,7 @@ if (leadNeeded) {
   if (!lead) {
     return stopped("lead", "In Progress", { note: "the Lead ended without a result" });
   }
+  workProduct = true;
   if (lead.outcome !== "plan") {
     const state = await stopForHuman("Lead", lead.outcome === "plan-approval" ? "needs-human: plan approval requested" : `needs-human: ${lead.sentence}`);
     return stopped("lead", state, { note: `Lead ${lead.outcome}: ${lead.sentence}` });
@@ -925,6 +942,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
       return stopped("engineer", "In Progress", { rounds, note: "the Engineer ended without a usable result or thread id twice" });
     }
     engineerThread = eThread;
+    workProduct = true;
     // The two log lines ride with the pre-review gate; a stop before the gate writes them alone.
     const engineerLog = [
       ...(mergeFirst ? [logCmd("reason", `--issue ${issue} --code conflict`)] : []),
@@ -1034,9 +1052,13 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   }
   if (!review || !rThread) {
     await sh("log:no-result", "Reviewer", [...fallbackLog, logCmd("reason", `--issue ${issue} --code no-result-line`)], true);
-    return stopped("reviewer", "In Review", { prNumber, rounds, note: `the Reviewer ended without a usable result or thread id${fallbackLog.length > 0 ? ", the Claude fallback too" : ""}` });
+    // A GLM Reviewer that died on its first calls and a Claude fallback with no result either: the
+    // providers failed, not the review. A Reviewer that worked and gave no result is not infrastructure.
+    const cause = fallbackLog.length > 0 ? "reviewer-fallback-failed" : null;
+    return stopped("reviewer", "In Review", { prNumber, rounds, note: `the Reviewer ended without a usable result or thread id${fallbackLog.length > 0 ? ", the Claude fallback too" : ""}` }, cause);
   }
   lastVerdict = review.verdict;
+  workProduct = true;
   // The two log lines ride with the review gate; an amber hold has no gate, so it writes them alone.
   const reviewerLog = [
     ...fallbackLog,

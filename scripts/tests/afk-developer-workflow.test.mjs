@@ -2840,3 +2840,64 @@ test("reviewer-fallback is a run-log reason code", async () => {
   const { REASON_CODES } = await import("../lib/run-log.mjs");
   assert.ok(REASON_CODES.includes("reviewer-fallback"));
 });
+
+// ---- Infrastructure failures (2026-10-19: OpenRouter's 402 used up four issues' daily starts) ------
+
+const endOf = (commands) => endEvent(commands.filter(isEnd).at(-1));
+
+test("a resumed review whose GLM Reviewer and Claude fallback both die ends infra-failure with cause reviewer-fallback-failed", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", resume: true },
+    reviewer: () => new Error("API Error: 402 This request requires more credits"),
+    shell: resumeShell(0, (c) => (isServed(c) ? SERVED_ONE : undefined)),
+  });
+  assert.equal(result.stoppedAt, "reviewer");
+  const end = endOf(commands);
+  assert.equal(end.reason, "infra-failure");
+  assert.equal(end.cause, "reviewer-fallback-failed");
+  assert.deepEqual(validateEvent(end), []);
+});
+
+test("a stop after an Engineer round is never infra-failure: the round is work product", async () => {
+  const fallback = await run({
+    reviewer: () => new Error("no result"),
+    shell: (c) => (isServed(c) ? SERVED_ONE : undefined),
+  });
+  assert.equal(fallback.result.stoppedAt, "reviewer");
+  assert.equal(endOf(fallback.commands).reason, "unspecified");
+  assert.equal(endOf(fallback.commands).cause, undefined);
+
+  const runner = await run({ shell: (c) => (isPre(c) ? null : undefined) });
+  assert.equal(endOf(runner.commands).reason, "runner-no-result");
+  assert.deepEqual(validateEvent(endOf(runner.commands)), []);
+});
+
+test("a GLM Reviewer that worked (many calls) and gave no result is no infra-failure, even with no work product", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", resume: true },
+    reviewer: () => new Error("no result"),
+    shell: resumeShell(0, (c) => (isServed(c) ? SERVED_MANY : undefined)),
+  });
+  assert.equal(result.stoppedAt, "reviewer");
+  assert.notEqual(endOf(commands).reason, "infra-failure");
+});
+
+test("a runner that returns nothing before any work product ends infra-failure with cause runner-no-result", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(0, (c) => (isPre(c) ? null : undefined)),
+  });
+  assert.match(result.note, /^runner-no-result/);
+  const end = endOf(commands);
+  assert.equal(end.reason, "infra-failure");
+  assert.equal(end.cause, "runner-no-result");
+  assert.deepEqual(validateEvent(end), []);
+});
+
+test("a review verdict is work product: a runner failure after it is not infra-failure", async () => {
+  const { commands } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(0, (c) => (c.includes("gate.mjs review") ? null : undefined)),
+  });
+  assert.notEqual(endOf(commands).reason, "infra-failure");
+});

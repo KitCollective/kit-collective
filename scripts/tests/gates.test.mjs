@@ -30,6 +30,7 @@ import {
   settleDeviceFlowsError,
   shouldLogGate,
   sliceFlowPath,
+  startCounts,
   waitsForDeviceFlows,
   workpadHasPlan,
 } from "../lib/gates.mjs";
@@ -783,4 +784,73 @@ test("settleDeviceFlowsError holds for a re-requested run to start, and only an 
   const stuck = harness([[status("error")]], 60);
   assert.equal(await settleDeviceFlowsError(stuck.input), "error");
   assert.ok(stuck.slept.reduce((a, b) => a + b, 0) <= 60 * 1000);
+});
+
+// A run that ends on the machinery with no work product (2026-10-19: OpenRouter's 402 used up five starts
+// of KIT-405, KIT-408, KIT-431 and KIT-432 in 90 minutes, no review done) has its own ceiling.
+const capNow = Date.parse("2026-10-19T12:00:00Z");
+const capAt = (minutesAgo) => new Date(capNow - minutesAgo * 60000).toISOString();
+/** One run per kind, oldest first, ten minutes apart: "infra" ends infra-failure, "work" ends otherwise, "open" has no end line. */
+const runsOf = (kinds, issue = "KIT-1") =>
+  kinds.flatMap((kind, i) => {
+    const at = (kinds.length - i) * 10;
+    const start = { event: "start", issue, at: capAt(at) };
+    if (kind === "open") return [start];
+    const why =
+      kind === "infra"
+        ? { reason: "infra-failure", cause: "reviewer-fallback-failed" }
+        : { reason: "ci-pending" };
+    const end = { event: "end", issue, status: "In Review", stoppedAt: "reviewer", ...why };
+    return [start, { ...end, at: capAt(at - 5) }];
+  });
+const countsOf = (events) => startCounts({ issue: "KIT-1", now: capNow, events });
+
+test("startCounts splits starts by the end line of their own run", () => {
+  assert.deepEqual(countsOf(runsOf(["infra", "work", "open", "infra"])), { counted: 2, infra: 2 });
+  // A start whose run wrote no end counts in full, even when a later run ended infra-failure.
+  assert.deepEqual(countsOf(runsOf(["open", "infra"])), { counted: 1, infra: 1 });
+  // Another issue's end line never classifies this issue's start.
+  const mixed = [
+    { event: "start", issue: "KIT-1", at: capAt(20) },
+    { event: "end", issue: "KIT-2", reason: "infra-failure", at: capAt(15) },
+  ];
+  assert.deepEqual(countsOf(mixed), { counted: 1, infra: 0 });
+  // Older than 24 h does not count at all.
+  assert.deepEqual(countsOf([{ event: "start", issue: "KIT-1", at: capAt(25 * 60) }]), {
+    counted: 0,
+    infra: 0,
+  });
+});
+
+test("session-check: infra-failed starts do not use up the run cap", () => {
+  const events = runsOf(["infra", "infra", "infra", "infra", "infra", "work"]);
+  const checked = sessionCheck({ ...free, now: capNow, resume: true, maxRunsPerDay: 5, events });
+  assert.equal(checked.code, GATE_EXIT.open);
+  const capped = sessionCheck({
+    ...free,
+    now: capNow,
+    resume: true,
+    maxRunsPerDay: 2,
+    events: runsOf(["infra", "work", "work"]),
+  });
+  assert.equal(capped.code, GATE_EXIT.closed);
+  assert.match(capped.line, /started 2 times .* \(cap 2, not counting 1 infrastructure failures\)/);
+});
+
+test("session-check: infra-failed starts have their own ceiling, default 10, so a broken provider cannot loop forever", () => {
+  const check = (n, extra = {}) =>
+    sessionCheck({
+      ...free,
+      now: capNow,
+      resume: true,
+      events: runsOf(Array(n).fill("infra")),
+      ...extra,
+    });
+  assert.equal(check(9).code, GATE_EXIT.open);
+  assert.equal(check(10).code, GATE_EXIT.closed);
+  assert.match(
+    check(10).line,
+    /10 runs end on an infrastructure failure in the last 24 h \(cap 10\)/,
+  );
+  assert.equal(check(10, { maxInfraRunsPerDay: 11 }).code, GATE_EXIT.open);
 });
