@@ -2469,9 +2469,10 @@ test("the Reviewer reads the required checks on the head and never re-runs the s
   // The mode is asked for once, with the move to In Review, before the Reviewer starts.
   assert.deepEqual(commands.filter(isReviewMode), ["node scripts/review-mode.mjs KIT-9"]);
   const mode = commands.findIndex(isReviewMode);
-  assert.deepEqual(commands.slice(mode - 2, mode), [
+  assert.deepEqual(commands.slice(mode - 3, mode), [
     'node scripts/linear.mjs state KIT-9 "In Review"',
     "rm -f .factory/review-matrix-KIT-9.md",
+    "node scripts/reviewer-route.mjs",
   ]);
   assert.ok(mode < commands.findIndex((c) => c.includes("--step reviewer")));
 });
@@ -2676,4 +2677,166 @@ test("review-mode: a matrix that is not green at one head, or a rewritten branch
   } finally {
     r.done();
   }
+});
+
+// ---- Reviewer route and the Claude fallback (ADR-0067, consequence of 2026-10-19) ----------------
+
+const ROUTE = "node scripts/reviewer-route.mjs";
+const CLAUDE_ROUTE = { code: 0, line: "REVIEWER claude low-credit: 0.00 USD left, below 1 USD" };
+const SERVED_ONE = { code: 0, line: `SERVED ${REVIEWER_THREAD} as z-ai/glm-5.3 (1 calls)` };
+const SERVED_MANY = { code: 0, line: `SERVED ${REVIEWER_THREAD} as z-ai/glm-5.3 (40 calls)` };
+const isServed = (c) => c.startsWith("bb optio reviewer-served");
+const reviewerSpawns = (spawns) =>
+  agentSpawns(spawns).filter((s) => s.options.label.startsWith("reviewer:"));
+/** The first (GLM) Reviewer dies without a result, as on the 402 of KIT-408; later ones are green. */
+const glmDies = (n) =>
+  n === 1 ? new Error("API Error: 402 This request requires more credits") : undefined;
+
+test("the reviewer route rides with the move to In Review and costs no runner of its own", async () => {
+  const { commands, spawns } = await run();
+  assert.equal(commands.filter((c) => c === ROUTE).length, 1);
+  const inReview = runners(spawns).find((s) => s.options.label === "linear:In Review");
+  assert.match(inReview.prompt, /node scripts\/reviewer-route\.mjs/);
+  assert.ok(!labels(spawns).includes("reviewer-fallback"));
+});
+
+test("route claude: a Sonnet Engineer's Reviewer runs on Opus, unproxied, and no served check is asked", async () => {
+  const { result, commands, spawns } = await run({
+    shell: (c) => (c === ROUTE ? CLAUDE_ROUTE : undefined),
+  });
+  assert.equal(result.status, "Approval");
+  const [reviewer] = reviewerSpawns(spawns);
+  assert.equal(reviewer.options.model, "claude-opus-5-5");
+  assert.equal(reviewer.options.label, "reviewer:KIT-9:r1");
+  assert.ok(!commands.some(isServed));
+  assert.match(
+    commands.find((c) => c.includes("spawn") && c.includes("--step reviewer")),
+    new RegExp(`--thread ${REVIEWER_THREAD} .*--model claude-opus-5-5`),
+  );
+  assert.ok(!commands.some((c) => c.includes("--code reviewer-fallback")));
+});
+
+test("route claude: an Opus Engineer's Reviewer runs on Sonnet, never the Engineer's model", async () => {
+  const { result, commands, spawns } = await run({
+    startDecision: { engineerModel: "opus" },
+    shell: (c) => (c === ROUTE ? CLAUDE_ROUTE : undefined),
+  });
+  assert.equal(result.status, "Approval");
+  const [reviewer] = reviewerSpawns(spawns);
+  assert.equal(reviewer.options.model, "claude-sonnet-5-5");
+  assert.match(
+    commands.find((c) => c.includes("spawn") && c.includes("--step reviewer")),
+    /--model claude-sonnet-5-5/,
+  );
+});
+
+test("no path picks Fable for the Reviewer: route, fallback, fresh Reviewer and Opus rounds (Nicklas, 2026-10-19)", async () => {
+  // No alias and no model id for it: spawn() cannot start a Fable thread at all.
+  assert.doesNotMatch(SOURCE, /"fable"|claude-fable/);
+  const claudeEverywhere = (c) =>
+    c === ROUTE ? CLAUDE_ROUTE : isServed(c) ? SERVED_ONE : undefined;
+  const red = (n) =>
+    n <= 2
+      ? { verdict: "red", sha: SHA, sentence: "bad", threadId: REVIEWER_THREAD, rows: [] }
+      : undefined;
+  const runs = [
+    await run({ shell: claudeEverywhere }),
+    await run({ shell: claudeEverywhere, startDecision: { engineerModel: "opus" } }),
+    // Two red rounds, so round 3 runs the Engineer on Opus.
+    await run({ shell: claudeEverywhere, reviewer: red }),
+    // The GLM Reviewer dies and the Claude fallback takes over, for both Engineer models.
+    await run({ reviewer: glmDies, shell: (c) => (isServed(c) ? SERVED_ONE : undefined) }),
+    await run({
+      reviewer: glmDies,
+      startDecision: { engineerModel: "opus" },
+      shell: (c) => (isServed(c) ? SERVED_ONE : undefined),
+    }),
+  ];
+  for (const { spawns, commands } of runs) {
+    const models = reviewerSpawns(spawns).map((s) => s.options.model);
+    assert.ok(models.length > 0);
+    for (const model of models) assert.doesNotMatch(model, /fable/);
+    assert.ok(!commands.some((c) => /fable/.test(c)));
+  }
+  // Round 3's Opus Engineer gets a Sonnet Reviewer.
+  assert.deepEqual(
+    reviewerSpawns(runs[2].spawns)
+      .map((s) => s.options.model)
+      .slice(0, 3),
+    ["claude-opus-5-5", "claude-opus-5-5", "claude-sonnet-5-5"],
+  );
+  assert.equal(reviewerSpawns(runs[4].spawns)[1].options.model, "claude-sonnet-5-5");
+});
+
+test("a GLM Reviewer that died on its first calls is followed by one Claude Reviewer on the same head (reviewer-fallback)", async () => {
+  for (const served of [SERVED_ONE, { code: 1, line: `NOT SERVED ${REVIEWER_THREAD}: no call` }]) {
+    const { result, commands, spawns } = await run({
+      reviewer: glmDies,
+      shell: (c) => (isServed(c) ? served : undefined),
+    });
+    assert.equal(result.status, "Approval");
+    const [glm, claude] = reviewerSpawns(spawns);
+    assert.equal(reviewerSpawns(spawns).length, 2);
+    assert.equal(glm.options.label, "reviewer:KIT-9:r1:openrouter");
+    assert.equal(claude.options.label, "reviewer:KIT-9:r1:claude");
+    assert.equal(claude.options.model, "claude-opus-5-5");
+    // Served and route are asked in one runner, and only for the GLM thread.
+    const fallback = runners(spawns).find((s) => s.options.label === "reviewer-fallback");
+    assert.match(fallback.prompt, /reviewer-served --title reviewer:KIT-9:r1:openrouter/);
+    assert.match(fallback.prompt, /reviewer-route\.mjs/);
+    assert.ok(!commands.some((c) => isServed(c) && c.includes(":claude")));
+    const at = (needle) => commands.findIndex((c) => c.includes(needle));
+    assert.ok(at("--code reviewer-fallback") >= 0);
+    assert.ok(at("--code reviewer-fallback") < at("--step reviewer --outcome green"));
+    assert.match(
+      commands.find((c) => c.includes("spawn") && c.includes("--step reviewer")),
+      new RegExp(`--thread ${REVIEWER_THREAD} .*--model claude-opus-5-5`),
+    );
+    assert.ok(commands.some((c) => c.includes("audit-receipt.mjs post 77")));
+  }
+});
+
+test("a GLM Reviewer with no result that the proxy served many calls stops as before, unless the route now says claude", async () => {
+  const stopped = await run({
+    reviewer: glmDies,
+    shell: (c) => (isServed(c) ? SERVED_MANY : undefined),
+  });
+  assert.equal(stopped.result.stoppedAt, "reviewer");
+  assert.equal(reviewerSpawns(stopped.spawns).length, 1);
+  assert.ok(!stopped.commands.some((c) => c.includes("--code reviewer-fallback")));
+  assert.ok(stopped.commands.some((c) => c.includes("--code no-result-line")));
+
+  // The route said glm before the Reviewer started and says claude by the time it died.
+  let routes = 0;
+  const switched = await run({
+    reviewer: glmDies,
+    shell: (c) => {
+      if (isServed(c)) return SERVED_MANY;
+      if (c === ROUTE) {
+        routes += 1;
+        return routes === 1 ? { code: 0, line: "REVIEWER glm" } : CLAUDE_ROUTE;
+      }
+      return undefined;
+    },
+  });
+  assert.equal(switched.result.status, "Approval");
+  assert.equal(reviewerSpawns(switched.spawns)[1].options.model, "claude-opus-5-5");
+  assert.ok(switched.commands.some((c) => c.includes("--code reviewer-fallback")));
+});
+
+test("a Claude fallback that also returns nothing stops at the reviewer with both reasons logged", async () => {
+  const { result, commands, spawns } = await run({
+    reviewer: () => new Error("no result"),
+    shell: (c) => (isServed(c) ? SERVED_ONE : undefined),
+  });
+  assert.equal(result.stoppedAt, "reviewer");
+  assert.equal(reviewerSpawns(spawns).length, 2);
+  assert.match(result.note, /the Claude fallback too/);
+  assert.ok(commands.some((c) => c.includes("--code reviewer-fallback")));
+  assert.ok(commands.some((c) => c.includes("--code no-result-line")));
+});
+
+test("reviewer-fallback is a run-log reason code", async () => {
+  const { REASON_CODES } = await import("../lib/run-log.mjs");
+  assert.ok(REASON_CODES.includes("reviewer-fallback"));
 });
