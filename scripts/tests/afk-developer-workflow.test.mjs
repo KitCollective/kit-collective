@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { LOCK_ROWS } from "../lib/review-matrix.mjs";
+import { reviewMode } from "../lib/review-mode.mjs";
 import { END_STATUSES, END_STOPS, validateEvent } from "../lib/run-log.mjs";
 
 /**
@@ -2252,5 +2256,231 @@ test("every stop point and status the workflow returns after start is in the run
   )) {
     assert.ok(END_STOPS.includes(stoppedAt), stoppedAt);
     if (status !== undefined) assert.ok(END_STATUSES.includes(status), status);
+  }
+});
+
+// ---- Review mode: CI is the evidence, and a development merge gets a delta review (2026-10-19) ----
+
+const isReviewMode = (c) => c.startsWith("node scripts/review-mode.mjs ");
+const GREEN_BEFORE = "b".repeat(40);
+
+test("the Reviewer reads the required checks on the head and never re-runs the suites CI ran", async () => {
+  const { commands, spawns } = await run();
+  const prompt = reviewers(spawns)[0].prompt;
+  assert.match(prompt, /read the required checks on the head with gh pr checks 77/);
+  assert.match(
+    prompt,
+    /Never re-run a full test suite, typecheck, lint or build that a required check already ran green on this head/,
+  );
+  assert.match(prompt, /one targeted test file at most, with its output trimmed \(\| tail -30\)/);
+  // No delta was offered, so this is the full review of the merge-base diff.
+  assert.match(prompt, /run it on the PR's merge-base diff/);
+  assert.doesNotMatch(prompt, /Delta review/);
+  // The mode is asked for once, with the move to In Review, before the Reviewer starts.
+  assert.deepEqual(commands.filter(isReviewMode), ["node scripts/review-mode.mjs KIT-9"]);
+  const mode = commands.findIndex(isReviewMode);
+  assert.equal(commands[mode - 1], 'node scripts/linear.mjs state KIT-9 "In Review"');
+  assert.ok(mode < commands.findIndex((c) => c.includes("--step reviewer")));
+});
+
+test("a head that moved only by a development merge gets a delta review since the green head", async () => {
+  const { result, spawns } = await run({
+    shell: (c) =>
+      isReviewMode(c) ? { code: 0, line: `REVIEW-MODE delta ${GREEN_BEFORE}` } : undefined,
+  });
+  assert.equal(result.status, "Approval");
+  const prompt = reviewers(spawns)[0].prompt;
+  assert.match(prompt, /run its development-merge delta review/);
+  assert.doesNotMatch(prompt, /run it on the PR's merge-base diff/);
+  assert.ok(
+    prompt.includes(
+      `git diff ${GREEN_BEFORE}..HEAD restricted to the globs on the PR body's write-scope: line`,
+    ),
+  );
+  assert.ok(prompt.includes(`node scripts/review-mode.mjs KIT-9 --green ${GREEN_BEFORE}`));
+  assert.match(prompt, /git show --cc <merge>/);
+  assert.ok(prompt.includes(`evidence \`unchanged since ${GREEN_BEFORE.slice(0, 12)}\``));
+  assert.match(prompt, /re-read mergeable and required-checks on the head/);
+  // CI stays the evidence in a delta review too.
+  assert.match(prompt, /Never re-run a full test suite/);
+});
+
+test("any answer but a well-formed delta line is a full review", async () => {
+  const answers = [
+    {
+      code: 0,
+      line: "REVIEW-MODE full abc123456789 is a commit of the branch, not a merge of origin/development",
+    },
+    { code: 0, line: "REVIEW-MODE delta abc1234" },
+    { code: 0, line: `REVIEW-MODE delta ${GREEN_BEFORE}; rm -rf .` },
+    { code: 4, line: `REVIEW-MODE delta ${GREEN_BEFORE}` },
+    { code: 4, line: "UNKNOWN: linear down" },
+    { code: 0, line: "KIT-EXIT:0" },
+  ];
+  for (const answer of answers) {
+    const { result, spawns } = await run({ shell: (c) => (isReviewMode(c) ? answer : undefined) });
+    assert.equal(result.status, "Approval", answer.line);
+    const prompt = reviewers(spawns)[0].prompt;
+    assert.match(prompt, /run it on the PR's merge-base diff/, answer.line);
+    assert.doesNotMatch(prompt, /Delta review/, answer.line);
+  }
+});
+
+test("a green review whose gate closed hands its head to the next round's review-mode as --green", async () => {
+  let gates = 0;
+  const { commands } = await run({
+    shell: (c) => {
+      if (!isReviewGate(c)) return undefined;
+      gates += 1;
+      return gates === 1 ? { code: 1, line: FLOW_RED_LINE } : { code: 0, line: "OPEN (review)" };
+    },
+  });
+  assert.deepEqual(commands.filter(isReviewMode), [
+    "node scripts/review-mode.mjs KIT-9",
+    `node scripts/review-mode.mjs KIT-9 --green ${SHA}`,
+  ]);
+});
+
+test("a red review hands no --green to the next round", async () => {
+  const { commands } = await run({
+    reviewer: (n) =>
+      n === 1
+        ? {
+            verdict: "red",
+            sha: SHA,
+            rows: ["spec-ac"],
+            sentence: "gap",
+            threadId: REVIEWER_THREAD,
+          }
+        : undefined,
+  });
+  const modes = commands.filter(isReviewMode);
+  assert.equal(modes.length, 2);
+  assert.ok(modes.every((c) => c === "node scripts/review-mode.mjs KIT-9"));
+});
+
+/** A throwaway repo: `development` and `feature` share a base; `feature` changes the issue's file. */
+function repo() {
+  const dir = mkdtempSync(join(tmpdir(), "review-mode-"));
+  const raw = (args) =>
+    execFileSync("git", args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] })
+      .toString()
+      .trim();
+  const git = (args) => {
+    try {
+      return raw(args);
+    } catch {
+      return null;
+    }
+  };
+  const write = (file, text) => writeFileSync(join(dir, file), text);
+  const commit = (message) => {
+    raw(["add", "-A"]);
+    raw(["commit", "-q", "-m", message]);
+    return raw(["rev-parse", "HEAD"]);
+  };
+  raw(["init", "-q", "-b", "development"]);
+  raw(["config", "user.email", "test@example.com"]);
+  raw(["config", "user.name", "test"]);
+  raw(["config", "commit.gpgsign", "false"]);
+  write("issue.txt", "one\ntwo\nthree\nfour\nfive\nsix\nseven\n");
+  write("other.txt", "lane\n");
+  commit("base");
+  raw(["checkout", "-q", "-b", "feature"]);
+  write("issue.txt", "ONE\ntwo\nthree\nfour\nfive\nsix\nseven\n");
+  const green = commit("the issue's change");
+  const onLane = (file, text) => {
+    raw(["checkout", "-q", "development"]);
+    write(file, text);
+    commit(`lane changes ${file}`);
+    raw(["checkout", "-q", "feature"]);
+  };
+  const rows = (at = green, status = "checked") =>
+    LOCK_ROWS.map((lock) => ({ id: lock.id, status, evidence: "ok", at }));
+  const mode = (opts = {}) => reviewMode({ rows: rows(), lane: "development", git, ...opts });
+  const done = () => rmSync(dir, { recursive: true, force: true });
+  return { raw, write, commit, green, onLane, rows, mode, done };
+}
+
+test("review-mode: a merge of development that touched other files is a delta since the green head", () => {
+  const r = repo();
+  try {
+    r.onLane("other.txt", "lane moved\n");
+    r.raw(["merge", "-q", "--no-edit", "development"]);
+    const merge = r.raw(["rev-parse", "HEAD"]);
+    assert.deepEqual(r.mode({ green: r.green }), {
+      mode: "delta",
+      since: r.green,
+      head: merge,
+      merges: [merge],
+      overlap: [],
+    });
+    // The matrix alone names the green head when the run has none, short sha included.
+    assert.equal(r.mode({ rows: r.rows(r.green.slice(0, 9)) }).mode, "delta");
+  } finally {
+    r.done();
+  }
+});
+
+test("review-mode: a file both sides changed and git combined is listed for the Reviewer", () => {
+  const r = repo();
+  try {
+    r.onLane("issue.txt", "one\ntwo\nthree\nfour\nfive\nsix\nSEVEN\n");
+    r.raw(["merge", "-q", "--no-edit", "development"]);
+    const out = r.mode();
+    assert.equal(out.mode, "delta");
+    assert.deepEqual(out.overlap, ["issue.txt"]);
+  } finally {
+    r.done();
+  }
+});
+
+test("review-mode: a commit of the branch since the green head is a full review", () => {
+  const r = repo();
+  try {
+    r.onLane("other.txt", "lane moved\n");
+    r.raw(["merge", "-q", "--no-edit", "development"]);
+    r.write("issue.txt", "ONE\nTWO\nthree\nfour\nfive\nsix\nseven\n");
+    r.commit("more of the issue");
+    const out = r.mode();
+    assert.equal(out.mode, "full");
+    assert.match(out.why, /is a commit of the branch, not a merge of development/);
+  } finally {
+    r.done();
+  }
+});
+
+test("review-mode: a merge that took one side of a shared file whole is a full review", () => {
+  const r = repo();
+  try {
+    r.onLane("issue.txt", "one\ntwo\nthree\nfour\nfive\nsix\nSEVEN\n");
+    r.raw(["merge", "-q", "--no-edit", "-s", "ours", "development"]);
+    const out = r.mode();
+    assert.equal(out.mode, "full");
+    assert.match(out.why, /took one side of issue\.txt whole/);
+  } finally {
+    r.done();
+  }
+});
+
+test("review-mode: a matrix that is not green at one head, or a rewritten branch, is a full review", () => {
+  const r = repo();
+  try {
+    r.onLane("other.txt", "lane moved\n");
+    r.raw(["merge", "-q", "--no-edit", "development"]);
+    assert.match(r.mode({ rows: [] }).why, /no review matrix/);
+    assert.match(r.mode({ rows: r.rows(r.green, "finding") }).why, /holds a finding/);
+    assert.match(r.mode({ rows: r.rows().slice(1) }).why, /incomplete/);
+    const mixed = r.rows();
+    mixed[0] = { ...mixed[0], at: "c".repeat(40) };
+    assert.match(r.mode({ rows: mixed }).why, /not all read at one head/);
+    assert.match(r.mode({ green: "d".repeat(40) }).why, /not at the green head/);
+    // The branch was rewritten: the green head is no ancestor of HEAD.
+    r.raw(["reset", "-q", "--hard", "development"]);
+    r.write("issue.txt", "redone\n");
+    r.commit("rewritten");
+    assert.match(r.mode().why, /does not descend from/);
+  } finally {
+    r.done();
   }
 });
