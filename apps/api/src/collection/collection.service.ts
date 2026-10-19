@@ -22,6 +22,7 @@ import {
   type CollectionSavePhoto,
   type CollectionSaveResponse,
   type CollectionSendBidResponse,
+  type CollectionSendMessageRequest,
   type CollectionSendMessageResponse,
   type CollectionShowcaseJerseys,
   collectionAddFavoriteRequestSchema,
@@ -115,6 +116,8 @@ import { declineOtherPendingBudsOnUserJersey } from "./user-jersey-buds.js";
 import { deleteUserJerseyRows } from "./user-jersey-delete.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function canonicalCollectorPair(leftId: string, rightId: string): [string, string] {
   return leftId < rightId ? [leftId, rightId] : [rightId, leftId];
@@ -789,9 +792,124 @@ export class CollectionService {
     rawBody: unknown,
   ): Promise<CollectionSendMessageResponse> {
     await this.assertConversationParticipant(userId, conversationId);
-    await this.assertConversationNotBlocked(userId, conversationId);
+    const peerId = await this.assertConversationNotBlocked(userId, conversationId);
     const body = collectionSendMessageRequestSchema.parse(rawBody);
 
+    const jerseyColumns = await this.resolveMessageJersey(peerId, body.userJerseyId);
+    if (body.replyToMessageId) {
+      await this.assertReplyTarget(conversationId, body.replyToMessageId);
+    }
+
+    return this.insertConversationMessage(userId, conversationId, body, jerseyColumns);
+  }
+
+  /**
+   * Posts a message to a peer by Collector id, finding or creating the pair's Conversation in the same
+   * request. Every refusal happens before anything is created.
+   */
+  async sendPeerMessage(
+    userId: string,
+    peerId: string,
+    rawBody: unknown,
+  ): Promise<CollectionSendMessageResponse> {
+    const body = collectionSendMessageRequestSchema.parse(rawBody);
+
+    if (peerId === userId) {
+      throw new ForbiddenException("Cannot message yourself");
+    }
+    await this.assertPeerExists(peerId);
+    if (await this.moderationService.isBlocked(userId, peerId)) {
+      throw new ForbiddenException("Cannot start a conversation with this collector");
+    }
+
+    const jerseyColumns = await this.resolveMessageJersey(peerId, body.userJerseyId);
+    if (body.contentBase64) {
+      decodeBase64Photo(body.contentBase64);
+    }
+    if (body.replyToMessageId) {
+      const existingId = await this.findPairConversationId(userId, peerId);
+      if (!existingId) {
+        throw new BadRequestException("Reply target message not found in conversation");
+      }
+      await this.assertReplyTarget(existingId, body.replyToMessageId);
+    }
+
+    const conversationId = await this.findOrCreatePairConversation(userId, peerId);
+    return this.insertConversationMessage(userId, conversationId, body, jerseyColumns);
+  }
+
+  private async assertReplyTarget(conversationId: string, replyToMessageId: string) {
+    const [replyRow] = await this.db
+      .select({ id: conversationMessage.id })
+      .from(conversationMessage)
+      .where(
+        and(
+          eq(conversationMessage.id, replyToMessageId),
+          eq(conversationMessage.conversationId, conversationId),
+        ),
+      )
+      .limit(1);
+
+    if (!replyRow) {
+      throw new BadRequestException("Reply target message not found in conversation");
+    }
+  }
+
+  /**
+   * The snapshot columns of the UserJersey a message is about, so a card still reads after the jersey is
+   * gone. It must be the peer's and not private; nothing is written here.
+   */
+  private async resolveMessageJersey(
+    peerId: string,
+    userJerseyId: string | undefined,
+  ): Promise<{
+    userJerseyId?: string;
+    jerseyClubId?: string | null;
+    jerseyNationalTeamId?: string | null;
+    jerseySeasonId?: string;
+    jerseyType?: KitType;
+    jerseySize?: JerseySize;
+  }> {
+    if (!userJerseyId) {
+      return {};
+    }
+
+    const [jerseyRow] = await this.db
+      .select({
+        id: userJersey.id,
+        ownerId: userJersey.userId,
+        private: userJersey.private,
+        clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
+        seasonId: userJersey.seasonId,
+        type: userJersey.type,
+        size: userJersey.size,
+      })
+      .from(userJersey)
+      .where(eq(userJersey.id, userJerseyId))
+      .limit(1);
+
+    if (!jerseyRow || jerseyRow.ownerId !== peerId || jerseyRow.private) {
+      throw new BadRequestException("UserJersey is not available to message about");
+    }
+
+    return {
+      userJerseyId: jerseyRow.id,
+      jerseyClubId: jerseyRow.clubId,
+      jerseyNationalTeamId: jerseyRow.nationalTeamId,
+      jerseySeasonId: jerseyRow.seasonId,
+      jerseyType: jerseyRow.type,
+      jerseySize: jerseyRow.size,
+    };
+  }
+
+  /** The one message insert of an ordinary message (text or image, optional reply and UserJersey). */
+  private async insertConversationMessage(
+    userId: string,
+    conversationId: string,
+    body: CollectionSendMessageRequest,
+    jerseyColumns: Awaited<ReturnType<CollectionService["resolveMessageJersey"]>>,
+  ): Promise<CollectionSendMessageResponse> {
     const hasText = Boolean(body.text?.trim());
     const hasImage = Boolean(body.contentBase64);
     const kind = hasImage ? "image" : "text";
@@ -810,23 +928,6 @@ export class CollectionService {
       }
     }
 
-    if (body.replyToMessageId) {
-      const [replyRow] = await this.db
-        .select({ id: conversationMessage.id })
-        .from(conversationMessage)
-        .where(
-          and(
-            eq(conversationMessage.id, body.replyToMessageId),
-            eq(conversationMessage.conversationId, conversationId),
-          ),
-        )
-        .limit(1);
-
-      if (!replyRow) {
-        throw new BadRequestException("Reply target message not found in conversation");
-      }
-    }
-
     const [insertedMessage] = await this.db
       .insert(conversationMessage)
       .values({
@@ -837,6 +938,7 @@ export class CollectionService {
         body: hasText ? body.text?.trim() : null,
         imageObjectKey: imageObjectKey ?? null,
         replyToMessageId: body.replyToMessageId ?? null,
+        ...jerseyColumns,
       })
       .returning({ id: conversationMessage.id });
 
@@ -846,7 +948,71 @@ export class CollectionService {
 
     await this.touchConversation(this.db, conversationId);
 
-    return collectionSendMessageResponseSchema.parse({ messageId: insertedMessage.id });
+    return collectionSendMessageResponseSchema.parse({
+      conversationId,
+      messageId: insertedMessage.id,
+    });
+  }
+
+  /**
+   * The Conversation of a pair, created with both participants when it does not exist yet. Two first
+   * messages of a pair can arrive at once: the pair index keeps one Conversation.
+   */
+  private async findOrCreatePairConversation(userId: string, peerId: string): Promise<string> {
+    const [lowerCollectorId, upperCollectorId] = canonicalCollectorPair(userId, peerId);
+
+    const [insertedConversation] = await this.db
+      .insert(conversation)
+      .values({ lowerCollectorId, upperCollectorId })
+      .onConflictDoNothing({
+        target: [conversation.lowerCollectorId, conversation.upperCollectorId],
+      })
+      .returning({ id: conversation.id });
+
+    if (insertedConversation) {
+      const conversationId = insertedConversation.id;
+
+      await this.db.insert(conversationParticipant).values([
+        { conversationId, userId: peerId },
+        { conversationId, userId },
+      ]);
+      return conversationId;
+    }
+
+    const existingId = await this.findPairConversationId(userId, peerId);
+    if (!existingId) {
+      throw new BadRequestException("Could not create conversation");
+    }
+    return existingId;
+  }
+
+  private async findPairConversationId(userId: string, peerId: string): Promise<string | null> {
+    const [lowerCollectorId, upperCollectorId] = canonicalCollectorPair(userId, peerId);
+    const [row] = await this.db
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(
+        and(
+          eq(conversation.lowerCollectorId, lowerCollectorId),
+          eq(conversation.upperCollectorId, upperCollectorId),
+        ),
+      )
+      .limit(1);
+    return row?.id ?? null;
+  }
+
+  private async assertPeerExists(peerId: string): Promise<void> {
+    if (!UUID_PATTERN.test(peerId)) {
+      throw new NotFoundException("Peer not found");
+    }
+    const [peerRow] = await this.db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.id, peerId))
+      .limit(1);
+    if (!peerRow) {
+      throw new NotFoundException("Peer not found");
+    }
   }
 
   // A new message or Bud bumps the Conversation and brings it back for any participant who hid it.
@@ -923,7 +1089,7 @@ export class CollectionService {
   private async assertConversationNotBlocked(
     userId: string,
     conversationId: string,
-  ): Promise<void> {
+  ): Promise<string> {
     const [conversationRow] = await this.db
       .select({
         lowerCollectorId: conversation.lowerCollectorId,
@@ -945,6 +1111,8 @@ export class CollectionService {
     if (await this.moderationService.isBlocked(userId, peerId)) {
       throw new NotFoundException("Conversation not found");
     }
+
+    return peerId;
   }
 
   async getConversationPeer(
@@ -975,11 +1143,58 @@ export class CollectionService {
       throw new NotFoundException("Conversation not found");
     }
 
+    return collectionConversationPeerSchema.parse({
+      ...(await this.loadPeerSummary(peerId)),
+      conversationId,
+    });
+  }
+
+  /**
+   * Who a peer is and whether a Conversation with them exists, creating nothing. The id is null when none
+   * exists or when the viewer hid it (it returns on send).
+   */
+  async lookupPeerConversation(
+    userId: string,
+    peerId: string,
+  ): Promise<CollectionConversationPeer> {
+    if (peerId === userId) {
+      throw new NotFoundException("Peer not found");
+    }
+    await this.assertPeerExists(peerId);
+    if (await this.moderationService.isBlocked(userId, peerId)) {
+      throw new NotFoundException("Peer not found");
+    }
+
+    const peer = await this.loadPeerSummary(peerId);
+    const existingId = await this.findPairConversationId(userId, peerId);
+
+    let conversationId: string | null = null;
+    if (existingId) {
+      const [participant] = await this.db
+        .select({ conversationId: conversationParticipant.conversationId })
+        .from(conversationParticipant)
+        .where(
+          and(
+            eq(conversationParticipant.conversationId, existingId),
+            eq(conversationParticipant.userId, userId),
+            sql`${conversationParticipant.hiddenAt} IS NULL`,
+          ),
+        )
+        .limit(1);
+      conversationId = participant ? existingId : null;
+    }
+
+    return collectionConversationPeerSchema.parse({ ...peer, conversationId });
+  }
+
+  /** What a Collector shows of themselves to a peer: handle, city when shared, public jerseys, avatar. */
+  private async loadPeerSummary(peerId: string) {
     const [peerRow] = await this.db
       .select({
         handle: user.handle,
         city: user.city,
         showCity: user.showCity,
+        avatarObjectKey: user.avatarObjectKey,
       })
       .from(user)
       .where(eq(user.id, peerId))
@@ -994,12 +1209,13 @@ export class CollectionService {
       .from(userJersey)
       .where(and(eq(userJersey.userId, peerId), eq(userJersey.private, false)));
 
-    return collectionConversationPeerSchema.parse({
+    return {
       peerId,
       handle: peerRow.handle,
       jerseyCount: Number(jerseyCountRow?.count ?? 0),
       ...(peerRow.showCity && peerRow.city ? { city: peerRow.city } : {}),
-    });
+      avatarUrl: peerRow.avatarObjectKey ? `/v1/identity/peers/${peerId}/avatar` : null,
+    };
   }
 
   async listPeerJerseys(
@@ -2193,43 +2409,7 @@ export class CollectionService {
       throw new ConflictException("A pending bid on this UserJersey already exists");
     }
 
-    const [lowerCollectorId, upperCollectorId] = canonicalCollectorPair(userId, jerseyRow.ownerId);
-
-    // Two first Buds of a pair can arrive at once: the pair index keeps one Conversation.
-    const [insertedConversation] = await this.db
-      .insert(conversation)
-      .values({ lowerCollectorId, upperCollectorId })
-      .onConflictDoNothing({
-        target: [conversation.lowerCollectorId, conversation.upperCollectorId],
-      })
-      .returning({ id: conversation.id });
-
-    let conversationId: string;
-    if (insertedConversation) {
-      conversationId = insertedConversation.id;
-
-      await this.db.insert(conversationParticipant).values([
-        { conversationId, userId: jerseyRow.ownerId },
-        { conversationId, userId },
-      ]);
-    } else {
-      const [existingConversation] = await this.db
-        .select({ id: conversation.id })
-        .from(conversation)
-        .where(
-          and(
-            eq(conversation.lowerCollectorId, lowerCollectorId),
-            eq(conversation.upperCollectorId, upperCollectorId),
-          ),
-        )
-        .limit(1);
-
-      if (!existingConversation) {
-        throw new BadRequestException("Could not create conversation");
-      }
-
-      conversationId = existingConversation.id;
-    }
+    const conversationId = await this.findOrCreatePairConversation(userId, jerseyRow.ownerId);
 
     const [insertedMessage] = await this.db
       .insert(conversationMessage)
