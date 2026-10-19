@@ -242,7 +242,7 @@ function Threads({
         )}
       </div>
       <div className="flex justify-end px-2 pb-2">
-        <Button variant="ghost" onClick={refetch} aria-label="Refresh the thread list">
+        <Button variant="ghost" size="icon" onClick={refetch} aria-label="Refresh the thread list">
           <Icon name="RefreshCw" className="size-4" />
         </Button>
       </div>
@@ -276,7 +276,7 @@ function Messages({ onNavigate }: Pick<PluginThreadListProps, "onNavigate">) {
         <h1 className="text-base font-medium">
           Inbox{cards.length === 0 ? "" : ` · ${cards.length}`}
         </h1>
-        <Button variant="ghost" onClick={refetch} aria-label="Refresh">
+        <Button variant="ghost" size="icon" onClick={refetch} aria-label="Refresh">
           <Icon name="RefreshCw" className="size-4" />
         </Button>
       </div>
