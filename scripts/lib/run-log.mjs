@@ -97,6 +97,9 @@ export const REASON_CODES = [
   "no-result-line",
   // The ask for the AUDIT-RESULT line got none, so the run spawned one fresh Reviewer on the same head (KIT-404).
   "fresh-reviewer",
+  // A GLM Reviewer without a result that the proxy served only a handful of calls (OpenRouter out of
+  // credit), or the route said Claude by then: one Claude Reviewer took the same head (ADR-0067).
+  "reviewer-fallback",
   "runner-no-result",
   "report-failed",
   "lead-skipped",

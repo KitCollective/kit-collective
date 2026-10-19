@@ -87,7 +87,6 @@ const PROVIDER = "claude-code";
 const MODELS = {
   opus: "claude-opus-5-5",
   sonnet: "claude-sonnet-5-5",
-  fable: "claude-fable-5-1",
   haiku: "claude-haiku-5-5",
   // The Reviewer on GLM 5.3 through Optio's proxy (ADR-0067): what the run log records for it. The
   // agent() call names a catalog carrier, because `bb workflows validate` only accepts catalog models.
@@ -100,9 +99,6 @@ const MODELS = {
 function spawn(alias, prompt, label, phaseTitle, schema) {
   if (alias === "opus") {
     return agent(prompt, { label, phase: phaseTitle, schema, provider: "claude-code", model: "claude-opus-5-5", reasoningLevel: "high" });
-  }
-  if (alias === "fable") {
-    return agent(prompt, { label, phase: phaseTitle, schema, provider: "claude-code", model: "claude-fable-5-1", reasoningLevel: "high" });
   }
   if (alias === "sonnet") {
     return agent(prompt, { label, phase: phaseTitle, schema, provider: "claude-code", model: "claude-sonnet-5-5", reasoningLevel: "high" });
@@ -117,7 +113,26 @@ function spawn(alias, prompt, label, phaseTitle, schema) {
 // The Reviewer never runs on the Engineer's model (audit-receipt --require-different-model).
 // GLM 5.3 reviews every Engineer: never the Engineer's model or vendor (ADR-0067). The literal is a
 // catalog carrier, since `bb workflows validate` refused an OpenRouter id (2026-10-18).
-const reviewerAlias = () => "glm";
+// While OpenRouter cannot pay (2026-10-19: 402 on every GLM call, KIT-405, KIT-408, KIT-431 stuck),
+// scripts/reviewer-route.mjs answers `REVIEWER claude <reason>` and the Reviewer runs on Claude: Opus,
+// or Sonnet when the Engineer ran on Opus. Never Fable (Nicklas, 2026-10-19). A run whose Engineer
+// rounds ran on both Sonnet and Opus has no Claude Reviewer the receipt accepts: it stops at the receipt.
+const claudeReviewer = (engineerModel) => (engineerModel === "opus" ? "sonnet" : "opus");
+const reviewerAlias = (engineerModel, route) => (route === "claude" ? claudeReviewer(engineerModel) : "glm");
+const ROUTE_CMD = "node scripts/reviewer-route.mjs";
+/** "claude" only for the route script's own well-formed answer; anything else (no answer, a runner slip) is "glm". */
+const routeOf = (answer) => (answer && !answer.runner && answer.code === 0 && /^REVIEWER claude\b/.test(answer.line ?? "") ? "claude" : "glm");
+// A GLM Reviewer with no result whose thread the proxy served at most this many calls died on its
+// first calls (the 402 of an empty OpenRouter account): one Claude Reviewer takes the same head.
+const FALLBACK_MAX_CALLS = 5;
+/** True when reviewer-served says the proxy served the thread no call or only a handful. */
+function servedHandful(answer) {
+  if (!answer || answer.runner) return false;
+  const line = answer.line ?? "";
+  if (/^NOT (?:SERVED|FOUND)\b/.test(line)) return true;
+  const calls = /^SERVED thr_[a-z0-9]+\b.*\((\d+) calls?\)/.exec(line);
+  return !!calls && Number(calls[1]) <= FALLBACK_MAX_CALLS;
+}
 
 // The only Linear states this workflow may write. Merging, Post-Merge and Done are a human's
 // (or /land's) to set, so they are not in the list and `move` throws on them.
@@ -990,22 +1005,41 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   // to In Review; any answer but a well-formed delta line is a full review.
   const modeCmd = `node scripts/review-mode.mjs ${issue}${lastGreenSha ? ` --green ${lastGreenSha}` : ""}`;
   // The Reviewer's file of an earlier round goes first, so only this round's review can be published.
-  const inReview = [...(round === 0 ? [logCmd("reason", `--issue ${issue} --code engineer-skipped`)] : []), stateCmd("In Review"), `rm -f ${MATRIX_FILE}`];
-  const deltaSince = deltaReviewSince(await shAfter(inReview, "linear:In Review", "Pre-review gate", modeCmd));
+  // The reviewer route rides along too (it only reads): GLM, or Claude while OpenRouter cannot pay.
+  const inReview = [...(round === 0 ? [logCmd("reason", `--issue ${issue} --code engineer-skipped`)] : []), stateCmd("In Review"), `rm -f ${MATRIX_FILE}`, ROUTE_CMD];
+  const modeAnswer = await shAfter(inReview, "linear:In Review", "Pre-review gate", modeCmd);
+  const deltaSince = deltaReviewSince(modeAnswer);
+  // A shared runner that came back short has no route answer: GLM then, with the fallback below.
+  const route = routeOf(modeAnswer?.before?.[inReview.length - 1]);
 
   // -- Reviewer: fresh hidden thread on another model than the Engineer.
   phase("Reviewer");
-  const rAlias = reviewerAlias(modelAlias);
-  const proxied = rAlias === "glm";
+  let rAlias = reviewerAlias(modelAlias, route);
+  let proxied = rAlias === "glm";
   const rLabel = `reviewer:${issue}:r${round}`;
   let { review, thread: rThread, served: servedAnswer, title: rTitle } = await reviewHead(rAlias, rLabel, deltaSince);
+  // The fallback's reason code rides with the review gate's log lines.
+  const fallbackLog = [];
+  if (proxied && (!review || !rThread)) {
+    // A GLM Reviewer without a result: when the proxy served it only a handful of calls (the 402 of an
+    // empty OpenRouter account, KIT-408 on 2026-10-19) or the route now says Claude, one Claude Reviewer
+    // takes the same head in this run instead of a stop. Both commands only read, so one runner asks both.
+    const [served, now] = await sh("reviewer-fallback", "Reviewer", [`bb optio reviewer-served --title ${rTitle}`, ROUTE_CMD], true, true);
+    if (servedHandful(served) || routeOf(now) === "claude") {
+      rAlias = claudeReviewer(modelAlias);
+      proxied = false;
+      fallbackLog.push(logCmd("reason", `--issue ${issue} --code reviewer-fallback`));
+      ({ review, thread: rThread, served: servedAnswer, title: rTitle } = await reviewHead(rAlias, `${rLabel}:claude`, deltaSince));
+    }
+  }
   if (!review || !rThread) {
-    await sh("log:no-result", "Reviewer", [logCmd("reason", `--issue ${issue} --code no-result-line`)], true);
-    return stopped("reviewer", "In Review", { prNumber, rounds, note: "the Reviewer ended without a usable result or thread id" });
+    await sh("log:no-result", "Reviewer", [...fallbackLog, logCmd("reason", `--issue ${issue} --code no-result-line`)], true);
+    return stopped("reviewer", "In Review", { prNumber, rounds, note: `the Reviewer ended without a usable result or thread id${fallbackLog.length > 0 ? ", the Claude fallback too" : ""}` });
   }
   lastVerdict = review.verdict;
   // The two log lines ride with the review gate; an amber hold has no gate, so it writes them alone.
   const reviewerLog = [
+    ...fallbackLog,
     logCmd("spawn", `--issue ${issue} --step reviewer --thread ${rThread} --mode review --provider ${PROVIDER} --model ${MODELS[rAlias]}${machineFlag}`),
     logCmd("result", `--issue ${issue} --step reviewer --outcome ${review.verdict} --usage-thread ${rThread}`),
   ];
