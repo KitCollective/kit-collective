@@ -56,6 +56,18 @@
       "Toast",
       "Tab bar"
     ],
+    "inbox": [
+      "Inbox",
+      "Thread row",
+      "Conversation",
+      "Bid card",
+      "Chat bubble",
+      "Message composer",
+      "Sheet",
+      "Foreign UserJersey detail",
+      "Button dock",
+      "Tab bar"
+    ],
     "wishlist-paywall": ["Empty state", "Sheet", "Button", "List row", "Tab bar"]
   }
 }

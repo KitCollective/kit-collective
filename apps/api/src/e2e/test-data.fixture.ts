@@ -162,6 +162,8 @@ export const TEST_SHORTCUT: { id: string; name: string; side: FixtureSide } = {
 /**
  * One Bud the test peer left on the Test Collector's FC København jersey and the Collector has
  * not answered (KIT-286): Samling shows "1 bud" on that tile and the Med bud view has a result.
+ * The inbox flow (regression/inbox.yaml, slices/KIT-300.yaml) accepts this Bud and hides the
+ * thread, so the reset before each flow must bring it back pending.
  */
 export const TEST_UNANSWERED_BID = {
   conversationId: "e2e00000-0000-4000-8000-000000000501",
