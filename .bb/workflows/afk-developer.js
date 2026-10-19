@@ -833,7 +833,7 @@ async function reviewHead(rAlias, rLabel, since) {
         "You are a judge: change no code, move no Linear state, post no status, do not merge, and write nothing to Linear.",
         // The auto-mode classifier refused the Reviewer's own workpad write as an External System Write (KIT-298, KIT-404), so the workflow moves the file.
         `Write your \`### Review matrix\` section, the heading included (one row per lock-set row, evidence for each, \`at\` the full head sha), to the file ${MATRIX_FILE} in this checkout, and run node scripts/review-matrix.mjs validate ${MATRIX_FILE} until it exits 0. On red, put \`### Review feedback\` with every finding below it in the same file. After you return, the workflow moves both sections into the workpad as you wrote them: never call scripts/linear.mjs comment-update or write the workpad yourself, and never keep the matrix anywhere else.`,
-        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the matrix file included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
+        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). Write that line as your last text, after every other tool call (the matrix file included), with nothing after it. Then, as your very last tool call, return the same verdict, the full head sha and the same failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId. The receipt reads both from your own thread and refuses when they disagree.`,
         "Every finding names the file and line, what is wrong, and what green looks like, so the Engineer can check it, and is marked `gating` or `nit`. Only gating findings make the review red; nits go in the matrix and do not hold it (ADR-0066).",
         "The `Device flows` status of a slice flow may still be running while you review: it is not a required check, not yours to wait for and not a finding. Review the flow file against the acceptance criteria; the review gate waits for the run.",
         "On red, also return light: true only when every finding is light: the wording of a comment, a doc line, a name or a message, with no gap in behaviour, tests, an acceptance criterion, the design lock or the write-scope. Otherwise light: false.",
@@ -1165,44 +1165,33 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd(rThread), "node scripts/auto-land.mjs enabled"], true, true);
   const enabledAnswer = dry[1];
   dry = dry.slice(0, 1);
-  // A Reviewer that returned its verdict through the result tool can end on another sentence, and
-  // the receipt reads only the thread's last text (KIT-283 and KIT-286, 2026-10-14). The Reviewer
-  // is asked once for the line, as bb-orchestrate allows, and the receipt is tried again. The message
-  // is built from checked tokens only; the verdict is green, since only a green review gets here.
-  // GLM 5.3 once answered the ask with its result JSON instead of the line (KIT-404, 2026-10-18), so
-  // the ask says the line is plain text.
+  // The receipt reads the verdict from the Reviewer's own thread: its last text line, or the input of
+  // its own final bb_workflow_result call in its event log (ADR-0058, 2026-10-19). A Reviewer that
+  // returned through the result tool therefore passes without the line. bb stops a worker at that
+  // call, so the thread is never asked again: on 2026-10-19 the ask to stopped Opus Reviewers got no
+  // answer (runner-no-result) for KIT-432, KIT-431 and KIT-405. When the receipt still finds no
+  // verdict, the run spawns one fresh Reviewer on the same head before stopping (KIT-404 sat In Review
+  // for 17 hours on 2026-10-18). It is a delta review since this green head, so it re-reads the checks
+  // and carries the matrix forward. The receipt then reads that new thread itself; nothing is built
+  // from what the workflow relays.
   const reviewSha = /^[0-9a-f]{40}$/i.test(review.sha) ? review.sha.toLowerCase() : "";
   const noLine = (answer) => answer?.code !== 0 && !answer?.runner && /did not end with an exact AUDIT-RESULT line/.test(answer?.line ?? "");
   if (reviewSha && noLine(dry[0])) {
-    await sh("log:no-result", "Review gate", [
+    await sh("log:fresh-reviewer", "Review gate", [
       logCmd("reason", `--issue ${issue} --code no-result-line`),
-      `bb thread unarchive ${rThread}`,
+      logCmd("reason", `--issue ${issue} --code fresh-reviewer`),
     ], true);
-    const asked = await sh("reviewer:result-line", "Review gate", [
-      `bb thread tell ${rThread} "Your review ended without the result line. Do not review again, change nothing and call no tool. If the head is still ${reviewSha} and your verdict stands, reply with this one line as plain text and nothing else: no JSON, no code block, no tool call and no result tool, since the receipt reads only your last text line. AUDIT-RESULT ${issue} green ${reviewSha}"`,
-      `bb thread wait ${rThread} --timeout 600`,
-    ]);
-    if (asked.length === 2 && asked.every((r) => r.code === 0)) {
-      dry = await sh("receipt:dry-run", "Review gate", [receiptCmd(rThread)], false, true);
-    }
-    // Still no line: one fresh Reviewer on the same head, inside this run, before stopping (KIT-404 sat
-    // In Review for 17 hours on 2026-10-18 after the ask). It is a delta review since this green head,
-    // so it re-reads the checks and carries the matrix forward. The receipt still reads only that new
-    // thread's own last text line; nothing is built from a model's result.
-    if (asked.length !== 2 || !asked.every((r) => r.code === 0) || noLine(dry[0])) {
-      await sh("log:fresh-reviewer", "Review gate", [logCmd("reason", `--issue ${issue} --code fresh-reviewer`)], true);
-      const fresh = await reviewHead(rAlias, `${rLabel}:fresh`, reviewSha);
-      const freshGreen = fresh.review && fresh.thread && fresh.review.verdict === "green" && String(fresh.review.sha).toLowerCase() === reviewSha;
-      if (freshGreen && servedOk(fresh.served)) {
-        rThread = fresh.thread;
-        dry = [await shAfter([
-          logCmd("spawn", `--issue ${issue} --step reviewer --thread ${rThread} --mode review --provider ${PROVIDER} --model ${MODELS[rAlias]}${machineFlag}`),
-          logCmd("result", `--issue ${issue} --step reviewer --outcome green --usage-thread ${rThread}`),
-        ], "receipt:dry-run", "Review gate", receiptCmd(rThread))];
-      } else {
-        const why = !freshGreen ? `the fresh Reviewer returned ${fresh.review ? `${fresh.review.verdict} on ${String(fresh.review.sha).slice(0, 12)}` : "no usable result"}` : `the reviewer proxy did not serve ${fresh.title}: ${fresh.served?.line ?? "no answer"}`;
-        dry = [{ code: 1, line: `REFUSED (receipt): no AUDIT-RESULT line after the ask, and ${why}` }];
-      }
+    const fresh = await reviewHead(rAlias, `${rLabel}:fresh`, reviewSha);
+    const freshGreen = fresh.review && fresh.thread && fresh.review.verdict === "green" && String(fresh.review.sha).toLowerCase() === reviewSha;
+    if (freshGreen && servedOk(fresh.served)) {
+      rThread = fresh.thread;
+      dry = [await shAfter([
+        logCmd("spawn", `--issue ${issue} --step reviewer --thread ${rThread} --mode review --provider ${PROVIDER} --model ${MODELS[rAlias]}${machineFlag}`),
+        logCmd("result", `--issue ${issue} --step reviewer --outcome green --usage-thread ${rThread}`),
+      ], "receipt:dry-run", "Review gate", receiptCmd(rThread))];
+    } else {
+      const why = !freshGreen ? `the fresh Reviewer returned ${fresh.review ? `${fresh.review.verdict} on ${String(fresh.review.sha).slice(0, 12)}` : "no usable result"}` : `the reviewer proxy did not serve ${fresh.title}: ${fresh.served?.line ?? "no answer"}`;
+      dry = [{ code: 1, line: `REFUSED (receipt): no verdict in the Reviewer's thread, and ${why}` }];
     }
   }
   receipt = dry[0]?.line ?? "no output from audit-receipt";

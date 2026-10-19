@@ -115,6 +115,7 @@ const FAKE_BB = `#!/bin/sh
 case "$*" in
   *"thread show"*) echo '{"thread":{"id":"thr_rev12345","providerId":"claude-code","createdAt":1800000000000}}';;
   *"thread output"*) printf '%s' "{\\"output\\":$(node -e 'process.stdout.write(JSON.stringify(require("fs").readFileSync(process.env.WORLD + "/bb-output.txt", "utf8")))')}";;
+  *"thread log"*) echo '[]';;
 esac
 `;
 

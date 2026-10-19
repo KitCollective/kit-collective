@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   describe,
@@ -7,6 +8,7 @@ import {
   ghMessage,
   statusPermissionLine,
 } from "../lib/audit-receipt.mjs";
+import { parseAuditResult } from "../lib/audit-result.mjs";
 import { parseResultLine } from "../lib/gates.mjs";
 
 const HEAD = "c0ffee1234567890c0ffee1234567890c0ffee12";
@@ -304,4 +306,187 @@ test("describe never exceeds 140 characters and keeps the sha whole", () => {
     assert.ok(absurd.endsWith(" at c0ffee1"));
     assert.ok(absurd.startsWith("audit green by thr_x"));
   }
+});
+
+// -- The verdict as the Reviewer's own final bb_workflow_result call (ADR-0058, 2026-10-19). The
+// fixtures are the recorded tail of thr_dfv3s7iyyj, KIT-432's fresh Opus Reviewer on PR #479: it
+// wrote its matrix, called the result tool without a final text line, and bb stopped the thread.
+// The second fixture adds the AUDIT-RESULT line as an agent message before the same call.
+const fixture = (name) =>
+  JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), "utf8"));
+const CALL_ONLY = fixture("reviewer-thread-result-call");
+const LINE_AND_CALL = fixture("reviewer-thread-line-and-call");
+const PR_HEAD = "75ee1d2e07902c84c8f66c3155d509575f4f6e43";
+const LAST_TEXT =
+  "HEAD equals the green sha, so the delta is empty. Next I'm re-reading the required checks and writing the matrix.";
+const kit432 = {
+  thread: { id: "thr_dfv3s7iyyj", providerId: "claude-code", createdAt: 2000 },
+  output: LAST_TEXT,
+  events: CALL_ONLY,
+  head: PR_HEAD,
+  headCommittedAt: 1000,
+  spawns: [
+    {
+      issue: "KIT-432",
+      step: "engineer",
+      thread: "thr_eng432000",
+      provider: "claude-code",
+      model: "claude-sonnet-5-5",
+    },
+    {
+      issue: "KIT-432",
+      step: "reviewer",
+      thread: "thr_dfv3s7iyyj",
+      provider: "claude-code",
+      model: "claude-opus-5-5",
+    },
+  ],
+  requireDifferentModel: true,
+};
+/** The fixture's result call with its input changed. */
+const withCall = (events, change) =>
+  events.map((e) =>
+    e.data?.item?.tool === "bb_workflow_result"
+      ? {
+          ...e,
+          data: {
+            ...e.data,
+            item: {
+              ...e.data.item,
+              arguments: { value: { ...e.data.item.arguments.value, ...change } },
+            },
+          },
+        }
+      : e,
+  );
+
+test("the recorded thread with no final line passes on its own final bb_workflow_result call (KIT-432)", () => {
+  assert.equal(parseAuditResult(LAST_TEXT), null, "the thread's last text is no result line");
+  const r = evaluateReceipt(kit432);
+  assert.equal(r.ok, true, r.refusal);
+  assert.equal(r.state, "success");
+  assert.equal(r.verdict, "green");
+  assert.equal(r.issue, "KIT-432", "the issue comes from the run log's spawn reviewer event");
+  assert.deepEqual(r.rows, []);
+  assert.equal(r.source, "result call");
+  assert.match(r.description, /thr_dfv3s7iyyj \(claude-code\/claude-opus-5-5\) at 75ee1d2/);
+});
+
+test("the recorded thread with the line and the call passes when they agree", () => {
+  const line = `AUDIT-RESULT KIT-432 green ${PR_HEAD}`;
+  const r = evaluateReceipt({ ...kit432, events: LINE_AND_CALL, output: line });
+  assert.equal(r.ok, true, r.refusal);
+  assert.equal(r.source, "line and result call");
+  // The line alone still works, as before, with no event log at all.
+  assert.equal(evaluateReceipt({ ...kit432, events: [], output: line }).source, "line");
+});
+
+test("a line and a result call that disagree are refused", () => {
+  const red = evaluateReceipt({
+    ...kit432,
+    events: LINE_AND_CALL,
+    output: `AUDIT-RESULT KIT-432 red ${PR_HEAD} spec-ac`,
+  });
+  assert.equal(red.ok, false);
+  assert.match(
+    red.refusal,
+    /AUDIT-RESULT line \(red spec-ac\) and the bb_workflow_result call \(green no rows\).*disagree/,
+  );
+  const rows = evaluateReceipt({
+    ...kit432,
+    events: withCall(LINE_AND_CALL, { verdict: "amber", rows: ["required-checks"] }),
+    output: `AUDIT-RESULT KIT-432 amber ${PR_HEAD} mergeable`,
+  });
+  assert.match(rows.refusal, /disagree/);
+});
+
+test("a result call or a line for another sha than the PR head is refused", () => {
+  const otherHead = "b".repeat(40);
+  assert.match(
+    evaluateReceipt({ ...kit432, head: otherHead }).refusal,
+    /bb_workflow_result call audited 75ee1d2e0790, the head is bbbbbbb/,
+  );
+  // The line names the head, but the call another sha: still refused.
+  const split = evaluateReceipt({
+    ...kit432,
+    events: withCall(LINE_AND_CALL, { sha: otherHead }),
+    output: `AUDIT-RESULT KIT-432 green ${PR_HEAD}`,
+  });
+  assert.match(split.refusal, /call audited bbbbbbbbbbbb/);
+  // A short sha in the call is no verdict: the call must carry the full sha.
+  assert.match(
+    evaluateReceipt({ ...kit432, events: withCall(CALL_ONLY, { sha: PR_HEAD.slice(0, 12) }) })
+      .refusal,
+    /not a full 40-character sha/,
+  );
+});
+
+test("the result call counts only as the thread's last tool call", () => {
+  const after = {
+    id: "evt_after0001",
+    scope: { kind: "turn", turnId: "da3e5dc4a9-t6" },
+    threadId: "thr_dfv3s7iyyj",
+    seq: 64,
+    createdAt: 1792445790000,
+    type: "item/started",
+    data: { item: { type: "commandExecution", id: "da3e5dc4a9-i42", command: "ls" } },
+  };
+  const r = evaluateReceipt({ ...kit432, events: [...CALL_ONLY, after] });
+  assert.equal(r.ok, false);
+  assert.match(
+    r.refusal,
+    /did not end with an exact AUDIT-RESULT line.*no bb_workflow_result call/,
+  );
+  // Text after the call is no tool call: the call still counts.
+  const message = { ...after, data: { item: { type: "agentMessage", id: "x1", text: "done" } } };
+  assert.equal(evaluateReceipt({ ...kit432, events: [...CALL_ONLY, message] }).ok, true);
+});
+
+test("another thread's events, a bad verdict, rows on green or another thread id are no verdict", () => {
+  const foreign = CALL_ONLY.map((e) => ({ ...e, threadId: "thr_other0001" }));
+  assert.match(
+    evaluateReceipt({ ...kit432, events: foreign }).refusal,
+    /no bb_workflow_result call/,
+  );
+  assert.match(
+    evaluateReceipt({ ...kit432, events: withCall(CALL_ONLY, { verdict: "maybe" }) }).refusal,
+    /no valid verdict: verdict "maybe"/,
+  );
+  assert.match(
+    evaluateReceipt({ ...kit432, events: withCall(CALL_ONLY, { rows: ["spec-ac"] }) }).refusal,
+    /rows are not distinct lock-row ids/,
+  );
+  assert.match(
+    evaluateReceipt({ ...kit432, events: withCall(CALL_ONLY, { threadId: "thr_swk6hmigxu" }) })
+      .refusal,
+    /names thread thr_swk6hmigxu/,
+  );
+  const red = evaluateReceipt({
+    ...kit432,
+    events: withCall(CALL_ONLY, { verdict: "red", rows: ["spec-ac", "mergeable"] }),
+  });
+  assert.equal(red.state, "failure");
+  assert.deepEqual(red.rows, ["spec-ac", "mergeable"]);
+});
+
+test("a result call keeps every other check: run log reviewer spawn, engineer thread, different model", () => {
+  assert.match(
+    evaluateReceipt({ ...kit432, spawns: kit432.spawns.slice(0, 1) }).refusal,
+    /no spawn reviewer event for thr_dfv3s7iyyj/,
+  );
+  const sameModel = kit432.spawns.map((e) =>
+    e.step === "engineer" ? { ...e, model: "claude-opus-5-5" } : e,
+  );
+  assert.match(
+    evaluateReceipt({ ...kit432, spawns: sameModel }).refusal,
+    /the same as an engineer spawn/,
+  );
+  assert.match(
+    evaluateReceipt({ ...kit432, implementerThread: "thr_dfv3s7iyyj" }).refusal,
+    /implementer thread/,
+  );
+  assert.match(
+    evaluateReceipt({ ...kit432, headCommittedAt: 3000 }).refusal,
+    /started before the head commit/,
+  );
 });

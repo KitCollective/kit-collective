@@ -1587,29 +1587,7 @@ test("the runner and the Engineer are told to set the shell tool's timeout, whic
 
 const isReceipt = (c) => c.includes("audit-receipt.mjs post");
 const NO_LINE =
-  "REFUSED (receipt): thread thr_reviewer01 did not end with an exact AUDIT-RESULT line (nothing else on the line or after it)";
-
-test("a receipt refused for a missing result line asks the Reviewer once, then tries again (KIT-283, KIT-286)", async () => {
-  let receipts = 0;
-  const { result, commands } = await run({
-    shell: (c) => {
-      if (!isReceipt(c)) return undefined;
-      receipts += 1;
-      return receipts === 1
-        ? { code: 1, line: NO_LINE }
-        : { code: 0, line: "WOULD POST (receipt): kc/audit success" };
-    },
-  });
-  assert.equal(result.status, "Approval");
-  assert.equal(commands.filter(isReceipt).length, 2);
-  const tell = commands.find((c) => c.startsWith("bb thread tell thr_reviewer01 "));
-  assert.ok(tell, "the Reviewer is asked for its line");
-  assert.match(tell, new RegExp(`AUDIT-RESULT KIT-9 green ${SHA}"$`));
-  const at = (needle) => commands.findIndex((c) => c.startsWith(needle));
-  assert.ok(at("bb thread unarchive thr_reviewer01") < at("bb thread tell"));
-  assert.ok(at("bb thread tell") < at("bb thread wait thr_reviewer01"));
-  assert.ok(commands.some((c) => c.includes("--code no-result-line")));
-});
+  "REFUSED (receipt): thread thr_reviewer01 did not end with an exact AUDIT-RESULT line (nothing else on the line or after it), and its last tool call is no bb_workflow_result call";
 
 const FRESH_THREAD = "thr_reviewer02";
 const FRESH_TITLE = "reviewer:KIT-9:r1:fresh:openrouter";
@@ -1621,13 +1599,83 @@ const served = (c) =>
         line: `SERVED ${c.endsWith(FRESH_TITLE) ? FRESH_THREAD : REVIEWER_THREAD} as z-ai/glm-5.3 (3 calls)`,
       }
     : undefined;
+/** Any message to, or wait on, a Reviewer thread after it returned: bb has already stopped it. */
+const asksStopped = (c) =>
+  /^bb thread (tell|unarchive|wait) thr_reviewer01\b/.test(c) && !c.includes("Review matrix");
 
-test("the Reviewer is asked only once, and other refusals are not retried", async () => {
-  const once = await run({ shell: (c) => (isReceipt(c) ? { code: 1, line: NO_LINE } : undefined) });
+test("the Reviewer is told to end on the line and make the result tool its very last call, and that the two must agree", async () => {
+  const { spawns } = await run();
+  const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:")).prompt;
+  assert.match(reviewer, /Write that line as your last text, after every other tool call/);
+  assert.match(reviewer, /as your very last tool call, return the same verdict, the full head sha/);
+  assert.match(reviewer, /refuses when they disagree/);
+});
+
+test("a Reviewer that returned only through the result tool passes on the first receipt: no ask, no fresh Reviewer (KIT-432)", async () => {
+  const { result, commands, spawns } = await run({
+    shell: (c) =>
+      isReceipt(c)
+        ? {
+            code: 0,
+            line: "WOULD POST (receipt): kc/audit success: audit green by thr_reviewer01 (claude-code/claude-opus-5-5) at aaaaaaa (verdict from the thread's result call)",
+          }
+        : undefined,
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(commands.filter(isReceipt).length, 1);
+  assert.ok(!commands.some(asksStopped));
+  assert.equal(
+    agentSpawns(spawns).filter((s) => s.options.label.startsWith("reviewer:")).length,
+    1,
+  );
+});
+
+test("no verdict in the Reviewer's thread never messages that stopped thread: one fresh Reviewer on the same head, whose own thread is the receipt (KIT-404, KIT-432)", async () => {
+  const { result, commands, spawns } = await run({
+    shell: (c) => {
+      if (isReceipt(c))
+        return c.includes(`--thread ${FRESH_THREAD} `)
+          ? { code: 0, line: "WOULD POST (receipt): kc/audit success" }
+          : { code: 1, line: NO_LINE };
+      return served(c);
+    },
+  });
+  assert.equal(result.status, "Approval");
+  assert.match(result.receipt, /WOULD POST/);
+  // bb stops a worker at its result call; on 2026-10-19 the ask to such a thread got no answer.
+  assert.ok(!commands.some(asksStopped), "the stopped Reviewer thread is not asked again");
+  const reviewers = agentSpawns(spawns).filter((s) => s.options.label.startsWith("reviewer:"));
+  assert.deepEqual(
+    reviewers.map((s) => s.options.label),
+    ["reviewer:KIT-9:r1:openrouter", FRESH_TITLE],
+  );
+  // Delta since the green head itself: the checks are re-read and the matrix carried forward.
+  assert.match(reviewers[1].prompt, new RegExp(`--green ${SHA}`));
+  assert.match(reviewers[1].prompt, /Write that line as your last text/);
+  const at = (needle) => commands.findIndex((c) => c.includes(needle));
+  assert.ok(at("--code no-result-line") > at(`--thread ${REVIEWER_THREAD} `));
+  assert.ok(at("--code no-result-line") < at("--code fresh-reviewer"));
+  assert.ok(at("--code fresh-reviewer") < at(`reviewer-served --title ${FRESH_TITLE}`));
+  // The fresh thread is logged as a reviewer before its receipt, which audit-receipt requires.
+  assert.ok(at(`spawn --issue KIT-9 --step reviewer --thread ${FRESH_THREAD}`) > 0);
+  assert.ok(
+    at(`spawn --issue KIT-9 --step reviewer --thread ${FRESH_THREAD}`) <
+      at(`--thread ${FRESH_THREAD} --implementer-thread`),
+  );
+  assert.ok(
+    commands.some((c) =>
+      c.includes(`--step reviewer --outcome green --usage-thread ${FRESH_THREAD}`),
+    ),
+  );
+  assert.ok(!commands.some((c) => c.includes("--code evidence-gap")));
+});
+
+test("only a missing verdict spawns the fresh Reviewer, and never a second one", async () => {
+  const once = await run({ shell: (c) => (isReceipt(c) ? { code: 1, line: NO_LINE } : served(c)) });
   assert.equal(once.result.stoppedAt, "receipt");
-  // The first try, the one after the ask, and the one on the fresh Reviewer's thread.
-  assert.equal(once.commands.filter(isReceipt).length, 3);
-  assert.equal(once.commands.filter((c) => c.startsWith("bb thread tell")).length, 1);
+  // The first try and the one on the fresh Reviewer's thread.
+  assert.equal(once.commands.filter(isReceipt).length, 2);
+  assert.ok(!once.commands.some(asksStopped));
   assert.equal(
     agentSpawns(once.spawns).filter((s) => s.options.label.startsWith("reviewer:")).length,
     2,
@@ -1645,59 +1693,10 @@ test("the Reviewer is asked only once, and other refusals are not retried", asyn
   });
   assert.equal(other.result.stoppedAt, "receipt");
   assert.equal(other.commands.filter(isReceipt).length, 1);
-  assert.ok(!other.commands.some((c) => c.startsWith("bb thread tell")));
-
-  const tellFailed = await run({
-    shell: (c) =>
-      isReceipt(c)
-        ? { code: 1, line: NO_LINE }
-        : c.startsWith("bb thread tell")
-          ? { code: 1, line: "HTTP 409" }
-          : served(c),
-  });
   assert.equal(
-    tellFailed.commands.filter((c) => isReceipt(c) && c.includes(`--thread ${REVIEWER_THREAD} `))
-      .length,
+    agentSpawns(other.spawns).filter((s) => s.options.label.startsWith("reviewer:")).length,
     1,
-    "no second receipt on the asked thread when the ask failed",
   );
-});
-
-test("the ask answered with JSON instead of the line spawns one fresh Reviewer on the same head, whose own line is the receipt (KIT-404)", async () => {
-  const { result, commands, spawns } = await run({
-    shell: (c) => {
-      if (isReceipt(c))
-        return c.includes(`--thread ${FRESH_THREAD} `)
-          ? { code: 0, line: "WOULD POST (receipt): kc/audit success" }
-          : { code: 1, line: NO_LINE };
-      return served(c);
-    },
-  });
-  assert.equal(result.status, "Approval");
-  assert.match(result.receipt, /WOULD POST/);
-  const reviewers = agentSpawns(spawns).filter((s) => s.options.label.startsWith("reviewer:"));
-  assert.deepEqual(
-    reviewers.map((s) => s.options.label),
-    ["reviewer:KIT-9:r1:openrouter", FRESH_TITLE],
-  );
-  // Delta since the green head itself: the checks are re-read and the matrix carried forward.
-  assert.match(reviewers[1].prompt, new RegExp(`--green ${SHA}`));
-  assert.match(reviewers[1].prompt, /write that line as your last text/);
-  const at = (needle) => commands.findIndex((c) => c.includes(needle));
-  assert.ok(at("--code fresh-reviewer") > at("bb thread wait thr_reviewer01"));
-  assert.ok(at("--code fresh-reviewer") < at(`reviewer-served --title ${FRESH_TITLE}`));
-  // The fresh thread is logged as a reviewer before its receipt, which audit-receipt requires.
-  assert.ok(at(`spawn --issue KIT-9 --step reviewer --thread ${FRESH_THREAD}`) > 0);
-  assert.ok(
-    at(`spawn --issue KIT-9 --step reviewer --thread ${FRESH_THREAD}`) <
-      at(`--thread ${FRESH_THREAD} --implementer-thread`),
-  );
-  assert.ok(
-    commands.some((c) =>
-      c.includes(`--step reviewer --outcome green --usage-thread ${FRESH_THREAD}`),
-    ),
-  );
-  assert.ok(!commands.some((c) => c.includes("--code evidence-gap")));
 });
 
 test("a fresh Reviewer that is not green on the same head, or not served, stops at the receipt without its receipt", async () => {
@@ -1714,7 +1713,7 @@ test("a fresh Reviewer that is not green on the same head, or not served, stops 
     });
     assert.equal(result.stoppedAt, "receipt");
     assert.equal(result.status, "In Review");
-    assert.match(result.receipt, /no AUDIT-RESULT line after the ask/);
+    assert.match(result.receipt, /no verdict in the Reviewer.s thread/);
     assert.ok(!commands.some((c) => isReceipt(c) && c.includes(FRESH_THREAD)));
     assert.ok(!commands.some((c) => c.includes(`--thread ${FRESH_THREAD} --mode review`)));
     assert.ok(commands.some((c) => c.includes("--code evidence-gap")));
@@ -1732,27 +1731,9 @@ test("a fresh Reviewer that is not green on the same head, or not served, stops 
   assert.ok(!notServed.commands.some((c) => isReceipt(c) && c.includes(FRESH_THREAD)));
 });
 
-test("the ask for the result line says plain text, not JSON, a code block or a tool call (KIT-404)", async () => {
-  const { commands } = await run({
-    shell: (c) => (isReceipt(c) ? { code: 1, line: NO_LINE } : undefined),
-  });
-  const tell = commands.find((c) => c.startsWith("bb thread tell thr_reviewer01 "));
-  assert.match(
-    tell,
-    /as plain text and nothing else: no JSON, no code block, no tool call and no result tool/,
-  );
-  assert.match(tell, new RegExp(`AUDIT-RESULT KIT-9 green ${SHA}"$`));
-});
-
 test("fresh-reviewer is a run-log reason code", async () => {
   const { REASON_CODES } = await import("../lib/run-log.mjs");
   assert.ok(REASON_CODES.includes("fresh-reviewer"));
-});
-
-test("the Reviewer prompt asks for the result line as its last text, after the matrix file", async () => {
-  const { spawns } = await run();
-  const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:")).prompt;
-  assert.match(reviewer, /write that line as your last text, after every other tool call/);
 });
 
 const PUBLISH = `node scripts/linear.mjs review-matrix KIT-9 --head ${SHA}`;
