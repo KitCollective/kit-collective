@@ -204,16 +204,20 @@ describe("the Staff chat header reads override or file", () => {
   it("says on, off for a switched-off setting, and paused for a pause setting", async () => {
     const { rpc, agent, header } = await load();
     await agent("max", "Max");
-    expect(await header()).toMatchObject({ status: "on" });
+    expect(await header()).toMatchObject({ status: "on", overrides: { status: null } });
     await rpc("staff_settings_set", { agentId: "max", key: "paused", value: true, by: "N" });
-    expect(await header()).toMatchObject({ status: "paused" });
+    expect(await header()).toMatchObject({
+      status: "paused",
+      overrides: { status: { by: "N", at: expect.any(String) } },
+    });
     // Off wins over paused.
     await rpc("staff_settings_set", { agentId: "max", key: "enabled", value: false, by: "N" });
     expect(await header()).toMatchObject({ status: "off" });
     await rpc("staff_settings_clear", { agentId: "max", key: "enabled", by: "N" });
     expect(await header()).toMatchObject({ status: "paused" });
     await rpc("staff_settings_clear", { agentId: "max", key: "paused", by: "N" });
-    expect(await header()).toMatchObject({ status: "on" });
+    // Cleared overrides leave no mark: the Charter's value is in force again.
+    expect(await header()).toMatchObject({ status: "on", overrides: { status: null } });
   });
 
   it("says off for a disabled agent row, and paused for the plugin-wide pause", async () => {
@@ -240,8 +244,10 @@ describe("the Staff chat header reads override or file", () => {
     });
     await agent("max", "Max");
     expect((await header())?.budget).toEqual({ limit: "40 USD a day", used: null });
+    expect((await header())?.overrides.budget).toBeNull();
     await rpc("staff_settings_set", { agentId: "max", key: "budget", value: "5 USD", by: "N" });
     expect((await header())?.budget).toEqual({ limit: "5 USD", used: null });
+    expect((await header())?.overrides.budget).toMatchObject({ by: "N" });
     await rpc("staff_settings_set", { agentId: "max", key: "budget", value: null, by: "N" });
     expect((await header())?.budget).toEqual({ limit: null, used: null });
   });

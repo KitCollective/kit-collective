@@ -93,6 +93,11 @@ const staffHeader = z.object({
   lastHeartbeat: z.number().nullable(),
   /** The Charter's budget as written; `used` is null while nothing measures it. */
   budget: z.object({ limit: z.string().nullable(), used: z.string().nullable() }),
+  /** Who overrode what the header shows and when (ISO); null while the Charter's value is in force (ADR-0065). */
+  overrides: z.object({
+    status: z.object({ by: z.string(), at: z.string() }).nullable(),
+    budget: z.object({ by: z.string(), at: z.string() }).nullable(),
+  }),
 });
 
 const by = z.string().trim().min(1).max(80);

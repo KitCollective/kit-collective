@@ -229,6 +229,7 @@ describe("the Staff chat header", () => {
       status: "on",
       lastHeartbeat: 5_000,
       budget: { limit: "40 USD a day", used: null },
+      overrides: { status: null, budget: null },
     });
   });
 

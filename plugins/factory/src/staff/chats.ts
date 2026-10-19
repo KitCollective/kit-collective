@@ -206,6 +206,11 @@ export function createStaffChats(core: Core, store: SettingsStore) {
       lastHeartbeat,
       // The Charter states no measured use, and nothing else measures it either.
       budget: { limit: effective.budget.value, used: null },
+      // An override is marked where its value is shown, so the Charter is never silently out of date.
+      overrides: {
+        status: effective.enabled.override ?? effective.paused.override,
+        budget: effective.budget.override,
+      },
     };
   }
 

@@ -7,6 +7,20 @@ import { cn } from "@/lib/utils";
 import { PANEL, when } from "../shared/common";
 import { useLoaded } from "../shared/use-loaded";
 
+/** The mark an overridden value carries: an asterisk whose tooltip says who set it and when. */
+function Overridden({ by, at }: { by: string; at: string }) {
+  return (
+    <span
+      role="img"
+      aria-label={`overridden by ${by}`}
+      title={`Overrides the Charter: set by ${by} at ${at}`}
+      className="text-amber-600"
+    >
+      *
+    </span>
+  );
+}
+
 export function StaffChatHeader({
   threadId,
   isCompactViewport,
@@ -31,7 +45,10 @@ export function StaffChatHeader({
   const details = (
     <>
       <span className="truncate">{heartbeat}</span>
-      <span className="truncate">{budget}</span>
+      <span className="truncate">
+        {budget}
+        {header.overrides.budget === null ? null : <Overridden {...header.overrides.budget} />}
+      </span>
     </>
   );
   return (
@@ -45,7 +62,10 @@ export function StaffChatHeader({
           )}
         />
         <span className="truncate text-foreground">{header.title}</span>
-        <span>{header.status}</span>
+        <span>
+          {header.status}
+          {header.overrides.status === null ? null : <Overridden {...header.overrides.status} />}
+        </span>
         {isCompactViewport ? null : details}
         <Button
           variant="outline"
