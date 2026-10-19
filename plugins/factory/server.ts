@@ -35,7 +35,7 @@ export default async function plugin(bb: BbPluginApi) {
   const inbox = createInbox({ ...core, staffQuestions: staff.openQuestions });
   const loops = createLoops(core);
   const home = createHome({ inbox: { list: inbox.waiting } });
-  const threads = createThreads(core);
+  const threads = createThreads(core, async () => staff.rpc.staff_list(null));
   const reviewerProxy = createReviewerProxy({
     bb: core.bb,
     keyFile: async () => (await core.settings.get()).linearApiKeyFile,
