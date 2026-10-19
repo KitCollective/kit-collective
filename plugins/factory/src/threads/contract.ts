@@ -73,3 +73,5 @@ export const threadsContract = {
     }),
   },
 };
+
+export type ThreadListDto = z.output<(typeof threadsContract)["threads_list"]["output"]>;

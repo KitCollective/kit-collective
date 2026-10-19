@@ -20,12 +20,12 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../../src/contract";
 import type { InboxListDto } from "../../src/inbox/contract";
-import type { threadsContract } from "../../src/threads/contract";
+import type { ThreadListDto } from "../../src/threads/contract";
 import { MessageRow } from "../inbox/message-row";
 import { useInboxPanel } from "../inbox/panel-state";
 import { INBOX } from "../shared/common";
 
-type ThreadsDto = typeof threadsContract.threads_list.output._output;
+type ThreadsDto = ThreadListDto;
 type ListedThread = ThreadsDto["other"][number]["thread"];
 type Child = ThreadsDto["groups"][number]["issues"][number]["children"][number];
 
@@ -50,7 +50,10 @@ function useFiling(live: readonly PluginSidebarThread[]) {
   const shape = useMemo(
     () =>
       live
-        .map((thread) => `${thread.id}:${thread.displayTitle}:${thread.parentThreadId}`)
+        .map(
+          (thread) =>
+            `${thread.id}:${thread.displayTitle}:${thread.parentThreadId}:${thread.lifecycleOwnerThreadId}`,
+        )
         .join("|"),
     [live],
   );
@@ -180,24 +183,25 @@ function Threads({
               <section>
                 <Heading>Staff</Heading>
                 <ul className="flex flex-col gap-0.5">
-                  {filing.staff.map((member) =>
-                    member.chat === null ? (
-                      <li
-                        key={member.agentId}
-                        className="px-2 py-1.5 text-sm text-muted-foreground"
-                      >
-                        {member.name} · {member.title}
-                      </li>
-                    ) : (
-                      <ThreadRow
-                        key={member.agentId}
-                        {...row}
-                        thread={member.chat}
-                        label={member.name}
-                        detail={member.title}
-                      />
-                    ),
-                  )}
+                  {filing.staff.map((member) => (
+                    <Fragment key={member.agentId}>
+                      {member.chat === null ? (
+                        <li className="px-2 py-1.5 text-sm text-muted-foreground">
+                          {member.name} · {member.title}
+                        </li>
+                      ) : (
+                        <ThreadRow
+                          {...row}
+                          thread={member.chat}
+                          label={member.name}
+                          detail={member.title}
+                        />
+                      )}
+                      {member.activity.map((thread) => (
+                        <ThreadRow key={thread.id} {...row} thread={thread} depth={1} />
+                      ))}
+                    </Fragment>
+                  ))}
                 </ul>
               </section>
             )}

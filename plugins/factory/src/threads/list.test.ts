@@ -26,6 +26,8 @@ interface Thread {
   id: string;
   title: string | null;
   parentThreadId: string | null;
+  lifecycleOwnerThreadId: string | null;
+  visibility: "hidden" | "visible";
   status: "idle" | "active" | "error";
   archivedAt: number | null;
   projectId: string;
@@ -39,6 +41,8 @@ const thread = (id: string, title: string | null, extra: Partial<Thread> = {}): 
     id,
     title,
     parentThreadId: null,
+    lifecycleOwnerThreadId: null,
+    visibility: "visible",
     status: "idle",
     archivedAt: null,
     projectId: "proj_1",
@@ -81,11 +85,15 @@ async function load({
   inbox = true,
   staff = false,
 }: Options) {
-  const list = vi.fn(async (args: { archived?: boolean; limit?: number; offset?: number } = {}) =>
-    threads
-      .filter((t) => (args.archived === false ? t.archivedAt === null : true))
-      .slice(args.offset ?? 0, (args.offset ?? 0) + (args.limit ?? 1000))
-      .map((t) => makeThreadResponse({ ...t })),
+  const list = vi.fn(
+    async (
+      args: { archived?: boolean; includeHidden?: boolean; limit?: number; offset?: number } = {},
+    ) =>
+      threads
+        .filter((t) => (args.archived === false ? t.archivedAt === null : true))
+        .filter((t) => args.includeHidden === true || t.visibility === "visible")
+        .slice(args.offset ?? 0, (args.offset ?? 0) + (args.limit ?? 1000))
+        .map((t) => makeThreadResponse({ ...t })),
   );
   vi.stubGlobal(
     "fetch",
@@ -244,6 +252,40 @@ describe("Optio's thread list", () => {
       ["thr_lead", 1],
       ["thr_eng", 1],
       ["thr_rev", 2],
+    ]);
+    expect(result.other).toEqual([]);
+  });
+
+  it("folds the workflow's hidden threads, which follow their Issue thread's lifecycle, under it", async () => {
+    // The shape bb gives them: no parent, an owner, hidden.
+    const workflow = (id: string, title: string, owner: string) =>
+      thread(id, title, {
+        lifecycleOwnerThreadId: owner,
+        visibility: "hidden",
+        status: "active",
+      });
+    const { rpc } = await load({
+      threads: [
+        thread("thr_a", "ENG-1"),
+        workflow("thr_lead", "lead:ENG-1", "thr_a"),
+        workflow("thr_eng", "engineer:ENG-1:r0", "thr_a"),
+        workflow("thr_rev", "reviewer:ENG-1:r0", "thr_a"),
+        // Visible, as the shadow reviewers are: folded all the same, not filed under Other.
+        thread("thr_shadow", "reviewer:ENG-1:shadow:openrouter", {
+          lifecycleOwnerThreadId: "thr_a",
+        }),
+        // Hidden, and its Issue thread is gone: bb hides it, so the list does too.
+        workflow("thr_lost", "lead:ENG-9", "thr_gone"),
+      ],
+      issues: [issue("ENG-1", "In Progress")],
+    });
+    const result = await rpc("threads_list", null);
+    const [entry] = result.groups[0]?.issues ?? [];
+    expect(entry?.children.map((c) => [c.id, c.depth])).toEqual([
+      ["thr_lead", 1],
+      ["thr_eng", 1],
+      ["thr_rev", 1],
+      ["thr_shadow", 1],
     ]);
     expect(result.other).toEqual([]);
   });

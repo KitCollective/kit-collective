@@ -83,7 +83,7 @@ export async function fetchDone(
 export interface IssueState {
   identifier: string;
   title: string;
-  /** The state's name in Linear, such as `Approval`. */
+  /** The state's name in Linear, as the team named it. */
   state: string;
   /** The state's type, such as `started` or `completed`. */
   type: string;

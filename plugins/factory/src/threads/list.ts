@@ -1,6 +1,7 @@
 // Optio's thread list: the threads of bb, filed for the sidebar. The Staff are on top, an Issue
 // thread (a root thread titled with its issue's key) goes under the state its issue is in, in Linear,
-// the threads spawned under a thread are folded under it, and what is neither an issue nor a Staff
+// the threads that follow a thread's lifecycle (the workflows' hidden Lead, Engineer and Reviewer
+// threads) or were spawned under it are folded under it, and what is neither an issue nor a Staff
 // member's is listed last under Other. The page draws it; this decides where each thread goes.
 
 import type { z } from "zod";
@@ -21,6 +22,10 @@ interface Row {
   title: string | null;
   titleFallback: string | null;
   parentThreadId: string | null;
+  /** The thread this one follows: how a workflow's threads point at their Issue thread. */
+  lifecycleOwnerThreadId: string | null;
+  /** A workflow's own threads are hidden from bb's lists unless asked for. */
+  visibility: "hidden" | "visible";
   status: string;
   updatedAt: number;
   createdAt: number;
@@ -70,12 +75,13 @@ function groupOf(
 export function createThreadList(core: Core, staffList: () => Promise<{ staff: StaffEntry[] }>) {
   const { bb, storedScheduler, linearApiKey } = core;
 
-  /** Every unarchived, visible thread of every project. */
+  /** Every unarchived thread of every project, the hidden ones too: the Lead, Engineer and Reviewer threads are hidden. */
   async function allThreads(): Promise<Row[]> {
     const found: Row[] = [];
     for (let page = 0; page < MAX_PAGES; page += 1) {
       const threads = await bb.sdk.threads.list({
         archived: false,
+        includeHidden: true,
         limit: PAGE,
         offset: page * PAGE,
       });
@@ -95,15 +101,19 @@ export function createThreadList(core: Core, staffList: () => Promise<{ staff: S
   async function list(): Promise<Listed> {
     const rows = await allThreads();
     const byId = new Map(rows.map((row) => [row.id, row]));
+    /** The thread a row is folded under: the one it follows, else the one it was spawned under. */
+    const foldedUnder = (row: Row): string | null => {
+      const owner = row.lifecycleOwnerThreadId ?? row.parentThreadId;
+      return owner !== null && owner !== row.id && byId.has(owner) ? owner : null;
+    };
     const childrenOf = new Map<string, Row[]>();
     for (const row of rows) {
-      if (row.parentThreadId === null || !byId.has(row.parentThreadId)) continue;
-      childrenOf.set(row.parentThreadId, [...(childrenOf.get(row.parentThreadId) ?? []), row]);
+      const owner = foldedUnder(row);
+      if (owner !== null) childrenOf.set(owner, [...(childrenOf.get(owner) ?? []), row]);
     }
-    // A thread whose parent is archived or hidden is a root here, so it is never lost.
-    const roots = rows.filter(
-      (row) => row.parentThreadId === null || !byId.has(row.parentThreadId),
-    );
+    // A thread whose owner is archived is a root here, so it is never lost; a hidden one with no
+    // owner left is a workflow's leftover that bb hides, so it is not listed.
+    const roots = rows.filter((row) => foldedUnder(row) === null && row.visibility === "visible");
 
     /** The threads below `id`, depth first, the oldest of each level first. */
     const below = (id: string, depth = 1): (Thread & { depth: number })[] =>
@@ -153,12 +163,10 @@ export function createThreadList(core: Core, staffList: () => Promise<{ staff: S
     if (board === null) {
       errors.push("the board is not set up, so no thread is filed under an issue");
     } else {
-      const own = new RegExp(`^(${escapeRegExp(board.teamKey)}-(\\d+))$`);
+      const own = new RegExp(`^${escapeRegExp(board.teamKey)}-(\\d+)$`);
       const candidates = roots.flatMap((row) => {
         const match = taken.has(row.id) ? null : own.exec(row.title ?? "");
-        return match === null
-          ? []
-          : [{ row, identifier: match[1] ?? "", number: Number(match[2]) }];
+        return match === null ? [] : [{ row, identifier: match[0], number: Number(match[1]) }];
       });
       let states = new Map<string, IssueState>();
       if (candidates.length > 0) {
@@ -178,7 +186,7 @@ export function createThreadList(core: Core, staffList: () => Promise<{ staff: S
           );
         }
       }
-      for (const { row, identifier } of [...candidates].sort(
+      for (const { row, identifier } of candidates.sort(
         (a, b) => touched(b.row) - touched(a.row),
       )) {
         const state = states.get(identifier);
