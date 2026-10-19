@@ -3,9 +3,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { startCounts as gateStartCounts } from "../lib/gates.mjs";
 
 /** Max's tick's stoppedRuns and receiptStall, from the tick's own source (self-contained functions above the IIFE). */
-const { stoppedRuns, receiptStall } = (() => {
+const { stoppedRuns, receiptStall, startCounts } = (() => {
   const tick = readFileSync(
     join(fileURLToPath(new URL("../..", import.meta.url)), "staff/max/tick.js"),
     "utf8",
@@ -13,7 +14,9 @@ const { stoppedRuns, receiptStall } = (() => {
   const from = tick.indexOf("function stoppedRuns(");
   const to = tick.indexOf("// end stoppedRuns");
   assert.ok(from >= 0 && to > from, "tick.js defines stoppedRuns");
-  return new Function(`${tick.slice(from, to)}; return { stoppedRuns, receiptStall };`)();
+  return new Function(
+    `${tick.slice(from, to)}; return { stoppedRuns, receiptStall, startCounts };`,
+  )();
 })();
 
 const NOW = Date.parse("2026-10-18T20:30:00Z");
@@ -247,4 +250,54 @@ test("the landing check leaves a receipt stall to stoppedRuns instead of retryin
   assert.ok(check > 0, "the landing loop skips a receipt stall");
   assert.ok(check < tick.indexOf("landingKeys.add(issue.key);"), "before it is kept as a landing");
   assert.match(tick, /An entry with after "receipt" is a green review/);
+});
+
+// 2026-10-19: OpenRouter's 402 ended every resumed review, and the tick listed KIT-405, KIT-408,
+// KIT-431 and KIT-432 in resumeLoops within 90 minutes.
+/** n runs of KIT-408, ten minutes apart; each ends infra-failure unless `reason` says otherwise. */
+const runsOf408 = (n, reason = "infra-failure") =>
+  Array.from({ length: n }, (_, i) => {
+    const at = (n - i) * 10;
+    const end = { event: "end", issue: "KIT-408", status: "In Review", stoppedAt: "reviewer" };
+    const why =
+      reason === "infra-failure" ? { reason, cause: "reviewer-fallback-failed" } : { reason };
+    return [
+      { at: minutesAgo(at), event: "start", issue: "KIT-408" },
+      { at: minutesAgo(at - 5), ...end, ...why },
+    ];
+  }).flat();
+const infraInput = (events, overrides = {}) =>
+  tickInput({
+    board: [{ key: "KIT-408", state: "In Review" }],
+    events,
+    prOf: () => ({ number: 470 }),
+    maxStartsPerDay: 5,
+    ...overrides,
+  });
+
+test("the tick resumes past the start cap when the extra starts ended on an infrastructure failure", () => {
+  const { resume, loops } = stoppedRuns(infraInput(runsOf408(6)));
+  assert.deepEqual(loops, []);
+  assert.equal(resume[0].issue, "KIT-408");
+});
+
+test("the tick lists a loop at the infra ceiling (default 10), and at the start cap for real stops", () => {
+  assert.deepEqual(stoppedRuns(infraInput(runsOf408(10))).loops, ["KIT-408"]);
+  assert.deepEqual(stoppedRuns(infraInput(runsOf408(10), { maxInfraStartsPerDay: 11 })).loops, []);
+  assert.deepEqual(stoppedRuns(infraInput(runsOf408(5, "ci-pending"))).loops, ["KIT-408"]);
+});
+
+test("the tick's start count is the session check's: one rule in both places", () => {
+  const cases = [
+    runsOf408(3),
+    [...runsOf408(2, "ci-pending"), ...runsOf408(1)],
+    [...runsOf408(2), { at: minutesAgo(1), event: "start", issue: "KIT-408" }],
+    [{ at: minutesAgo(25 * 60), event: "start", issue: "KIT-408" }, ...runsOf408(1)],
+  ];
+  for (const events of cases) {
+    assert.deepEqual(
+      startCounts(events, NOW),
+      gateStartCounts({ issue: "KIT-408", events, now: NOW }),
+    );
+  }
 });

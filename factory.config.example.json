@@ -221,7 +221,8 @@
   },
   "flow": {
     "runLog": ".factory/run-log.jsonl",
-    "maxRunsPerDay": 3
+    "maxRunsPerDay": 3,
+    "maxInfraRunsPerDay": 10
   },
   "scenarios": {
     "holdoutRepo": "KitCollective/kit-scenarios",

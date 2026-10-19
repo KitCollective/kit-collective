@@ -84,6 +84,13 @@ export const GATE_OUTCOMES = ["open", "closed"];
 /** What `scripts/auto-land.mjs` logs (ADR-0061): `start` is an enqueue and is what the daily cap counts. */
 export const AUTO_LAND_OUTCOMES = ["start", "landed", "refused", "alarm", "breaker-reset"];
 
+/**
+ * Why an `end` line says infra-failure: `runner-no-result` (a command runner returned nothing and the
+ * run stopped on it) or `reviewer-fallback-failed` (a GLM Reviewer with no result, then the Claude
+ * fallback with none either: 2026-10-19, OpenRouter's 402).
+ */
+export const INFRA_CAUSES = ["runner-no-result", "reviewer-fallback-failed"];
+
 /** Fixed reason codes. A row that failed an audit is `row-<lock row id>`. */
 export const REASON_CODES = [
   ...LOCK_ROWS.map((row) => `row-${row.id}`),
@@ -141,6 +148,9 @@ export const REASON_CODES = [
   "holdout-read",
   // An AFK developer run that used its last round (the `end` line's reason).
   "round-cap",
+  // An AFK developer run that stopped on the machinery with no work product (the `end` line's reason,
+  // with a `cause` from INFRA_CAUSES). Its start counts against flow.maxInfraRunsPerDay, not maxRunsPerDay.
+  "infra-failure",
   // Milestone scenarios (KIT-353). Every `scenarios.mjs status --code` (ERROR_CODES in
   // scripts/lib/scenarios.mjs) is here too, so the workflow's `reason` line for it is never refused;
   // a test reads the workflow's list. `scenarios-refused` is a refused check, `status-failed` an
@@ -195,6 +205,7 @@ const FIELDS = {
   status: (v) => END_STATUSES.includes(v),
   stoppedAt: (v) => END_STOPS.includes(v),
   reason: (v) => REASON_CODES.includes(v),
+  cause: (v) => INFRA_CAUSES.includes(v),
 };
 
 /** Events a milestone run writes: for these `milestone` stands in for `issue` (exactly one of the two). */
@@ -258,6 +269,9 @@ export function validateEvent(event) {
         problems.push(`spawn ${event.step} needs ${key}`);
       }
     }
+  }
+  if ((event.cause !== undefined) !== (event.event === "end" && event.reason === "infra-failure")) {
+    problems.push("cause belongs to an end line with reason infra-failure, and only there");
   }
   if (event.event === "gate" && !GATE_OUTCOMES.includes(event.outcome)) {
     problems.push("gate outcome must be open or closed");
