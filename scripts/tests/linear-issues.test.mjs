@@ -3,15 +3,20 @@ import { test } from "node:test";
 import {
   createIssue,
   createProjectComment,
+  fillReviewMatrix,
   fillWaiting,
   LinearUsageError,
   listIssues,
   parseCreateArgs,
   parseProjectCommentArgs,
+  parseReviewMatrixArgs,
   parseWaitingArgs,
   replaceWorkpadSection,
+  reviewMatrixProblem,
   SCENARIO_FAILURE_FOOTER,
+  sectionLines,
 } from "../lib/linear-issues.mjs";
+import { LOCK_ROWS } from "../lib/review-matrix.mjs";
 
 const STATES = [
   { id: "s-backlog", name: "Backlog", type: "backlog" },
@@ -609,4 +614,114 @@ test("waiting refuses zero or two workpads and a workpad without ### Waiting, an
     );
     assert.equal(fake.updates.length, 0);
   }
+});
+
+// ---- review-matrix: the workflow moves the Reviewer's file into the workpad (KIT-404) -------------
+
+const HEAD = "b".repeat(40);
+const matrixFile = (at = HEAD.slice(0, 12), extra = "") =>
+  [
+    "### Review matrix",
+    "",
+    "| row | status | evidence | at |",
+    "| --- | --- | --- | --- |",
+    ...LOCK_ROWS.map((lock) => `| ${lock.id} | checked | read it twice | ${at} |`),
+    "",
+    extra,
+  ].join("\n");
+
+test("review-matrix parses an issue key and a full head sha only", () => {
+  assert.deepEqual(parseReviewMatrixArgs(["kit-9", "--head", HEAD.toUpperCase()]), {
+    issue: "KIT-9",
+    head: HEAD,
+  });
+  for (const argv of [[], ["KIT-9"], ["KIT-9", "--head", "abc1234"], ["x", "--head", HEAD]]) {
+    assert.throws(() => parseReviewMatrixArgs(argv), LinearUsageError, JSON.stringify(argv));
+  }
+});
+
+test("sectionLines keeps a section's lines verbatim and ends it at the next heading", () => {
+  const text = "# t\n### Review matrix\n\n| a |\n  odd  \n\n### Review feedback\n- f\n";
+  assert.deepEqual(sectionLines(text, "Review matrix"), ["| a |", "  odd  "]);
+  assert.deepEqual(sectionLines(text, "Review feedback"), ["- f"]);
+  assert.equal(sectionLines(text, "Plan"), null);
+});
+
+test("a matrix that is incomplete, read at another head, or in another checkout is refused", () => {
+  const heads = { head: HEAD, checkoutHead: HEAD };
+  assert.equal(reviewMatrixProblem(matrixFile(), heads), null);
+  assert.equal(reviewMatrixProblem(matrixFile(HEAD), heads), null);
+  assert.match(
+    reviewMatrixProblem("no matrix here", heads),
+    /^matrix-invalid: .*no ### Review matrix/,
+  );
+  assert.match(
+    reviewMatrixProblem(matrixFile().replace(/\| spec-ac .*\n/, ""), heads),
+    /^matrix-invalid: row `spec-ac` is missing/,
+  );
+  assert.match(
+    reviewMatrixProblem(matrixFile("c".repeat(12)), heads),
+    /^matrix-invalid: row `spec-ac` was read at "c{12}"/,
+  );
+  assert.match(
+    reviewMatrixProblem(matrixFile(""), heads),
+    /^matrix-invalid: row `spec-ac` was read at ""/,
+  );
+  assert.match(
+    reviewMatrixProblem(matrixFile(), { head: HEAD, checkoutHead: "d".repeat(40) }),
+    /^matrix-invalid: this checkout is at d{12}/,
+  );
+});
+
+test("review-matrix replaces the workpad's matrix and adds feedback, verbatim, touching nothing else", async () => {
+  const old = `${WORKPAD}\n### Review matrix\n\n| spec-ac | finding | old | aaaaaaa |\n`;
+  const fake = fakeWorkpadIssue([
+    { id: "c-note", body: "Max: claimed." },
+    { id: "c-pad", body: old },
+  ]);
+  const text = matrixFile(
+    HEAD.slice(0, 12),
+    "### Review feedback\n\n- Spec: AC 2 (nit) `x` \\| y\n",
+  );
+  const id = await fillReviewMatrix(fake.gql, {
+    issue: "KIT-9",
+    text,
+    head: HEAD,
+    checkoutHead: HEAD,
+  });
+  assert.equal(id, "c-pad");
+  assert.equal(fake.updates.length, 1);
+  const body = fake.updates[0].body;
+  assert.ok(body.startsWith(WORKPAD), "the sections before the matrix are untouched");
+  assert.equal(
+    sectionLines(body, "Review matrix").join("\n"),
+    sectionLines(text, "Review matrix").join("\n"),
+  );
+  assert.deepEqual(sectionLines(body, "Review feedback"), ["- Spec: AC 2 (nit) `x` \\| y"]);
+  assert.doesNotMatch(body, /\| old \|/);
+});
+
+test("review-matrix writes nothing for a refused file, or a workpad that is not exactly one", async () => {
+  const refused = fakeWorkpadIssue([{ id: "c-pad", body: WORKPAD }]);
+  await assert.rejects(
+    fillReviewMatrix(refused.gql, {
+      issue: "KIT-9",
+      text: matrixFile("c".repeat(7)),
+      head: HEAD,
+      checkoutHead: HEAD,
+    }),
+    /matrix-invalid/,
+  );
+  assert.equal(refused.updates.length, 0);
+  const none = fakeWorkpadIssue([{ id: "c-1", body: "Max: claimed." }]);
+  await assert.rejects(
+    fillReviewMatrix(none.gql, {
+      issue: "KIT-9",
+      text: matrixFile(),
+      head: HEAD,
+      checkoutHead: HEAD,
+    }),
+    /no workpad/,
+  );
+  assert.equal(none.updates.length, 0);
 });
