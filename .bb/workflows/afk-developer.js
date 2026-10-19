@@ -888,7 +888,9 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
         `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run it on the PR's merge-base diff (this checkout is the PR head; confirm with git rev-parse HEAD).`,
         "An acceptance criterion covered by a check on the issue's `live-check:` line runs after the merge on the owner's machine: in the spec-ac row its evidence is `deferred to live check <name>`, which is not a finding, as long as the code it checks is in the diff.",
         "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
-        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
+        // A proxied Reviewer once checked the env for a token, found none and left the matrix in thread storage, so a green review closed the review gate (KIT-298, 2026-10-18).
+        `Write it this way: run node scripts/linear.mjs issue ${issue}, take the id of the comment that starts with \`## Agent Workpad\`, write that comment's body to a file with its \`### Review matrix\` section replaced (added when missing), and save it with node scripts/linear.mjs comment-update <id> --body-file <file>. The script finds the Linear key itself: never check env vars for a token and never keep the matrix anywhere else. If the call fails, put its error output in your summary and return amber with the row workpad.`,
+        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending or a failed workpad write). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
         "Every finding names the file and line, what is wrong, and what green looks like, so the Engineer can check it, and is marked `gating` or `nit`. Only gating findings make the review red; nits go in the matrix and do not hold it (ADR-0066).",
         "The `Device flows` status of a slice flow may still be running while you review: it is not a required check, not yours to wait for and not a finding. Review the flow file against the acceptance criteria; the review gate waits for the run.",
         "On red, also return light: true only when every finding is light: the wording of a comment, a doc line, a name or a message, with no gap in behaviour, tests, an acceptance criterion, the design lock or the write-scope. Otherwise light: false.",
@@ -949,7 +951,22 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   // also waits for the hosted Device flows run, which was asked for before the pre-review gate and ran
   // while the Reviewer reviewed; the request rides in front of every slice so a first `error` is asked for again.
   phase("Review gate");
-  const gate = await gateSlices("gate:review", "Review gate", `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [...reviewerLog, requestDeviceFlows(prNumber)], true, [requestDeviceFlows(prNumber)]);
+  const reviewGateCmd = `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`;
+  let gate = await gateSlices("gate:review", "Review gate", reviewGateCmd, [...reviewerLog, requestDeviceFlows(prNumber)], true, [requestDeviceFlows(prNumber)]);
+  // A green review whose gate is closed only on the matrix left the workpad unwritten (KIT-298, 2026-10-18):
+  // the Reviewer is asked once to write it, like the result line below, and the gate runs once more.
+  // The message is built from checked tokens only; the gate's own line (with backticks) stays out of the shell.
+  const greenSha = review.verdict === "green" && /^[0-9a-f]{40}$/i.test(review.sha) ? review.sha.toLowerCase() : "";
+  if (!gate.runner && gate.code === 1 && greenSha && /^CLOSED \(review\): matrix: /.test(gate.line ?? "")) {
+    await sh("log:no-matrix", "Review gate", [logCmd("reason", `--issue ${issue} --code gate-closed`), `bb thread unarchive ${rThread}`], true);
+    const asked = await sh("reviewer:matrix", "Review gate", [
+      `bb thread tell ${rThread} "Your green review left no complete Review matrix in the workpad, so the review gate is closed. Do not review again and change no code. Run node scripts/linear.mjs issue ${issue}, take the id of the Agent Workpad comment, write its body to a file with the Review matrix section replaced (one row per lock-set row, evidence for each), and save it with node scripts/linear.mjs comment-update <id> --body-file <file>. The script finds the Linear key itself. If the head is still ${greenSha} and your verdict stands, end with exactly one line and nothing after it: AUDIT-RESULT ${issue} green ${greenSha}"`,
+      `bb thread wait ${rThread} --timeout 600`,
+    ]);
+    if (asked.length === 2 && asked.every((r) => r.code === 0)) {
+      gate = await gateSlices("gate:review", "Review gate", reviewGateCmd, [], true, [requestDeviceFlows(prNumber)]);
+    }
+  }
   if (gate.runner) {
     return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
   }
