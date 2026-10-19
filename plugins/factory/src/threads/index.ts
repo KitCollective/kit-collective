@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { Core } from "../core.js";
 import type { threadsContract } from "./contract.js";
 import { fetchDone } from "./linear.js";
+import { createThreadList, type StaffEntry } from "./list.js";
 
 /** How long an issue stays Done before its thread is archived. */
 const DONE_FOR_MS = 24 * 3_600_000;
@@ -25,7 +26,7 @@ const ledgerEntry = z.object({
   unarchivedAt: z.number().optional(),
 });
 
-export function createThreads(core: Core) {
+export function createThreads(core: Core, staffList: () => Promise<{ staff: StaffEntry[] }>) {
   const { bb, settings, storedScheduler, linearApiKey } = core;
   const kv = bb.storage.kv;
 
@@ -125,7 +126,10 @@ export function createThreads(core: Core) {
     await remember(thread.id, { unarchivedAt: Date.now() });
   });
 
-  const rpc: PluginRpcHandlers<typeof threadsContract> = { threads_archive_done: sweep };
+  const rpc: PluginRpcHandlers<typeof threadsContract> = {
+    threads_archive_done: sweep,
+    threads_list: createThreadList(core, staffList).list,
+  };
 
   return { rpc };
 }

@@ -1,16 +1,15 @@
-// The Inbox page: what waits for a person, read from Linear on each open and on Refresh. A list
-// of messages on the left and the open message on the right, like a mail client; the open
-// message is the panel's `subPath` (the issue identifier), so a message has its own link and
-// back/forward walks between them. On a narrow viewport the list and the message take turns.
+// The Inbox page: the open message of what waits for a person, read from Linear on each open. It
+// has no list of its own: while it is open Optio's thread list in the sidebar lists the messages
+// (pages/threads/), and opening one there opens it here. The open message is the panel's `subPath`
+// (the issue identifier), so a message has its own link and back/forward walks between them.
 import {
   type PluginNavPanelProps,
   useBbNavigate,
   useRealtime,
   useRpc,
 } from "@get-bb/plugin-sdk/app";
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../../src/contract";
 import type {
@@ -18,93 +17,9 @@ import type {
   InboxListDto,
   LandingDto,
 } from "../../src/inbox/contract";
-import { DOT, INBOX } from "../shared/common";
-
-function kindLabel(card: InboxCardDto): string {
-  switch (card.kind) {
-    case "question":
-      return card.label ?? "question";
-    case "mention":
-      return "mention";
-    case "alarm":
-      return "watchdog alarm";
-    case "review":
-      return "green review";
-    case "landing":
-      return "approved";
-  }
-}
-
-/** The colour of a landing card; Home lists no landing, so it is not one of the shared kinds. */
-const LANDING_DOT = "bg-sky-500";
-
-const PHASE_TEXT: Record<LandingDto["phase"], string> = {
-  approved: "Approved, not in the merge queue yet",
-  queued: "In the merge queue",
-  merged: "Merged, waiting for the land gate",
-  done: "Done",
-  stopped: "Landing stopped",
-};
-
-function preview(card: InboxCardDto): string {
-  if (card.landing !== null) return PHASE_TEXT[card.landing.phase];
-  switch (card.kind) {
-    case "question":
-      return card.waiting?.ask ?? "The workpad holds no question.";
-    case "mention":
-      return card.mention?.comment || "Mentioned in the description.";
-    case "alarm":
-      return card.alarm?.problems.join("; ") || "The alarm lists no problem.";
-    case "review":
-    case "landing":
-      return card.review?.verdict ?? "No review verdict recorded.";
-  }
-}
-
-function waited(since: string): string {
-  const minutes = Math.max(0, Math.round((Date.now() - Date.parse(since)) / 60_000));
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.round(minutes / 60);
-  return hours < 48 ? `${hours} h` : `${Math.round(hours / 24)} d`;
-}
-
-function Row({ card, open, onOpen }: { card: InboxCardDto; open: boolean; onOpen: () => void }) {
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-current={open ? "true" : undefined}
-        className={cn(
-          "w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
-          open ? "bg-muted" : "hover:bg-muted/50",
-        )}
-      >
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "size-2 shrink-0 rounded-full",
-              card.landing?.phase === "stopped"
-                ? DOT.question
-                : card.kind === "landing"
-                  ? LANDING_DOT
-                  : DOT[card.kind],
-            )}
-            aria-hidden
-          />
-          <span className="font-medium">{card.identifier}</span>
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-            {waited(card.since)}
-          </span>
-        </div>
-        <p className="mt-0.5 truncate">{card.title}</p>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          {kindLabel(card)} · {preview(card)}
-        </p>
-      </button>
-    </li>
-  );
-}
+import { INBOX } from "../shared/common";
+import { kindLabel, PHASE_TEXT, waited } from "./message-row";
+import { bumpInbox, setInboxPanel, useInboxPanel } from "./panel-state";
 
 const field =
   "min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -256,24 +171,10 @@ function useMarkRead(card: InboxCardDto, onRead: () => void) {
   return { failure, open: () => markRead(onRead), dismiss: () => markRead(onRead) };
 }
 
-function Detail({
-  card,
-  onBack,
-  onSent,
-}: {
-  card: InboxCardDto;
-  onBack: () => void;
-  onSent: () => void;
-}) {
+function Detail({ card, onSent }: { card: InboxCardDto; onSent: () => void }) {
   const mention = useMarkRead(card, onSent);
   return (
     <article className="flex flex-col gap-4">
-      <div className="flex items-center gap-2 md:hidden">
-        <Button variant="ghost" onClick={onBack}>
-          <Icon name="ChevronLeft" className="size-4" />
-          Inbox
-        </Button>
-      </div>
       <header className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="rounded-full border border-border px-2 py-0.5">{kindLabel(card)}</span>
@@ -394,6 +295,7 @@ export function Inbox({ subPath }: PluginNavPanelProps) {
   const navigate = useBbNavigate();
   const [inbox, setInbox] = useState<InboxListDto | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const { version } = useInboxPanel();
   const refetch = useCallback(() => {
     rpc.call("inbox_list").then(
       (next) => {
@@ -403,75 +305,48 @@ export function Inbox({ subPath }: PluginNavPanelProps) {
       (cause: unknown) => setFailure(cause instanceof Error ? cause.message : String(cause)),
     );
   }, [rpc]);
-  useEffect(refetch, [refetch]);
+  // The list of messages is Optio's thread list while this page is open (see panel-state.ts): this
+  // page shows only the open message, and tells the list which one it is.
+  useEffect(() => {
+    setInboxPanel({ open: true, messageId: null });
+    return () => setInboxPanel({ open: false, messageId: null });
+  }, []);
+  useEffect(() => {
+    setInboxPanel({ open: true, messageId: subPath === "" ? null : subPath });
+  }, [subPath]);
+  useEffect(refetch, [refetch, version]);
   useRealtime("changed", refetch);
   const problem = failure ?? inbox?.error ?? null;
   const cards = inbox?.cards ?? [];
   const open = cards.find((card) => card.id === subPath) ?? null;
-  const show = (id: string) => navigate.toPluginPanel(INBOX, { subPath: id });
-  const back = () => navigate.toPluginPanel(INBOX, { subPath: "" });
 
+  let content: ReactNode;
+  if (open !== null) {
+    content = (
+      <Detail
+        card={open}
+        onSent={() => {
+          navigate.toPluginPanel(INBOX, { subPath: "" });
+          refetch();
+          bumpInbox();
+        }}
+      />
+    );
+  } else if (inbox === null && problem === null) {
+    content = <Message role="status">Reading Linear…</Message>;
+  } else if (subPath !== "") {
+    content = <Message role="status">This message has left the Inbox.</Message>;
+  } else {
+    content = (
+      <Message role="status">
+        {cards.length === 0 ? "Nothing waits for you." : "Choose a message in the list."}
+      </Message>
+    );
+  }
   return (
-    <div className="flex h-full min-h-0 flex-1">
-      <aside
-        className={cn(
-          "flex min-h-0 w-full flex-col border-border md:w-80 md:shrink-0 md:border-r",
-          open !== null && "hidden md:flex",
-        )}
-      >
-        <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-3">
-          <h1 className="text-base font-medium">
-            Inbox{cards.length === 0 ? "" : ` · ${cards.length}`}
-          </h1>
-          <Button variant="ghost" onClick={refetch} aria-label="Refresh">
-            <Icon name="RefreshCw" className="size-4" />
-          </Button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-          {problem === null ? null : <Message role="alert">{problem}</Message>}
-          {inbox === null ? (
-            problem === null ? (
-              <Message role="status">Reading Linear…</Message>
-            ) : null
-          ) : cards.length === 0 ? (
-            problem === null ? (
-              <Message role="status">Nothing waits for you.</Message>
-            ) : null
-          ) : (
-            <ul className="flex flex-col gap-0.5">
-              {cards.map((card) => (
-                <Row
-                  key={card.id}
-                  card={card}
-                  open={card.id === open?.id}
-                  onOpen={() => show(card.id)}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
-      </aside>
-      <main
-        className={cn(
-          "min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-3 md:px-6",
-          open === null && "hidden md:block",
-        )}
-      >
-        {open !== null ? (
-          <Detail
-            card={open}
-            onBack={back}
-            onSent={() => {
-              back();
-              refetch();
-            }}
-          />
-        ) : (
-          <p className="pt-10 text-center text-sm text-muted-foreground">
-            {cards.length === 0 ? "" : "Choose a message."}
-          </p>
-        )}
-      </main>
-    </div>
+    <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-3 md:px-6">
+      {problem === null ? null : <Message role="alert">{problem}</Message>}
+      {content}
+    </main>
   );
 }

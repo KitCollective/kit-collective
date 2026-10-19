@@ -1,4 +1,4 @@
-// bb-plugin-optio — the Staff page, the Inbox and the Home section.
+// bb-plugin-optio — the Staff page, the Inbox, the Home section and the thread list.
 //
 // Compiled by `bb plugin build` into dist/app.js + dist/app.css. React and
 // @get-bb/plugin-sdk/app are provided by the BB app at load time (never bundled),
@@ -17,6 +17,7 @@ import { Runs } from "./pages/runs";
 import { PANEL } from "./pages/shared/common";
 import { AgentPicker, Agents } from "./pages/staff";
 import { StaffChatHeader } from "./pages/staff/header";
+import { ThreadList } from "./pages/threads";
 
 const AGENT_VIEWS = { board: Board, runs: Runs };
 
@@ -34,6 +35,13 @@ export default definePluginApp((app) => {
     id: "staff-chat",
     title: "Staff chat",
     component: StaffChatHeader,
+  });
+  app.slots.experimental_threadList({
+    id: "optio",
+    title: "Optio",
+    description:
+      "Issue threads by what their issue waits on, the Staff on top, and the Inbox messages while the Inbox is open.",
+    component: ThreadList,
   });
   app.slots.homepageSection({ id: "waiting", title: "Venter på dig", component: Waiting });
   // bb lists the panels in the order they are registered, so the Inbox comes first.
