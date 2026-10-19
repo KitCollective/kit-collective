@@ -23,7 +23,7 @@ bb plugin build plugins/factory
 bb plugin install path:$PWD/plugins/factory --yes
 ```
 
-Then the agents are created through the plugin's RPC (`agent_create`); Max's instructions are the system prompt in `staff/max.md`. The Board is set up on the plugin's page (Agents, Board) and starts in `dry-run`; see the next section.
+Then the agents are created through the plugin's RPC (`agent_create`); Max's instructions are the system prompt in `staff/max.md`. The Board is set up on the plugin's page (Staff, Board) and starts in `dry-run`; see the next section.
 
 ## The Board reads the `loops` registry
 
@@ -93,13 +93,13 @@ node scripts/land-approved.mjs stop <pr> --issue KIT-n --reason <text>  # hand a
 
 ## Where a new area's code goes (KIT-412)
 
-Optio's code is cut by area so tickets for different areas run side by side. The areas are `inbox`, `staff` (the Agents page: list, one agent, chat, memory, automations, follow-ups, Linear triggers, instructions), `board` (setup, machines, requirements, the plan) and `runs`. A new area `<area>` puts:
+Optio's code is cut by area so tickets for different areas run side by side. The areas are `inbox`, `staff` (the Staff page: list, one agent, chat, memory, automations, follow-ups, Linear triggers, instructions; its chat commands are `bb optio chat <agent>` and `bb optio ask <agent> "<question>"`), `board` (setup, machines, requirements, the plan) and `runs`. A new area `<area>` puts:
 
 - its UI in `plugins/factory/pages/<area>/` (pieces several pages use go in `plugins/factory/pages/shared/`);
 - its RPC handlers and `bb optio` commands in `plugins/factory/src/<area>/index.ts`, as `create<Area>(core)` returning `{ rpc }` and, when the area has commands, `cli` (`inbox` keeps its older `{ list, command }` shape), where `core` is the shared wiring from `src/core.ts` (settings, stores, sessions, the scheduler, the Linear key);
 - its part of the RPC contract in `plugins/factory/src/<area>/contract.ts`, exported as `<area>Contract` (a type used by two areas goes in `src/shared/contract.ts`).
 
-`app.tsx`, `server.ts` and `src/contract.ts` only register areas, no logic: `server.ts` takes an import, a `create<Area>(core)` call and an entry in the RPC and CLI registers; `src/contract.ts` takes an import and a spread; `app.tsx` takes an import and, for a new nav panel, a `navPanel({...})` call (or an entry in the views the Agents panel is handed). The stores, the scheduler, the Linear adapter and the host code stay in `src/` and are reached through `core`. The Board's write-scope overlap ignores those three registration files, as it ignores test globs under `apps/` and `packages/`, so two areas' tickets can declare `plugins/factory/src/<area>/**` and `plugins/factory/pages/<area>/**` and run together. A ticket that puts logic in a registration file, or more than those registration lines, is a sign the code belongs in an area.
+`app.tsx`, `server.ts` and `src/contract.ts` only register areas, no logic: `server.ts` takes an import, a `create<Area>(core)` call and an entry in the RPC and CLI registers; `src/contract.ts` takes an import and a spread; `app.tsx` takes an import and, for a new nav panel, a `navPanel({...})` call (or an entry in the views the Staff panel is handed). The stores, the scheduler, the Linear adapter and the host code stay in `src/` and are reached through `core`. The Board's write-scope overlap ignores those three registration files, as it ignores test globs under `apps/` and `packages/`, so two areas' tickets can declare `plugins/factory/src/<area>/**` and `plugins/factory/pages/<area>/**` and run together. A ticket that puts logic in a registration file, or more than those registration lines, is a sign the code belongs in an area.
 
 ## The reviewer proxy (ADR-0067)
 
