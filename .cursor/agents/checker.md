@@ -27,7 +27,7 @@ Fetch `get_issue` and `list_comments`. Reuse the existing workpad.
 
 ## Complete review (no drip-feed)
 
-The first `In Review` pass is a **full** review: every row below, written to workpad `### Review matrix` (row, `checked` / `N/A` / `finding`, evidence, SHA; template from `node scripts/review-matrix.mjs rows`). List every hard finding in this fail. Do not send work back for one class while leaving sibling classes unstated.
+The first `In Review` pass is a **full** review: every row below, written to workpad `### Review matrix` (row, `checked` / `N/A` / `finding`, evidence, SHA; template from `node scripts/review-matrix.mjs rows`). In an AFK developer run the Reviewer writes the section to `.factory/review-matrix-<KIT-n>.md` instead and never writes Linear; the workflow moves it into the workpad verbatim (code-review/SKILL.md, _Review matrix_). List every hard finding in this fail. Do not send work back for one class while leaving sibling classes unstated.
 
 An AFK developer review whose head is the last green head plus merges of `origin/development` only (the workflow decides this with `node scripts/review-mode.mjs`) is a delta review instead: the write-scope diff since that head, each merge's resolution, and the files both sides changed; every untouched row is carried forward with the new head as `at` and evidence `unchanged since <sha>` (code-review/SKILL.md, _Development-merge delta_).
 

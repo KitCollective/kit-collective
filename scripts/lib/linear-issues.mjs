@@ -6,6 +6,7 @@
 import { blockerResolvesDependents, POST_MERGE_STATUS } from "./land-policy.mjs";
 import { issueIdentifier, optionValue } from "./linear-args.mjs";
 import { parseWriteScopeGlobs } from "./pr-write-scope.mjs";
+import { parseMatrix, validateMatrix } from "./review-matrix.mjs";
 
 export class LinearUsageError extends Error {}
 
@@ -438,6 +439,20 @@ export function parseWaitingArgs(argv) {
  * @param {{ issue: string, stage: string, ask: string, date: string }} input date is YYYY-MM-DD
  */
 export async function fillWaiting(gql, { issue, stage, ask, date }) {
+  const pad = await loadWorkpad(gql, issue);
+  const body = replaceWorkpadSection(pad.body, "Waiting", [
+    `- ${ask}`,
+    `- Stage: ${stage}. Asked: ${date}`,
+  ]);
+  if (body === null) {
+    throw new LinearUsageError(`the workpad of ${issue} has no ### Waiting section`);
+  }
+  await updateComment(gql, pad.id, body);
+  return pad.id;
+}
+
+/** The issue's single workpad comment; throws when it has none or more than one. */
+async function loadWorkpad(gql, issue) {
   const { issue: found } = await gql(
     "query($id: String!) { issue(id: $id) { comments(first: 250) { nodes { id body } } } }",
     { id: issue },
@@ -455,17 +470,113 @@ export async function fillWaiting(gql, { issue, stage, ask, date }) {
         : `${issue} has ${pads.length} workpad comments, expected one`,
     );
   }
-  const [pad] = pads;
-  const body = replaceWorkpadSection(pad.body, "Waiting", [
-    `- ${ask}`,
-    `- Stage: ${stage}. Asked: ${date}`,
-  ]);
-  if (body === null) {
-    throw new LinearUsageError(`the workpad of ${issue} has no ### Waiting section`);
-  }
+  return pads[0];
+}
+
+async function updateComment(gql, id, body) {
   await gql(
     "mutation($id: String!, $input: CommentUpdateInput!) { commentUpdate(id: $id, input: $input) { success } }",
-    { id: pad.id, input: { body } },
+    { id, input: { body } },
   );
+}
+
+/** The file the Reviewer writes its sections to, relative to the checkout root (`.factory/` is gitignored). */
+export const reviewMatrixFile = (issue) => `.factory/review-matrix-${issue}.md`;
+
+/** The sections a Reviewer's file may hold, in the order they are moved into the workpad. */
+const REVIEW_SECTIONS = ["Review matrix", "Review feedback"];
+
+/**
+ * The body lines of one `### <section>` of a Markdown text, verbatim, without the blank lines that
+ * open and close it; null when the text has no such section. A section ends at the next heading
+ * of level 1 to 3, as in `replaceWorkpadSection`.
+ * @param {string} text
+ * @param {string} section
+ */
+export function sectionLines(text, section) {
+  const all = text.split("\n");
+  const start = all.findIndex((line) => line.trimEnd() === `### ${section}`);
+  if (start === -1) {
+    return null;
+  }
+  const after = all.slice(start + 1);
+  const next = after.findIndex((line) => /^#{1,3}\s/.test(line));
+  const lines = next === -1 ? after : after.slice(0, next);
+  const first = lines.findIndex((line) => line.trim() !== "");
+  if (first === -1) {
+    return [];
+  }
+  const last = lines.findLastIndex((line) => line.trim() !== "");
+  return lines.slice(first, last + 1);
+}
+
+/**
+ * @param {string[]} argv arguments after `review-matrix`
+ * @returns {{ issue: string, head: string }}
+ */
+export function parseReviewMatrixArgs(argv) {
+  const usage = "review-matrix <KIT-n> --head <40-hex sha>";
+  const issue = issueIdentifier(argv[0]);
+  const head = optionValue(argv, "--head")?.trim().toLowerCase() ?? "";
+  if (!issue || !/^[0-9a-f]{40}$/.test(head)) {
+    throw new LinearUsageError(usage);
+  }
+  return { issue, head };
+}
+
+/**
+ * The problem that keeps a Reviewer's file out of the workpad, or null when it may be moved: it
+ * has a complete `### Review matrix` (review-matrix.mjs validate), every row was read at `head`
+ * (a 7 to 40 hex prefix of it), and the checkout is at `head` too.
+ * @param {string} text the Reviewer's file
+ * @param {{ head: string, checkoutHead: string }} heads full shas
+ */
+export function reviewMatrixProblem(text, { head, checkoutHead }) {
+  if (checkoutHead.toLowerCase() !== head) {
+    return `matrix-invalid: this checkout is at ${checkoutHead.slice(0, 12)}, the review read ${head.slice(0, 12)}`;
+  }
+  if (sectionLines(text, "Review matrix") === null) {
+    return "matrix-invalid: the file has no ### Review matrix section";
+  }
+  const rows = parseMatrix(text);
+  const [problem] = validateMatrix(rows);
+  if (problem) {
+    return `matrix-invalid: ${problem}`;
+  }
+  const stale = rows.find((row) => {
+    const at = row.at.replace(/`/g, "").toLowerCase();
+    return !/^[0-9a-f]{7,40}$/.test(at) || !head.startsWith(at);
+  });
+  return stale
+    ? `matrix-invalid: row \`${stale.id}\` was read at "${stale.at}", not the head ${head.slice(0, 12)}`
+    : null;
+}
+
+/**
+ * Moves the Reviewer's `### Review matrix` (and `### Review feedback`, when the file has one) into
+ * the issue's single workpad comment, each section's lines exactly as the Reviewer wrote them: a
+ * section the workpad lacks is added at its end, every other byte stays (ADR-0058: the workflow only
+ * moves the Reviewer's text). Throws a `matrix-invalid` usage error and writes nothing when
+ * `reviewMatrixProblem` names a problem. Returns the comment id.
+ * @param {(query: string, variables?: object) => Promise<any>} gql
+ * @param {{ issue: string, text: string, head: string, checkoutHead: string }} input
+ */
+export async function fillReviewMatrix(gql, { issue, text, head, checkoutHead }) {
+  const problem = reviewMatrixProblem(text, { head, checkoutHead });
+  if (problem) {
+    throw new LinearUsageError(problem);
+  }
+  const pad = await loadWorkpad(gql, issue);
+  let body = pad.body;
+  for (const section of REVIEW_SECTIONS) {
+    const lines = sectionLines(text, section);
+    if (lines === null) {
+      continue;
+    }
+    body =
+      replaceWorkpadSection(body, section, lines) ??
+      `${body.replace(/\n*$/, "")}\n\n### ${section}\n\n${lines.join("\n")}\n`;
+  }
+  await updateComment(gql, pad.id, body);
   return pad.id;
 }

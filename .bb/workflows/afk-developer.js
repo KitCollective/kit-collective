@@ -256,7 +256,8 @@ async function shAfter(before, label, phaseTitle, command) {
     all = null;
   }
   if (Array.isArray(all) && all.length === before.length + 1) {
-    return all[before.length];
+    // `before` carries the ride-along results for a caller that reads one (the matrix publish).
+    return { ...all[before.length], before: all.slice(0, before.length) };
   }
   return (await sh(label, phaseTitle, [command]))[0];
 }
@@ -267,17 +268,40 @@ async function shAfter(before, label, phaseTitle, command) {
  */
 async function gateSlices(label, phaseTitle, command, before = [], retry = true, every = []) {
   let out = { code: 4, line: `no output from ${label}` };
+  // The first slice's ride-along results, when its shared runner came back whole (else undefined).
+  let first;
   for (let slice = 1; slice <= GATE_SLICES; slice += 1) {
     const ahead = slice === 1 ? before : every;
     out = (ahead.length > 0 || (slice === 1 && retry) ? await shAfter(ahead, label, phaseTitle, command) : (await sh(label, phaseTitle, [command], false, retry))[0]) ?? out;
+    if (slice === 1) {
+      first = out.before;
+    }
     if (out.code !== 3) {
-      return out;
+      return { ...out, before: first };
     }
   }
-  return { ...out, exhausted: true, line: `${out.line} (still waiting after ${GATE_SLICES} slices of ${GATE_SLICE_SECONDS}s)` };
+  return { ...out, before: first, exhausted: true, line: `${out.line} (still waiting after ${GATE_SLICES} slices of ${GATE_SLICE_SECONDS}s)` };
 }
 
 const logCmd = (event, flags) => `node scripts/run-log.mjs ${event} ${flags}`;
+// The Reviewer writes its `### Review matrix` here (gitignored, in the run's one worktree) and never
+// touches Linear: the auto-mode classifier refused its comment-update as an External System Write
+// (KIT-298, 2026-10-18; KIT-404, 2026-10-19). The workflow moves the file into the workpad.
+const MATRIX_FILE = `.factory/review-matrix-${issue}.md`;
+/** The fixed command that moves the Reviewer's file into the workpad, checked against the head the Reviewer read. */
+const publishMatrixCmd = (sha) => `node scripts/linear.mjs review-matrix ${issue} --head ${sha}`;
+
+/**
+ * The run-log reason when the Reviewer's matrix did not reach the workpad, or "" when it did. `result`
+ * is the publish command's result; a missing one (its runner came back short) is no publish.
+ */
+function matrixReason(result) {
+  if (result && !result.runner && result.code === 0) {
+    return "";
+  }
+  const named = /\bmatrix-(missing|invalid):/.exec(result?.line ?? "");
+  return named ? `matrix-${named[1]}` : "matrix-write-failed";
+}
 // Asks for the hosted Device flows run of the PR head (ADR-0059). It decides for itself: nothing is
 // asked for without a slice flow, when the head already has the status, or when a re-request has
 // failed too. It rides in front of the pre-review gate, so the run starts as soon as the head exists
@@ -791,10 +815,10 @@ async function reviewHead(rAlias, rLabel, since) {
         ...(since ? deltaReviewLines(since) : []),
         ciEvidenceLine(prNumber),
         "An acceptance criterion covered by a check on the issue's `live-check:` line runs after the merge on the owner's machine: in the spec-ac row its evidence is `deferred to live check <name>`, which is not a finding, as long as the code it checks is in the diff.",
-        "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
-        // A proxied Reviewer once checked the env for a token, found none and left the matrix in thread storage, so a green review closed the review gate (KIT-298, 2026-10-18).
-        `Write it this way: run node scripts/linear.mjs issue ${issue}, take the id of the comment that starts with \`## Agent Workpad\`, write that comment's body to a file with its \`### Review matrix\` section replaced (added when missing), and save it with node scripts/linear.mjs comment-update <id> --body-file <file>. The script finds the Linear key itself: never check env vars for a token and never keep the matrix anywhere else. If the call fails, put its error output in your summary and return amber with the row workpad.`,
-        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending or a failed workpad write). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
+        "You are a judge: change no code, move no Linear state, post no status, do not merge, and write nothing to Linear.",
+        // The auto-mode classifier refused the Reviewer's own workpad write as an External System Write (KIT-298, KIT-404), so the workflow moves the file.
+        `Write your \`### Review matrix\` section, the heading included (one row per lock-set row, evidence for each, \`at\` the full head sha), to the file ${MATRIX_FILE} in this checkout, and run node scripts/review-matrix.mjs validate ${MATRIX_FILE} until it exits 0. On red, put \`### Review feedback\` with every finding below it in the same file. After you return, the workflow moves both sections into the workpad as you wrote them: never call scripts/linear.mjs comment-update or write the workpad yourself, and never keep the matrix anywhere else.`,
+        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the matrix file included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
         "Every finding names the file and line, what is wrong, and what green looks like, so the Engineer can check it, and is marked `gating` or `nit`. Only gating findings make the review red; nits go in the matrix and do not hold it (ADR-0066).",
         "The `Device flows` status of a slice flow may still be running while you review: it is not a required check, not yours to wait for and not a finding. Review the flow file against the acceptance criteria; the review gate waits for the run.",
         "On red, also return light: true only when every finding is light: the wording of a comment, a doc line, a name or a message, with no gap in behaviour, tests, an acceptance criterion, the design lock or the write-scope. Otherwise light: false.",
@@ -965,7 +989,8 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   // the head is the last green review's head plus merges of origin/development. It rides with the move
   // to In Review; any answer but a well-formed delta line is a full review.
   const modeCmd = `node scripts/review-mode.mjs ${issue}${lastGreenSha ? ` --green ${lastGreenSha}` : ""}`;
-  const inReview = round === 0 ? [logCmd("reason", `--issue ${issue} --code engineer-skipped`), stateCmd("In Review")] : [stateCmd("In Review")];
+  // The Reviewer's file of an earlier round goes first, so only this round's review can be published.
+  const inReview = [...(round === 0 ? [logCmd("reason", `--issue ${issue} --code engineer-skipped`)] : []), stateCmd("In Review"), `rm -f ${MATRIX_FILE}`];
   const deltaSince = deltaReviewSince(await shAfter(inReview, "linear:In Review", "Pre-review gate", modeCmd));
 
   // -- Reviewer: fresh hidden thread on another model than the Engineer.
@@ -996,20 +1021,50 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   // while the Reviewer reviewed; the request rides in front of every slice so a first `error` is asked for again.
   phase("Review gate");
   const reviewGateCmd = `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`;
-  let gate = await gateSlices("gate:review", "Review gate", reviewGateCmd, [...reviewerLog, requestDeviceFlows(prNumber)], true, [requestDeviceFlows(prNumber)]);
-  // A green review whose gate is closed only on the matrix left the workpad unwritten (KIT-298, 2026-10-18):
-  // the Reviewer is asked once to write it, like the result line below, and the gate runs once more.
-  // The message is built from checked tokens only; the gate's own line (with backticks) stays out of the shell.
-  const greenSha = review.verdict === "green" && /^[0-9a-f]{40}$/i.test(review.sha) ? review.sha.toLowerCase() : "";
-  if (!gate.runner && gate.code === 1 && greenSha && /^CLOSED \(review\): matrix: /.test(gate.line ?? "")) {
-    await sh("log:no-matrix", "Review gate", [logCmd("reason", `--issue ${issue} --code gate-closed`), `bb thread unarchive ${rThread}`], true);
+  // The Reviewer's matrix file reaches the workpad through a fixed command in the review gate's own
+  // first runner, right before the gate reads it (ADR-0058: the rows stay the Reviewer's; this only moves
+  // them). Only a checked 40-hex sha enters the command; without one nothing is published.
+  const fullSha = /^[0-9a-f]{40}$/i.test(review.sha) ? review.sha.toLowerCase() : "";
+  const publishCmd = fullSha ? publishMatrixCmd(fullSha) : "";
+  /** Publishes the matrix (when there is a sha) with `before`, then runs the review gate; the publish result is returned too. */
+  async function publishAndGate(before) {
+    const ahead = publishCmd ? [...before, publishCmd] : before;
+    let gated = await gateSlices("gate:review", "Review gate", reviewGateCmd, [...ahead, requestDeviceFlows(prNumber)], true, [requestDeviceFlows(prNumber)]);
+    let published = publishCmd ? gated.before?.[ahead.length - 1] : { code: 1, line: "matrix-invalid: the Reviewer returned no full head sha" };
+    if (publishCmd && !published) {
+      // The shared runner came back short, so whether the file moved is unknown: publish again (it is
+      // idempotent) and, when that worked, read the gate once more against the workpad it now holds.
+      published = (await sh("matrix:publish", "Review gate", [publishCmd], false, true))[0];
+      if (!published.runner && published.code === 0 && !gated.runner) {
+        gated = await gateSlices("gate:review", "Review gate", reviewGateCmd, [], true, [requestDeviceFlows(prNumber)]);
+      }
+    }
+    return { gated, reason: matrixReason(published), line: published?.line ?? "" };
+  }
+  let { gated: gate, reason: matrixMiss, line: matrixLine } = await publishAndGate([...reviewerLog]);
+  // A green review whose file did not reach the workpad (missing, or one the publish refused): the
+  // Reviewer is asked once to write the file, like the result line below, and it is published again
+  // with the gate. The message is built from checked tokens only; the publish line stays out of the shell.
+  const greenSha = review.verdict === "green" ? fullSha : "";
+  if (matrixMiss) {
+    await sh("log:matrix", "Review gate", [logCmd("reason", `--issue ${issue} --code ${matrixMiss}`), ...(greenSha && matrixMiss !== "matrix-write-failed" ? [`bb thread unarchive ${rThread}`] : [])], true);
+  }
+  if (greenSha && (matrixMiss === "matrix-missing" || matrixMiss === "matrix-invalid") && !gate.runner) {
     const asked = await sh("reviewer:matrix", "Review gate", [
-      `bb thread tell ${rThread} "Your green review left no complete Review matrix in the workpad, so the review gate is closed. Do not review again and change no code. Run node scripts/linear.mjs issue ${issue}, take the id of the Agent Workpad comment, write its body to a file with the Review matrix section replaced (one row per lock-set row, evidence for each), and save it with node scripts/linear.mjs comment-update <id> --body-file <file>. The script finds the Linear key itself. If the head is still ${greenSha} and your verdict stands, end with exactly one line and nothing after it: AUDIT-RESULT ${issue} green ${greenSha}"`,
+      `bb thread tell ${rThread} "Your green review left no valid Review matrix in ${MATRIX_FILE}, so it could not be moved into the workpad. Do not review again and change no code. Write the Review matrix section, heading included, to ${MATRIX_FILE} (one row per lock-set row, evidence for each, at ${greenSha}) and run node scripts/review-matrix.mjs validate ${MATRIX_FILE} until it exits 0. Never call scripts/linear.mjs comment-update. If the head is still ${greenSha} and your verdict stands, end with exactly one line and nothing after it: AUDIT-RESULT ${issue} green ${greenSha}"`,
       `bb thread wait ${rThread} --timeout 600`,
     ]);
     if (asked.length === 2 && asked.every((r) => r.code === 0)) {
-      gate = await gateSlices("gate:review", "Review gate", reviewGateCmd, [], true, [requestDeviceFlows(prNumber)]);
+      ({ gated: gate, reason: matrixMiss, line: matrixLine } = await publishAndGate([]));
+      if (matrixMiss) {
+        await sh("log:matrix", "Review gate", [logCmd("reason", `--issue ${issue} --code ${matrixMiss}`)], true);
+      }
     }
+  }
+  // A green review whose matrix is not in the workpad is no green: the gate may have read a matrix of an
+  // earlier head. It holds In Review for a person (the cheap hold an amber review gets), with no fix round.
+  if (greenSha && matrixMiss && !gate.runner) {
+    return stopped("review gate", "In Review", { prNumber, rounds, verdict: "amber", note: `the Reviewer's Review matrix did not reach the workpad (${matrixMiss}): ${matrixLine}` });
   }
   // A later round of this run may then review only what a development merge moved since this head.
   if (greenSha) {
