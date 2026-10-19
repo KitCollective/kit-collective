@@ -3,7 +3,7 @@ frontend agent, each with its own instructions, memory and recurring tasks.
 
 ## What you get
 
-- An **Agents** page in the sidebar where you create agents, write their
+- A **Staff** page in the sidebar where you create agents, write their
   instructions and start a chat with one.
 - A memory per agent. The agent saves decisions and durable facts while you
   talk, and reads them at the start of every later session; you can edit the
@@ -15,8 +15,11 @@ frontend agent, each with its own instructions, memory and recurring tasks.
   its trigger matches within each machine's capacity, takes a focus milestone
   first, records every start, skip and refusal, and reports a run that stopped
   at a gate.
-- A `bb optio` command for the same data from a terminal, and a
-  token-guarded route so another system can start an agent.
+- A `bb optio` command for the same data from a terminal, including
+  `bb optio chat <agent>` (prints the thread id of the agent's standing Staff
+  chat) and `bb optio ask <agent> "<question>"` (asks the person something that
+  is theirs to decide, shown in their Inbox), and a token-guarded route so
+  another system can start an agent.
 
 ## How it works
 
