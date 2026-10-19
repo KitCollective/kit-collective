@@ -71,7 +71,13 @@ const board = z.object({
   states: z.array(z.object({ name: z.string(), count: z.number() })),
   milestones: z.array(z.object({ name: z.string(), open: z.number(), ready: z.number() })),
   running: z.array(
-    z.object({ identifier: z.string(), machineId: z.string(), loop: z.string().nullable() }),
+    z.object({
+      identifier: z.string(),
+      machineId: z.string(),
+      loop: z.string().nullable(),
+      /** True for a run the Board did not start. */
+      outside: z.boolean().optional(),
+    }),
   ),
   start: z.array(
     z.object({

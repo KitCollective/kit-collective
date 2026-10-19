@@ -47,7 +47,7 @@ function describePlan(
     "Running",
     plan.running.map(
       (run) =>
-        `${run.identifier}  on ${run.machineId}${run.loop === null ? "" : `  [${run.loop}]`}`,
+        `${run.identifier}  on ${run.machineId}${run.loop === null ? "" : `  [${run.loop}]`}${run.outside === true ? "  (not started by the Board)" : ""}`,
     ),
   );
   section(

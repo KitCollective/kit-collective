@@ -26,7 +26,13 @@ export interface PlannedStart {
 
 export interface Plan {
   focus: string | null;
-  running: { identifier: string; machineId: string; loop: string | null }[];
+  running: {
+    identifier: string;
+    machineId: string;
+    loop: string | null;
+    /** True for a run the Board did not start: an issue in an active state with no dispatch of its own. */
+    outside?: boolean;
+  }[];
   start: PlannedStart[];
   waiting: { identifier: string; loop: string; reason: string }[];
   /** Blocked issues whose blockers are all resolved. */
@@ -117,6 +123,17 @@ export function planBoard(input: {
 
   const used = new Map<string, number>(config.machines.map((machine) => [machine.id, 0]));
   const live = new Map<string, number>();
+  /**
+   * Where a run the Board did not start is counted: the first Loop whose trigger label the issue
+   * carries, else the first Loop, on that Loop's first configured machine. A guess (a hand-started
+   * run on another machine counts against this one), but it only ever under-uses a machine and
+   * never starts more runs than the Loop and the machine allow.
+   */
+  const outsideSlot = (issue: BoardIssue) => {
+    const loop = loops.find((l) => issue.labels.includes(l.trigger.label)) ?? loops[0];
+    const machineId = loop?.machines.find((id) => used.has(id));
+    return loop === undefined || machineId === undefined ? null : { loop: loop.name, machineId };
+  };
   /** Issues being worked on: each holds its declared write scope. */
   const holders: BoardIssue[] = [];
   for (const issue of issues) {
@@ -127,6 +144,15 @@ export function planBoard(input: {
       plan.running.push({ identifier: issue.identifier, machineId: activeOn, loop });
       used.set(activeOn, (used.get(activeOn) ?? 0) + 1);
       if (loop !== null) live.set(loop, (live.get(loop) ?? 0) + 1);
+    } else if (config.activeStates.includes(issue.state) && past?.stalled !== true) {
+      // Max or a person started this run by hand: the Board has no dispatch for it, yet it
+      // holds a slot all the same.
+      const slot = outsideSlot(issue);
+      if (slot !== null) {
+        plan.running.push({ identifier: issue.identifier, ...slot, outside: true });
+        used.set(slot.machineId, (used.get(slot.machineId) ?? 0) + 1);
+        live.set(slot.loop, (live.get(slot.loop) ?? 0) + 1);
+      }
     }
     if (activeOn !== null || config.activeStates.includes(issue.state)) holders.push(issue);
     // A stalled issue that was parked in Blocked stays there: moving it back would undo the park
