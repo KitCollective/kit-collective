@@ -7,16 +7,11 @@ import { cn } from "@/lib/utils";
 import { PANEL, when } from "../shared/common";
 import { useLoaded } from "../shared/use-loaded";
 
-/** The mark an overridden value carries: an asterisk whose tooltip says who set it and when. */
+/** The mark an overridden value carries, as on the Loops page: visible text, with who set it and when. */
 function Overridden({ by, at }: { by: string; at: string }) {
   return (
-    <span
-      role="img"
-      aria-label={`overridden by ${by}`}
-      title={`Overrides the Charter: set by ${by} at ${at}`}
-      className="text-amber-600"
-    >
-      *
+    <span title={`Overrides the Charter: set by ${by} at ${at}`} className="ml-1 text-amber-600">
+      (override)
     </span>
   );
 }
