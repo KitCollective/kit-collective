@@ -255,7 +255,7 @@ export default function ForeignJerseyDetailScreen() {
         </ButtonDock>
       ) : null}
 
-      {dockState.kind === "none" ? (
+      {dockState.kind === "message-only" ? (
         <ButtonDock>
           <Button
             label={writeToPeerLabel(peerJersey.ownerHandle)}

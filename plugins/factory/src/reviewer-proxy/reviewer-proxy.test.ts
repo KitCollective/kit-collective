@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import plugin from "../../server.js";
+import { forOpenRouter, usageFrom } from "./index.js";
 
 const keyFile = join(mkdtempSync(join(tmpdir(), "optio-keys-")), ".env");
 writeFileSync(keyFile, "LINEAR_API_KEY=lin_key\nOPENROUTER_API_KEY=sk-or-test\n");
@@ -107,8 +108,11 @@ describe("the reviewer proxy (ADR-0067)", () => {
     expect(new Headers(init?.headers).get("authorization")).toBe("Bearer sk-or-test");
     expect(JSON.parse(String(init?.body))).toMatchObject({
       model: "deepseek/deepseek-v4-pro",
-      provider: { data_collection: "deny" },
+      provider: { data_collection: "deny", sort: "price" },
+      // The thread is the sticky-routing session, so its calls hit one provider's prompt cache.
+      session_id: "thr_review1",
     });
+    expect(new Headers(init?.headers).get("x-session-id")).toBe("thr_review1");
   });
 
   it("sends a carrier (a Claude catalog id) as GLM 5.3 and records the thread as served", async () => {
@@ -252,6 +256,108 @@ describe("the reviewer proxy (ADR-0067)", () => {
       body: JSON.stringify({ model: "claude-haiku-5-5", messages: [] }),
     });
     expect((await behavior.cli(["reviewer-served", "--thread", "thr_review1"])).exitCode).toBe(1);
+  });
+
+  it("adds each streamed call's usage and cost to the thread, and reviewer-served prints the total", async () => {
+    const sse = (cached: number, cost: number) =>
+      [
+        "event: message_start",
+        `data: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 0, output_tokens: 0 } } })}`,
+        "",
+        "event: message_delta",
+        `data: ${JSON.stringify({ type: "message_delta", usage: { input_tokens: 1000 - cached, cache_read_input_tokens: cached, output_tokens: 20, cost } })}`,
+        "",
+        "event: message_stop",
+        'data: {"type":"message_stop"}',
+        "",
+      ].join("\n");
+    const bodies = [sse(0, 0.002), sse(900, 0.0015)];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(bodies.shift() ?? "", {
+            status: 200,
+            headers: { "content-type": "text/event-stream" },
+          }),
+      ),
+    );
+    const behavior = await load();
+    const token = await tokenFor(behavior, "thr_review1");
+    for (let i = 0; i < 2; i += 1) {
+      const res = await behavior.fetchHttp("POST", "/reviewer/v1/messages", {
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ model: "claude-haiku-5-5", stream: true, messages: [] }),
+      });
+      // The client still gets the whole stream.
+      expect(await res.text()).toContain("message_stop");
+    }
+    await vi.waitFor(async () => {
+      const after = await behavior.cli(["reviewer-served", "--thread", "thr_review1"]);
+      expect(after.stdout).toBe(
+        "SERVED thr_review1 as z-ai/glm-5.3 (2 calls, $0.0035: 2000 prompt tokens (900 cached), 40 completion)",
+      );
+    });
+  });
+
+  it("reads usage from a JSON body too, and ignores a body without it", async () => {
+    const json = (value: unknown) =>
+      new Response(JSON.stringify(value)).body ?? new ReadableStream();
+    expect(
+      await usageFrom(
+        json({
+          usage: { input_tokens: 10, cache_read_input_tokens: 90, output_tokens: 5, cost: 0.01 },
+        }),
+      ),
+    ).toEqual({ prompt: 100, cached: 90, completion: 5, cost: 0.01 });
+    expect(await usageFrom(json({ type: "message", content: [] }))).toBeNull();
+  });
+
+  it("keeps cache_control and a byte-stable prefix while it lifts system messages", () => {
+    const definition = { name: "late_tool", input_schema: { type: "object" } };
+    const firstTurns = [
+      {
+        role: "user",
+        content: [{ type: "text", text: "review", cache_control: { type: "ephemeral" } }],
+      },
+      {
+        role: "system",
+        content: [
+          { type: "text", text: "late note" },
+          { type: "tool_addition", tool: { definition } },
+        ],
+      },
+      { role: "assistant", content: [{ type: "text", text: "reading" }] },
+    ];
+    const body = (messages: unknown[]) => ({
+      model: "claude-haiku-5-5",
+      system: [
+        { type: "text", text: "base" },
+        { type: "text", text: "rules", cache_control: { type: "ephemeral" } },
+      ],
+      tools: [{ name: "Bash", cache_control: { type: "ephemeral" } }],
+      messages,
+    });
+    const call1 = forOpenRouter(body(firstTurns));
+    const call2 = forOpenRouter(
+      body([...firstTurns, { role: "user", content: [{ type: "text", text: "next" }] }]),
+    );
+    // Claude Code's breakpoints reach OpenRouter as they came.
+    expect(call1.system).toEqual([
+      { type: "text", text: "base" },
+      { type: "text", text: "rules", cache_control: { type: "ephemeral" } },
+      { type: "text", text: "late note" },
+    ]);
+    expect(JSON.stringify(call1.tools)).toContain('"cache_control"');
+    // The next call renders the same tools, system prompt and earlier turns, byte for byte.
+    expect(JSON.stringify(call2.tools)).toBe(JSON.stringify(call1.tools));
+    expect(JSON.stringify(call2.system)).toBe(JSON.stringify(call1.system));
+    const turns = (sent: ReturnType<typeof forOpenRouter>) =>
+      Array.isArray(sent.messages) ? sent.messages : [];
+    expect(JSON.stringify(turns(call2).slice(0, 2))).toBe(JSON.stringify(turns(call1)));
+    // A body with no system message goes out untouched.
+    const plain = body([firstTurns[0]]);
+    expect(forOpenRouter(plain)).toBe(plain);
   });
 
   it("refuses a forged token and a token for a thread it does not proxy", async () => {
