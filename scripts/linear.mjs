@@ -36,6 +36,11 @@
 //       one comment on the project, prints `<commentId> <url>`
 //   node scripts/linear.mjs waiting KIT-272 --stage <text> --ask <text>
 //       replaces the `### Waiting` section of the single workpad comment, nothing else
+//   node scripts/linear.mjs review-matrix KIT-272 --head <sha>
+//       moves `### Review matrix` (and `### Review feedback`, when present) from the Reviewer's
+//       gitignored .factory/review-matrix-KIT-272.md into the single workpad comment, verbatim.
+//       Refuses (matrix-missing, matrix-invalid) a missing file, a matrix review-matrix.mjs validate
+//       refuses, a row whose `at` is not <sha>, or a checkout not at <sha>; then writes nothing
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -50,12 +55,15 @@ import {
 import {
   createIssue,
   createProjectComment,
+  fillReviewMatrix,
   fillWaiting,
   LinearUsageError,
   listIssues,
   parseCreateArgs,
   parseProjectCommentArgs,
+  parseReviewMatrixArgs,
   parseWaitingArgs,
+  reviewMatrixFile,
 } from "./lib/linear-issues.mjs";
 
 const API = process.env.LINEAR_GRAPHQL_URL || "https://api.linear.app/graphql";
@@ -494,8 +502,26 @@ switch (command) {
       throw error;
     }
     break;
+  case "review-matrix":
+    try {
+      const { issue, head } = parseReviewMatrixArgs(args);
+      const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+        encoding: "utf8",
+      }).trim();
+      const file = join(root, reviewMatrixFile(issue));
+      if (!existsSync(file))
+        fail(`matrix-missing: the Reviewer wrote no ${reviewMatrixFile(issue)}`);
+      const checkoutHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+      const text = readFileSync(file, "utf8");
+      const id = await fillReviewMatrix(gql, { issue, text, head, checkoutHead });
+      process.stdout.write(`${id}: review matrix at ${head.slice(0, 12)} moved into the workpad\n`);
+    } catch (error) {
+      if (error instanceof LinearUsageError) fail(error.message);
+      throw error;
+    }
+    break;
   default:
     fail(
-      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up, relate, block, project, list, create, project-comment, waiting",
+      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up, relate, block, project, list, create, project-comment, waiting, review-matrix",
     );
 }
