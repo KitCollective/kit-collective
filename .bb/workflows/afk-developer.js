@@ -300,6 +300,32 @@ function deviceFlowsNoVerdict(gate) {
   return pending ? `needs-human: run device-run.sh on the Mac on ${pending[1]}` : null;
 }
 
+/**
+ * The head the last green review read, when review-mode.mjs answered delta, else "" (a full review). Only a
+ * checked 40-hex sha leaves this function, so it can enter the Reviewer prompt.
+ */
+function deltaReviewSince(answer) {
+  if (!answer || answer.runner || answer.code !== 0) {
+    return "";
+  }
+  const delta = /^REVIEW-MODE delta ([0-9a-f]{40})$/i.exec(String(answer.line ?? "").trim());
+  return delta ? delta[1].toLowerCase() : "";
+}
+
+/** The Reviewer's delta instructions: what to read since the green head `since`, and how the matrix carries forward. */
+function deltaReviewLines(since) {
+  return [
+    `Delta review: the workpad's Review matrix was green at ${since}, and the workflow checked with git that HEAD differs from it only by merges of origin/development (the branch has no commit of its own since). Run node scripts/review-mode.mjs ${issue} --green ${since} once: it lists each merge and every file both sides of a merge changed.`,
+    `Do not run the three-axis fan-out on the merge-base diff. Review only: git diff ${since}..HEAD restricted to the globs on the PR body's write-scope: line (what development changed in this issue's files), each merge's resolution (git show --cc <merge>), and every file the script lists as changed on both sides, read against both parents. Judge whether the issue's code still meets its acceptance criteria with those changes and whether a resolution dropped or bent either side.`,
+    `In the matrix, re-read mergeable and required-checks on the head and re-check any other row the delta touches; carry every other row forward with its status, \`at\` set to the head sha and evidence \`unchanged since ${since.slice(0, 12)}\`. A gating finding in the delta makes the review red as usual.`,
+  ];
+}
+
+/** CI already ran the suites on this head: the Reviewer reads the checks instead of running them again (KIT-298 r5, 2026-10-18). */
+function ciEvidenceLine(pr) {
+  return `CI is the evidence for tests, typecheck, lint and builds: read the required checks on the head with gh pr checks ${pr} (or the check runs for the head sha) and cite them. Never re-run a full test suite, typecheck, lint or build that a required check already ran green on this head. To probe a gap you suspect, run one targeted test file at most, with its output trimmed (| tail -30). For names-english and docs-sync, cite the pre-review gate, which ran check-code-english and check-doc-references green on this head.`;
+}
+
 /** True when a closed review gate's only red check is the `Device flows` status: a red flow, which is the Engineer's to fix. */
 function deviceFlowsRedOnly(gate) {
   return gate.code === 1 && /checks: (?:TIMEOUT after \d+s: )?RED \([^)]*\): Device flows$/.test(gate.line);
@@ -356,8 +382,40 @@ async function stopForHuman(phaseTitle, sentence, waiting = null) {
   return "Approval";
 }
 
-function stopped(stoppedAt, status, extra) {
-  return { issue, status, stoppedAt, ...extra };
+// Every return after `start` is logged writes one `end` line, so Max's tick knows the run has returned and
+// resumes it on its next tick. Without it Max could only tell a run that returned from one in a long silent
+// Engineer round by waiting RUN_STUCK_MINUTES (2026-10-18: KIT-298 hit the round cap at 22:55 and sat In
+// Review for two hours). A stop before `start` (harness, session-check) writes none: no run began, and a
+// session-check refusal can mean another run of the issue is still live. The reason is a fixed code, never
+// the note. Best effort: a failed write leaves the 120-minute rule to find the run.
+let startLogged = false;
+function endReason(result) {
+  if (result.stoppedAt === "loop") return "round-cap";
+  if (result.status === "Approval") return "needs-human";
+  if (result.status === "Blocked") return "blocked-by";
+  if (String(result.note ?? "").startsWith("runner-no-result")) return "runner-no-result";
+  if (result.verdict === "amber" || / \(still waiting after \d+ slices/.test(String(result.note ?? ""))) return "ci-pending";
+  return "unspecified";
+}
+async function stopped(stoppedAt, status, extra) {
+  const result = { issue, status, stoppedAt, ...extra };
+  if (startLogged) {
+    const verdict = pick(result.verdict, ["green", "amber", "red"]);
+    const flags = [
+      `--issue ${issue}`,
+      `--status "${status}"`,
+      `--stopped-at "${stoppedAt}"`,
+      `--reason ${endReason(result)}`,
+      ...(verdict ? [`--verdict ${verdict}`] : []),
+      ...(Number.isInteger(result.rounds) ? [`--round ${result.rounds}`] : []),
+    ];
+    try {
+      await runRaw("log:end", "Hand-over", [logCmd("end", flags.join(" "))], true);
+    } catch (error) {
+      // Best effort, as above.
+    }
+  }
+  return result;
 }
 
 // ---- Session ------------------------------------------------------------------------------------
@@ -406,6 +464,7 @@ const begun = await sh("start", "Session", [
   ...(resume ? [] : [`node scripts/linear.mjs state ${issue} "In Progress"`]),
   `node scripts/scenarios.mjs titles --issue ${issue}`,
 ]);
+startLogged = begun[0]?.code === 0 && !begun[0].runner;
 if (begun.length < startSteps || begun.slice(0, startSteps).some((r) => r.code !== 0)) {
   return stopped("start", "stopped", { note: begun.slice(0, startSteps).find((r) => r.code !== 0)?.line ?? "start step incomplete" });
 }
@@ -666,6 +725,8 @@ let feedback = "";
 let prNumber = resumePr;
 let rounds = 0;
 let lastVerdict = "";
+// The head of this run's last green review, handed to review-mode.mjs (which may then choose a delta review).
+let lastGreenSha = "";
 let receipt = "";
 let engineerThread = "";
 
@@ -834,11 +895,12 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
       return stopped("head-changed", "In Progress", { prNumber, rounds, note: head[0]?.line ?? "no output" });
     }
   }
-  if (round === 0) {
-    await sh("linear:In Review", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code engineer-skipped`), stateCmd("In Review")], true);
-  } else {
-    await move("Pre-review gate", "In Review");
-  }
+  // Full or delta review is decided by git, never by the model: review-mode.mjs answers delta only when
+  // the head is the last green review's head plus merges of origin/development. It rides with the move
+  // to In Review; any answer but a well-formed delta line is a full review.
+  const modeCmd = `node scripts/review-mode.mjs ${issue}${lastGreenSha ? ` --green ${lastGreenSha}` : ""}`;
+  const inReview = round === 0 ? [logCmd("reason", `--issue ${issue} --code engineer-skipped`), stateCmd("In Review")] : [stateCmd("In Review")];
+  const deltaSince = deltaReviewSince(await shAfter(inReview, "linear:In Review", "Pre-review gate", modeCmd));
 
   // -- Reviewer: fresh hidden thread on another model than the Engineer.
   phase("Reviewer");
@@ -852,10 +914,16 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
     review = await spawn(
       rAlias,
       [
-        `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run it on the PR's merge-base diff (this checkout is the PR head; confirm with git rev-parse HEAD).`,
+        deltaSince
+          ? `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run its development-merge delta review (this checkout is the PR head; confirm with git rev-parse HEAD).`
+          : `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run it on the PR's merge-base diff (this checkout is the PR head; confirm with git rev-parse HEAD).`,
+        ...(deltaSince ? deltaReviewLines(deltaSince) : []),
+        ciEvidenceLine(prNumber),
         "An acceptance criterion covered by a check on the issue's `live-check:` line runs after the merge on the owner's machine: in the spec-ac row its evidence is `deferred to live check <name>`, which is not a finding, as long as the code it checks is in the diff.",
         "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
-        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
+        // A proxied Reviewer once checked the env for a token, found none and left the matrix in thread storage, so a green review closed the review gate (KIT-298, 2026-10-18).
+        `Write it this way: run node scripts/linear.mjs issue ${issue}, take the id of the comment that starts with \`## Agent Workpad\`, write that comment's body to a file with its \`### Review matrix\` section replaced (added when missing), and save it with node scripts/linear.mjs comment-update <id> --body-file <file>. The script finds the Linear key itself: never check env vars for a token and never keep the matrix anywhere else. If the call fails, put its error output in your summary and return amber with the row workpad.`,
+        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending or a failed workpad write). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
         "Every finding names the file and line, what is wrong, and what green looks like, so the Engineer can check it, and is marked `gating` or `nit`. Only gating findings make the review red; nits go in the matrix and do not hold it (ADR-0066).",
         "The `Device flows` status of a slice flow may still be running while you review: it is not a required check, not yours to wait for and not a finding. Review the flow file against the acceptance criteria; the review gate waits for the run.",
         "On red, also return light: true only when every finding is light: the wording of a comment, a doc line, a name or a message, with no gap in behaviour, tests, an acceptance criterion, the design lock or the write-scope. Otherwise light: false.",
@@ -916,7 +984,26 @@ for (let round = reviewAsIs ? 0 : 1; round <= roundCap; round += 1) {
   // also waits for the hosted Device flows run, which was asked for before the pre-review gate and ran
   // while the Reviewer reviewed; the request rides in front of every slice so a first `error` is asked for again.
   phase("Review gate");
-  const gate = await gateSlices("gate:review", "Review gate", `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [...reviewerLog, requestDeviceFlows(prNumber)], true, [requestDeviceFlows(prNumber)]);
+  const reviewGateCmd = `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`;
+  let gate = await gateSlices("gate:review", "Review gate", reviewGateCmd, [...reviewerLog, requestDeviceFlows(prNumber)], true, [requestDeviceFlows(prNumber)]);
+  // A green review whose gate is closed only on the matrix left the workpad unwritten (KIT-298, 2026-10-18):
+  // the Reviewer is asked once to write it, like the result line below, and the gate runs once more.
+  // The message is built from checked tokens only; the gate's own line (with backticks) stays out of the shell.
+  const greenSha = review.verdict === "green" && /^[0-9a-f]{40}$/i.test(review.sha) ? review.sha.toLowerCase() : "";
+  if (!gate.runner && gate.code === 1 && greenSha && /^CLOSED \(review\): matrix: /.test(gate.line ?? "")) {
+    await sh("log:no-matrix", "Review gate", [logCmd("reason", `--issue ${issue} --code gate-closed`), `bb thread unarchive ${rThread}`], true);
+    const asked = await sh("reviewer:matrix", "Review gate", [
+      `bb thread tell ${rThread} "Your green review left no complete Review matrix in the workpad, so the review gate is closed. Do not review again and change no code. Run node scripts/linear.mjs issue ${issue}, take the id of the Agent Workpad comment, write its body to a file with the Review matrix section replaced (one row per lock-set row, evidence for each), and save it with node scripts/linear.mjs comment-update <id> --body-file <file>. The script finds the Linear key itself. If the head is still ${greenSha} and your verdict stands, end with exactly one line and nothing after it: AUDIT-RESULT ${issue} green ${greenSha}"`,
+      `bb thread wait ${rThread} --timeout 600`,
+    ]);
+    if (asked.length === 2 && asked.every((r) => r.code === 0)) {
+      gate = await gateSlices("gate:review", "Review gate", reviewGateCmd, [], true, [requestDeviceFlows(prNumber)]);
+    }
+  }
+  // A later round of this run may then review only what a development merge moved since this head.
+  if (greenSha) {
+    lastGreenSha = greenSha;
+  }
   if (gate.runner) {
     return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
   }

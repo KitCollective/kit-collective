@@ -319,3 +319,21 @@ test("the run-log CLI writes milestone events, and the report ignores them", () 
   const withMilestone = buildReport([...sample(), ...events]);
   assert.deepEqual(withMilestone, buildReport(sample()));
 });
+
+test("an end line takes a fixed status, stop point and reason code, never free text", () => {
+  const end = {
+    event: "end",
+    issue: "KIT-298",
+    status: "In Review",
+    stoppedAt: "review gate",
+    reason: "round-cap",
+    verdict: "amber",
+    round: 5,
+  };
+  assert.deepEqual(validateEvent(end), []);
+  assert.deepEqual(validateEvent({ ...end, status: "Shipped" }), ["invalid status"]);
+  assert.deepEqual(validateEvent({ ...end, stoppedAt: "anywhere" }), ["invalid stoppedAt"]);
+  assert.deepEqual(validateEvent({ ...end, reason: "the CI was slow" }), ["invalid reason"]);
+  const { reason, ...noReason } = end;
+  assert.deepEqual(validateEvent(noReason), ["end needs reason"]);
+});

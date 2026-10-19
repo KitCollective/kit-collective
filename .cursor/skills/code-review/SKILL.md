@@ -42,7 +42,21 @@ Every review writes workpad `### Review matrix`: one row per lock-set row (`node
 
 - **Pass 1** fills every row. For `state-machine`, walk every state, transition and guard of each reducer or machine the diff touches, in one pass, not only the one a finding names.
 - **Pass 2+** reads the existing matrix first, runs `node scripts/review-matrix.mjs plan <workpad> <lastReviewSha>`, re-checks only `recheck` rows and copies `inherit` rows unchanged. Do not invent findings on an inherited row; a regression the fix created shows up as a touched row.
-- Rows `names-english` and `docs-sync` are filled from `pnpm check:review-gate` output, not from reading: if the script is green the row is `checked` with that evidence. Do not spend review time on what the script says.
+- Rows `names-english` and `docs-sync` are filled from `pnpm check:review-gate` output, not from reading: if the script is green the row is `checked` with that evidence. Do not spend review time on what the script says. In an AFK developer run the pre-review gate already ran both scripts green on the head the Reviewer gets: cite that instead of running them again.
+
+### CI is the evidence, not a local re-run
+
+The required checks on the head already ran the test suites, typecheck, lint and builds. Read them (`gh pr checks <pr>`, or the check runs for the head SHA) and cite them in `required-checks` and wherever a row needs test evidence. Do not re-run a full suite, typecheck, lint or build that a required check ran green on the same head: the output fills the context and proves nothing CI did not (KIT-298 r5, 2026-10-18, re-ran 1,837 tests CI had passed). To probe a gap you suspect, run one targeted test file at most and trim its output (`| tail -30`).
+
+### Development-merge delta (AFK developer)
+
+When the workflow says the review is a delta since a green head `X` (`node scripts/review-mode.mjs <KIT-n>` answered `REVIEW-MODE delta X`: the matrix was green at `X` and HEAD is `X` plus merges of `origin/development` only), do not run the three-axis fan-out on the merge-base diff. Read only:
+
+- `git diff X..HEAD` restricted to the write-scope globs on the PR body: what development changed in this issue's files;
+- each merge's resolution, `git show --cc <merge>` for every merge the script lists;
+- every file the script lists as changed on both sides, read against both parents: did the resolution drop or bend either side?
+
+In the matrix, re-read `mergeable` and `required-checks` on the head, re-check any other row the delta touches, and carry every other row forward with its status, `at` set to the head SHA and evidence `unchanged since X`. A gating finding in the delta is red as usual. The mode is git's call, never the model's: without that answer the review is full.
 
 ### Light findings (ADR-0050)
 

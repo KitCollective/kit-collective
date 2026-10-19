@@ -16,12 +16,16 @@ describe("collection conversation moderation contract", () => {
         handle: "collector_a",
         jerseyCount: 3,
         city: "København",
+        avatarUrl: "/v1/identity/peers/00000000-0000-0000-0000-000000000010/avatar",
+        conversationId: "00000000-0000-0000-0000-000000000020",
       }),
     ).toEqual({
       peerId: "00000000-0000-0000-0000-000000000010",
       handle: "collector_a",
       jerseyCount: 3,
       city: "København",
+      avatarUrl: "/v1/identity/peers/00000000-0000-0000-0000-000000000010/avatar",
+      conversationId: "00000000-0000-0000-0000-000000000020",
     });
 
     expect(
@@ -29,11 +33,15 @@ describe("collection conversation moderation contract", () => {
         peerId: "00000000-0000-0000-0000-000000000011",
         handle: "collector_b",
         jerseyCount: 0,
+        avatarUrl: null,
+        conversationId: null,
       }),
     ).toEqual({
       peerId: "00000000-0000-0000-0000-000000000011",
       handle: "collector_b",
       jerseyCount: 0,
+      avatarUrl: null,
+      conversationId: null,
     });
   });
 
@@ -43,6 +51,8 @@ describe("collection conversation moderation contract", () => {
         peerId: "00000000-0000-0000-0000-000000000012",
         handle: "collector_a",
         jerseyCount: 1,
+        avatarUrl: null,
+        conversationId: null,
         email: "secret@example.com",
       }),
     ).toThrow();

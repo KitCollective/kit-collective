@@ -5,7 +5,7 @@
 # PR also the review, the PR comment and the Linear workpad links.
 #
 # What runs: the issue's own flow, `slices/<KEY>.yaml`; with `E2E_FLOWS=regression`
-# the eight regression flows instead.
+# the nine regression flows instead.
 #
 # Agents run `device-run.sh`, which queues, starts the API, installs the app and
 # calls this script. By hand:

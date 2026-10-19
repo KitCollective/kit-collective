@@ -1,4 +1,4 @@
-# The eight regression flows (KIT-267, ADR-0049). They run only on request
+# The nine regression flows (KIT-267, ADR-0049). They run only on request
 # (`E2E_FLOWS=regression`): at a milestone, or before a promotion to staging.
 # An issue's evidence is its own flow under slices/.
 flows:

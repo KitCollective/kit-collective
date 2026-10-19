@@ -72,6 +72,8 @@ export const collectionSendMessageRequestSchema = z
     text: z.string().min(1).optional(),
     contentBase64: z.string().min(1).optional(),
     replyToMessageId: z.string().uuid().optional(),
+    /** The UserJersey of the peer this message is about. It must be public; the message keeps a snapshot of it. */
+    userJerseyId: z.string().uuid().optional(),
   })
   .strict()
   .refine((value) => Boolean(value.text?.trim()) || Boolean(value.contentBase64), {
@@ -82,6 +84,7 @@ export type CollectionSendMessageRequest = z.infer<typeof collectionSendMessageR
 
 export const collectionSendMessageResponseSchema = z
   .object({
+    conversationId: z.string().uuid(),
     messageId: z.string().uuid(),
   })
   .strict();

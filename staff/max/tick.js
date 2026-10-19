@@ -23,12 +23,17 @@
 // that finds it on; one that cannot be read starts nothing either (a pause must not leak through an outage).
 // Written without static imports or import.meta so it runs whether bb stores it as CJS or ESM.
 
-// A run that ended In Progress or In Review short of a landing: its issue's last run-log event is
-// older than runStuckMinutes (a live run logs as it goes) and it is not a landing. It stopped
-// whether or not it opened a PR: 2026-10-18 KIT-409's run stopped at its first step with no PR, and
-// because only issues with a PR were listed the issue sat In Progress for three hours, holding its
-// reserved write-scope over KIT-404. With an open PR the entry resumes it; without one it restarts
-// (mode "restart"). More than maxStartsPerDay starts in 24 h is a loop: listed in loops, never started.
+// A run that ended In Progress or In Review short of a landing, and is not a landing. Its issue's last
+// run-log event is the run's `end` line (the workflow writes one on every return after `start`), so it
+// is stopped at once, on the next tick: 2026-10-18 KIT-298's run hit the round cap at 22:55 with an amber
+// review and nothing resumed it for two hours. An `end` whose status is a landing (Merging, Done, unknown:
+// auto-land may have enqueued) or a person's stop (Approval, Blocked) is not resumed early. A run that
+// died without an `end` line counts as stopped once its last event is older than runStuckMinutes (a live
+// run can be silent for a long Engineer round). It stopped whether or not it opened a PR: 2026-10-18
+// KIT-409's run stopped at its first step with no PR, and because only issues with a PR were listed the
+// issue sat In Progress for three hours, holding its reserved write-scope over KIT-404. With an open PR
+// the entry resumes it; without one it restarts (mode "restart"). More than maxStartsPerDay starts in
+// 24 h is a loop: listed in loops, never started.
 // Pure and self-contained, so scripts/tests/max-tick.test.mjs runs this very source.
 function stoppedRuns({ board, events, prOf, skip, now, runStuckMinutes, maxStartsPerDay }) {
   const resume = [];
@@ -37,7 +42,10 @@ function stoppedRuns({ board, events, prOf, skip, now, runStuckMinutes, maxStart
     if (!["In Progress", "In Review"].includes(issue.state) || skip.has(issue.key)) continue;
     const own = events.filter((e) => e.issue === issue.key);
     const last = own.at(-1);
-    if (!last || now - Date.parse(last.at) < runStuckMinutes * 60000) continue;
+    if (!last) continue;
+    const ended =
+      last.event === "end" && ["stopped", "In Progress", "In Review"].includes(last.status);
+    if (!ended && now - Date.parse(last.at) < runStuckMinutes * 60000) continue;
     const starts = own.filter(
       (e) => e.event === "start" && now - Date.parse(e.at) < 24 * 60 * 60000,
     ).length;
@@ -315,10 +323,12 @@ function stoppedRuns({ board, events, prOf, skip, now, runStuckMinutes, maxStart
       if (!step) continue;
       const own = events.filter((e) => e.issue === issue.key);
       const last = own.at(-1);
-      // A run whose last event is runner-no-result has already stopped (the workflow returns right
-      // after logging it), so there is nothing to wait for. 2026-10-17: KIT-384 and KIT-319 ended so
-      // at 00:53 and 01:00, and the ticks inside the threshold printed nothing until a person landed them.
-      const ended = last?.event === "reason" && last.code === "runner-no-result";
+      // A run whose last event is its `end` line, or runner-no-result (the workflow returns right after
+      // logging it), has already stopped, so there is nothing to wait for. 2026-10-17: KIT-384 and
+      // KIT-319 ended so at 00:53 and 01:00, and the ticks inside the threshold printed nothing until a
+      // person landed them.
+      const ended =
+        last?.event === "end" || (last?.event === "reason" && last.code === "runner-no-result");
       if (!last || (!ended && Date.now() - Date.parse(last.at) < landingStuckMinutes * 60000))
         continue;
       const after = (e) => own.slice(own.lastIndexOf(e) + 1);

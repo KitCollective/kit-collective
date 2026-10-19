@@ -4,6 +4,8 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { composerFieldBorder } from "@/components/message-composer-field-border";
 import { IconButton } from "@/components/ui";
+import { JerseyReferenceRow } from "@/inbox/jersey-reference-row";
+import type { JerseyReference } from "@/inbox/thread-view-model";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -13,6 +15,12 @@ type MessageComposerProps = {
   onChangeText: (text: string) => void;
   replyTo?: string;
   onDismissReply?: () => void;
+  /** The jersey the thread was opened from; shown above the field until dismissed (Revision 2026-10-10). */
+  reference?: JerseyReference | null;
+  /** The reference thumb, already resolved to a full URL. */
+  referenceThumbUri?: string | null;
+  referenceImageHeaders?: Record<string, string>;
+  onDismissReference?: () => void;
   onAttach: () => void;
   onSend: () => void;
   disabledSend: boolean;
@@ -24,6 +32,10 @@ export function MessageComposer({
   onChangeText,
   replyTo,
   onDismissReply,
+  reference = null,
+  referenceThumbUri = null,
+  referenceImageHeaders,
+  onDismissReference,
   onAttach,
   onSend,
   disabledSend,
@@ -46,6 +58,18 @@ export function MessageComposer({
         },
       ]}
     >
+      {reference ? (
+        <JerseyReferenceRow
+          testID="composer-jersey-reference"
+          caption={reference.caption}
+          label={reference.label}
+          thumbUri={referenceThumbUri}
+          imageHeaders={referenceImageHeaders}
+          dismissName={reference.dismissName}
+          onDismiss={onDismissReference}
+          accessibilityLabel={reference.accessibilityLabel}
+        />
+      ) : null}
       {replyTo ? (
         <View style={styles.replyRow}>
           <Text
@@ -60,6 +84,7 @@ export function MessageComposer({
       <View style={styles.row}>
         <IconButton name="Tilføj billede" icon="image-outline" onPress={onAttach} />
         <TextInput
+          testID="composer-input"
           accessibilityLabel="Besked"
           placeholder="Skriv en besked"
           placeholderTextColor={theme.contentMuted}
@@ -81,6 +106,7 @@ export function MessageComposer({
           ]}
         />
         <Pressable
+          testID="composer-send"
           accessibilityRole="button"
           accessibilityLabel="Send"
           onPress={onSend}

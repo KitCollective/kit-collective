@@ -8,9 +8,14 @@ import {
   bidCardState,
   conversationMore,
   headerInitial,
+  jerseyReference,
+  peerThreadHref,
+  sendMessageBody,
   type ThreadItem,
   threadItemIndex,
   threadItems,
+  threadStart,
+  writeToPeerLabel,
 } from "../src/inbox/thread-view-model";
 
 const JERSEY_ID = "44444444-4444-4444-8444-444444444444";
@@ -289,6 +294,8 @@ describe("conversationMore (Conversation → More Sheet)", () => {
     handle: PEER,
     jerseyCount: 3,
     city: "København",
+    avatarUrl: null,
+    conversationId: null,
   };
 
   it("builds the profile row: initial, Handle, city · n trøjer · Se profil, Peer Profil href", () => {
@@ -367,5 +374,171 @@ describe("threadItemIndex (a waiting Indbakke row opens the thread at that Bud)"
 
     expect(threadItemIndex(items, null)).toBeNull();
     expect(threadItemIndex(items, "99999999-9999-4999-8999-999999999999")).toBeNull();
+  });
+});
+
+describe("threadStart (Conversation → Thread start, composition 5)", () => {
+  const peer: CollectionConversationPeer = {
+    peerId: "66666666-6666-4666-8666-666666666666",
+    handle: PEER,
+    jerseyCount: 3,
+    city: "København",
+    avatarUrl: "/v1/collection/peers/avatar/66666666-6666-4666-8666-666666666666",
+    conversationId: null,
+  };
+
+  it("is the Handle, its initial and the Avatar photo path of the Collector", () => {
+    expect(threadStart(peer)).toMatchObject({
+      handle: PEER,
+      initial: "M",
+      avatarPath: "/v1/collection/peers/avatar/66666666-6666-4666-8666-666666666666",
+    });
+  });
+
+  it("falls back to the initial when the Collector has no photo", () => {
+    expect(threadStart({ ...peer, avatarUrl: null }).avatarPath).toBeNull();
+  });
+
+  it("reads city · n trøjer", () => {
+    expect(threadStart(peer).meta).toBe("København · 3 trøjer");
+  });
+
+  it("omits the city when the Collector shows none, and says 1 trøje in the singular", () => {
+    const { city: _city, ...withoutCity } = peer;
+
+    expect(threadStart({ ...withoutCity, jerseyCount: 1 }).meta).toBe("1 trøje");
+    expect(threadStart({ ...withoutCity, jerseyCount: 0 }).meta).toBe("0 trøjer");
+  });
+});
+
+describe("jerseyReference (Message composer → jersey reference, Revision 2026-10-10)", () => {
+  const peerJersey = {
+    id: JERSEY_ID,
+    clubLabel: "Brøndby IF",
+    seasonLabel: "2023/24",
+    photos: [
+      { photoUrl: "/v1/collection/showcase/photos/55555555-5555-4555-8555-555555555555" },
+      { photoUrl: "/v1/collection/showcase/photos/66666666-6666-4666-8666-666666666666" },
+    ],
+  };
+
+  it("is the first photo as thumb, the caption Om trøjen and the jersey as club and season", () => {
+    expect(jerseyReference(peerJersey)).toMatchObject({
+      userJerseyId: JERSEY_ID,
+      thumbPath: "/v1/collection/showcase/photos/55555555-5555-4555-8555-555555555555",
+      caption: "Om trøjen",
+      label: "Brøndby IF 2023/24",
+    });
+  });
+
+  it("names the dismiss control and reads as one line to a screen reader", () => {
+    expect(jerseyReference(peerJersey)).toMatchObject({
+      dismissName: "Fjern trøjen",
+      accessibilityLabel: "Om trøjen, Brøndby IF 2023/24",
+    });
+  });
+
+  it("has no thumb path without a photo", () => {
+    expect(jerseyReference({ ...peerJersey, photos: [] }).thumbPath).toBeNull();
+  });
+});
+
+describe("sendMessageBody (the first message carries the jersey reference)", () => {
+  const reference = jerseyReference({
+    id: JERSEY_ID,
+    clubLabel: "Brøndby IF",
+    seasonLabel: "2023/24",
+    photos: [],
+  });
+
+  it("carries userJerseyId while the reference is shown", () => {
+    expect(sendMessageBody({ text: " Hej ", reference })).toEqual({
+      text: "Hej",
+      userJerseyId: JERSEY_ID,
+    });
+  });
+
+  it("carries no userJerseyId once the reference is dismissed", () => {
+    expect(sendMessageBody({ text: "Hej", reference: null })).toEqual({ text: "Hej" });
+  });
+
+  it("keeps the photo and the reply-to alongside the reference", () => {
+    expect(
+      sendMessageBody({
+        text: "",
+        imageBase64: "AAAA",
+        replyToMessageId: "77777777-7777-4777-8777-777777777777",
+        reference,
+      }),
+    ).toEqual({
+      contentBase64: "AAAA",
+      replyToMessageId: "77777777-7777-4777-8777-777777777777",
+      userJerseyId: JERSEY_ID,
+    });
+  });
+});
+
+describe("threadItems → the jersey a message is about", () => {
+  function text(overrides: Partial<CollectionConversationMessage> = {}) {
+    return {
+      id: "88888888-8888-4888-8888-888888888888",
+      kind: "text" as const,
+      role: "incoming" as const,
+      text: "Hej, er den til salg?",
+      createdAt: "2026-10-17T10:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  it("puts the jersey on a text bubble as the read-only reference row", () => {
+    const item = threadItems(detail([text({ jersey: jersey() })])).find(
+      (entry) => entry.type === "bubble",
+    );
+
+    expect(item).toMatchObject({
+      type: "bubble",
+      reference: {
+        caption: "Om trøjen",
+        label: "Brøndby IF 2023/24",
+        thumbPath: "/v1/collection/showcase/photos/55555555-5555-4555-8555-555555555555",
+      },
+    });
+  });
+
+  it("puts the jersey on an image bubble too", () => {
+    const item = threadItems(
+      detail([text({ kind: "image", imageUrl: "/v1/x", jersey: jersey() })]),
+    ).find((entry) => entry.type === "bubble");
+
+    expect(item).toMatchObject({ reference: { label: "Brøndby IF 2023/24" } });
+  });
+
+  it("keeps the label and drops the thumb once the jersey is gone", () => {
+    const item = threadItems(
+      detail([text({ jersey: jersey({ userJerseyId: null, thumbUrl: null }) })]),
+    ).find((entry) => entry.type === "bubble");
+
+    expect(item).toMatchObject({ reference: { label: "Brøndby IF 2023/24", thumbPath: null } });
+  });
+
+  it("gives a bubble with no jersey no reference", () => {
+    const item = threadItems(detail([text()])).find((entry) => entry.type === "bubble");
+
+    expect(item).toMatchObject({ type: "bubble", reference: null });
+  });
+});
+
+describe("peerThreadHref and writeToPeerLabel (the entries into a thread)", () => {
+  it("opens the thread with a Collector, about a jersey when started from one", () => {
+    expect(peerThreadHref("66666666-6666-4666-8666-666666666666")).toBe(
+      "/(tabs)/inbox/peer/66666666-6666-4666-8666-666666666666",
+    );
+    expect(peerThreadHref("66666666-6666-4666-8666-666666666666", JERSEY_ID)).toBe(
+      `/(tabs)/inbox/peer/66666666-6666-4666-8666-666666666666?jerseyId=${JERSEY_ID}`,
+    );
+  });
+
+  it("names the dock control Skriv til <handle>", () => {
+    expect(writeToPeerLabel(PEER)).toBe("Skriv til mikkel_fck");
   });
 });

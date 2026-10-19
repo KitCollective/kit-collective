@@ -3,7 +3,7 @@
 #   1. .maestro/local-api.sh              (terminal 1: local API on a disposable database)
 #   2. .maestro/build-local.sh            (Release build on the flows' own simulator)
 #   3. .maestro/run-local.sh [flow.yaml]  (terminal 2; no argument = this issue's slice flow,
-#      E2E_FLOWS=regression = the eight regression flows)
+#      E2E_FLOWS=regression = the nine regression flows)
 # Screenshots and recordings land in .maestro/out/.
 set -euo pipefail
 

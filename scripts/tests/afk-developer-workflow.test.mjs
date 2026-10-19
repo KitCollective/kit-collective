@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { LOCK_ROWS } from "../lib/review-matrix.mjs";
+import { reviewMode } from "../lib/review-mode.mjs";
+import { END_STATUSES, END_STOPS, validateEvent } from "../lib/run-log.mjs";
 
 /**
  * The AFK developer workflow runs in bb's QuickJS sandbox, which this repo cannot start. These tests
@@ -115,6 +120,10 @@ const lastState = (commands) =>
     .filter((c) => /linear\.mjs state /.test(c))
     .map((c) => /"([^"]+)"$/.exec(c)[1])
     .at(-1);
+
+/** The run's last line, `run-log.mjs end`, is a log line, not a step: tests of the steps leave it out. */
+const isEnd = (c) => c.startsWith("node scripts/run-log.mjs end ");
+const steps = (commands) => commands.filter((c) => !isEnd(c));
 
 const agentSpawns = (spawns) =>
   spawns.filter((s) => !s.options.schema?.required?.includes("results"));
@@ -355,7 +364,7 @@ test("a red review loops once to a fix pass, logs the red audit, and stops at th
   assert.equal(result.rounds, 2);
   assert.ok(commands.some((c) => c.includes("label KIT-9 swap ready-for-agent ready-for-human")));
   assert.equal(lastState(commands), "Approval");
-  assert.equal(commands.filter((c) => c.includes("--verdict red")).length, 2);
+  assert.equal(steps(commands).filter((c) => c.includes("--verdict red")).length, 2);
   assert.ok(commands.some((c) => c.includes('state KIT-9 "In Progress"')));
   assert.ok(
     agentSpawns(spawns).filter((s) => s.options.label.startsWith("engineer:")).length === 2,
@@ -367,7 +376,7 @@ test("a red review loops once to a fix pass, logs the red audit, and stops at th
   assert.deepEqual(waitingCmds(commands), [
     'node scripts/linear.mjs waiting KIT-9 --stage "review gate" --ask "needs-human: round cap reached after a red review, the findings are under ### Review feedback"',
   ]);
-  assert.equal(commands.at(-1), waitingCmds(commands)[0]);
+  assert.equal(steps(commands).at(-1), waitingCmds(commands)[0]);
 });
 
 test("a red review with only light findings at the cap gets one extra round, and that one only", async () => {
@@ -479,7 +488,7 @@ test("an amber review (checks pending) holds In Review and posts nothing", async
     }),
   });
   assert.equal(result.status, "In Review");
-  assert.ok(!commands.some((c) => c.includes("audit-receipt") || c.includes("--verdict")));
+  assert.ok(!steps(commands).some((c) => c.includes("audit-receipt") || c.includes("--verdict")));
 });
 
 test("a Lead plan-approval ends the run in Approval before any Engineer", async () => {
@@ -539,7 +548,7 @@ test("hostile text from the Reviewer never reaches a command", async () => {
       threadId: REVIEWER_THREAD,
     }),
   });
-  assert.ok(!badSha.commands.some((c) => c.includes("--verdict red")));
+  assert.ok(!steps(badSha.commands).some((c) => c.includes("--verdict red")));
   const badVerdict = await run({
     reviewer: () => ({ verdict: "green; id", sha: SHA, sentence: "x", threadId: REVIEWER_THREAD }),
   });
@@ -1054,7 +1063,7 @@ test("a gate-detected needs-human stop fills ### Waiting with linear.mjs waiting
     shell: (c) => (isReviewGate(c) ? { code: 1, line: NO_VERDICT_LINE } : undefined),
   });
   assert.deepEqual(waitingCmds(noVerdict.commands), [WAITING_DEVICE_FLOWS]);
-  assert.equal(noVerdict.commands.at(-1), WAITING_DEVICE_FLOWS);
+  assert.equal(steps(noVerdict.commands).at(-1), WAITING_DEVICE_FLOWS);
   assert.equal(lastState(noVerdict.commands), "Approval");
   assert.ok(
     noVerdict.commands.findIndex((c) => c.includes('state KIT-9 "Approval"')) <
@@ -1212,7 +1221,7 @@ test("autoLand true: green hands the issue to auto-land start with --force-enabl
   assert.ok(commands.findIndex((c) => c.includes("audit-receipt.mjs post")) < start);
   assert.notEqual(lastState(commands), "Approval", "Approval is the exception exit, not a step");
   // The workflow itself still never merges, posts a receipt for real, or sets a merge state.
-  for (const command of commands) {
+  for (const command of steps(commands)) {
     assert.doesNotMatch(command, /"(Merging|Post-Merge|Done)"/);
     assert.doesNotMatch(command, /gh pr merge|merge-lock|sync-pr|--auto\b/);
     if (command.includes("audit-receipt.mjs")) assert.match(command, /--dry-run/);
@@ -1419,7 +1428,7 @@ test("a fresh run, and a resume without a PR, never ask for the resume point", a
 const runners = (spawns) => spawns.filter((s) => s.options.schema?.required?.includes("results"));
 const labels = (spawns) => runners(spawns).map((s) => s.options.label);
 
-test("a green run spends nine runners: the log lines ride with the gates, and the proxied Reviewer's thread is looked up by title", async () => {
+test("a green run spends ten runners: the log lines ride with the gates, the end line has its own, and the proxied Reviewer's thread is looked up by title", async () => {
   const { result, commands, spawns } = await run();
   assert.equal(result.status, "Approval");
   assert.deepEqual(labels(spawns), [
@@ -1432,6 +1441,7 @@ test("a green run spends nine runners: the log lines ride with the gates, and th
     "gate:review",
     "receipt:dry-run",
     "linear:Approval",
+    "log:end",
   ]);
   const at = (needle) => commands.findIndex((c) => c.includes(needle));
   assert.ok(at("--step engineer --outcome ready") >= 0);
@@ -1542,6 +1552,7 @@ test("a resume that reviews the head as it is writes both skip lines on runners 
     "gate:review",
     "receipt:dry-run",
     "linear:Approval",
+    "log:end",
   ]);
   const point = runners(spawns).find((s) => s.options.label === "resume-point").prompt;
   assert.match(point, /--code lead-skipped/);
@@ -1638,6 +1649,84 @@ test("the Reviewer prompt asks for the result line as its last text, after the w
   const { spawns } = await run();
   const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:")).prompt;
   assert.match(reviewer, /write that line as your last text, after every other tool call/);
+});
+
+test("the Reviewer prompt says how to write the matrix and never to look for a token (KIT-298)", async () => {
+  const { spawns } = await run();
+  const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:")).prompt;
+  assert.match(reviewer, /node scripts\/linear\.mjs issue KIT-9/);
+  assert.match(reviewer, /`## Agent Workpad`/);
+  assert.match(reviewer, /`### Review matrix` section replaced/);
+  assert.match(reviewer, /node scripts\/linear\.mjs comment-update <id> --body-file <file>/);
+  assert.match(reviewer, /never check env vars for a token/);
+  assert.match(reviewer, /error output in your summary and return amber with the row workpad/);
+});
+
+const NO_MATRIX = "CLOSED (review): matrix: row `spec-ac` is missing";
+
+test("a green review whose gate is closed on the matrix asks the Reviewer once to write it, then runs the gate again (KIT-298)", async () => {
+  let gates = 0;
+  const { result, commands } = await run({
+    shell: (c) => {
+      if (!isReviewGate(c)) return undefined;
+      gates += 1;
+      return gates === 1 ? { code: 1, line: NO_MATRIX } : { code: 0, line: "OPEN (review): fine" };
+    },
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(commands.filter(isReviewGate).length, 2);
+  const tells = commands.filter((c) => c.startsWith("bb thread tell thr_reviewer01 "));
+  assert.equal(tells.length, 1);
+  assert.match(tells[0], /node scripts\/linear\.mjs comment-update <id> --body-file <file>/);
+  assert.match(tells[0], new RegExp(`AUDIT-RESULT KIT-9 green ${SHA}"$`));
+  assert.doesNotMatch(tells[0], /`/, "no backtick reaches the shell");
+  const at = (needle) => commands.findIndex((c) => c.startsWith(needle));
+  const secondGate = commands.findLastIndex(isReviewGate);
+  assert.ok(at("bb thread unarchive thr_reviewer01") < at("bb thread tell"));
+  assert.ok(at("bb thread tell") < at("bb thread wait thr_reviewer01"));
+  assert.ok(at("bb thread wait thr_reviewer01") < secondGate);
+  assert.equal(
+    commands.filter((c) => c.includes("--step reviewer") && c.includes(" spawn ")).length,
+    1,
+    "the reviewer's log lines are not written twice",
+  );
+});
+
+test("the matrix ask is not made for a red review, another closed step or a failed tell", async () => {
+  const red = await run({
+    shell: (c) => (isReviewGate(c) ? { code: 1, line: NO_MATRIX } : undefined),
+    reviewer: () => ({
+      verdict: "red",
+      sha: SHA,
+      rows: ["spec-ac"],
+      sentence: "AC 2 unmet",
+      threadId: REVIEWER_THREAD,
+    }),
+  });
+  assert.ok(!red.commands.some((c) => c.startsWith("bb thread tell")));
+
+  const scope = await run({
+    shell: (c) =>
+      isReviewGate(c)
+        ? { code: 1, line: "CLOSED (review): scope: outside write-scope" }
+        : undefined,
+  });
+  assert.ok(!scope.commands.some((c) => c.startsWith("bb thread tell")));
+
+  const tellFailed = await run({
+    shell: (c) =>
+      isReviewGate(c)
+        ? { code: 1, line: NO_MATRIX }
+        : c.startsWith("bb thread tell")
+          ? { code: 1, line: "HTTP 409" }
+          : undefined,
+  });
+  const firstRound = tellFailed.commands.slice(
+    0,
+    tellFailed.commands.findIndex((c) => c.startsWith("bb thread tell")) + 1,
+  );
+  assert.equal(firstRound.filter(isReviewGate).length, 1, "no second gate when the ask failed");
+  assert.equal(tellFailed.result.stoppedAt, "review gate");
 });
 
 // ---- Scenario titles in the Engineer prompt (KIT-351) -----------------------------------------------
@@ -2085,88 +2174,313 @@ test("the dispatch tick starts a conflicting resume with mergeFirst, a flag the 
   assert.match(meta, /mergeFirst: \{ type: "boolean" \}/);
 });
 
-/** Max's tick's stoppedRuns, from the tick's own source (it is a self-contained function above the IIFE). */
-const stoppedRuns = (() => {
-  const tick = readFileSync(
-    join(fileURLToPath(new URL("../..", import.meta.url)), "staff/max/tick.js"),
-    "utf8",
-  );
-  const from = tick.indexOf("function stoppedRuns(");
-  const to = tick.indexOf("// end stoppedRuns");
-  assert.ok(from >= 0 && to > from, "tick.js defines stoppedRuns");
-  return new Function(`${tick.slice(from, to)}; return stoppedRuns;`)();
-})();
+/** The `end` event a `run-log.mjs end` command would append, as run-log.mjs parses its flags. */
+const endEvent = (command) => {
+  const event = { event: "end" };
+  for (const [, key, quoted, bare] of command.matchAll(/--([a-z-]+) (?:"([^"]*)"|(\S+))/g)) {
+    const name = key.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    event[name] = name === "round" ? Number(bare) : (quoted ?? bare);
+  }
+  return event;
+};
 
-const NOW = Date.parse("2026-10-18T20:30:00Z");
-const minutesAgo = (m) => new Date(NOW - m * 60000).toISOString();
-const tickInput = (overrides = {}) => ({
-  board: [{ key: "KIT-409", state: "In Progress" }],
-  events: [
-    { at: minutesAgo(190), event: "gate", issue: "KIT-409", gate: "session", outcome: "open" },
-    { at: minutesAgo(187), event: "start", issue: "KIT-409" },
-  ],
-  prOf: () => undefined,
-  skip: new Set(),
-  now: NOW,
-  runStuckMinutes: 120,
-  maxStartsPerDay: 3,
-  ...overrides,
-});
-
-test("the tick restarts a run that stopped before its PR (KIT-409, 2026-10-18)", () => {
-  const { resume, loops } = stoppedRuns(tickInput());
-  assert.deepEqual(resume, [{ issue: "KIT-409", mode: "restart", pr: null, quietMinutes: 187 }]);
-  assert.deepEqual(loops, []);
-});
-
-test("the tick resumes a stopped run that has an open PR, as before", () => {
-  const { resume } = stoppedRuns(
-    tickInput({
-      board: [{ key: "KIT-284", state: "In Review" }],
-      events: [
-        { at: minutesAgo(130), event: "reason", issue: "KIT-284", code: "runner-no-result" },
-      ],
-      prOf: (key) => (key === "KIT-284" ? { number: 301 } : undefined),
+test("an amber review at the end of a run writes one end line, so Max resumes it on the next tick (KIT-298)", async () => {
+  const { result, commands } = await run({
+    reviewer: () => ({
+      verdict: "amber",
+      sha: SHA,
+      sentence: "pending",
+      threadId: REVIEWER_THREAD,
     }),
+  });
+  assert.equal(result.status, "In Review");
+  const ends = commands.filter(isEnd);
+  assert.equal(ends.length, 1);
+  assert.equal(commands.at(-1), ends[0]);
+  assert.match(
+    ends[0],
+    /^node scripts\/run-log\.mjs end --issue KIT-9 --status "In Review" --stopped-at "reviewer" --reason ci-pending --verdict amber --round \d+$/,
   );
-  assert.deepEqual(resume, [{ issue: "KIT-284", mode: "resume", pr: 301, quietMinutes: 130 }]);
+  assert.deepEqual(validateEvent(endEvent(ends[0])), []);
 });
 
-test("the tick leaves a run alone while it still logs, a landing, and issues it never ran", () => {
-  const recent = tickInput({ events: [{ at: minutesAgo(30), event: "start", issue: "KIT-409" }] });
-  assert.deepEqual(stoppedRuns(recent).resume, []);
-  assert.deepEqual(stoppedRuns(tickInput({ skip: new Set(["KIT-409"]) })).resume, []);
-  assert.deepEqual(stoppedRuns(tickInput({ events: [] })).resume, []);
-  for (const state of ["To-do", "Approval", "Blocked", "Merging"])
-    assert.deepEqual(stoppedRuns(tickInput({ board: [{ key: "KIT-409", state }] })).resume, []);
+test("every return after start writes exactly one valid end line, last, with status and stop of the result", async () => {
+  const red = {
+    verdict: "red",
+    sha: SHA,
+    rows: ["spec"],
+    sentence: "x",
+    threadId: REVIEWER_THREAD,
+  };
+  const runs = [
+    await run(),
+    await run({ args: { issue: "KIT-9", maxRounds: 1 }, reviewer: () => red }),
+    await run({ args: { issue: "KIT-9", autoLand: true }, shell: autoLandShell() }),
+    await run({ engineer: () => new Error("no result") }),
+    await run({
+      lead: { outcome: "plan-approval", sentence: "ask", threadId: "thr_lead0001" },
+      startDecision: { plan: true },
+    }),
+  ];
+  for (const { result, commands } of runs) {
+    const ends = commands.filter(isEnd);
+    assert.equal(ends.length, 1, result.stoppedAt);
+    assert.equal(commands.at(-1), ends[0]);
+    const event = endEvent(ends[0]);
+    assert.deepEqual(validateEvent(event), [], ends[0]);
+    assert.equal(event.status, result.status);
+    assert.equal(event.stoppedAt, result.stoppedAt);
+  }
+  assert.equal(endEvent(runs[1].commands.at(-1)).reason, "needs-human");
 });
 
-test("a stopped run at the attempt cap is a loop for Nicklas, never restarted, with or without a PR", () => {
-  const starts = [400, 300, 190].map((m) => ({
-    at: minutesAgo(m),
-    event: "start",
-    issue: "KIT-409",
-  }));
-  for (const prOf of [() => undefined, () => ({ number: 9 })]) {
-    const { resume, loops } = stoppedRuns(tickInput({ events: starts, prOf }));
-    assert.deepEqual(resume, []);
-    assert.deepEqual(loops, ["KIT-409"]);
+test("a stop before start is logged writes no end line: no run began, and another may be live", async () => {
+  const harness = await run({
+    shell: (c) => (isHarnessDiff(c) ? { code: 1, line: "" } : undefined),
+  });
+  const session = await run({
+    shell: (c) => (c.includes("session-check") ? { code: 1, line: "CLOSED: run live" } : undefined),
+  });
+  const startFailed = await run({
+    shell: (c) => (c.includes("run-log.mjs start") ? { code: 2, line: "bad" } : undefined),
+  });
+  for (const { commands } of [harness, session, startFailed]) assert.ok(!commands.some(isEnd));
+});
+
+test("every stop point and status the workflow returns after start is in the run log's end vocabulary", () => {
+  const calls = [...SOURCE.matchAll(/\bstopped\("([^"]+)", (?:"([^"]+)"|\w+)/g)];
+  assert.ok(calls.length > 20);
+  // harness and session-check return before start is logged and write no end line.
+  for (const [, stoppedAt, status] of calls.filter(
+    (c) => !["harness", "session-check"].includes(c[1]),
+  )) {
+    assert.ok(END_STOPS.includes(stoppedAt), stoppedAt);
+    if (status !== undefined) assert.ok(END_STATUSES.includes(status), status);
   }
 });
 
-test("a stopped run holds no live slot, and the tick restarts it with resume:true (the session check refuses a fresh run In Progress)", () => {
-  const tick = readFileSync(
-    join(fileURLToPath(new URL("../..", import.meta.url)), "staff/max/tick.js"),
-    "utf8",
-  );
+// ---- Review mode: CI is the evidence, and a development merge gets a delta review (2026-10-19) ----
+
+const isReviewMode = (c) => c.startsWith("node scripts/review-mode.mjs ");
+const GREEN_BEFORE = "b".repeat(40);
+
+test("the Reviewer reads the required checks on the head and never re-runs the suites CI ran", async () => {
+  const { commands, spawns } = await run();
+  const prompt = reviewers(spawns)[0].prompt;
+  assert.match(prompt, /read the required checks on the head with gh pr checks 77/);
   assert.match(
-    tick,
-    /issue\.touchedMinutesAgo < liveWindowMinutes &&\s*!stoppedKeys\.has\(issue\.key\)/,
+    prompt,
+    /Never re-run a full test suite, typecheck, lint or build that a required check already ran green on this head/,
   );
+  assert.match(prompt, /one targeted test file at most, with its output trimmed \(\| tail -30\)/);
+  // No delta was offered, so this is the full review of the merge-base diff.
+  assert.match(prompt, /run it on the PR's merge-base diff/);
+  assert.doesNotMatch(prompt, /Delta review/);
+  // The mode is asked for once, with the move to In Review, before the Reviewer starts.
+  assert.deepEqual(commands.filter(isReviewMode), ["node scripts/review-mode.mjs KIT-9"]);
+  const mode = commands.findIndex(isReviewMode);
+  assert.equal(commands[mode - 1], 'node scripts/linear.mjs state KIT-9 "In Review"');
+  assert.ok(mode < commands.findIndex((c) => c.includes("--step reviewer")));
+});
+
+test("a head that moved only by a development merge gets a delta review since the green head", async () => {
+  const { result, spawns } = await run({
+    shell: (c) =>
+      isReviewMode(c) ? { code: 0, line: `REVIEW-MODE delta ${GREEN_BEFORE}` } : undefined,
+  });
+  assert.equal(result.status, "Approval");
+  const prompt = reviewers(spawns)[0].prompt;
+  assert.match(prompt, /run its development-merge delta review/);
+  assert.doesNotMatch(prompt, /run it on the PR's merge-base diff/);
   assert.ok(
-    tick.indexOf("const live = ") > tick.indexOf("stoppedRuns({"),
-    "live is counted after the stopped runs are known",
+    prompt.includes(
+      `git diff ${GREEN_BEFORE}..HEAD restricted to the globs on the PR body's write-scope: line`,
+    ),
   );
-  assert.match(tick, /mode restart \(no open PR[^\n]*still passes \\`"resume":true\\`/);
-  assert.doesNotMatch(tick, /if \(!pr\) continue;\n\s*const starts/);
+  assert.ok(prompt.includes(`node scripts/review-mode.mjs KIT-9 --green ${GREEN_BEFORE}`));
+  assert.match(prompt, /git show --cc <merge>/);
+  assert.ok(prompt.includes(`evidence \`unchanged since ${GREEN_BEFORE.slice(0, 12)}\``));
+  assert.match(prompt, /re-read mergeable and required-checks on the head/);
+  // CI stays the evidence in a delta review too.
+  assert.match(prompt, /Never re-run a full test suite/);
+});
+
+test("any answer but a well-formed delta line is a full review", async () => {
+  const answers = [
+    {
+      code: 0,
+      line: "REVIEW-MODE full abc123456789 is a commit of the branch, not a merge of origin/development",
+    },
+    { code: 0, line: "REVIEW-MODE delta abc1234" },
+    { code: 0, line: `REVIEW-MODE delta ${GREEN_BEFORE}; rm -rf .` },
+    { code: 4, line: `REVIEW-MODE delta ${GREEN_BEFORE}` },
+    { code: 4, line: "UNKNOWN: linear down" },
+    { code: 0, line: "KIT-EXIT:0" },
+  ];
+  for (const answer of answers) {
+    const { result, spawns } = await run({ shell: (c) => (isReviewMode(c) ? answer : undefined) });
+    assert.equal(result.status, "Approval", answer.line);
+    const prompt = reviewers(spawns)[0].prompt;
+    assert.match(prompt, /run it on the PR's merge-base diff/, answer.line);
+    assert.doesNotMatch(prompt, /Delta review/, answer.line);
+  }
+});
+
+test("a green review whose gate closed hands its head to the next round's review-mode as --green", async () => {
+  let gates = 0;
+  const { commands } = await run({
+    shell: (c) => {
+      if (!isReviewGate(c)) return undefined;
+      gates += 1;
+      return gates === 1 ? { code: 1, line: FLOW_RED_LINE } : { code: 0, line: "OPEN (review)" };
+    },
+  });
+  assert.deepEqual(commands.filter(isReviewMode), [
+    "node scripts/review-mode.mjs KIT-9",
+    `node scripts/review-mode.mjs KIT-9 --green ${SHA}`,
+  ]);
+});
+
+test("a red review hands no --green to the next round", async () => {
+  const { commands } = await run({
+    reviewer: (n) =>
+      n === 1
+        ? {
+            verdict: "red",
+            sha: SHA,
+            rows: ["spec-ac"],
+            sentence: "gap",
+            threadId: REVIEWER_THREAD,
+          }
+        : undefined,
+  });
+  const modes = commands.filter(isReviewMode);
+  assert.equal(modes.length, 2);
+  assert.ok(modes.every((c) => c === "node scripts/review-mode.mjs KIT-9"));
+});
+
+/** A throwaway repo: `development` and `feature` share a base; `feature` changes the issue's file. */
+function repo() {
+  const dir = mkdtempSync(join(tmpdir(), "review-mode-"));
+  const raw = (args) =>
+    execFileSync("git", args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] })
+      .toString()
+      .trim();
+  const git = (args) => {
+    try {
+      return raw(args);
+    } catch {
+      return null;
+    }
+  };
+  const write = (file, text) => writeFileSync(join(dir, file), text);
+  const commit = (message) => {
+    raw(["add", "-A"]);
+    raw(["commit", "-q", "-m", message]);
+    return raw(["rev-parse", "HEAD"]);
+  };
+  raw(["init", "-q", "-b", "development"]);
+  raw(["config", "user.email", "test@example.com"]);
+  raw(["config", "user.name", "test"]);
+  raw(["config", "commit.gpgsign", "false"]);
+  write("issue.txt", "one\ntwo\nthree\nfour\nfive\nsix\nseven\n");
+  write("other.txt", "lane\n");
+  commit("base");
+  raw(["checkout", "-q", "-b", "feature"]);
+  write("issue.txt", "ONE\ntwo\nthree\nfour\nfive\nsix\nseven\n");
+  const green = commit("the issue's change");
+  const onLane = (file, text) => {
+    raw(["checkout", "-q", "development"]);
+    write(file, text);
+    commit(`lane changes ${file}`);
+    raw(["checkout", "-q", "feature"]);
+  };
+  const rows = (at = green, status = "checked") =>
+    LOCK_ROWS.map((lock) => ({ id: lock.id, status, evidence: "ok", at }));
+  const mode = (opts = {}) => reviewMode({ rows: rows(), lane: "development", git, ...opts });
+  const done = () => rmSync(dir, { recursive: true, force: true });
+  return { raw, write, commit, green, onLane, rows, mode, done };
+}
+
+test("review-mode: a merge of development that touched other files is a delta since the green head", () => {
+  const r = repo();
+  try {
+    r.onLane("other.txt", "lane moved\n");
+    r.raw(["merge", "-q", "--no-edit", "development"]);
+    const merge = r.raw(["rev-parse", "HEAD"]);
+    assert.deepEqual(r.mode({ green: r.green }), {
+      mode: "delta",
+      since: r.green,
+      head: merge,
+      merges: [merge],
+      overlap: [],
+    });
+    // The matrix alone names the green head when the run has none, short sha included.
+    assert.equal(r.mode({ rows: r.rows(r.green.slice(0, 9)) }).mode, "delta");
+  } finally {
+    r.done();
+  }
+});
+
+test("review-mode: a file both sides changed and git combined is listed for the Reviewer", () => {
+  const r = repo();
+  try {
+    r.onLane("issue.txt", "one\ntwo\nthree\nfour\nfive\nsix\nSEVEN\n");
+    r.raw(["merge", "-q", "--no-edit", "development"]);
+    const out = r.mode();
+    assert.equal(out.mode, "delta");
+    assert.deepEqual(out.overlap, ["issue.txt"]);
+  } finally {
+    r.done();
+  }
+});
+
+test("review-mode: a commit of the branch since the green head is a full review", () => {
+  const r = repo();
+  try {
+    r.onLane("other.txt", "lane moved\n");
+    r.raw(["merge", "-q", "--no-edit", "development"]);
+    r.write("issue.txt", "ONE\nTWO\nthree\nfour\nfive\nsix\nseven\n");
+    r.commit("more of the issue");
+    const out = r.mode();
+    assert.equal(out.mode, "full");
+    assert.match(out.why, /is a commit of the branch, not a merge of development/);
+  } finally {
+    r.done();
+  }
+});
+
+test("review-mode: a merge that took one side of a shared file whole is a full review", () => {
+  const r = repo();
+  try {
+    r.onLane("issue.txt", "one\ntwo\nthree\nfour\nfive\nsix\nSEVEN\n");
+    r.raw(["merge", "-q", "--no-edit", "-s", "ours", "development"]);
+    const out = r.mode();
+    assert.equal(out.mode, "full");
+    assert.match(out.why, /took one side of issue\.txt whole/);
+  } finally {
+    r.done();
+  }
+});
+
+test("review-mode: a matrix that is not green at one head, or a rewritten branch, is a full review", () => {
+  const r = repo();
+  try {
+    r.onLane("other.txt", "lane moved\n");
+    r.raw(["merge", "-q", "--no-edit", "development"]);
+    assert.match(r.mode({ rows: [] }).why, /no review matrix/);
+    assert.match(r.mode({ rows: r.rows(r.green, "finding") }).why, /holds a finding/);
+    assert.match(r.mode({ rows: r.rows().slice(1) }).why, /incomplete/);
+    const mixed = r.rows();
+    mixed[0] = { ...mixed[0], at: "c".repeat(40) };
+    assert.match(r.mode({ rows: mixed }).why, /not all read at one head/);
+    assert.match(r.mode({ green: "d".repeat(40) }).why, /not at the green head/);
+    // The branch was rewritten: the green head is no ancestor of HEAD.
+    r.raw(["reset", "-q", "--hard", "development"]);
+    r.write("issue.txt", "redone\n");
+    r.commit("rewritten");
+    assert.match(r.mode().why, /does not descend from/);
+  } finally {
+    r.done();
+  }
 });

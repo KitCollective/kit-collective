@@ -3,6 +3,7 @@ import {
   type CollectionConversationPeer,
   type CollectionConversations,
   type CollectionSendMessageRequest,
+  type CollectionSendMessageResponse,
   collectionBlockConversationResponseSchema,
   collectionConversationDetailSchema,
   collectionConversationPeerSchema,
@@ -71,7 +72,7 @@ export async function sendConversationMessage(
   accessToken: string,
   conversationId: string,
   body: CollectionSendMessageRequest,
-): Promise<{ messageId: string }> {
+): Promise<CollectionSendMessageResponse> {
   const response = await requestJson(`/v1/collection/conversations/${conversationId}/messages`, {
     method: "POST",
     headers: {
@@ -86,6 +87,50 @@ export async function sendConversationMessage(
   }
 
   return collectionSendMessageResponseSchema.parse(await response.json());
+}
+
+/**
+ * The first message to a Collector with no Conversation yet. The API creates the Conversation
+ * with it and answers its id (a hidden Conversation of the pair comes back too).
+ */
+export async function sendPeerMessage(
+  accessToken: string,
+  peerId: string,
+  body: CollectionSendMessageRequest,
+): Promise<CollectionSendMessageResponse> {
+  const response = await requestJson(`/v1/collection/peers/${peerId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Accept-Language": "da",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new ConversationsFetchError("Kunne ikke sende besked", response.status);
+  }
+
+  return collectionSendMessageResponseSchema.parse(await response.json());
+}
+
+/** The Collector and the pair's Conversation, or `conversationId: null`. Creates nothing. */
+export async function fetchPeerConversation(
+  accessToken: string,
+  peerId: string,
+): Promise<CollectionConversationPeer> {
+  const response = await requestJson(`/v1/collection/peers/${peerId}/conversation`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Accept-Language": "da",
+    },
+  });
+
+  if (!response.ok) {
+    throw new ConversationsFetchError("Kunne ikke hente samtale", response.status);
+  }
+
+  return collectionConversationPeerSchema.parse(await response.json());
 }
 
 export function resolveConversationPhotoUrl(relativePath: string): string {

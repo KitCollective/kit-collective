@@ -1,5 +1,5 @@
 import type { CollectionPeerJersey } from "@kit/api-contract";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -12,6 +12,8 @@ import { useAuth } from "@/auth/AuthProvider";
 import { Sheet } from "@/components/catalog-ui";
 import { toastConfig } from "@/components/toast-config";
 import { Button, ButtonDock, IconButton } from "@/components/ui";
+import { peerThreadHref, writeToPeerLabel } from "@/inbox/thread-view-model";
+import { WriteToPeerButton } from "@/inbox/write-to-peer-button";
 import {
   JerseyFactRow,
   JerseyPlayerRow,
@@ -156,6 +158,17 @@ export default function ForeignJerseyDetailScreen() {
     void runModeration("Blokér", () => blockPeer(accessToken, peerJersey.ownerId));
   };
 
+  // This screen is a full-screen modal over the Søg tab: a push into the Indbakke tab alone opens
+  // the thread behind it (hosted Device flow, KIT-291). Close the Søg stack first.
+  const openThreadWithOwner = () => {
+    if (!peerJersey) {
+      return;
+    }
+    router.dismissAll();
+    // SAFETY: the view-model builds only routes that exist under app/(tabs).
+    router.push(peerThreadHref(peerJersey.ownerId, peerJersey.id) as Href);
+  };
+
   const view = useMemo(
     () => (peerJersey ? buildForeignJerseyView(peerJersey) : null),
     [peerJersey],
@@ -190,7 +203,7 @@ export default function ForeignJerseyDetailScreen() {
     <View testID="foreign-jersey-detail" style={[styles.root, { backgroundColor: theme.canvas }]}>
       <ScrollView
         contentContainerStyle={{
-          paddingBottom: dockState.kind === "none" ? insets.bottom + space.insetLg : space.insetLg,
+          paddingBottom: space.insetLg,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -224,8 +237,12 @@ export default function ForeignJerseyDetailScreen() {
 
       {dockState.kind === "send" ? (
         <ButtonDock>
-          {/* A row so KIT-298 can add the 54px message Icon button before Send bud. */}
           <View style={styles.dockRow}>
+            <WriteToPeerButton
+              testID="foreign-jersey-write"
+              name={writeToPeerLabel(peerJersey.ownerHandle)}
+              onPress={openThreadWithOwner}
+            />
             <View style={styles.dockPrimary}>
               <Button
                 label="Send bud"
@@ -235,6 +252,18 @@ export default function ForeignJerseyDetailScreen() {
               />
             </View>
           </View>
+        </ButtonDock>
+      ) : null}
+
+      {dockState.kind === "message-only" ? (
+        <ButtonDock>
+          <Button
+            label={writeToPeerLabel(peerJersey.ownerHandle)}
+            testID="foreign-jersey-write"
+            variant="secondary"
+            width="fill"
+            onPress={openThreadWithOwner}
+          />
         </ButtonDock>
       ) : null}
 
