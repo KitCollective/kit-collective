@@ -1611,11 +1611,28 @@ test("a receipt refused for a missing result line asks the Reviewer once, then t
   assert.ok(commands.some((c) => c.includes("--code no-result-line")));
 });
 
+const FRESH_THREAD = "thr_reviewer02";
+const FRESH_TITLE = "reviewer:KIT-9:r1:fresh:openrouter";
+/** Optio serves each Reviewer's thread by title: the first review and the fresh one are two threads. */
+const served = (c) =>
+  c.startsWith("bb optio reviewer-served")
+    ? {
+        code: 0,
+        line: `SERVED ${c.endsWith(FRESH_TITLE) ? FRESH_THREAD : REVIEWER_THREAD} as z-ai/glm-5.3 (3 calls)`,
+      }
+    : undefined;
+
 test("the Reviewer is asked only once, and other refusals are not retried", async () => {
   const once = await run({ shell: (c) => (isReceipt(c) ? { code: 1, line: NO_LINE } : undefined) });
   assert.equal(once.result.stoppedAt, "receipt");
-  assert.equal(once.commands.filter(isReceipt).length, 2);
+  // The first try, the one after the ask, and the one on the fresh Reviewer's thread.
+  assert.equal(once.commands.filter(isReceipt).length, 3);
   assert.equal(once.commands.filter((c) => c.startsWith("bb thread tell")).length, 1);
+  assert.equal(
+    agentSpawns(once.spawns).filter((s) => s.options.label.startsWith("reviewer:")).length,
+    2,
+    "one fresh Reviewer, never a second",
+  );
 
   const other = await run({
     shell: (c) =>
@@ -1636,13 +1653,100 @@ test("the Reviewer is asked only once, and other refusals are not retried", asyn
         ? { code: 1, line: NO_LINE }
         : c.startsWith("bb thread tell")
           ? { code: 1, line: "HTTP 409" }
-          : undefined,
+          : served(c),
   });
   assert.equal(
-    tellFailed.commands.filter(isReceipt).length,
+    tellFailed.commands.filter((c) => isReceipt(c) && c.includes(`--thread ${REVIEWER_THREAD} `))
+      .length,
     1,
-    "no second receipt when the ask failed",
+    "no second receipt on the asked thread when the ask failed",
   );
+});
+
+test("the ask answered with JSON instead of the line spawns one fresh Reviewer on the same head, whose own line is the receipt (KIT-404)", async () => {
+  const { result, commands, spawns } = await run({
+    shell: (c) => {
+      if (isReceipt(c))
+        return c.includes(`--thread ${FRESH_THREAD} `)
+          ? { code: 0, line: "WOULD POST (receipt): kc/audit success" }
+          : { code: 1, line: NO_LINE };
+      return served(c);
+    },
+  });
+  assert.equal(result.status, "Approval");
+  assert.match(result.receipt, /WOULD POST/);
+  const reviewers = agentSpawns(spawns).filter((s) => s.options.label.startsWith("reviewer:"));
+  assert.deepEqual(
+    reviewers.map((s) => s.options.label),
+    ["reviewer:KIT-9:r1:openrouter", FRESH_TITLE],
+  );
+  // Delta since the green head itself: the checks are re-read and the matrix carried forward.
+  assert.match(reviewers[1].prompt, new RegExp(`--green ${SHA}`));
+  assert.match(reviewers[1].prompt, /write that line as your last text/);
+  const at = (needle) => commands.findIndex((c) => c.includes(needle));
+  assert.ok(at("--code fresh-reviewer") > at("bb thread wait thr_reviewer01"));
+  assert.ok(at("--code fresh-reviewer") < at(`reviewer-served --title ${FRESH_TITLE}`));
+  // The fresh thread is logged as a reviewer before its receipt, which audit-receipt requires.
+  assert.ok(at(`spawn --issue KIT-9 --step reviewer --thread ${FRESH_THREAD}`) > 0);
+  assert.ok(
+    at(`spawn --issue KIT-9 --step reviewer --thread ${FRESH_THREAD}`) <
+      at(`--thread ${FRESH_THREAD} --implementer-thread`),
+  );
+  assert.ok(
+    commands.some((c) =>
+      c.includes(`--step reviewer --outcome green --usage-thread ${FRESH_THREAD}`),
+    ),
+  );
+  assert.ok(!commands.some((c) => c.includes("--code evidence-gap")));
+});
+
+test("a fresh Reviewer that is not green on the same head, or not served, stops at the receipt without its receipt", async () => {
+  const cases = [{ verdict: "red", sha: SHA }, { verdict: "green", sha: "b".repeat(40) }, null];
+  for (const fresh of cases) {
+    const { result, commands } = await run({
+      reviewer: (n) =>
+        n === 1
+          ? { verdict: "green", sha: SHA, sentence: "clean", threadId: REVIEWER_THREAD }
+          : fresh
+            ? { ...fresh, sentence: "x", threadId: FRESH_THREAD }
+            : new Error("no result"),
+      shell: (c) => (isReceipt(c) ? { code: 1, line: NO_LINE } : served(c)),
+    });
+    assert.equal(result.stoppedAt, "receipt");
+    assert.equal(result.status, "In Review");
+    assert.match(result.receipt, /no AUDIT-RESULT line after the ask/);
+    assert.ok(!commands.some((c) => isReceipt(c) && c.includes(FRESH_THREAD)));
+    assert.ok(!commands.some((c) => c.includes(`--thread ${FRESH_THREAD} --mode review`)));
+    assert.ok(commands.some((c) => c.includes("--code evidence-gap")));
+  }
+  const notServed = await run({
+    shell: (c) =>
+      isReceipt(c)
+        ? { code: 1, line: NO_LINE }
+        : c.startsWith("bb optio reviewer-served") && c.endsWith(FRESH_TITLE)
+          ? { code: 1, line: `NOT SERVED ${FRESH_THREAD}: no proxied calls` }
+          : served(c),
+  });
+  assert.equal(notServed.result.stoppedAt, "receipt");
+  assert.match(notServed.result.receipt, /did not serve/);
+  assert.ok(!notServed.commands.some((c) => isReceipt(c) && c.includes(FRESH_THREAD)));
+});
+
+test("the ask for the result line says plain text, not JSON, a code block or a tool call (KIT-404)", async () => {
+  const { commands } = await run({
+    shell: (c) => (isReceipt(c) ? { code: 1, line: NO_LINE } : undefined),
+  });
+  const tell = commands.find((c) => c.startsWith("bb thread tell thr_reviewer01 "));
+  assert.match(
+    tell,
+    /as plain text and nothing else: no JSON, no code block, no tool call and no result tool/,
+  );
+  assert.match(tell, new RegExp(`AUDIT-RESULT KIT-9 green ${SHA}"$`));
+});
+
+test("fresh-reviewer is a run-log reason code", async () => {
+  const { REASON_CODES } = await import("../lib/run-log.mjs");
+  assert.ok(REASON_CODES.includes("fresh-reviewer"));
 });
 
 test("the Reviewer prompt asks for the result line as its last text, after the workpad write", async () => {
