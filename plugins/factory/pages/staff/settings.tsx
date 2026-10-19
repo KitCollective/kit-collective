@@ -99,8 +99,10 @@ function Log({ log }: { log: Change[] }) {
           key={`${change.at}-${change.key}-${read(change.key, change.to)}`}
           className="px-4 py-2 text-sm"
         >
-          <span className="font-medium">{LABELS[change.key as KeyName] ?? change.key}</span>:{" "}
-          {read(change.key, change.from)} → {read(change.key, change.to)}
+          <span className="font-medium">
+            {Object.entries(LABELS).find(([name]) => name === change.key)?.[1] ?? change.key}
+          </span>
+          : {read(change.key, change.from)} → {read(change.key, change.to)}
           <span className="block text-xs text-muted-foreground">
             {change.by} · {when(Date.parse(change.at))}
           </span>
