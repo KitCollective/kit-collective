@@ -1,6 +1,7 @@
 // The staff area's part of the RPC contract: the Agents page, its chat, memory, automations,
 // follow-ups and Linear triggers.
 import { z } from "zod";
+import { scheduleSchema } from "../loop-registry.js";
 import { proposalDto } from "../loops/contract.js";
 import { ok } from "../shared/contract.js";
 
@@ -90,11 +91,70 @@ const staffHeader = z.object({
   status: z.enum(["on", "off", "paused"]),
   /** When the newest daily activity thread was last active (ms); null when there is none yet. */
   lastHeartbeat: z.number().nullable(),
-  /** The Charter's budget as written; `used` is null while nothing measures it. */
+  /** The budget in force, as written: the override, else the Charter's; `used` is null while nothing measures it. */
   budget: z.object({ limit: z.string().nullable(), used: z.string().nullable() }),
+  /** Who overrode what the header shows and when (ISO); null while the Charter's value is in force (ADR-0065). */
+  overrides: z.object({
+    status: z.object({ by: z.string(), at: z.string() }).nullable(),
+    budget: z.object({ by: z.string(), at: z.string() }).nullable(),
+  }),
+});
+
+const by = z.string().trim().min(1).max(80);
+
+/** One setting: what is in force, what the Charter says, and who overrode it and when (ISO). */
+const setting = <T extends z.ZodType>(value: T) =>
+  z.object({
+    value,
+    file: value,
+    override: z.object({ by: z.string(), at: z.string() }).nullable(),
+  });
+
+/** A Staff member's Operating settings, as the page and `bb optio settings --json` read them. */
+const staffSettingsDto = z.object({
+  /** What the chat header shows; `off` also when the agent itself is disabled, `paused` also under the plugin-wide pause. */
+  status: z.enum(["on", "off", "paused"]),
+  settings: z.object({
+    enabled: setting(z.boolean()),
+    paused: setting(z.boolean()),
+    /** The model the member's threads use; the file value is null when the Charter names none. */
+    model: setting(z.string().nullable()),
+    /** The budget as written; null states none. */
+    budget: setting(z.string().nullable()),
+    /** The daily window, in UTC, in which Max's tick may wake the member; null is "as the Charter says". */
+    heartbeat: setting(scheduleSchema.nullable()),
+  }),
+  /** The Charter's Heartbeat as written (prose), shown beside the window; null when it states none. */
+  charter: z.object({ heartbeat: z.string().nullable() }),
+  /** Every change to the member's settings, newest first. */
+  log: z.array(
+    z.object({
+      key: z.string(),
+      /** The override before; null when the Charter's value was in force. */
+      from: z.object({ value: z.unknown() }).nullable(),
+      /** The override after; null when it was cleared. */
+      to: z.object({ value: z.unknown() }).nullable(),
+      by: z.string(),
+      at: z.string(),
+    }),
+  ),
 });
 
 export const staffContract = {
+  staff_settings: {
+    input: z.object({ agentId: z.string().min(1) }).strict(),
+    output: staffSettingsDto,
+  },
+  staff_settings_set: {
+    input: z
+      .object({ agentId: z.string().min(1), key: z.string().min(1), value: z.unknown(), by })
+      .strict(),
+    output: ok,
+  },
+  staff_settings_clear: {
+    input: z.object({ agentId: z.string().min(1), key: z.string().min(1), by }).strict(),
+    output: ok,
+  },
   staff_list: {
     input: z.null(),
     output: z.object({
@@ -242,3 +302,4 @@ export type SessionDto = z.infer<typeof session>;
 export type FollowUpDto = z.infer<typeof followUp>;
 export type LinearTriggerDto = z.infer<typeof linearTrigger>;
 export type StaffHeaderDto = z.infer<typeof staffHeader>;
+export type StaffSettingsDto = z.infer<typeof staffSettingsDto>;

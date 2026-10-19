@@ -1,5 +1,5 @@
 // A Staff member's Charter: `staff/<agent id>.md` in the agent's project, with a frontmatter that
-// gives the title, the Heartbeat and, when there is one, the budget. An agent that has a Charter is
+// gives the title, the Heartbeat, the model and, when there is one, the budget. An agent that has a Charter is
 // Staff (CONTEXT.md: Staff, Charter). Only top-level `key: value` lines are read; there is no YAML
 // dependency and the Charter's nested `limits:` block is not needed here.
 
@@ -8,6 +8,8 @@ export interface Charter {
   heartbeat: string | null;
   /** The budget the Charter states, as written; null when it states none. */
   budget: string | null;
+  /** The model the Charter names for the member's threads; null when it names none. */
+  model: string | null;
 }
 
 /** The path of an agent's Charter in its project. */
@@ -31,5 +33,6 @@ export function parseCharter(text: string): Charter | null {
     title,
     heartbeat: fields.get("heartbeat") ?? null,
     budget: fields.get("budget") ?? null,
+    model: fields.get("model") ?? null,
   };
 }

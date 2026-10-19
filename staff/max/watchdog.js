@@ -4,13 +4,17 @@
 // (15:10 to 15:45), so Max could not read or write Linear as himself.
 //
 // Checks, each healed when it safely can be:
-//   tick-off      the dispatch automation is disabled            -> resumed
+//   tick-off      the dispatch automation is disabled            -> resumed (not while Max is off or paused)
 //   tick-failing  its last 3 runs failed                         -> alarm (with the last error)
-//   tick-silent   no run of it finished in the last 20 minutes   -> alarm
+//   tick-silent   no run of it finished in the last 20 minutes   -> alarm (not while Max is off or paused)
 //   env-keys      the runs machine's .env lacks a required key   -> the missing lines are appended from
 //                 this checkout's .env (values are never printed); alarm only if they are missing here too
 //   max-stuck     a Max thread has been active for over 45 min   -> alarm
 //   worktrees     worktrees of Done/Canceled issues on the runs machine -> reaped (ADR-0066)
+// Max's Operating settings (KIT-408) are read first with `bb optio settings max --json`: while he is off or
+// paused (his page's setting, a disabled agent or Optio's plugin-wide pause) the tick is held on purpose, so
+// the watchdog neither resumes it nor calls it silent. Settings it cannot read change nothing: the checks
+// run as before.
 // An alarm is one comment on the alarm issue as Max, with Nicklas's profile URL so it reaches his Linear
 // inbox. The same set of problems is not repeated within 6 hours, and a comment says when they cleared.
 // A tick with nothing wrong and nothing healed prints nothing (a silent, free run).
@@ -51,10 +55,17 @@
   const problems = [];
   const healed = [];
 
+  // Max's Operating settings: why the tick is held on purpose, or null (also when they cannot be read).
+  let heldOnPurpose = null;
+  try {
+    const status = json(["optio", "settings", "max"]).status;
+    if (status === "off" || status === "paused") heldOnPurpose = status;
+  } catch {}
+
   // The dispatch tick: on, not failing, not silent.
   try {
     const automation = json(["automation", "show", tick, "--project", project]);
-    if (!automation.enabled) {
+    if (!automation.enabled && heldOnPurpose === null) {
       if (!dryRun) run(bb, ["automation", "resume", tick, "--project", project]);
       healed.push(`tick-off: the dispatch automation ${tick} was disabled; resumed`);
     }
@@ -72,7 +83,11 @@
       );
     }
     const last = runs.find((r) => r.finishedAt);
-    if (automation.enabled && (!last || Date.now() - last.finishedAt > 20 * 60000)) {
+    if (
+      automation.enabled &&
+      heldOnPurpose === null &&
+      (!last || Date.now() - last.finishedAt > 20 * 60000)
+    ) {
       problems.push(
         `tick-silent: no dispatch run finished since ${last ? new Date(last.finishedAt).toISOString() : "ever"}`,
       );

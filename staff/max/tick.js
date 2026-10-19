@@ -21,6 +21,11 @@
 // schedule come from `bb optio loops --json`, each the override set on Optio's Loops page or else the value in
 // factory.config.json. A Loop that is off or outside its schedule starts and resumes nothing until the next tick
 // that finds it on; one that cannot be read starts nothing either (a pause must not leak through an outage).
+// Max's own Operating settings (KIT-408) come from `bb optio settings max --json`, read just before a wake:
+// off, paused (his setting or Optio's plugin-wide pause), outside his Heartbeat window (a daily UTC window
+// set on his page; none means as the Charter says) or unreadable wakes nobody. The tick then prints one
+// stderr line and returns without saving state, so the same work wakes him once he is back. The model
+// override, when set, replaces DISPATCH_MODEL for the wake. staff/max.md is not read for any of this.
 // Written without static imports or import.meta so it runs whether bb stores it as CJS or ESM.
 
 // A run that ended In Progress or In Review short of a landing, and is not a landing. Its issue's last
@@ -104,6 +109,47 @@ function receiptStall(own) {
   const bb = process.env.BB_CLI ?? "bb";
   const statePath = path.join(path.dirname(process.argv[1]), "kit-dispatch.state");
 
+  // Whether now is inside a daily UTC window { from, to } as "HH:MM": from up to, not including, to; a
+  // window that ends before it starts runs past midnight; null is any time (src/loop-registry.ts inSchedule).
+  const inDailyWindow = (window) => {
+    if (window === null || window === undefined) return true;
+    const now = new Date();
+    const minutes = (clock) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
+    const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+    return minutes(window.from) < minutes(window.to)
+      ? nowMinutes >= minutes(window.from) && nowMinutes < minutes(window.to)
+      : nowMinutes >= minutes(window.from) || nowMinutes < minutes(window.to);
+  };
+
+  // Max's own Operating settings (override or Charter value), read from Optio. hold says why Max is not
+  // woken this tick, or is null; model is the override when one is set. Unreadable settings hold the wake:
+  // a pause must not leak through an outage.
+  const readMaxSettings = () => {
+    try {
+      const printed = JSON.parse(
+        execFileSync(bb, ["optio", "settings", "max", "--json"], {
+          encoding: "utf8",
+          timeout: 60000,
+        }),
+      );
+      if (!printed.settings || !printed.status)
+        throw new Error(printed.error ?? "unexpected output");
+      const window = printed.settings.heartbeat.value;
+      let hold = null;
+      if (printed.status !== "on") hold = `Max is ${printed.status} (Operating settings)`;
+      else if (!inDailyWindow(window))
+        hold = `Max is outside his Heartbeat window ${window.from}-${window.to} UTC`;
+      const { model } = printed.settings;
+      return { hold, model: model.override !== null && model.value ? model.value : null };
+    } catch (error) {
+      const reason = (error instanceof Error ? error.message : String(error)).split("\n")[0];
+      return {
+        hold: `could not read Max's settings with \`bb optio settings max --json\`: ${reason}`,
+        model: null,
+      };
+    }
+  };
+
   // The AFK developer Loop's Operating settings, override-or-file, read from Optio. startHold says why
   // nothing is started or resumed this tick, or is null.
   const AFK_WORKFLOW = "afk-developer";
@@ -122,15 +168,8 @@ function receiptStall(own) {
     const { enabled, maxLive, startsPerDay, schedule } = afk.settings;
     maxLiveRuns = maxLive.value;
     maxStartsPerDay = startsPerDay.value ?? Number.POSITIVE_INFINITY;
-    const now = new Date();
-    const minutes = (clock) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
-    const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
     const window = schedule.value;
-    const inWindow =
-      window === null ||
-      (minutes(window.from) < minutes(window.to)
-        ? nowMinutes >= minutes(window.from) && nowMinutes < minutes(window.to)
-        : nowMinutes >= minutes(window.from) || nowMinutes < minutes(window.to));
+    const inWindow = inDailyWindow(window);
     if (!enabled.value) startHold = `${afk.name} is paused`;
     else if (!inWindow)
       startHold = `${afk.name} is outside its schedule ${window.from}-${window.to} UTC`;
@@ -470,6 +509,15 @@ function receiptStall(own) {
     process.stdout.write(
       `DRY RUN resume: ${JSON.stringify(actionable.resume)} (stopped, before the slot check: ${JSON.stringify(resume)}) loops: ${JSON.stringify(resumeLoops)}\n`,
     );
+  // Max's own Operating settings (KIT-408), read once the board has something new. Held: say why in one
+  // line and leave statePath alone, so the same work wakes Max after unpause (a held tick stays silent
+  // on stdout, like a tick with nothing new).
+  const maxSettings = readMaxSettings();
+  if (maxSettings.hold !== null) {
+    process.stderr.write(`kit-dispatch: ${maxSettings.hold}; not waking Max this tick\n`);
+    return;
+  }
+  const wakeModel = maxSettings.model ?? dispatchModel;
   if (nothingToDo) {
     // Remember the empty state, so the same work appearing again later wakes a thread again.
     if (!dryRun)
@@ -530,7 +578,7 @@ End with a short status report in Danish: runs started (issue, thread, run id), 
   );
   if (dryRun) {
     process.stdout.write(
-      `DRY RUN: board changed (${JSON.stringify(counts)}), eligible: ${eligible.join(", ") || "none"}, landing: ${landing.map((l) => `${l.issue} ${l.step} #${l.pr}`).join(", ") || "none"}; ${today ? `would clear and tell ${today.id} ("${title}")` : `would spawn "${title}" in ${environment}`} with a ${prompt.length}-character prompt\n`,
+      `DRY RUN: board changed (${JSON.stringify(counts)}), eligible: ${eligible.join(", ") || "none"}, landing: ${landing.map((l) => `${l.issue} ${l.step} #${l.pr}`).join(", ") || "none"}; ${today ? `would clear and tell ${today.id} ("${title}")` : `would spawn "${title}" in ${environment}`} with a ${prompt.length}-character prompt (model ${wakeModel})\n`,
     );
     return;
   }
@@ -549,7 +597,7 @@ End with a short status report in Danish: runs started (issue, thread, run id), 
         "--mode",
         "auto",
         "--model",
-        dispatchModel,
+        wakeModel,
         "--reasoning-level",
         "medium",
         "--permission-mode",
@@ -573,7 +621,7 @@ End with a short status report in Danish: runs started (issue, thread, run id), 
         "--provider",
         "claude-code",
         "--model",
-        dispatchModel,
+        wakeModel,
         "--reasoning-level",
         "medium",
         "--permission-mode",
