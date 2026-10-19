@@ -95,6 +95,8 @@ export const REASON_CODES = [
   "tool-refused",
   "evidence-gap",
   "no-result-line",
+  // The ask for the AUDIT-RESULT line got none, so the run spawned one fresh Reviewer on the same head (KIT-404).
+  "fresh-reviewer",
   "runner-no-result",
   "report-failed",
   "lead-skipped",
