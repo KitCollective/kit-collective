@@ -5,14 +5,18 @@ frontend agent, or whatever areas a project has. Each agent has its own
 instructions, a memory that grows as you decide things with it, and
 automations that run recurring work.
 
-Everything is set up on the **Agents** page in the bb sidebar.
+Everything is set up on the **Staff** page in the bb sidebar.
 
 ## What an agent is
 
 - **Instructions**: its area, its rules, what it may touch.
-- **Chat**: "Start chat" opens a new bb thread as the agent. The thread first
-  runs `bb optio brief <agent>`, which prints the instructions and the
-  memory.
+- **Chat**: "Start chat" opens the agent's standing Staff chat, a bb thread as
+  the agent that Optio makes the first time. The thread first runs
+  `bb optio brief <agent>`, which prints the instructions and the memory.
+  `bb optio chat <agent>` prints the thread id of that chat, and
+  `bb optio ask <agent> "<question>"` asks the person something that is theirs
+  to decide: it shows in their Inbox as a card linking to the Staff chat and
+  leaves it when they answer there.
 - **Memory**: one-sentence facts and decisions. The agent saves them with
   `bb optio memory add` while you talk; you can add, correct and remove
   them on the page.
@@ -71,7 +75,7 @@ when its reason changes.
 
 ## The runs page
 
-**Runs** (a button on the Agents list and on the Board) lists every run the
+**Runs** (a button on the Staff list and on the Board) lists every run the
 Board started, per Loop and newest first: its issue, machine, current step, how
 long it has run, the gates Optio recorded for it, and why it stopped. It
 filters by Loop and by state: *running*, *stopped* (a stall, released or not)
@@ -123,11 +127,11 @@ own tunnel to that one path.
 | Path | What it holds |
 | --- | --- |
 | `server.ts` | Registrations only: one `create<Area>(core)` per area, one RPC register, one CLI register. |
-| `app.tsx` | Registrations only: the composer's agent picker and the nav panels: Inbox, and Agents, which hands the Board and Runs views in as sub-paths. |
+| `app.tsx` | Registrations only: the composer's agent picker and the nav panels: Inbox, and Staff, which hands the Board and Runs views in as sub-paths. |
 | `src/contract.ts` | The RPC contract shared by server and page: each area's `<area>Contract` spread, and the realtime channel. |
 | `src/core.ts` | The wiring every area reads: settings, stores, sessions, the scheduler, the Linear key, the host client, the agent tools, the routes other systems call, the thread events. |
 | `src/<area>/` | One area's server side: `index.ts` (its RPC handlers and `bb optio` commands) and `contract.ts` (its part of the RPC contract). Areas: `staff`, `board`, `runs`, `inbox`; `src/shared/` holds what two areas use. |
-| `pages/<area>/` | One area's UI: `staff` (the Agents page and the composer's agent picker), `board`, `runs`, `inbox`; `pages/shared/` holds the pieces several pages use. |
+| `pages/<area>/` | One area's UI: `staff` (the Staff page and the composer's agent picker), `board`, `runs`, `inbox`; `pages/shared/` holds the pieces several pages use. |
 | `src/agent-store.ts` | Agents, memory and automations in the plugin's SQLite database. |
 | `src/sessions.ts` | Starting an agent thread; the brief; due automations; workflow launchers. |
 | `src/store.ts` | The ledger of agent sessions. |
