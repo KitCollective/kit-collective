@@ -240,7 +240,7 @@
       "maxPerDay": 100,
       "breakerAfter": 3
     },
-    "maxRunsPerDay": 5
+    "maxRunsPerDay": 8
   },
   "scenarios": {
     "holdoutRepo": "KitCollective/kit-scenarios",
