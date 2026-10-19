@@ -387,6 +387,105 @@ describe("device-flow test data", () => {
     );
   });
 
+  it("restores the incoming pending Bud after the inbox flow accepted it", async () => {
+    await applyTestData({ db, objectStore, credentials: CREDENTIALS });
+    const before = await snapshot(db, TEST_IDS);
+    const { conversationId, messageId, jerseyId } = TEST_UNANSWERED_BID;
+    const participants = () =>
+      db
+        .select()
+        .from(conversationParticipant)
+        .where(eq(conversationParticipant.conversationId, conversationId))
+        .orderBy(asc(conversationParticipant.userId));
+    const participantsBefore = await participants();
+
+    // What the inbox flow leaves behind (regression/inbox.yaml, slices/KIT-300.yaml): the Collector
+    // accepted the peer's Bud as an Accepter writes it (collection.service.ts respondToBid), and
+    // then hid the thread with Slet samtale.
+    const [bud] = await db
+      .select()
+      .from(conversationMessage)
+      .where(eq(conversationMessage.id, messageId));
+    await db
+      .update(conversationMessage)
+      .set({ bidStatus: "accepted" })
+      .where(eq(conversationMessage.id, messageId));
+    await db
+      .update(userJersey)
+      .set({ biddingEnabled: false, updatedAt: new Date() })
+      .where(eq(userJersey.id, jerseyId));
+    await db.insert(conversationMessage).values({
+      conversationId,
+      senderId: TEST_COLLECTOR_ID,
+      kind: "system",
+      systemReason: "bid_accepted",
+      bidAmountDkk: bud!.bidAmountDkk,
+      userJerseyId: jerseyId,
+      jerseyClubId: bud!.jerseyClubId,
+      jerseyNationalTeamId: bud!.jerseyNationalTeamId,
+      jerseySeasonId: bud!.jerseySeasonId,
+      jerseyType: bud!.jerseyType,
+      jerseySize: bud!.jerseySize,
+    });
+    await db.insert(conversationMessage).values({
+      conversationId,
+      senderId: TEST_COLLECTOR_ID,
+      kind: "text",
+      body: "Tak for buddet",
+    });
+    await db
+      .update(conversationParticipant)
+      .set({ hiddenAt: new Date() })
+      .where(
+        and(
+          eq(conversationParticipant.conversationId, conversationId),
+          eq(conversationParticipant.userId, TEST_COLLECTOR_ID),
+        ),
+      );
+    // Prove the writes above took, so the reset is what undoes them.
+    const [accepted] = await db
+      .select()
+      .from(conversationMessage)
+      .where(eq(conversationMessage.id, messageId));
+    expect(accepted?.bidStatus).toBe("accepted");
+    expect((await participants()).filter((row) => row.hiddenAt !== null)).toHaveLength(1);
+
+    await applyTestData({ db, objectStore, credentials: CREDENTIALS });
+    const after = await snapshot(db, TEST_IDS);
+
+    for (const key of SNAPSHOT_KEYS) {
+      expect(stable(after[key])).toEqual(stable(before[key]));
+    }
+    const [restored] = await db
+      .select()
+      .from(conversationMessage)
+      .where(eq(conversationMessage.id, messageId));
+    expect(restored).toMatchObject({
+      kind: "bid",
+      bidStatus: "pending",
+      bidAmountDkk: 250,
+      senderId: TEST_PEER_ID,
+      userJerseyId: jerseyId,
+    });
+    const restoredParticipants = await participants();
+    expect(restoredParticipants.every((row) => row.hiddenAt === null)).toBe(true);
+    expect(restoredParticipants.map((row) => row.userId)).toEqual(
+      participantsBefore.map((row) => row.userId),
+    );
+    // The thread holds exactly the fixture's Buds for the pair: no system line, no plain message.
+    expect(
+      await db
+        .select({ id: conversationMessage.id, kind: conversationMessage.kind })
+        .from(conversationMessage)
+        .where(eq(conversationMessage.conversationId, conversationId))
+        .orderBy(asc(conversationMessage.id)),
+    ).toEqual(
+      [TEST_UNANSWERED_BID.messageId, TEST_TWO_BIDDER_BIDS[0]!.messageId]
+        .sort()
+        .map((id) => ({ id, kind: "bid" })),
+    );
+  });
+
   it("forgets the sign-in code requests of the test Collectors, so a long run is never throttled", async () => {
     const collectorEmail = CREDENTIALS.collector.email.toLowerCase();
     await db.insert(authThrottleHit).values([

@@ -1,0 +1,203 @@
+# The inbox on the fixed test data: the waiting Buds, accepting one in its thread, More, and a first
+# message to a Collector without a Bud (ADR-0049). Slice copy: slices/KIT-300.yaml (kc__kit-300__NN);
+# keep the two in step.
+#
+# design-sections for the review: design-sections.json -> flows.inbox (the regression flows carry no header line).
+#
+# FIXTURE THIS FLOW READS (apps/api/src/e2e/test-data.fixture.ts): the Test Collector holds three
+# incoming pending Buds, all unanswered: 250 kr on FC København (...0101, message ...0502) and 300 kr
+# on Brøndby IF (...0102, message ...0503), both from e2e_peer in Conversation ...0501, and 350 kr on
+# Brøndby IF from freja_e2e (message ...0505) in Conversation ...0504. So Venter på dit svar has
+# three rows. Both of the Test Collector's jerseys start with åben for bud off; accepting a Bud does
+# not need it on (respondBid checks only that the Bud is pending and the viewer owns the jersey), and
+# the accept closes ...0101 and declines other pending Buds on ...0101 only (there are none), so the
+# two Brøndby IF Buds keep waiting. e2e_peer owns the one foreign jersey, OB (...0105), åben for bud.
+#
+# One Collector signs in (the Test Collector, default Vision), the test data is reset once.
+#
+# Not on a screen here, proved by tests instead: the row text, unread state and accessible name of
+# every Thread row (apps/mobile/src/inbox/inbox-view-model.test.ts), what the response returns and
+# which Conversations are left out (apps/api/tests/conversations.test.ts), that accept is one
+# transaction and closes the jersey (apps/api/tests/conversation-bid-accept.test.ts), the first
+# message creating the Conversation and the hidden thread returning
+# (apps/api/tests/conversation-start.test.ts), and the view-model copy and the send body
+# (apps/mobile/tests/thread-view-model.test.ts). Not reachable on a phone simulator: the wide layout
+# with the list beside the open thread (width >= 1024).
+#
+# Taps are by testID: inbox-row-<message id or conversation id>, bid-card-accept-<message id>,
+# conversation-more(-delete), conversation-confirm-submit, foreign-jersey-write, composer-input,
+# composer-send. Two taps are not by testID: the tab bar (as in every flow) and Tilbage in the thread
+# header, an Icon button with no testID in the conversation header (as in KIT-298).
+appId: app.kitcollective.mobile
+name: inbox
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__inbox
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: Indbakke
+- extendedWaitUntil:
+    visible:
+      id: inbox-section-waiting
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+# Step 1, AC: Indbakke is one list; Venter på dit svar is there because Buds wait, with the count
+# (3) in mono beside it, above Samtaler.
+- assertVisible:
+    id: inbox-section-waiting-count
+    text: "3"
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__inbox__01-venter-paa-dit-svar
+# Step 2, AC: a waiting row opens the thread at that Bud, and the incoming pending Bid card holds
+# primary Accepter (the Test Collector is the owner of FC København, ...0101).
+- tapOn:
+    id: inbox-row-e2e00000-0000-4000-8000-000000000502
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: bid-card-accept-e2e00000-0000-4000-8000-000000000502
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__inbox__02-thread-incoming-bid-card
+# Step 3, AC: Accepter turns the card to Accepteret (filled check, no buttons) and writes the
+# owner's centred system line (not a bubble) under it.
+- tapOn:
+    id: bid-card-accept-e2e00000-0000-4000-8000-000000000502
+- extendedWaitUntil:
+    visible:
+      id: bid-card-status-accepted
+    timeout: 15000
+# The line is the last item; the list ends there, so Maestro cannot centre it.
+- scrollUntilVisible:
+    element:
+      id: thread-system-line
+    centerElement: false
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__inbox__03-accepted-system-line
+# Step 4, AC: the answered Bud leaves Venter på dit svar; two Buds still wait on Brøndby IF (300 kr
+# from e2e_peer, 350 kr from freja_e2e: the accept closed FC København only).
+- tapOn: Tilbage
+- extendedWaitUntil:
+    visible:
+      id: inbox-section-waiting
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible:
+    id: inbox-section-waiting-count
+    text: "2"
+- assertNotVisible:
+    id: inbox-row-e2e00000-0000-4000-8000-000000000502
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__inbox__04-indbakke-after-accept
+# Step 5, AC: More opens a Sheet over the thread. The thread is opened from its Samtaler row
+# (inbox-row-<conversation id>), which has the same name as the two waiting rows of e2e_peer.
+- tapOn:
+    id: inbox-row-e2e00000-0000-4000-8000-000000000501
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+- tapOn:
+    id: conversation-more
+- extendedWaitUntil:
+    visible:
+      id: conversation-more-sheet
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__inbox__05-more-sheet
+# ---- Slet samtale for the Test Collector (no screenshots), so the pair has no thread ----
+# The fixed data holds no Collector without a Conversation; hiding it makes the peer lookup answer
+# `conversationId: null` and the thread open empty (as in KIT-298). The first message brings the
+# hidden Conversation back.
+- tapOn:
+    id: conversation-more-delete
+- extendedWaitUntil:
+    visible:
+      id: conversation-confirm-submit
+    timeout: 15000
+- tapOn:
+    id: conversation-confirm-submit
+- extendedWaitUntil:
+    notVisible:
+      id: conversation-header
+    timeout: 15000
+# ---- Søg to the OB jersey of e2e_peer ----
+# The first tab press can be swallowed while the tab settles on the hosted simulator (KIT-291).
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 8000
+    optional: true
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 15000
+- tapOn:
+    id: search-input
+- inputText: OB
+- extendedWaitUntil:
+    visible:
+      id: typeahead-list
+    timeout: 15000
+- hideKeyboard
+- tapOn:
+    id: typeahead-hit-club-.*
+- extendedWaitUntil:
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    timeout: 15000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+- extendedWaitUntil:
+    visible:
+      id: foreign-jersey-write
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- tapOn:
+    id: foreign-jersey-write
+- extendedWaitUntil:
+    visible:
+      id: thread-start
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: composer-jersey-reference
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+# Step 6, AC: with no thread yet the empty thread opens from the jersey: the Handle and the initial
+# centred, and above the field the jersey reference (thumb, Om trøjen, club and season, dismiss).
+- takeScreenshot: kc__inbox__06-empty-thread-jersey-reference
+# Step 7, AC: a first message needs no Bud; Send creates the Conversation and the bubble shows,
+# with the reference above it.
+- tapOn:
+    id: composer-input
+- inputText: "Hej, har du et billede af ryggen"
+# No hideKeyboard: the composer sits in a KeyboardAvoidingView, so Send stays tappable (hideKeyboard
+# fails on the hosted simulator when the field exposes no dismiss action).
+- runFlow: ../subflows/settle.yaml
+- tapOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+# The bubble is one accessibility element with the reference row above it, and Maestro matches the
+# whole label, so the text is matched with .* around it.
+- extendedWaitUntil:
+    visible: ".*Hej, har du et billede af ryggen.*"
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__inbox__07-message-without-bud
+- stopRecording

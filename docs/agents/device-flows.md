@@ -1,6 +1,6 @@
 # Device flows
 
-A slice that touches `apps/mobile/**` proves itself with **its own Device flow**, `apps/mobile/.maestro/slices/<KEY>.yaml`, written in the same PR and run against an iOS Simulator build: by the hosted run on a GitHub macOS runner (what an issue session asks for, ADR-0059), or on the approver's Mac. The five flows that used to be the gate, and three more for the states of the identity block (KIT-284), are the **regression set** under `regression/`: eight flows, run only on request. Decisions: `docs/adr/0048-device-flows-as-pr-evidence.md`, changed by `docs/adr/0049-slice-flows-queue-and-native-cache.md`. Terms (**Device flow**, **Test Collector**, **Evidence run**, **Design finding**): `CONTEXT.md`.
+A slice that touches `apps/mobile/**` proves itself with **its own Device flow**, `apps/mobile/.maestro/slices/<KEY>.yaml`, written in the same PR and run against an iOS Simulator build: by the hosted run on a GitHub macOS runner (what an issue session asks for, ADR-0059), or on the approver's Mac. The five flows that used to be the gate, and three more for the states of the identity block (KIT-284), are the **regression set** under `regression/`: nine flows, run only on request. Decisions: `docs/adr/0048-device-flows-as-pr-evidence.md`, changed by `docs/adr/0049-slice-flows-queue-and-native-cache.md`. Terms (**Device flow**, **Test Collector**, **Evidence run**, **Design finding**): `CONTEXT.md`.
 
 ## Write the slice flow
 
@@ -25,6 +25,7 @@ Regression flows (`E2E_FLOWS=regression`): run them at a milestone, before a pro
 | `add-jersey-vision-failure` | Test Collector, Vision `failure` | `01-empty-identity-block` (Vision fandt ikke trøjen, no reading state left), `02-data-drill`, `03-picked-by-hand` (AaB, 2023/24, Hjemme), `04-ready-to-save`, `05-saved` (Save works by hand) |
 | `collection` | Test Collector | `01-collection`, `02-shortcut-filter`, `03-own-detail` |
 | `search-bid` | Test Collector | `01-search-home`, `02-typeahead-hits`, `03-not-open-for-bid-no-dock`, `04-foreign-detail-open-for-bid`, `05-send-bid-empty`, `06-send-bid-amount`, `07-bid-sent-toast-and-own-bid-row`, `08-thread-from-own-bid-row` (e2e_peer's two OB jerseys: `...0106` is public but not åben for bud, `...0105` is åben for bud with a player and a Badge; `slices/KIT-294.yaml` copies these steps as `kc__kit-294__NN`) |
+| `inbox` | Test Collector | `01-venter-paa-dit-svar`, `02-thread-incoming-bid-card`, `03-accepted-system-line`, `04-indbakke-after-accept`, `05-more-sheet`, `06-empty-thread-jersey-reference`, `07-message-without-bud` (`slices/KIT-300.yaml` copies these steps as `kc__kit-300__NN`) |
 | `wishlist-paywall` | second test Collector | `01-wishlist`, `02-paywall` |
 
 The three `add-jersey-*` flows beyond `add-jersey` pick the fixture photo, the newest in the simulator's library. The Data drill that Vælg opens has no `testID` on its club, season and type controls (and the club picker's rows), so `add-jersey-vision-failure` taps them by a pattern on their copy (`.*AaB.*`, `.*2023/24.*`, `.*Hjemme.*`, the drill's `Gem`) and goes on to Save by hand; `add-jersey-vision-off` stops at the opened drill and asserts it by the copy of its first row. Add the testIDs to the drill to replace the copy taps.
@@ -51,7 +52,7 @@ Not covered: Android, physical devices, the camera branch of Tilføj trøje, sho
 | Path | What |
 | --- | --- |
 | `apps/mobile/.maestro/slices/` | one flow per issue, plus `TEMPLATE.yaml.example` |
-| `apps/mobile/.maestro/regression/` | the eight regression flows |
+| `apps/mobile/.maestro/regression/` | the nine regression flows |
 | `apps/mobile/.maestro/subflows/` | `sign-in.yaml` (reset, cold start, sign in), `settle.yaml` (a fixed pause for motion Maestro cannot see), `photo-picker-banner.yaml` (waits for the system photo picker, pauses, closes the iOS Private Access banner when it shows), `photo-picker-done.yaml` (taps the picker's `Done` once it is enabled, and again while an enabled `Done` shows) |
 | `apps/mobile/.maestro/scripts/` | `reset-test-data.js`, the reset call the flows run first (sends `VISION`, the fixed Vision case, when a flow defines it) |
 | `apps/mobile/.maestro/fixtures/` | one drawn shirt photo for the simulator gallery; `photos/` holds the real shirt photos a slice flow can ask for |
@@ -119,7 +120,7 @@ The rest of this section runs on the approver's Mac, for the full evidence or wh
 # What an issue session runs: queue, API, app, flow, evidence. One command.
 apps/mobile/.maestro/device-run.sh
 
-# The eight regression flows instead.
+# The nine regression flows instead.
 E2E_FLOWS=regression apps/mobile/.maestro/device-run.sh
 ```
 
