@@ -7,7 +7,7 @@ description: Work as, or manage, a standing agent of the Optio plugin: load an a
 
 An agent is a name, a project and standing instructions, plus the memory it
 has saved. The user creates and edits agents, their memory and their
-automations on the **Agents** page in the bb sidebar; the commands below are the
+automations on the **Staff** page in the bb sidebar; the commands below are the
 same data from a shell.
 
 ## If you are a standing agent
@@ -34,7 +34,7 @@ Your thread instructions name you and your agent id.
 ## In the composer
 
 The user addresses an agent from any composer by typing `@` and picking it
-under Agents, or with the Agent picker beside the send button. The message then
+under Staff, or with the Agent picker beside the send button. The message then
 carries that agent's brief as context: when you see "The user addressed the …
 standing agent", act as that agent for the message.
 
@@ -48,6 +48,8 @@ standing agent", act as that agent for the message.
 | `bb optio memory list <agent> [--json]` | The agent's memory with ids. |
 | `bb optio memory remove <memory-id>` | Delete one memory. |
 | `bb optio trigger <agent> --task "<task>"` | Start a new thread of the agent with a task. |
+| `bb optio chat <agent> [--json]` | Print the thread id of the Staff member's standing Staff chat; Optio makes the chat the first time. |
+| `bb optio ask <agent> "<question>"` | Ask the person something that is theirs to decide. It shows in their Inbox as a card linking to your Staff chat and leaves it when they answer there. |
 | `bb optio follow-up add <agent> --task "<task>" [--in <duration> \| --at <time>]` | Schedule a new thread of the agent that reports back to the calling thread. At most 30 days ahead. |
 | `bb optio follow-up list [--agent <id>]` | Follow-ups that are waiting or running. |
 | `bb optio follow-up cancel <id>` | Cancel a follow-up that has not started. |
@@ -55,7 +57,7 @@ standing agent", act as that agent for the message.
 | `bb optio gates [--limit <n>] [--json]` | The gate runs `optio_gate` recorded, newest first. |
 | `bb optio urls` | The routes other systems call. |
 
-Agents, instructions and automations are created and changed on the Agents
+Agents, instructions and automations are created and changed on the Staff
 page, not from a shell.
 
 ## Gates
@@ -126,7 +128,7 @@ reads the team's issues from Linear and:
 The Loops' states, labels and workflows come from the registry; the backlog,
 active and blocked states are the board's configuration, set when it is set up.
 The plugin names none itself. Mode, focus, machines, capacity and routing rules
-are edited on the Agents page under Board.
+are edited on the Staff page under Board.
 
 | Command | Effect |
 | --- | --- |
