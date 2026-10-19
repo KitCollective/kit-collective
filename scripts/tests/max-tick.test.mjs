@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-/** Max's tick's stoppedRuns, from the tick's own source (it is a self-contained function above the IIFE). */
-const stoppedRuns = (() => {
+/** Max's tick's stoppedRuns and receiptStall, from the tick's own source (self-contained functions above the IIFE). */
+const { stoppedRuns, receiptStall } = (() => {
   const tick = readFileSync(
     join(fileURLToPath(new URL("../..", import.meta.url)), "staff/max/tick.js"),
     "utf8",
@@ -13,7 +13,7 @@ const stoppedRuns = (() => {
   const from = tick.indexOf("function stoppedRuns(");
   const to = tick.indexOf("// end stoppedRuns");
   assert.ok(from >= 0 && to > from, "tick.js defines stoppedRuns");
-  return new Function(`${tick.slice(from, to)}; return stoppedRuns;`)();
+  return new Function(`${tick.slice(from, to)}; return { stoppedRuns, receiptStall };`)();
 })();
 
 const NOW = Date.parse("2026-10-18T20:30:00Z");
@@ -171,4 +171,80 @@ test("the tick's landing check reads an end line as a run that has returned", ()
     tick,
     /const ended =\s*last\?\.event === "end" \|\| \(last\?\.event === "reason" && last\.code === "runner-no-result"\);/,
   );
+});
+
+// KIT-404 (PR #431), 2026-10-18: the GLM Reviewer reviewed green, the ask for its AUDIT-RESULT line got
+// JSON back, and the run stopped at the receipt. The tick listed it as a landing, retried only the
+// receipt, was refused, and the unchanged board kept Max silent for 17 hours.
+const receiptStop = (m, extra = {}) =>
+  ended(m, "In Review", {
+    stoppedAt: "receipt",
+    reason: "unspecified",
+    verdict: "green",
+    ...extra,
+  });
+const stallEvents = (code) => [
+  { at: minutesAgo(60), event: "start", issue: "KIT-409" },
+  { at: minutesAgo(20), event: "gate", issue: "KIT-409", gate: "review", outcome: "open" },
+  { at: minutesAgo(19), event: "result", issue: "KIT-409", step: "reviewer", outcome: "green" },
+  { at: minutesAgo(10), event: "reason", issue: "KIT-409", code },
+  receiptStop(5),
+];
+
+test("a run that stopped at the receipt on no-result-line or evidence-gap is resumed, marked after receipt (KIT-404)", () => {
+  for (const code of ["no-result-line", "evidence-gap"]) {
+    const events = stallEvents(code);
+    assert.equal(receiptStall(events), true, code);
+    const { resume, loops } = stoppedRuns(
+      tickInput({
+        board: [{ key: "KIT-409", state: "In Review" }],
+        events,
+        prOf: () => ({ number: 431 }),
+      }),
+    );
+    assert.deepEqual(resume, [
+      { issue: "KIT-409", mode: "resume", pr: 431, quietMinutes: 5, after: "receipt" },
+    ]);
+    assert.deepEqual(loops, []);
+  }
+});
+
+test("a receipt stall is a stall only after its own run's reason, and only at the receipt", () => {
+  // The reason belongs to an earlier run: this run stopped at the receipt for another cause.
+  const earlier = [
+    { at: minutesAgo(90), event: "reason", issue: "KIT-409", code: "no-result-line" },
+    { at: minutesAgo(60), event: "start", issue: "KIT-409" },
+    receiptStop(5),
+  ];
+  assert.equal(receiptStall(earlier), false);
+  // Another stop, or a run still going after the reason, is no receipt stall.
+  assert.equal(
+    receiptStall([...stallEvents("evidence-gap").slice(0, -1), ended(5, "In Review")]),
+    false,
+  );
+  assert.equal(receiptStall(stallEvents("evidence-gap").slice(0, -1)), false);
+});
+
+test("a receipt stall still counts toward maxStartsPerDay: the third one is a loop for Nicklas", () => {
+  const events = [
+    { at: minutesAgo(300), event: "start", issue: "KIT-409" },
+    { at: minutesAgo(200), event: "start", issue: "KIT-409" },
+    ...stallEvents("no-result-line"),
+  ];
+  const { resume, loops } = stoppedRuns(
+    tickInput({ board: [{ key: "KIT-409", state: "In Review" }], events }),
+  );
+  assert.deepEqual(resume, []);
+  assert.deepEqual(loops, ["KIT-409"]);
+});
+
+test("the landing check leaves a receipt stall to stoppedRuns instead of retrying the receipt (KIT-404)", () => {
+  const tick = readFileSync(
+    join(fileURLToPath(new URL("../..", import.meta.url)), "staff/max/tick.js"),
+    "utf8",
+  );
+  const check = tick.indexOf('if (step === "start" && receiptStall(own)) continue;');
+  assert.ok(check > 0, "the landing loop skips a receipt stall");
+  assert.ok(check < tick.indexOf("landingKeys.add(issue.key);"), "before it is kept as a landing");
+  assert.match(tick, /An entry with after "receipt" is a green review/);
 });
