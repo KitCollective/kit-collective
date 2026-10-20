@@ -58,6 +58,13 @@ const workflowRunSchema = z
   })
   .loose();
 
+const activeRunsSchema = z.object({
+  runs: z.array(workflowRunSchema.extend({ name: z.string() })),
+});
+
+/** Threads older than this cannot hold a live run: a workflow run ends after 24 h at most. */
+const LIVE_RUN_WINDOW_MS = 24 * 3600_000;
+
 const workflowResultSchema = z.object({
   prNumber: z.number().int().positive().nullish().catch(null),
   note: z.string().nullish().catch(null),
@@ -311,6 +318,12 @@ export function createCore(bb: BbPluginApi) {
   }
   const registryText = (config: SchedulerConfig) => projectConfigText(config.projectId);
 
+  const workflowCall = <T>(
+    method: string,
+    input: Record<string, string | null>,
+    outputSchema: z.ZodType<T>,
+  ) => bb.sdk.plugins.callRpc({ pluginId: "workflows", method, input, outputSchema });
+
   let schedulerConfig: SchedulerConfig | null = null;
   const scheduler = createScheduler({
     store: dispatches,
@@ -330,18 +343,36 @@ export function createCore(bb: BbPluginApi) {
       const thread = await bb.sdk.threads.get({ threadId }).catch(() => null);
       return thread?.status ?? null;
     },
+    async liveWorkflowRuns(config) {
+      // The workflows plugin lists live runs per thread and names no issue, so ask the threads
+      // of the project that were touched within a run's lifetime.
+      const since = Date.now() - LIVE_RUN_WINDOW_MS;
+      const threads = await bb.sdk.threads.list({ projectId: config.projectId, limit: 500 });
+      const runs = await Promise.all(
+        threads
+          .filter((thread) => thread.updatedAt >= since)
+          .map(async (thread) => {
+            const { runs: active } = await workflowCall(
+              "workflowActiveRuns",
+              { threadId: thread.id },
+              activeRunsSchema,
+            );
+            return active.map((run) => ({
+              runId: run.id,
+              workflow: run.name,
+              threadId: thread.id,
+            }));
+          }),
+      );
+      return runs.flat();
+    },
     async workflowRuns(threadId) {
-      const call = <T>(
-        method: string,
-        input: Record<string, string | null>,
-        outputSchema: z.ZodType<T>,
-      ) => bb.sdk.plugins.callRpc({ pluginId: "workflows", method, input, outputSchema });
-      const { runs: active } = await call(
+      const { runs: active } = await workflowCall(
         "workflowActiveRuns",
         { threadId },
         z.object({ runs: z.array(workflowRunSchema) }),
       );
-      const { run } = await call(
+      const { run } = await workflowCall(
         "workflowRunView",
         { threadId, runId: null },
         z.object({ run: workflowRunSchema.nullable() }),

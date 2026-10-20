@@ -18,6 +18,14 @@ import type { SpawnRequest } from "./sessions.js";
 
 const DAY_MS = 24 * 3600_000;
 
+export interface LiveWorkflowRun {
+  runId: string;
+  /** The workflow's name, which a Loop's `workflow` is matched against. */
+  workflow: string;
+  /** The thread the run was started in. */
+  threadId: string;
+}
+
 export interface SchedulerDeps {
   store: DispatchStore;
   /** The text of `factory.config.json` in the project checkout. Read on every tick. */
@@ -38,6 +46,12 @@ export interface SchedulerDeps {
     step?: string | null;
     prNumber?: number | null;
   }>;
+  /**
+   * The workflow runs that are live now, in any thread of the project. Optional: without it the
+   * Board counts an issue in an active state as a run. A run names no issue the Board can read, so
+   * the thread that holds it is what the ledger's dispatches are matched on.
+   */
+  liveWorkflowRuns?(config: SchedulerConfig): Promise<LiveWorkflowRun[]>;
   /** The newest review gate recorded for the issue since `since` (epoch ms), or null. */
   latestReviewGate(issue: string, since: number): GateRun | null;
   /** The pull request's head commit now, read on the machine the gate ran on. */
@@ -137,6 +151,26 @@ export function createScheduler(deps: SchedulerDeps) {
     promotable: [],
   });
 
+  /**
+   * The live runs the Board has no active dispatch for, or undefined when they cannot be read.
+   * A run of an active dispatch is told by the thread it runs in, or by the run the tick saw.
+   */
+  async function outsideRuns(config: SchedulerConfig) {
+    if (deps.liveWorkflowRuns === undefined) return undefined;
+    try {
+      const live = await deps.liveWorkflowRuns(config);
+      const active = store.active();
+      const threads = new Set(active.flatMap((dispatch) => dispatch.threadId ?? []));
+      const runs = new Set(active.flatMap((dispatch) => dispatch.workflowRunId ?? []));
+      return live.filter((run) => !threads.has(run.threadId) && !runs.has(run.runId));
+    } catch (error) {
+      deps.log(
+        `scheduler: could not read the live workflow runs: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return undefined;
+    }
+  }
+
   const planFor = async (config: SchedulerConfig, board: Board, registry: Registry) =>
     planBoard({
       issues: board.issues,
@@ -146,6 +180,7 @@ export function createScheduler(deps: SchedulerDeps) {
       history: store.history(),
       recentStarts: store.startsSince(deps.now() - DAY_MS),
       now: deps.now(),
+      outsideRuns: await outsideRuns(config),
     });
 
   async function start(

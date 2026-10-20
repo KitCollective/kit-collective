@@ -474,6 +474,8 @@ function setup(board: Board) {
     registryReads: number;
     lastRefill: number | null;
     workflowActive: boolean;
+    /** The live workflow runs the lookup reports; an Error makes the lookup fail. */
+    liveRuns: { runId: string; workflow: string; threadId: string }[] | Error;
     threadStatus: string | null;
     seen: { runId: string | null; step: string | null; prNumber: number | null };
     board: Board;
@@ -491,6 +493,7 @@ function setup(board: Board) {
     registryReads: 0,
     lastRefill: null,
     workflowActive: true,
+    liveRuns: [],
     threadStatus: "idle",
     seen: { runId: null, step: null, prNumber: null },
     board,
@@ -518,6 +521,10 @@ function setup(board: Board) {
       last: state.workflowActive ? null : 'workflow run wf_1 succeeded in phase "Review gate"',
       ...state.seen,
     }),
+    async liveWorkflowRuns() {
+      if (state.liveRuns instanceof Error) throw state.liveRuns;
+      return state.liveRuns;
+    },
     latestReviewGate: () => state.reviewGate,
     async prHead(hostId, repo, pr) {
       state.headReads.push(`${hostId} ${repo} #${pr}`);
@@ -542,6 +549,132 @@ function setup(board: Board) {
   });
   return { scheduler, store, state, db };
 }
+
+describe("live workflow runs the Board did not start", () => {
+  const states = { Ready: "state-todo" };
+  const run = (runId: string, threadId = `thr_${runId}`, workflow = "issue-run") => ({
+    runId,
+    workflow,
+    threadId,
+  });
+  /** One machine, so a slot is a slot. */
+  const oneSlot = {
+    machines: [{ id: "harness", cap: 1, hostId: "host_harness", branch: "origin/main" }],
+  };
+  const harnessOnly = registryText([{ ...issueLoop, machines: ["harness"] }]);
+
+  it("counts a live run of the Loop's workflow against the machine's cap and the Loop's maxLive, whatever its issue is", async () => {
+    const capped = setup({ states, issues: [issue("ENG-1"), issue("ENG-2"), issue("ENG-3")] });
+    capped.state.liveRuns = [run("wfr_1"), run("wfr_2")];
+    const byCap = await capped.scheduler.tick(config(), false);
+    expect(byCap.plan.running).toEqual([
+      { identifier: "wfr_1", machineId: "harness", loop: "Issue run", outside: true },
+      { identifier: "wfr_2", machineId: "harness", loop: "Issue run", outside: true },
+    ]);
+    // harness (2 of 2) is full: the first issue takes mac, the others find no free slot.
+    expect(byCap.plan.start.map((start) => [start.issue.identifier, start.machineId])).toEqual([
+      ["ENG-1", "mac"],
+    ]);
+    expect(byCap.plan.waiting.map((entry) => entry.identifier)).toEqual(["ENG-2", "ENG-3"]);
+
+    const byLoop = setup({ states, issues: [issue("ENG-1"), issue("ENG-2")] });
+    byLoop.state.registryText = registryText([{ ...issueLoop, maxLive: 2 }]);
+    byLoop.state.liveRuns = [run("wfr_1"), run("wfr_2")];
+    const full = await byLoop.scheduler.tick(config(), false);
+    expect(full.plan.start).toEqual([]);
+    expect(full.plan.waiting.map((entry) => entry.reason)).toEqual([
+      "Issue run has 2 of 2 live runs",
+      "Issue run has 2 of 2 live runs",
+    ]);
+  });
+
+  it("ignores a live run of a workflow no enabled Loop owns", async () => {
+    const { scheduler, state } = setup({ states, issues: [issue("ENG-1")] });
+    state.liveRuns = [run("wfr_1", "thr_1", "some-other-workflow")];
+    const result = await scheduler.tick(config(oneSlot), false);
+    expect(result.plan.running).toEqual([]);
+    expect(result.plan.start).toHaveLength(1);
+  });
+
+  it("counts a run the Board started once: by its launcher thread, or by the run its dispatch saw", async () => {
+    const { scheduler, store, state } = setup({
+      states,
+      issues: [
+        issue("ENG-1", { state: "Doing" }),
+        issue("ENG-2", { state: "Doing" }),
+        issue("ENG-3"),
+      ],
+    });
+    state.registryText = registryText([{ ...issueLoop, maxLive: 3 }]);
+    const byThread = store.start({
+      issue: "ENG-1",
+      loop: "Issue run",
+      machineId: "harness",
+      resume: false,
+      now: 1,
+    });
+    store.attach(byThread.id, "thr_launcher_1");
+    const byRun = store.start({
+      issue: "ENG-2",
+      loop: "Issue run",
+      machineId: "harness",
+      resume: false,
+      now: 1,
+    });
+    store.attach(byRun.id, "thr_launcher_2");
+    store.observe(byRun.id, { workflowRunId: "wfr_known", step: null, prNumber: null });
+    state.liveRuns = [run("wfr_1", "thr_launcher_1"), run("wfr_known", "thr_elsewhere")];
+    const result = await scheduler.tick(config(), false);
+    expect(result.plan.running.map((entry) => entry.identifier)).toEqual(["ENG-1", "ENG-2"]);
+    expect(result.plan.running.some((entry) => entry.outside === true)).toBe(false);
+    expect(result.plan.start.map((start) => start.issue.identifier)).toEqual(["ENG-3"]);
+  });
+
+  it("stops counting an active-state issue that has no open run", async () => {
+    const { scheduler, state } = setup({
+      states,
+      issues: [issue("ENG-1", { state: "Doing" }), issue("ENG-2")],
+    });
+    state.registryText = harnessOnly;
+    state.liveRuns = [];
+    const result = await scheduler.tick(config(oneSlot), false);
+    expect(result.plan.running).toEqual([]);
+    expect(result.plan.start.map((start) => start.issue.identifier)).toEqual(["ENG-2"]);
+  });
+
+  it("counts an open run once, not once as a run and again as its issue in an active state", async () => {
+    const { scheduler, state } = setup({
+      states,
+      issues: [issue("ENG-1", { state: "Doing" }), issue("ENG-2")],
+    });
+    state.registryText = harnessOnly;
+    state.liveRuns = [run("wfr_1")];
+    const result = await scheduler.tick(
+      config({
+        machines: [{ id: "harness", cap: 2, hostId: "host_harness", branch: "origin/main" }],
+      }),
+      false,
+    );
+    expect(result.plan.running).toEqual([
+      { identifier: "wfr_1", machineId: "harness", loop: "Issue run", outside: true },
+    ]);
+    expect(result.plan.start.map((start) => start.issue.identifier)).toEqual(["ENG-2"]);
+  });
+
+  it("falls back to counting an active-state issue when the lookup fails, so a broken lookup never over-starts", async () => {
+    const { scheduler, state } = setup({
+      states,
+      issues: [issue("ENG-1", { state: "Doing" }), issue("ENG-2")],
+    });
+    state.registryText = harnessOnly;
+    state.liveRuns = new Error("workflows plugin is down");
+    const result = await scheduler.tick(config(oneSlot), false);
+    expect(result.plan.running).toEqual([
+      { identifier: "ENG-1", machineId: "harness", loop: "Issue run", outside: true },
+    ]);
+    expect(result.plan.start).toEqual([]);
+  });
+});
 
 describe("the hand-over on the recorded review gate", () => {
   const states = { Ready: "state-todo", Accepted: "state-accepted", Waiting: "state-waiting" };

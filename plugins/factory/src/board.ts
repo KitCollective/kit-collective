@@ -30,7 +30,7 @@ export interface Plan {
     identifier: string;
     machineId: string;
     loop: string | null;
-    /** True for a run the Board did not start: an issue in an active state with no dispatch of its own. */
+    /** True for a run the Board did not start. Its identifier is the issue, or the workflow run when only the run is known. */
     outside?: boolean;
   }[];
   start: PlannedStart[];
@@ -105,6 +105,12 @@ export function planBoard(input: {
   recentStarts?: Map<string, number>;
   /** The time the plan is for (epoch ms), against which a Loop's schedule is checked. */
   now?: number;
+  /**
+   * The live workflow runs the ledger has no dispatch for: a run started by hand, whatever state
+   * its issue is in. Undefined when the runs could not be read; an issue in an active state with no
+   * dispatch then counts as a run, as it did before the runs were read.
+   */
+  outsideRuns?: { runId: string; workflow: string }[];
 }): Plan {
   const { issues, config, registry, focus, history } = input;
   const recentStarts = input.recentStarts ?? new Map<string, number>();
@@ -144,9 +150,13 @@ export function planBoard(input: {
       plan.running.push({ identifier: issue.identifier, machineId: activeOn, loop });
       used.set(activeOn, (used.get(activeOn) ?? 0) + 1);
       if (loop !== null) live.set(loop, (live.get(loop) ?? 0) + 1);
-    } else if (config.activeStates.includes(issue.state) && past?.stalled !== true) {
-      // Max or a person started this run by hand: the Board has no dispatch for it, yet it
-      // holds a slot all the same.
+    } else if (
+      input.outsideRuns === undefined &&
+      config.activeStates.includes(issue.state) &&
+      past?.stalled !== true
+    ) {
+      // The live runs are unknown: assume Max or a person started this run by hand. The Board has
+      // no dispatch for it, yet it holds a slot all the same.
       const slot = outsideSlot(issue);
       if (slot !== null) {
         plan.running.push({ identifier: issue.identifier, ...slot, outside: true });
@@ -163,6 +173,17 @@ export function planBoard(input: {
       past?.stalled !== true
     )
       plan.unblock.push(issue);
+  }
+
+  // A run the Board did not start holds a slot whatever its issue is, so the runs themselves are
+  // counted, not the issues in an active state. A run names no machine: it takes the Loop's first.
+  for (const run of input.outsideRuns ?? []) {
+    const loop = loops.find((candidate) => candidate.workflow === run.workflow);
+    const machineId = loop?.machines.find((id) => used.has(id));
+    if (loop === undefined || machineId === undefined) continue;
+    plan.running.push({ identifier: run.runId, machineId, loop: loop.name, outside: true });
+    used.set(machineId, (used.get(machineId) ?? 0) + 1);
+    live.set(loop.name, (live.get(loop.name) ?? 0) + 1);
   }
 
   const orderBy = (priorityOrder: number[]) => {
