@@ -3,6 +3,8 @@
 
     python3 paperclip/sync.py plan     # show what would change, write nothing
     python3 paperclip/sync.py apply    # create/update agents; new agents are paused
+    python3 paperclip/sync.py resume   # turn the loop on: wakes on, agents resumed
+    python3 paperclip/sync.py pause    # turn the loop off: agents paused, wakes off
 
 Board token: PAPERCLIP_BOARD_TOKEN, or read over SSH from PAPERCLIP_SSH_HOST
 (default `guapo`) at /opt/guapo/secrets/board.token. The token is never printed.
@@ -201,6 +203,9 @@ def run(apply: bool) -> None:
                 changed = [k for k in ("name", "role", "title", "icon", "reportsTo", "capabilities", "adapterType")
                            if cur.get(k) != body[k]]
                 print(f"~ {a['name']}: {', '.join(changed) or 'fields unchanged'}; instructions and config re-pushed")
+                # Keep whatever resume/pause set; apply never turns wakes on or off.
+                body["runtimeConfig"]["heartbeat"]["wakeOnDemand"] = bool(
+                    ((cur.get("runtimeConfig") or {}).get("heartbeat") or {}).get("wakeOnDemand", False))
                 if apply:
                     # Permissions can only be set at creation; PATCH rejects them.
                     api("PATCH", f"/api/agents/{cur['id']}", token,
@@ -215,7 +220,25 @@ def run(apply: bool) -> None:
             print(f"! {x.get('name')} exists in Paperclip but not in org.toml (left alone)")
 
 
+def switch(on: bool) -> None:
+    """Turn every org.toml agent on or off. apply never does this by itself."""
+    org = load_org()
+    token = board_token()
+    cid = next(c["id"] for c in as_list(api("GET", "/api/companies", token), "companies") if c.get("name") == org["company"]["name"])
+    names = {a["name"] for a in org["agents"]}
+    for x in as_list(api("GET", f"/api/companies/{cid}/agents", token), "agents"):
+        if x.get("name") not in names:
+            continue
+        hb = {**((x.get("runtimeConfig") or {}).get("heartbeat") or {}), "wakeOnDemand": on}
+        api("PATCH", f"/api/agents/{x['id']}", token, {"runtimeConfig": {**(x.get("runtimeConfig") or {}), "heartbeat": hb}})
+        api("POST", f"/api/agents/{x['id']}/{'resume' if on else 'pause'}", token, {})
+        print(f"{'on ' if on else 'off'} {x['name']}")
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 2 or sys.argv[1] not in ("plan", "apply"):
+    if len(sys.argv) != 2 or sys.argv[1] not in ("plan", "apply", "resume", "pause"):
         sys.exit(__doc__)
-    run(apply=sys.argv[1] == "apply")
+    if sys.argv[1] in ("resume", "pause"):
+        switch(sys.argv[1] == "resume")
+    else:
+        run(apply=sys.argv[1] == "apply")
