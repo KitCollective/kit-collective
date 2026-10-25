@@ -24,9 +24,16 @@ python3 paperclip/sync.py apply
 
 The script reads the board token over `ssh guapo` (or `PAPERCLIP_BOARD_TOKEN`) and never prints it. New agents are created paused with wakes off, and the script never resumes an agent.
 
+## Claude subscription
+
+`claude_local` agents use the Claude Code login stored in Paperclip's volume (`/paperclip/.claude`), on Nicklas's Max subscription (shared with Guapo's agents). Log in again, as the `node` user Paperclip runs as:
+
+```bash
+ssh -t guapo docker exec -it -u node guapo-paperclip claude auth login
+```
+
 ## Not wired yet
 
 - The software-factory plugin (dispatch, factory state, the Merging rule). Until it exists every agent stays paused.
-- The Claude subscription login for `claude_local`: Nicklas runs `claude setup-token` and adds it as a company secret.
 - Release Gate's step runner (`factory gate-run`); its command exits 1 until then.
 - Repo checkout and worktrees for the agents on the server.
