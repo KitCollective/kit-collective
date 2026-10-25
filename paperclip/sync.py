@@ -132,6 +132,38 @@ def payload(a: dict, org: dict, ids: dict[str, str], secrets: dict[str, str]) ->
     }
 
 
+def sync_project(org: dict, cid: str, token: str, apply: bool) -> str | None:
+    p = org.get("project")
+    if not p:
+        return None
+    policy = {
+        "enabled": True,
+        "defaultMode": "isolated_workspace",
+        "allowIssueOverride": False,
+        "workspaceStrategy": {"type": "git_worktree", "baseRef": p["base_ref"], "branchTemplate": p["branch_template"]},
+    }
+    projects = as_list(api("GET", f"/api/companies/{cid}/projects", token), "projects")
+    cur = next((x for x in projects if x.get("name") == p["name"]), None)
+    if cur is None:
+        print(f"+ project {p['name']} (worktrees from {p['base_ref']})")
+        if not apply:
+            return None
+        cur = api("POST", f"/api/companies/{cid}/projects", token, {"name": p["name"], "description": p.get("description")})
+    else:
+        print(f"~ project {p['name']}: policy re-pushed")
+    if not apply:
+        return cur["id"]
+    workspaces = as_list(api("GET", f"/api/projects/{cur['id']}/workspaces", token), "workspaces")
+    ws = next((w for w in workspaces if w.get("cwd") == p["cwd"]), None)
+    if ws is None:
+        ws = api("POST", f"/api/projects/{cur['id']}/workspaces", token,
+                 {"name": "primary", "cwd": p["cwd"], "repoUrl": p["repo_url"], "defaultRef": p["base_ref"], "isPrimary": True})
+        print(f"  + workspace {p['cwd']}")
+    policy["defaultProjectWorkspaceId"] = ws["id"]
+    api("PATCH", f"/api/projects/{cur['id']}", token, {"description": p.get("description"), "executionWorkspacePolicy": policy})
+    return cur["id"]
+
+
 def run(apply: bool) -> None:
     org = load_org()
     token = board_token()
@@ -142,6 +174,9 @@ def run(apply: bool) -> None:
     cid = company["id"]
     # Secret names to ids. Values are never read.
     secrets = {s["name"]: s["id"] for s in as_list(api("GET", f"/api/companies/{cid}/secrets", token), "secrets")}
+    project_id = sync_project(org, cid, token, apply)
+    if project_id:
+        print(f"  project id {project_id} (set it as projectId in the software-factory plugin config)")
     existing = {}
     for x in as_list(api("GET", f"/api/companies/{cid}/agents", token), "agents"):
         key = (x.get("metadata") or {}).get("kitId") or x.get("name")

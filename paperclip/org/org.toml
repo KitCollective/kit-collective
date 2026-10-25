@@ -15,6 +15,16 @@ description = "Collector app for football kits. Software built by an agent loop 
 # Monthly cap for the whole company in cents. 0 = no cap. Subscription runs book 0 anyway.
 budget_monthly_cents = 0
 
+# The repo the loop works on. Every issue gets its own git worktree from origin/development.
+# The checkout lives in Paperclip's volume; git authenticates with the agents' GH_TOKEN through gh.
+[project]
+name = "kit-collective"
+description = "KitCollective app, API and site. Integration lane: development."
+cwd = "/paperclip/repos/kit-collective"
+repo_url = "https://github.com/KitCollective/kit-collective"
+base_ref = "origin/development"
+branch_template = "factory/{{issue.identifier}}"
+
 # Defaults for every claude_local agent. An agent may override any of them.
 [defaults.claude]
 engine = "cli"                       # Claude Code CLI, not ACP: loads the repo's .claude hooks and skills
