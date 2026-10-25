@@ -24,6 +24,7 @@ max_concurrent_runs = 1              # start with one run at a time on the share
 
 # ── Agents ─────────────────────────────────────────────────────────────────
 # model: always explicit (an empty model means Opus in claude_local). Never Fable.
+# secrets: env var -> company secret name in Paperclip. Only the agents that need a secret get it.
 # Every agent is created paused. `sync.py apply` never resumes an agent.
 
 [[agents]]
@@ -58,6 +59,7 @@ reports_to = "tech-lead"
 adapter = "claude_local"
 model = "claude-sonnet-5-5"          # the plan may set Opus per issue
 effort = "high"
+secrets = { GH_TOKEN = "GH_TOKEN" }   # push branches, open PRs
 capabilities = "Implements one issue end to end in its own worktree: app, API, database and tests, with frontend and backend subagents. Pushes a branch and opens the PR. Also runs release promotions with the release skill."
 
 [[agents]]
@@ -70,6 +72,7 @@ reports_to = "tech-lead"
 adapter = "claude_local"
 model = "claude-opus-5-5"
 effort = "high"
+secrets = { GH_TOKEN = "GH_TOKEN" }   # Actions, rulesets, PRs
 capabilities = "Infrastructure issues only: GitHub Actions, lanes and rulesets, Coolify, EAS channels and secrets. Every change goes to Approval."
 
 [[agents]]
@@ -81,6 +84,7 @@ icon = "shield"
 reports_to = "cto"                   # independent of Delivery
 adapter = "claude_local"
 model = "claude-opus-5-5"            # must differ from every Engineer model in the round; GLM via proxy later
+secrets = { GH_TOKEN = "GH_TOKEN" }   # read the PR diff and checks
 capabilities = "Judges finished work on a different model than the Engineer: code review, acceptance criteria and, later, holdout scenarios. Ends with one AUDIT-RESULT line. Never edits code."
 
 [[agents]]
@@ -96,4 +100,5 @@ adapter = "process"
 command = "node"
 args = ["/paperclip/plugins/software-factory/bin/gate-run.mjs"]
 timeout_sec = 2400
+secrets = { GH_TOKEN = "GH_TOKEN" }   # check and merge PRs
 capabilities = "Runs the project's pipeline steps (gates, test-edit detection, auto-land) one per invoke; the exit code is the verdict. The only agent allowed to move an issue to Merging. No model."

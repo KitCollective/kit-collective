@@ -80,9 +80,22 @@ def load_org() -> dict:
     return org
 
 
-def adapter_config(a: dict, defaults: dict) -> dict:
+def env_bindings(a: dict, secrets: dict[str, str]) -> dict:
+    env = {}
+    for var, name in (a.get("secrets") or {}).items():
+        if name not in secrets:
+            sys.exit(f"org.toml: {a['id']} needs secret {name}, which is not in the company. Create it in Paperclip first.")
+        env[var] = {"type": "secret_ref", "secretId": secrets[name]}
+    return env
+
+
+def adapter_config(a: dict, defaults: dict, secrets: dict[str, str]) -> dict:
+    env = env_bindings(a, secrets)
     if a["adapter"] == "process":
-        return {"command": a["command"], "args": a.get("args", []), "timeoutSec": int(a.get("timeout_sec", 600))}
+        cfg = {"command": a["command"], "args": a.get("args", []), "timeoutSec": int(a.get("timeout_sec", 600))}
+        if env:
+            cfg["env"] = env
+        return cfg
     d = {**defaults, **a}
     cfg = {
         "engine": d["engine"],
@@ -92,10 +105,12 @@ def adapter_config(a: dict, defaults: dict) -> dict:
     }
     if d.get("effort"):
         cfg["effort"] = d["effort"]
+    if env:
+        cfg["env"] = env
     return cfg
 
 
-def payload(a: dict, org: dict, ids: dict[str, str]) -> dict:
+def payload(a: dict, org: dict, ids: dict[str, str], secrets: dict[str, str]) -> dict:
     defaults = org.get("defaults", {}).get("claude", {})
     concurrent = int({**defaults, **a}.get("max_concurrent_runs", 1))
     return {
@@ -106,7 +121,7 @@ def payload(a: dict, org: dict, ids: dict[str, str]) -> dict:
         "reportsTo": ids.get(a["reports_to"]) if a.get("reports_to") else None,
         "capabilities": a["capabilities"],
         "adapterType": a["adapter"],
-        "adapterConfig": adapter_config(a, defaults),
+        "adapterConfig": adapter_config(a, defaults, secrets),
         # No timer and no wakes until the software-factory plugin is wired; the plugin turns wakes on.
         "runtimeConfig": {"heartbeat": {"enabled": False, "wakeOnDemand": False, "maxConcurrentRuns": concurrent}},
         "permissions": {"canCreateAgents": False},
@@ -125,6 +140,8 @@ def run(apply: bool) -> None:
     if company is None:
         sys.exit(f"No company named {name}. Create it in Paperclip first.")
     cid = company["id"]
+    # Secret names to ids. Values are never read.
+    secrets = {s["name"]: s["id"] for s in as_list(api("GET", f"/api/companies/{cid}/secrets", token), "secrets")}
     existing = {}
     for x in as_list(api("GET", f"/api/companies/{cid}/agents", token), "agents"):
         key = (x.get("metadata") or {}).get("kitId") or x.get("name")
@@ -137,7 +154,7 @@ def run(apply: bool) -> None:
         if not ready:
             sys.exit("org.toml: reports_to has a cycle")
         for a in ready:
-            body = payload(a, org, ids)
+            body = payload(a, org, ids, secrets)
             cur = existing.get(a["id"]) or existing.get(a["name"])
             if cur is None:
                 print(f"+ {a['name']} ({a['adapter']}, {body['adapterConfig'].get('model', 'no model')}) — created paused")
