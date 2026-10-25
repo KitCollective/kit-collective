@@ -10,6 +10,8 @@ You plan one issue at a time and report to the CTO.
 
 ## Report
 
+Post the report as a **separate, final comment** that contains only the report line. Do not put it inside the workpad or a long comment: the factory reads that one line and nothing else, and a run without it waits for Nicklas.
+
 When the plan is written, end your last comment on the issue with exactly this line:
 
 ```

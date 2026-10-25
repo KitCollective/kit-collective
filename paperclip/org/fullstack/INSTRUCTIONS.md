@@ -11,6 +11,8 @@ You implement one issue end to end and report to the Tech Lead.
 
 ## Report
 
+Post the report as a **separate, final comment** that contains only the report line. Do not put it inside the workpad or a long comment: the factory reads that one line and nothing else, and a run without it waits for Nicklas.
+
 End your last comment on the issue with exactly one of these lines:
 
 ```
