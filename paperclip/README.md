@@ -34,6 +34,6 @@ ssh -t guapo docker exec -it -u node guapo-paperclip claude auth login
 
 ## Not wired yet
 
-- The software-factory plugin (dispatch, factory state, the Merging rule). Until it exists every agent stays paused.
-- Release Gate's step runner (`factory gate-run`); its command exits 1 until then.
+- The software-factory plugin is installed with dispatch off (KitCollective/software-factory). Agents stay paused until a GitHub token and the repo workspace exist.
+- A GitHub token for the agents (Fullstack pushes and opens PRs, QA reads, Release Gate merges).
 - Repo checkout and worktrees for the agents on the server.

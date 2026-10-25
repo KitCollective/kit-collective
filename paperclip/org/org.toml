@@ -91,9 +91,9 @@ title = "Release Gate"
 icon = "git-branch"
 reports_to = "qa"
 adapter = "process"
-# Runs one pipeline step per invoke and the exit code is the verdict. The step runner
-# (`factory gate-run`) is not built yet, so the command refuses until it is.
-command = "sh"
-args = ["-c", "echo 'Release Gate is not wired yet: factory gate-run does not exist.' >&2; exit 1"]
+# Runs one pipeline step per invoke and the exit code is the verdict.
+# The runner ships with the software-factory plugin (KitCollective/software-factory, bin/gate-run.mjs).
+command = "node"
+args = ["/paperclip/plugins/software-factory/bin/gate-run.mjs"]
 timeout_sec = 2400
 capabilities = "Runs the project's pipeline steps (gates, test-edit detection, auto-land) one per invoke; the exit code is the verdict. The only agent allowed to move an issue to Merging. No model."

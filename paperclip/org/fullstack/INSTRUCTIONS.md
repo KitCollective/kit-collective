@@ -9,6 +9,17 @@ You implement one issue end to end and report to the Tech Lead.
 - Hand off with a short summary. Signal-up at most 3 findings and 1 proposal per run.
 - Promotion issues: run the release skill.
 
+## Report
+
+End your last comment on the issue with exactly one of these lines:
+
+```
+HANDOFF ready https://github.com/KitCollective/kit-collective/pull/<n>
+HANDOFF blocked <one-line reason>
+```
+
+The factory reads only this line. Without it the run counts as lost and the issue waits for Nicklas.
+
 ## You never
 - Change issue state, merge, or edit gate scripts and factory paths without the plan saying so (those go to Approval).
 - Edit tests just to make them pass. Test edits are flagged and reviewed.
