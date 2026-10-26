@@ -236,6 +236,8 @@ catches it in the API tests and the container smoke test.
 
 ### Implement ADW production gh ratchet (KIT-54)
 
+Archived with the Pi harness to `KitCollective/kit-pi-harness` (commit `cb548428`); it no longer runs in this repo.
+
 `harness/tests/implement-adw.test.mjs` drives `createGhClient` / `createTypecheckTouched` with fake `runCommand` only (not injected `fakeGh`). Coverage that must stay:
 
 - **"production createGhClient pushes the rebased head, waits through pending required checks, and ignores optional pending"** — rebase is followed by a push of the issue branch, `gh pr create` has `--head` and non-empty `--body` (non-interactive `gh` requires both `--title` and `--body`), a first pending required-check snapshot never becomes green before Linear `setStatus`, optional pending checks must not block.
@@ -265,6 +267,8 @@ Prevents repeating the KIT-105 silent pass (status flip only, no durable note or
 
 ### Factory checker spawn ratchet (KIT-56)
 
+Archived with the Pi harness to `KitCollective/kit-pi-harness` (commit `cb548428`); it no longer runs in this repo.
+
 `scripts/check-factory-checker-spawn.mjs` (CI via `pnpm check:factory-checker-spawn`) fails when factory-checker loses mechanical spawn allowlist (`harness/checker-spawn.mjs` + `harness/factory-checker-tools.ts`), `linear_cli` host-tool wiring, explicit three-axis pass verdict guard (`reviewFeedbackIsClean`), missing Slop axis guard (`reviewFeedbackMissingSlopAxis`), three-axis pass lines (`REVIEW_PASS_FEEDBACK_LINES`), read-only Slop sub-agent (`.pi/agents/slop.md` + `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS`), `subagent` on parent allowlist, missing-PR fail-move, or GitHub wait timeout fail-move. Prevents repeating the KIT-56 checker fail (prompt-only tool deny and silent pass on missing/empty `### Review feedback`). Tighten only.
 
 ### Factory checker Slop axis ratchet (KIT-126)
@@ -289,6 +293,8 @@ Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TO
 
 ### Implement Gate format-check and cheap retry
 
+Archived with the Pi harness to `KitCollective/kit-pi-harness` (commit `cb548428`); it no longer runs in this repo.
+
 `scripts/check-implement-cheap-retry.mjs` (CI via `node` in `.github/workflows/ci.yml`) plus `harness/tests/implement-adw.test.mjs` / `harness/tests/implement-ci-retry.test.mjs` / `harness/tests/resume.test.mjs` keep these locks:
 
 - Gate (`.pi/agents/gate.md`) runs `pnpm format:check` or `biome ci .`. Format-fail is red. Do not treat format as typecheck. Typecheck may be yellow.
@@ -304,6 +310,8 @@ Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TO
 Prevents repeating KIT-125 (five false format cheap-retries → retry-cap hold, never In Review while GitHub was green). Tighten only.
 
 ### Implement checker-fail resume findings (KIT-116)
+
+Archived with the Pi harness to `KitCollective/kit-pi-harness` (commit `cb548428`); it no longer runs in this repo.
 
 `scripts/check-implement-checker-fail-resume.mjs` (CI via `node` in `.github/workflows/ci.yml`) plus `harness/tests/implement-ci-retry.test.mjs` / `harness/tests/role-comments.test.mjs` / `harness/tests/checker.test.mjs` keep these locks:
 
@@ -342,6 +350,8 @@ Prevents repeating the KIT-47 checker that reviewed a local `kit-47` cut from `d
 `.cursor/hooks/block-pr-lane.sh` denies `gh pr create` without `--base development`, and denies `--base production` / `--base staging` except the promotion pairs (`--head development` → staging, `--head staging` → production). Prevents repeating the KIT-101/KIT-100 land onto `production` when that was the repo default. GitHub default branch is `development`; rulesets `lane-development` / `lane-staging` / `lane-production` require a PR (production also requires one approving review; `lane-staging` also requires the `test` and `Scenarios` checks, with no bypass actors, ADR-0060). Tighten only.
 
 ### Pi helper model pin (Kimi default)
+
+Archived with the Pi harness to `KitCollective/kit-pi-harness` (commit `cb548428`); it no longer runs in this repo.
 
 Unpinned `.pi/agents` (nest/expo/drizzle/ui-ux/devops/slop) made Pi bill OpenRouter `moonshotai/kimi-k2.6` via `KIT-Pi-harness`. `scripts/generate-pi-implement-context.mjs` and `.pi/agents/slop.md` pin `model: cursor/composer-2.5`. `harness/tests/implement-adw.test.mjs` and `scripts/tests/check-pi-implement-context-generated.test.mjs` lock the pin. Prevents repeating 89 Kimi generations after the Hy3 Scout/Gate pin already shipped. Tighten only.
 
