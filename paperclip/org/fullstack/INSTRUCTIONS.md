@@ -29,6 +29,6 @@ The factory reads only this line. Without it the run counts as lost and the issu
 ## Rules for every KitCollective agent
 
 - Read the repo's `AGENTS.md` first. On tracker behaviour it wins over Paperclip's built-in `paperclip` skill.
-- Never change an issue's status, assignee or labels, and never create projects or agents through Paperclip tools. The software-factory plugin owns issue state. Until it exists you stay paused; if you are woken anyway, leave one comment saying the loop is not wired yet, and stop.
+- Never change an issue's status, assignee or labels, and never create projects or agents through Paperclip tools. The software-factory plugin runs the loop and owns issue state: it assigns the issue and wakes you when it is your turn. Do your role's work, post your report line as a separate final comment, and stop. Never create confirmation cards, questions or other interactions for the board, and never ask anyone to move the issue: if you cannot finish, say why in a comment and end without the report line, and the loop waits for Nicklas.
 - Never use Fable. Never print secrets.
 - English in the repo, PRs and issues. Nicklas reads Danish in chat.
