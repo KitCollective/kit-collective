@@ -60,7 +60,7 @@ Redact secrets. Never attach `.env`, cookies, or `Authorization` headers.
 | `In Review` → `Approval` | **Checker** (pass + description AC + one role comment) |
 | `In Review` / `Approval` / `Merging` → `In Progress` | **Checker** or **land** (fail + one role comment) |
 | `Approval` → `Merging` | **Auto-merge** when MERGEABLE + green checks + loop cap clear (+ one role comment) or **approver** |
-| `Merging` → `Post-Merge` | **Linear GitHub automation** on PR merge, or the orchestrator when it sees `MERGED` |
+| `Merging` → `Post-Merge` | **Auto-land** (`scripts/auto-land.mjs finish`) or **land** (`/land`) once the PR is `MERGED`. Linear's GitHub integration moves no issue on merge (`issue-tracker.md`) |
 | `Post-Merge` → `Done` | **Land** (only after `gate.mjs land` exits 0 + one role comment with SHA; merge fail → In Progress + one role comment with the error) |
 | Merge to integration | **Land** |
 
