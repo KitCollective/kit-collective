@@ -76,7 +76,7 @@ _Avoid_: using a GitHub review approval as merge permission; setting `Merging` f
 _Avoid_: reading a green relayed gate result as enough; auto-land for a high-risk or oversize change, or a `surface:mobile` change with no slice flow (ADR-0064); calling it Auto-merge (the archived worker rule below)
 
 **Post-Merge**:
-The PR is merged. Set by Linear's GitHub automation on merge, or by the orchestrator when it sees `MERGED`. The integration lane is verified green here, then the worktree is reaped. `Done` is set only after `node scripts/gate.mjs land <pr> --issue KIT-n` exits 0; a gate that is not open leaves the issue in `Post-Merge`. `blockedBy` does not resolve here.
+The PR is merged. Set by the factory once the PR is `MERGED` (`scripts/auto-land.mjs finish` or `/land`); Linear's GitHub integration moves no issue on a merge. The integration lane is verified green here, then the worktree is reaped. `Done` is set only after `node scripts/gate.mjs land <pr> --issue KIT-n` exits 0; a gate that is not open leaves the issue in `Post-Merge`. `blockedBy` does not resolve here.
 _Avoid_: pointing Linear's GitHub automation at `Done`; calling a merged but unverified issue Done
 
 **Workpad**:
