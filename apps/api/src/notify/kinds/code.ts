@@ -22,5 +22,7 @@ export const codeMail: MailDefinition<CodeMailData> = {
     { part: "text", text: "Skriv koden i appen for at fortsætte." },
     { part: "note", text: "Har du ikke bedt om en kode? Så kan du se bort fra mailen." },
   ],
-  footerReason: "Du får denne mail, fordi nogen bad om en kode til denne adresse.",
+  // Paper's reason line, then the lock's rule for account mails (01–04, 12): both, per Nicklas.
+  footerReason:
+    "Du får denne mail, fordi nogen bad om en kode til denne adresse. Den kan ikke slås fra.",
 };

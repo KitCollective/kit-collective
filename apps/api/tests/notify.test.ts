@@ -88,6 +88,7 @@ describe("Notify, login code mail (01)", () => {
       "Skriv koden i appen for at fortsætte.",
       "Har du ikke bedt om en kode? Så kan du se bort fra mailen.",
       "Du får denne mail, fordi nogen bad om en kode til denne adresse.",
+      "Den kan ikke slås fra.",
     ]) {
       expect(mail.text).toContain(fact);
       expect(shown).toContain(fact);
