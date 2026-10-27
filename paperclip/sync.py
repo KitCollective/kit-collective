@@ -16,6 +16,7 @@ It never resumes a paused agent.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -134,6 +135,24 @@ def payload(a: dict, org: dict, ids: dict[str, str], secrets: dict[str, str]) ->
     }
 
 
+def push_instructions(agent_id: str, bundle: dict, token: str) -> None:
+    """Writes the entry file when Paperclip holds other content.
+
+    PATCH /instructions-bundle only sets the mode and entry file; it drops `files` without an error.
+    Content goes through PUT /instructions-bundle/file, with the hash of what it replaces.
+    """
+    entry = bundle["entryFile"]
+    content = bundle["files"][entry]
+    cur = api("GET", f"/api/agents/{agent_id}/instructions-bundle", token)
+    held = next((f for f in cur.get("files", []) if f.get("path") == entry), None)
+    want = hashlib.sha256(content.encode()).hexdigest()
+    if held and held.get("contentHash") == want:
+        return
+    api("PUT", f"/api/agents/{agent_id}/instructions-bundle/file", token,
+        {"path": entry, "content": content, "baseHash": held.get("contentHash") if held else None})
+    print(f"  instructions {entry} updated")
+
+
 def sync_project(org: dict, cid: str, token: str, apply: bool) -> str | None:
     p = org.get("project")
     if not p:
@@ -210,7 +229,7 @@ def run(apply: bool) -> None:
                     # Permissions can only be set at creation; PATCH rejects them.
                     api("PATCH", f"/api/agents/{cur['id']}", token,
                         {k: v for k, v in body.items() if k not in ("instructionsBundle", "permissions")})
-                    api("PATCH", f"/api/agents/{cur['id']}/instructions-bundle", token, body["instructionsBundle"])
+                    push_instructions(cur["id"], body["instructionsBundle"], token)
                 ids[a["id"]] = cur["id"]
             pending.remove(a)
 
