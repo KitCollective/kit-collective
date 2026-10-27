@@ -43,6 +43,7 @@ COPY packages/domain/package.json packages/domain/
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=build /app/apps/api/dist apps/api/dist
+COPY --from=build /app/apps/api/assets apps/api/assets
 COPY --from=build /app/packages/api-contract/dist packages/api-contract/dist
 COPY --from=build /app/packages/db/dist packages/db/dist
 COPY --from=build /app/packages/domain/dist packages/domain/dist

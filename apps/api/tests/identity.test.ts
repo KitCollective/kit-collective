@@ -44,19 +44,26 @@ import { recordedMails, resetRecordedMails } from "../dist/notify/recording-mail
 
 type RecordedMail = (typeof recordedMails)[number];
 
-function mailUrl(mail: RecordedMail | undefined): string | undefined {
-  return mail && "url" in mail ? mail.url : undefined;
+const LEGACY_SUBJECT = { verify: "Bekræft din e-mail", reset: "Nulstil adgangskode" } as const;
+
+/** Verify and reset mails are told apart by their subject; they carry the link as the text body. */
+function isLegacyMail(mail: RecordedMail, kind: keyof typeof LEGACY_SUBJECT): boolean {
+  return mail.subject === LEGACY_SUBJECT[kind];
 }
 
-/** The six digits of the newest sign-in code mailed to this address. */
+function mailUrl(mail: RecordedMail | undefined): string | undefined {
+  return mail?.text.trim();
+}
+
+/** The six digits that lead the subject of the newest sign-in mail sent to this address. */
 function latestCode(email: string): string {
   const mail = [...recordedMails]
     .reverse()
-    .find((item) => item.kind === "code" && item.to === email);
-  if (!mail || !("code" in mail)) {
+    .find((item) => item.to === email && /^\d{6} /.test(item.subject));
+  if (!mail) {
     throw new Error(`No sign-in code was mailed to ${email}`);
   }
-  return mail.code;
+  return mail.subject.slice(0, 6);
 }
 
 function requestCodeInject(
@@ -368,7 +375,7 @@ describe("Identity /v1", () => {
     expect(session.user.emailVerified).toBe(false);
 
     const mail = recordedMails.find(
-      (item) => item.to === "verify-me@example.com" && item.kind === "verify",
+      (item) => item.to === "verify-me@example.com" && isLegacyMail(item, "verify"),
     );
     expect(mailUrl(mail)).toMatch(/token=/);
     const token = new URL(mailUrl(mail) ?? "").searchParams.get("token");
@@ -411,7 +418,7 @@ describe("Identity /v1", () => {
     expect(identityPasswordResetAcceptedSchema.parse(JSON.parse(known.body))).toEqual({
       accepted: true,
     });
-    expect(recordedMails.filter((item) => item.kind === "reset")).toHaveLength(1);
+    expect(recordedMails.filter((item) => isLegacyMail(item, "reset"))).toHaveLength(1);
     expect(recordedMails.some((item) => item.to === "reset-unknown@example.com")).toBe(false);
   });
 
@@ -432,7 +439,7 @@ describe("Identity /v1", () => {
     });
     expect(request.statusCode).toBe(200);
     const mail = recordedMails.find(
-      (item) => item.to === "reset-complete@example.com" && item.kind === "reset",
+      (item) => item.to === "reset-complete@example.com" && isLegacyMail(item, "reset"),
     );
     const token = new URL(mailUrl(mail) ?? "").searchParams.get("token");
 
@@ -1481,7 +1488,7 @@ describe("Identity /v1", () => {
       resetRecordedMails();
       const registered = await registerSession(app, "code-password@example.com");
       const token = new URL(
-        mailUrl(recordedMails.find((item) => item.kind === "verify")) ?? "",
+        mailUrl(recordedMails.find((item) => isLegacyMail(item, "verify"))) ?? "",
       ).searchParams.get("token");
       await app.inject({ method: "POST", url: "/v1/identity/verify", payload: { token } });
 
