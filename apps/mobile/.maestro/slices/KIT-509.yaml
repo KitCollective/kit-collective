@@ -128,11 +128,11 @@ name: kit-509
 - tapOn:
     id: jersey-detail-player-row
 - extendedWaitUntil:
-    visible: "Mads Vestergaard"
+    visible: ".*Mads Vestergaard.*"
     timeout: 15000
 - runFlow: ../subflows/settle.yaml
 - takeScreenshot: kc__kit-509__07-player-picker
-- tapOn: "Mads Vestergaard"
+- tapOn: ".*Mads Vestergaard.*"
 - extendedWaitUntil:
     visible:
       id: jersey-detail-player-row
@@ -177,9 +177,9 @@ name: kit-509
 - tapOn:
     id: jersey-detail-player-row
 - extendedWaitUntil:
-    visible: "Mads Vestergaard"
+    visible: ".*Mads Vestergaard.*"
     timeout: 15000
-- tapOn: "Mads Vestergaard"
+- tapOn: ".*Mads Vestergaard.*"
 - extendedWaitUntil:
     visible:
       id: jersey-detail-player-row
