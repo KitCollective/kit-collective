@@ -44,9 +44,8 @@ export default function ConfirmScreen() {
   const typography = useTypography();
   const reduceMotion = useReduceMotion();
   const insets = useSafeAreaInsets();
-  const { sessionId, editJerseyId } = useLocalSearchParams<{
+  const { sessionId } = useLocalSearchParams<{
     sessionId: string;
-    editJerseyId?: string;
   }>();
   const { accessToken: sessionToken, requestPremiumAccess, entitlement } = useAuth();
   const visionRemembered = useVisionSwitch();
@@ -70,7 +69,7 @@ export default function ConfirmScreen() {
     saveLabel,
     handleSave,
     handlePostSaveDismiss,
-  } = useConfirmSave({ sessionId, editJerseyId, visionJobId });
+  } = useConfirmSave({ sessionId, visionJobId });
 
   // Luk on an overview session parks it, so Samling keeps one row that reopens the overview.
   const exitToCollection = useConfirmExit(sessionId, state, isSessionResolved, () => {
@@ -140,7 +139,6 @@ export default function ConfirmScreen() {
       pathname: section === "data" ? "/(capture)/confirm-data" : "/(capture)/confirm-details",
       params: {
         sessionId,
-        ...(editJerseyId ? { editJerseyId } : {}),
         ...(section === "data" && vision.catalogMissHint
           ? { visionSideHint: vision.catalogMissHint }
           : {}),
@@ -158,7 +156,7 @@ export default function ConfirmScreen() {
   const activeJerseyIndex = state?.drafts.findIndex((entry) => entry.id === draft.id) ?? 0;
   const activeTabLabel = `Trøje ${activeJerseyIndex + 1}`;
   const outOfQuota = visionMatcherRemainingToOutOfQuota(entitlement?.visionMatcher);
-  const visionOn = Boolean(accessToken) && !outOfQuota && !editJerseyId;
+  const visionOn = Boolean(accessToken) && !outOfQuota;
   const settled = vision.settledDraftIds.has(draft.id);
   // A read is running or about to start for this jersey.
   const identityInFlight = vision.analyzing || (visionOn && draft.photos.length > 0 && !settled);

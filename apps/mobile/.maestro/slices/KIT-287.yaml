@@ -157,8 +157,8 @@ name: kit-287
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: kc__kit-287__08-photo-added-count-2-of-2
-# AC 11: More holds Rediger trøjen and Slet trøjen (danger); the detail itself has no
-# destructive button.
+# AC 11: More holds Slet trøjen (danger); the detail itself has no destructive button. (Rediger
+# trøjen left More with KIT-509: every fact is edited where it is shown.)
 - scrollUntilVisible:
     element:
       id: jersey-detail-more

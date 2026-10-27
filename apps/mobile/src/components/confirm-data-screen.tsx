@@ -40,15 +40,13 @@ export function ConfirmDataScreen() {
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
-  const { sessionId, editJerseyId, visionSideHint } = useLocalSearchParams<{
+  const { sessionId, visionSideHint } = useLocalSearchParams<{
     sessionId: string;
-    editJerseyId?: string;
     visionSideHint?: string;
   }>();
   const { accessToken } = useAuth();
   const { state, isSessionResolved, mutate, draft, handleCommitDrill } = useConfirmSave({
     sessionId,
-    editJerseyId,
   });
   useConfirmExit(sessionId, state, isSessionResolved);
 

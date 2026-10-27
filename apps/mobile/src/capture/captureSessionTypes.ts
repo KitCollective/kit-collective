@@ -34,8 +34,6 @@ export type CaptureJerseyDraft = {
   badgeId: string | null;
   badgeLabel: string | null;
   photos: CaptureSessionPhoto[];
-  /** When set, Confirm saves via PATCH instead of POST save (metadata-only edit). */
-  editJerseyId?: string;
   /** Vision grouped these photos with middling confidence (suggest band): the overview shows Tjek. */
   needsCheck?: boolean;
 };

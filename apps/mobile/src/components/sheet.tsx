@@ -53,6 +53,8 @@ export function useSheetScroll(): SheetScrollControls | null {
 type SheetProps = {
   visible: boolean;
   title: string;
+  /** Read instead of the title, e.g. "Type, nuværende Hjemme" for a single-select sheet. */
+  titleAccessibilityLabel?: string;
   onDismiss: () => void;
   children: ReactNode;
   variant?: SheetVariant;
@@ -74,6 +76,7 @@ type SheetProps = {
 export function Sheet({
   visible,
   title,
+  titleAccessibilityLabel,
   onDismiss,
   children,
   variant = "form",
@@ -161,6 +164,7 @@ export function Sheet({
               )}
               <Text
                 accessibilityRole="header"
+                accessibilityLabel={titleAccessibilityLabel}
                 style={[typography.title, styles.sheetTitleRegion, { color: theme.contentPrimary }]}
               >
                 {title}

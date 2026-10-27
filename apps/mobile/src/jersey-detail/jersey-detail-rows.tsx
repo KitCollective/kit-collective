@@ -8,6 +8,7 @@ import type {
   FactRowView,
   PlayerRowView,
   SettingRowView,
+  TitleTargetsView,
 } from "@/jersey-detail/jersey-detail-view-model";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
@@ -24,6 +25,12 @@ type TitleBlockProps = {
   caption: string;
   title: string;
   season: string;
+  /** Own detail only: the club and the season are targets. Without it the block is static. */
+  targets?: TitleTargetsView;
+  onClubPress?: () => void;
+  onSeasonPress?: () => void;
+  /** True while a save is in flight: the targets stay, but do nothing. */
+  disabled?: boolean;
 };
 
 /**
@@ -34,32 +41,104 @@ type TitleBlockProps = {
  * the club has no line limit (it grows downwards) and the season may shrink to the column width,
  * where a Text wraps rather than clips. The numeral keeps the taller line box
  * `collectionFactsNumeralStyle` gives it, so the digit tops are not cut either.
+ *
+ * The club and the season are each a target (club picker, season sheet). Each says its value and
+ * what it does; a target with no handler is plain text.
  */
-export function JerseyTitleBlock({ caption, title, season }: TitleBlockProps) {
+export function JerseyTitleBlock({
+  caption,
+  title,
+  season,
+  targets,
+  onClubPress,
+  onSeasonPress,
+  disabled = false,
+}: TitleBlockProps) {
   const theme = useTheme();
   const typography = useTypography();
+  const clubText = (
+    <Text style={[typography.displayLarge, styles.titleText, { color: theme.contentPrimary }]}>
+      {title}
+    </Text>
+  );
+  const seasonText = (
+    <Text
+      style={[
+        collectionFactsNumeralStyle(typography.numeral44),
+        styles.season,
+        { color: theme.contentPrimary },
+      ]}
+    >
+      {season}
+    </Text>
+  );
+
+  if (!targets) {
+    return (
+      <View style={styles.titleBlock} testID="jersey-detail-title">
+        <Text style={[typography.caption, { color: theme.contentSecondary }]}>{caption}</Text>
+        <View
+          style={styles.titleLine}
+          accessible
+          accessibilityRole="header"
+          accessibilityLabel={`${title}, ${season}`}
+        >
+          {clubText}
+          {seasonText}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.titleBlock} testID="jersey-detail-title">
       <Text style={[typography.caption, { color: theme.contentSecondary }]}>{caption}</Text>
-      <View
-        style={styles.titleLine}
-        accessible
-        accessibilityRole="header"
-        accessibilityLabel={`${title}, ${season}`}
-      >
-        <Text style={[typography.displayLarge, styles.titleText, { color: theme.contentPrimary }]}>
-          {title}
-        </Text>
-        <Text
-          style={[
-            collectionFactsNumeralStyle(typography.numeral44),
-            styles.season,
-            { color: theme.contentPrimary },
-          ]}
-        >
-          {season}
-        </Text>
+      <View style={styles.titleLine}>
+        {onClubPress && targets.club ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={targets.club.accessibilityLabel}
+            accessibilityHint={targets.club.accessibilityHint}
+            accessibilityState={{ disabled }}
+            disabled={disabled}
+            onPress={onClubPress}
+            testID="jersey-detail-club"
+            style={styles.titleText}
+          >
+            {clubText}
+          </Pressable>
+        ) : (
+          <View
+            accessible
+            accessibilityRole="header"
+            accessibilityLabel={title}
+            style={styles.titleText}
+          >
+            {clubText}
+          </View>
+        )}
+        {onSeasonPress ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={targets.season.accessibilityLabel}
+            accessibilityHint={targets.season.accessibilityHint}
+            accessibilityState={{ disabled }}
+            disabled={disabled}
+            onPress={onSeasonPress}
+            testID="jersey-detail-season"
+            style={styles.season}
+          >
+            {seasonText}
+          </Pressable>
+        ) : (
+          <View
+            accessible
+            accessibilityLabel={targets.season.accessibilityLabel}
+            style={styles.season}
+          >
+            {seasonText}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -130,18 +209,23 @@ export function JerseyBidRow({ row, onPress }: JerseyBidRowProps) {
   );
 }
 
-/** Player row. No chevron: a chevron on a row that does nothing would lie. */
-export function JerseyPlayerRow({ row }: { row: PlayerRowView }) {
+/**
+ * Player row. On the own detail it opens the squad picker (`onPress`, trailing chevron); without
+ * `onPress` (foreign detail) it is a static row.
+ */
+export function JerseyPlayerRow({
+  row,
+  onPress,
+  disabled = false,
+}: {
+  row: PlayerRowView;
+  onPress?: () => void;
+  disabled?: boolean;
+}) {
   const theme = useTheme();
   const typography = useTypography();
-
-  return (
-    <View
-      accessible
-      accessibilityLabel={row.accessibilityLabel}
-      testID="jersey-detail-player-row"
-      style={[styles.playerRow, { backgroundColor: theme.fillSecondary }]}
-    >
+  const content = (
+    <>
       {row.kind === "player" ? (
         // A player without a shirt number has no emblem in the lock: empty tile (design gap).
         <NumberEmblem size="lg" state="rest" number={row.number ?? undefined} />
@@ -162,28 +246,70 @@ export function JerseyPlayerRow({ row }: { row: PlayerRowView }) {
           <Text style={[typography.label, { color: theme.contentPrimary }]}>{row.title}</Text>
         )}
       </View>
-    </View>
+      {onPress ? (
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={theme.contentMuted}
+          accessibilityElementsHidden
+        />
+      ) : null}
+    </>
+  );
+
+  if (!onPress) {
+    return (
+      <View
+        accessible
+        accessibilityLabel={row.accessibilityLabel}
+        testID="jersey-detail-player-row"
+        style={[styles.playerRow, { backgroundColor: theme.fillSecondary }]}
+      >
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={row.accessibilityLabel}
+      accessibilityHint={row.accessibilityHint}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      testID="jersey-detail-player-row"
+      style={({ pressed }) => [
+        styles.playerRow,
+        { backgroundColor: theme.fillSecondary, opacity: pressed ? 0.92 : 1 },
+      ]}
+    >
+      {content}
+    </Pressable>
   );
 }
 
-/** Label-left / value-right List row. No chevron: the row does nothing when pressed. */
-export function JerseyFactRow({ row, hairline }: { row: FactRowView; hairline: boolean }) {
+type JerseyFactRowProps = {
+  row: FactRowView;
+  hairline: boolean;
+  /** Own detail: opens the small sheet for that one fact. Without it the row is static. */
+  onPress?: () => void;
+  disabled?: boolean;
+};
+
+/** Label-left / value-right List row. */
+export function JerseyFactRow({ row, hairline, onPress, disabled = false }: JerseyFactRowProps) {
   const theme = useTheme();
   const typography = useTypography();
-
-  return (
-    <View
-      accessible
-      accessibilityLabel={row.accessibilityLabel}
-      testID={`jersey-detail-fact-${row.key}`}
-      style={[
-        styles.factRow,
-        hairline && {
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: theme.borderSubtle,
-        },
-      ]}
-    >
+  const rowStyle = [
+    styles.factRow,
+    hairline && {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.borderSubtle,
+    },
+  ];
+  const content = (
+    <>
       <Text style={[typography.body, { color: theme.contentSecondary }]}>{row.label}</Text>
       <Text
         style={[
@@ -194,7 +320,35 @@ export function JerseyFactRow({ row, hairline }: { row: FactRowView; hairline: b
       >
         {row.value}
       </Text>
-    </View>
+    </>
+  );
+
+  if (!onPress) {
+    return (
+      <View
+        accessible
+        accessibilityLabel={row.accessibilityLabel}
+        testID={`jersey-detail-fact-${row.key}`}
+        style={rowStyle}
+      >
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={row.accessibilityLabel}
+      accessibilityHint={row.accessibilityHint}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      testID={`jersey-detail-fact-${row.key}`}
+      style={({ pressed }) => [rowStyle, pressed && { opacity: 0.9 }]}
+    >
+      {content}
+    </Pressable>
   );
 }
 

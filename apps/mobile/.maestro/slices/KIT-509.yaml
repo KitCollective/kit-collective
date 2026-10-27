@@ -1,0 +1,237 @@
+# KIT-509: edit one fact at a time on the own UserJersey (Revision 2026-10-10).
+#
+# design-sections: Own UserJersey detail, Sheet, Chip, List row, Number emblem, Button, Toast
+#
+# FIXTURE THIS FLOW NEEDS (apps/api/src/e2e/test-data.fixture.ts), all owned by the Test Collector:
+# - FC København (...0101): home, M, used, the latest season (2023/24), no player and no Badge.
+#   Every club shares the two fixture seasons (2022/23, 2023/24), so a club change keeps the
+#   season. OB holds the one squad (Mads Vestergaard, nr. 9) and the one Badge (Pokalfinale 2023),
+#   both in 2023/24, which is what the player picker, the Badge sheet and the season rule show.
+#
+# The flow edits the jersey in place and never leaves the detail: size, club (Behold, then Skift),
+# player, Badge, remove the player, and a season the player is not in.
+#
+# The catalog ids are generated, so the rows a step taps carry testIDs built from what the flow
+# knows: the club picker's `catalog-picker-row-<label>`, the season's `jersey-detail-season-option-<label>`,
+# and a pattern for the only squad player and the only Badge.
+#
+# Not shown here: the failed-save toast (AC 8). The device harness has no way to make one PATCH
+# fail; the rule is covered by jersey-edit.test.ts and the toast by code. A screen reader's
+# announcements (AC 10) are covered by jersey-detail-view-model.test.ts and jersey-edit.test.ts.
+appId: app.kitcollective.mobile
+name: kit-509
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-509
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000101
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+# The jersey bid row sits above the facts: bring the facts into view.
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-fact-size
+# AC 1: Størrelse opens a small Sheet with Chip single-select for that fact only, M selected.
+- tapOn:
+    id: jersey-detail-fact-size
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-sheet-size
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+# AC 10: the sheet announces the fact and its current value.
+- assertVisible: "Størrelse, nuværende M"
+- takeScreenshot: kc__kit-509__01-size-sheet
+# AC 1, 8: a tap saves and closes; the new value is on the row.
+- tapOn:
+    id: jersey-detail-option-size-xl
+- extendedWaitUntil:
+    notVisible:
+      id: jersey-detail-sheet-size
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-fact-size
+      text: "Størrelse, XL"
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-509__02-size-saved
+# AC 5: the club opens the full-screen picker with search, the current club marked.
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-club
+    direction: UP
+- tapOn:
+    id: jersey-detail-club
+- extendedWaitUntil:
+    visible: "Søg klub eller landshold"
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-509__03-club-picker
+# AC 6: a different club asks first: what is kept, what is reset, Skift til OB / Behold FC København.
+- tapOn:
+    id: catalog-picker-row-OB
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-club-change
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-509__04-club-change-sheet
+# AC 6: Behold saves nothing, the jersey is still FC København.
+- tapOn:
+    id: jersey-detail-club-change-keep
+- extendedWaitUntil:
+    notVisible:
+      id: jersey-detail-club-change
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-509__05-club-kept
+# AC 6: Skift til OB saves the club; the season, type, size and condition are kept.
+- tapOn:
+    id: jersey-detail-club
+- extendedWaitUntil:
+    visible: "Søg klub eller landshold"
+    timeout: 15000
+- tapOn:
+    id: catalog-picker-row-OB
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-club-change
+    timeout: 15000
+- tapOn:
+    id: jersey-detail-club-change-confirm
+- extendedWaitUntil:
+    notVisible:
+      id: jersey-detail-club-change
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-club
+      text: "Klub, OB"
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-509__06-club-changed
+# AC 3: the player row opens the full-screen picker with the OB squad for 2023/24, each row led by
+# a Number emblem md, with search.
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-player-row
+- tapOn:
+    id: jersey-detail-player-row
+- extendedWaitUntil:
+    visible:
+      id: "jersey-detail-squad-.*"
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-509__07-player-picker
+- tapOn:
+    id: "jersey-detail-squad-.*"
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-player-row
+      text: ".*Mads Vestergaard.*"
+    timeout: 15000
+# AC 1: Badge opens its Sheet with the season's badge and Ingen; a tap saves.
+- tapOn:
+    id: jersey-detail-fact-badge
+- extendedWaitUntil:
+    visible:
+      id: "jersey-detail-option-badge-(?!none).*"
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-509__08-badge-sheet
+- tapOn:
+    id: "jersey-detail-option-badge-(?!none).*"
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-fact-badge
+      text: ".*Pokalfinale 2023.*"
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-509__09-player-and-badge-set
+# AC 4: the player can be removed; the detail goes back to Tilføj spiller.
+- tapOn:
+    id: jersey-detail-player-row
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-player-remove
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-509__10-player-picker-current-and-remove
+- tapOn:
+    id: jersey-detail-player-remove
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-player-row
+      text: ".*Tilføj spiller.*"
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-509__11-player-removed
+# AC 7: put the player back, then change the season: 2022/23 has no Mads Vestergaard, so the
+# player is cleared, and the Badge belongs to 2023/24, so it is cleared too.
+- tapOn:
+    id: jersey-detail-player-row
+- extendedWaitUntil:
+    visible:
+      id: "jersey-detail-squad-.*"
+    timeout: 15000
+- tapOn:
+    id: "jersey-detail-squad-.*"
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-player-row
+      text: ".*Mads Vestergaard.*"
+    timeout: 15000
+# AC 2: the season opens a Sheet of the club's seasons with decade chips; the current one is marked.
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-season
+    direction: UP
+- tapOn:
+    id: jersey-detail-season
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-season-list
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+# AC 10: the current season is announced as current.
+- assertVisible:
+    id: jersey-detail-season-option-2023/24
+    text: "2023/24, nuværende sæson"
+- takeScreenshot: kc__kit-509__12-season-sheet
+- tapOn:
+    id: jersey-detail-season-option-2022/23
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-season
+      text: "Sæson, 2022/23"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-player-row
+# AC 7: 2022/23 has no Mads Vestergaard, so the player is cleared; the Badge belongs to 2023/24.
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-player-row
+      text: ".*Tilføj spiller.*"
+    timeout: 15000
+- assertNotVisible:
+    id: jersey-detail-fact-badge
+    text: ".*Pokalfinale 2023.*"
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-509__13-season-changed-player-and-badge-cleared
+- stopRecording

@@ -11,20 +11,22 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 import { patchJerseyBidding, patchJerseyPrivate } from "@/api/bidding";
+import { fetchClubSeasons, fetchSeasonPatches, searchCatalogPlayers } from "@/api/catalog";
 import {
   addUserJerseyPhoto,
   deleteUserJersey,
   fetchCollectionJerseys,
   resolvePhotoUrl,
+  updateUserJersey,
 } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
-import { createEditCaptureSession } from "@/capture/captureSession";
-import { createSqliteCaptureSessionStore } from "@/capture/captureSessionSqliteStore";
 import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
 import { captureQualityForRole, readPreparedPhotoBase64 } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { Banner } from "@/components/catalog-ui";
+import { ClubPickerOverlay } from "@/components/club-picker-overlay";
 import { formatThreadTime } from "@/components/thread-row";
 import { Button, IconButton } from "@/components/ui";
 import {
@@ -43,14 +45,47 @@ import {
   jerseySettingsView,
   replaceJerseyInList,
 } from "@/jersey-detail/jersey-detail-view-model";
+import {
+  applyJerseyEdit,
+  type ClubChangeCopy,
+  clubChangeCopy,
+  JERSEY_EDIT_FAILURE_MESSAGE,
+  type JerseyEdit,
+  type JerseyEditOutcome,
+  type JerseyFactKey,
+} from "@/jersey-detail/jersey-edit";
+import {
+  JerseyClubChangeSheet,
+  JerseyFactSheet,
+  JerseySeasonSheet,
+} from "@/jersey-detail/jersey-edit-sheets";
 import { JerseyPhotoPager, JerseyThumbStrip } from "@/jersey-detail/jersey-photos";
+import { JerseyPlayerPicker } from "@/jersey-detail/jersey-player-picker";
 import { loadOwnJersey } from "@/jersey-detail/own-jersey-load";
 import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-type PendingMoreAction = "edit" | "delete";
+type PendingMoreAction = "delete";
+
+type Named = { id: string; label: string };
+type Side = Named & { kind?: "club" | "national_team" };
+
+/** The one edit surface that is open: a fact sheet, a picker, or a step of the club change. */
+type EditSurface =
+  | { kind: "fact"; key: JerseyFactKey }
+  | { kind: "season" }
+  | { kind: "player" }
+  | { kind: "club" }
+  | {
+      kind: "club-confirm";
+      club: Side;
+      seasons: Named[];
+      copy: ClubChangeCopy;
+      needsSeason: boolean;
+    }
+  | { kind: "club-season"; club: Side; seasons: Named[] };
 
 const PICKED_PHOTO_ROLE = "other";
 
@@ -64,6 +99,13 @@ export default function JerseyDetailScreen() {
   const insets = useSafeAreaInsets();
   const pagerRef = useRef<ScrollView>(null);
   const pendingMoreAction = useRef<PendingMoreAction | null>(null);
+  // One edit at a time: two PATCHes of a whole-row update must never race.
+  const busy = useRef(false);
+  // iOS cannot present a Modal over one that is still leaving: the next surface waits for the
+  // one that closed to report onModalHide.
+  const surfaceRef = useRef<EditSurface | null>(null);
+  const surfaceHiding = useRef(false);
+  const nextSurface = useRef<EditSurface | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -78,6 +120,8 @@ export default function JerseyDetailScreen() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [surface, setSurface] = useState<EditSurface | null>(null);
+  const [saving, setSaving] = useState(false);
   const [addingPhoto, setAddingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   // Set when a photo was just added: the pager jumps to the new (last) photo once it is rendered.
@@ -156,23 +200,6 @@ export default function JerseyDetailScreen() {
     } finally {
       setSavingPrivate(false);
     }
-  };
-
-  const handleEdit = () => {
-    if (!jersey) {
-      return;
-    }
-
-    const sessionId =
-      typeof globalThis.crypto?.randomUUID === "function"
-        ? globalThis.crypto.randomUUID()
-        : `edit-${Date.now()}`;
-    const store = createSqliteCaptureSessionStore(sessionId);
-    createEditCaptureSession(jersey, sessionId, store);
-    router.push({
-      pathname: "/(capture)/confirm",
-      params: { sessionId, editJerseyId: jersey.id },
-    });
   };
 
   // Samling's place-overview cache only refetches when the place goes live again: a jersey it
@@ -256,14 +283,12 @@ export default function JerseyDetailScreen() {
     }
   };
 
-  // The More sheet closes first; on iOS the next surface (the capture route or the confirm
-  // Sheet) waits for Modal.onDismiss so it does not layer over a closing Modal.
+  // The More sheet closes first; on iOS the confirm Sheet waits for Modal.onDismiss so it does
+  // not layer over a closing Modal.
   const runPendingMoreAction = () => {
     const next = pendingMoreAction.current;
     pendingMoreAction.current = null;
-    if (next === "edit") {
-      handleEdit();
-    } else if (next === "delete") {
+    if (next === "delete") {
       setDeleteSheetOpen(true);
     }
   };
@@ -274,6 +299,203 @@ export default function JerseyDetailScreen() {
     if (Platform.OS !== "ios") {
       runPendingMoreAction();
     }
+  };
+
+  const closeSurface = () => {
+    if (surfaceRef.current) {
+      surfaceHiding.current = Platform.OS === "ios";
+    }
+    surfaceRef.current = null;
+    setSurface(null);
+  };
+
+  const presentSurface = (next: EditSurface) => {
+    if (surfaceHiding.current) {
+      nextSurface.current = next;
+      return;
+    }
+    surfaceRef.current = next;
+    setSurface(next);
+  };
+
+  const openSurface = (next: EditSurface) => {
+    if (busy.current) {
+      return;
+    }
+    presentSurface(next);
+  };
+
+  const onSurfaceHidden = () => {
+    surfaceHiding.current = false;
+    const next = nextSurface.current;
+    nextSurface.current = null;
+    if (next) {
+      presentSurface(next);
+    }
+  };
+
+  const showEditFailed = () => {
+    Toast.show({ type: "error", position: "bottom", text1: JERSEY_EDIT_FAILURE_MESSAGE });
+  };
+
+  /** Runs one edit start to finish; a second edit while it runs is ignored. */
+  const exclusively = async (work: () => Promise<void>) => {
+    if (busy.current) {
+      return;
+    }
+    busy.current = true;
+    setSaving(true);
+    try {
+      await work();
+    } finally {
+      busy.current = false;
+      setSaving(false);
+    }
+  };
+
+  // The edit shows on screen at once; the server answer replaces it (a club change changes the
+  // labels and the squad), and a failed save puts the old jersey back.
+  const saveOutcome = async (outcome: Extract<JerseyEditOutcome, { status: "ok" }>) => {
+    if (!accessToken || !jersey) {
+      return;
+    }
+    const previous = jersey;
+    setJersey(outcome.optimistic);
+    try {
+      const updated = await updateUserJersey(accessToken, previous.id, outcome.body);
+      setJersey(updated);
+      setList((current) => replaceJerseyInList(current, updated));
+      syncCollectionCache(updated);
+    } catch {
+      setJersey(previous);
+      showEditFailed();
+    }
+  };
+
+  const submitEdit = (edit: JerseyEdit) =>
+    exclusively(async () => {
+      if (!jersey) {
+        return;
+      }
+      const outcome = applyJerseyEdit(jersey, edit);
+      if (outcome.status === "ok") {
+        await saveOutcome(outcome);
+      }
+    });
+
+  const sideId = jersey?.clubId ?? jersey?.nationalTeamId ?? null;
+
+  const chooseSeason = (season: Named) => {
+    if (!accessToken || !jersey || !sideId || season.id === jersey.seasonId) {
+      return;
+    }
+    const current = jersey;
+    void exclusively(async () => {
+      try {
+        // The squad and the patches are only needed to check what the jersey already carries.
+        const [squad, patches] = await Promise.all([
+          current.playerId
+            ? searchCatalogPlayers(accessToken, "", "da", {
+                clubId: sideId,
+                seasonId: season.id,
+              }).then((response) => response.items)
+            : Promise.resolve([]),
+          (current.patches ?? []).length > 0
+            ? fetchSeasonPatches(accessToken, season.id).then((response) => response.items)
+            : Promise.resolve([]),
+        ]);
+        const outcome = applyJerseyEdit(current, { kind: "season", season, squad, patches });
+        if (outcome.status === "ok") {
+          await saveOutcome(outcome);
+        }
+      } catch {
+        showEditFailed();
+      }
+    });
+  };
+
+  // Club picked: nothing is saved. The confirm sheet says what is kept and what is reset.
+  const chooseClub = (club: Side, seasons: Named[]) => {
+    if (!jersey) {
+      return;
+    }
+    const outcome = applyJerseyEdit(jersey, {
+      kind: "club",
+      club,
+      seasons,
+      patches: jersey.patches ?? [],
+    });
+    presentSurface({
+      kind: "club-confirm",
+      club,
+      seasons,
+      copy: clubChangeCopy(jersey, club.label, outcome.reset),
+      needsSeason: outcome.status === "choose-season",
+    });
+  };
+
+  const pickClub = (row: Side) => {
+    if (!accessToken || !jersey || row.id === (jersey.clubId ?? jersey.nationalTeamId)) {
+      return;
+    }
+    const club: Side = { id: row.id, label: row.label, kind: row.kind };
+    void exclusively(async () => {
+      try {
+        const { seasons } = await fetchClubSeasons(accessToken, club.id);
+        chooseClub(club, seasons);
+      } catch {
+        showEditFailed();
+      }
+    });
+  };
+
+  const confirmClubChange = (open: Extract<EditSurface, { kind: "club-confirm" }>) => {
+    closeSurface();
+    if (open.needsSeason) {
+      presentSurface({ kind: "club-season", club: open.club, seasons: open.seasons });
+      return;
+    }
+    if (!jersey) {
+      return;
+    }
+    void submitEdit({
+      kind: "club",
+      club: open.club,
+      seasons: open.seasons,
+      patches: jersey.patches ?? [],
+    });
+  };
+
+  // The new club lacks the jersey's season: the collector picks one, then the club and the
+  // season are saved together.
+  const chooseSeasonForNewClub = (
+    open: Extract<EditSurface, { kind: "club-season" }>,
+    season: Named,
+  ) => {
+    if (!accessToken || !jersey) {
+      return;
+    }
+    const current = jersey;
+    void exclusively(async () => {
+      try {
+        const patches =
+          (current.patches ?? []).length > 0
+            ? (await fetchSeasonPatches(accessToken, season.id)).items
+            : [];
+        const outcome = applyJerseyEdit(current, {
+          kind: "club",
+          club: open.club,
+          seasons: open.seasons,
+          chosenSeason: season,
+          patches,
+        });
+        if (outcome.status === "ok") {
+          await saveOutcome(outcome);
+        }
+      } catch {
+        showEditFailed();
+      }
+    });
   };
 
   const openBidTarget = (target: BidRowTarget) => {
@@ -399,17 +621,35 @@ export default function JerseyDetailScreen() {
 
         <View style={styles.column}>
           {photoError ? <Banner tone="danger" message={photoError} /> : null}
-          <JerseyTitleBlock caption={view.caption} title={view.title} season={view.season} />
+          <JerseyTitleBlock
+            caption={view.caption}
+            title={view.title}
+            season={view.season}
+            targets={view.titleTargets}
+            disabled={saving}
+            onClubPress={() => openSurface({ kind: "club" })}
+            onSeasonPress={() => openSurface({ kind: "season" })}
+          />
 
           {bidRow ? (
             <JerseyBidRow row={bidRow} onPress={() => openBidTarget(bidRow.target)} />
           ) : null}
 
-          <JerseyPlayerRow row={view.playerRow} />
+          <JerseyPlayerRow
+            row={view.playerRow}
+            disabled={saving}
+            onPress={() => openSurface({ kind: "player" })}
+          />
 
           <View>
             {view.factRows.map((row, index) => (
-              <JerseyFactRow key={row.key} row={row} hairline={index < view.factRows.length - 1} />
+              <JerseyFactRow
+                key={row.key}
+                row={row}
+                hairline={index < view.factRows.length - 1}
+                disabled={saving}
+                onPress={() => openSurface({ kind: "fact", key: row.key })}
+              />
             ))}
           </View>
 
@@ -428,6 +668,67 @@ export default function JerseyDetailScreen() {
         </View>
       </ScrollView>
 
+      <JerseyFactSheet
+        visible={surface?.kind === "fact"}
+        factKey={surface?.kind === "fact" ? surface.key : null}
+        jersey={jersey}
+        accessToken={accessToken}
+        onSelect={(edit) => void submitEdit(edit)}
+        onDismiss={closeSurface}
+        onModalHide={onSurfaceHidden}
+      />
+
+      <JerseySeasonSheet
+        visible={surface?.kind === "season"}
+        title="Sæson"
+        sideId={sideId}
+        currentSeasonId={jersey.seasonId}
+        accessToken={accessToken}
+        onSelect={chooseSeason}
+        onDismiss={closeSurface}
+        onModalHide={onSurfaceHidden}
+      />
+
+      <JerseyPlayerPicker
+        visible={surface?.kind === "player"}
+        jersey={jersey}
+        accessToken={accessToken}
+        onSelect={(player) => void submitEdit({ kind: "player", player })}
+        onRemove={() => void submitEdit({ kind: "player", player: null })}
+        onDismiss={closeSurface}
+        onModalHide={onSurfaceHidden}
+      />
+
+      <ClubPickerOverlay
+        visible={surface?.kind === "club"}
+        accessToken={accessToken}
+        selectedClubId={jersey.clubId ?? jersey.nationalTeamId}
+        onSelect={pickClub}
+        onDismiss={closeSurface}
+        onModalHide={onSurfaceHidden}
+      />
+
+      <JerseyClubChangeSheet
+        visible={surface?.kind === "club-confirm"}
+        copy={surface?.kind === "club-confirm" ? surface.copy : null}
+        onConfirm={() => surface?.kind === "club-confirm" && confirmClubChange(surface)}
+        onKeep={closeSurface}
+        onModalHide={onSurfaceHidden}
+      />
+
+      <JerseySeasonSheet
+        visible={surface?.kind === "club-season"}
+        title={surface?.kind === "club-season" ? `Sæson hos ${surface.club.label}` : "Sæson"}
+        sideId={surface?.kind === "club-season" ? surface.club.id : null}
+        currentSeasonId={null}
+        accessToken={accessToken}
+        onSelect={(season) =>
+          surface?.kind === "club-season" && chooseSeasonForNewClub(surface, season)
+        }
+        onDismiss={closeSurface}
+        onModalHide={onSurfaceHidden}
+      />
+
       <JerseyMoreSheet
         visible={moreOpen}
         onDismiss={() => {
@@ -435,7 +736,6 @@ export default function JerseyDetailScreen() {
           setMoreOpen(false);
         }}
         onModalHide={runPendingMoreAction}
-        onEdit={() => chooseMoreAction("edit")}
         onDelete={() => chooseMoreAction("delete")}
       />
 
