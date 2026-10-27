@@ -132,6 +132,7 @@ export function CatalogPickerModal({
                       key={item.id}
                       title={item.label}
                       meta={item.meta}
+                      testID={`catalog-picker-row-${item.label}`}
                       selected={selectedId === item.id}
                       onPress={() => onSelect(item)}
                     />

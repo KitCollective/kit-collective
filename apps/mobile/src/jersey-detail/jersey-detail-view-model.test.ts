@@ -185,7 +185,7 @@ describe("title targets", () => {
     });
   });
 
-  it("has no club target on a national-team jersey: the club picker lists clubs only", () => {
+  it("keeps the club target on a national-team jersey: the picker lists national teams too", () => {
     const targets = view(
       jersey({
         clubId: null,
@@ -195,7 +195,10 @@ describe("title targets", () => {
       }),
     ).titleTargets;
 
-    expect(targets.club).toBeNull();
+    expect(targets.club).toEqual({
+      accessibilityLabel: "Klub, Danmark",
+      accessibilityHint: "Ændrer klub",
+    });
     expect(targets.season.accessibilityLabel).toBe("Sæson, 2023/24");
   });
 });

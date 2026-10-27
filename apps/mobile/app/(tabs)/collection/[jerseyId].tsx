@@ -70,6 +70,7 @@ import { useTheme } from "@/theme/use-theme";
 type PendingMoreAction = "delete";
 
 type Named = { id: string; label: string };
+type Side = Named & { kind?: "club" | "national_team" };
 
 /** The one edit surface that is open: a fact sheet, a picker, or a step of the club change. */
 type EditSurface =
@@ -79,12 +80,12 @@ type EditSurface =
   | { kind: "club" }
   | {
       kind: "club-confirm";
-      club: Named;
+      club: Side;
       seasons: Named[];
       copy: ClubChangeCopy;
       needsSeason: boolean;
     }
-  | { kind: "club-season"; club: Named; seasons: Named[] };
+  | { kind: "club-season"; club: Side; seasons: Named[] };
 
 const PICKED_PHOTO_ROLE = "other";
 
@@ -414,7 +415,7 @@ export default function JerseyDetailScreen() {
   };
 
   // Club picked: nothing is saved. The confirm sheet says what is kept and what is reset.
-  const chooseClub = (club: Named, seasons: Named[]) => {
+  const chooseClub = (club: Side, seasons: Named[]) => {
     if (!jersey) {
       return;
     }
@@ -433,11 +434,11 @@ export default function JerseyDetailScreen() {
     });
   };
 
-  const pickClub = (row: { id: string; label: string }) => {
-    if (!accessToken || !jersey || row.id === jersey.clubId) {
+  const pickClub = (row: Side) => {
+    if (!accessToken || !jersey || row.id === (jersey.clubId ?? jersey.nationalTeamId)) {
       return;
     }
-    const club = { id: row.id, label: row.label };
+    const club: Side = { id: row.id, label: row.label, kind: row.kind };
     void exclusively(async () => {
       try {
         const { seasons } = await fetchClubSeasons(accessToken, club.id);
@@ -701,7 +702,7 @@ export default function JerseyDetailScreen() {
       <ClubPickerOverlay
         visible={surface?.kind === "club"}
         accessToken={accessToken}
-        selectedClubId={jersey.clubId}
+        selectedClubId={jersey.clubId ?? jersey.nationalTeamId}
         onSelect={pickClub}
         onDismiss={closeSurface}
         onModalHide={onSurfaceHidden}

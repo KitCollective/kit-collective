@@ -75,7 +75,10 @@ export function JerseyFactSheet({
   const key = lastKey.current;
   const copy = jerseyFactSheetCopy(key, jersey);
 
-  const [patches, setPatches] = useState<PatchOption[]>([]);
+  const [loadedPatches, setLoadedPatches] = useState<{
+    seasonId: string;
+    items: PatchOption[];
+  } | null>(null);
   const [patchesLoading, setPatchesLoading] = useState(false);
   const [patchesError, setPatchesError] = useState<string | null>(null);
 
@@ -89,12 +92,15 @@ export function JerseyFactSheet({
     void fetchSeasonPatches(accessToken, jersey.seasonId)
       .then((response) => {
         if (!cancelled) {
-          setPatches(response.items.map((item) => ({ id: item.id, label: item.label })));
+          setLoadedPatches({
+            seasonId: jersey.seasonId,
+            items: response.items.map((item) => ({ id: item.id, label: item.label })),
+          });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setPatches([]);
+          setLoadedPatches(null);
           setPatchesError("Kunne ikke hente badges.");
         }
       })
@@ -108,13 +114,19 @@ export function JerseyFactSheet({
     };
   }, [visible, factKey, accessToken, jersey.seasonId]);
 
+  // Only patches fetched for the jersey's current season: a season change must not show the old list.
+  const patches = loadedPatches?.seasonId === jersey.seasonId ? loadedPatches.items : [];
   const options = optionsFor(key, jersey, patches);
 
   return (
-    <Sheet visible={visible} title={copy.title} onDismiss={onDismiss} onModalHide={onModalHide}>
+    <Sheet
+      visible={visible}
+      title={copy.title}
+      titleAccessibilityLabel={copy.accessibilityLabel}
+      onDismiss={onDismiss}
+      onModalHide={onModalHide}
+    >
       <View
-        accessible={false}
-        accessibilityLabel={copy.accessibilityLabel}
         accessibilityRole="radiogroup"
         testID={`jersey-detail-sheet-${key}`}
         style={styles.chips}
@@ -231,9 +243,12 @@ export function JerseySeasonSheet({
   const theme = useTheme();
   const typography = useTypography();
   const { height } = useWindowDimensions();
-  const listRef = useRef<ScrollView>(null);
+  const listRef = useRef<Animated.ScrollView>(null);
   const rowTops = useRef(new Map<string, number>());
-  const [seasons, setSeasons] = useState<{ id: string; label: string }[]>([]);
+  const [loaded, setLoaded] = useState<{
+    sideId: string;
+    seasons: { id: string; label: string }[];
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -248,12 +263,12 @@ export function JerseySeasonSheet({
     void fetchClubSeasons(accessToken, sideId)
       .then((response) => {
         if (!cancelled) {
-          setSeasons(sortSeasonsNewestFirst(response.seasons));
+          setLoaded({ sideId, seasons: sortSeasonsNewestFirst(response.seasons) });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setSeasons([]);
+          setLoaded(null);
           setError("Kunne ikke hente sæsoner.");
         }
       })
@@ -267,6 +282,8 @@ export function JerseySeasonSheet({
     };
   }, [visible, accessToken, sideId]);
 
+  // Only the seasons of the side being edited: the club-season step must not show the old club's list.
+  const seasons = loaded?.sideId === sideId ? loaded.seasons : [];
   const decades = seasonDecades(seasons);
   const sheetScroll = useSheetScroll();
 
@@ -279,8 +296,7 @@ export function JerseySeasonSheet({
 
   const list = (
     <Animated.ScrollView
-      // SAFETY: Animated.ScrollView forwards its ref to the underlying ScrollView; only scrollTo is called on it.
-      ref={listRef as never}
+      ref={listRef}
       onScroll={sheetScroll?.scrollHandler}
       scrollEventThrottle={16}
       style={{ maxHeight: height * SEASON_LIST_MAX }}
@@ -301,7 +317,7 @@ export function JerseySeasonSheet({
               onSelect(season);
               onDismiss();
             }}
-            testID={`jersey-detail-season-${season.id}`}
+            testID={`jersey-detail-season-option-${season.label}`}
             style={({ pressed }) => [
               styles.seasonRow,
               (pressed || selected) && { backgroundColor: theme.fillSecondary },
@@ -461,7 +477,7 @@ const styles = StyleSheet.create({
     gap: space.gapMd,
   },
   changeList: {
-    gap: 2,
+    gap: space.gapSm,
   },
   actions: {
     gap: space.gapSm,

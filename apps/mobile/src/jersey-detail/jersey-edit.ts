@@ -30,7 +30,8 @@ export type JerseyEdit =
     }
   | {
       kind: "club";
-      club: Named;
+      /** A club, or a national team when the picker row says so. */
+      club: Named & { kind?: "club" | "national_team" };
       /** The new club's seasons. The current season stays when it is one of them. */
       seasons: readonly Named[];
       /** Set once the collector has picked a season because the new club lacks the current one. */
@@ -57,9 +58,10 @@ function patchesOf(jersey: CollectionJersey): Named[] {
 
 /** The full update for `jersey` as it stands; edits override the parts they change. */
 function fullBody(jersey: CollectionJersey): CollectionJerseyUpdate {
-  // SAFETY: a jersey has exactly one side; the spread sends clubId xor nationalTeamId, which the union cannot narrow from a ternary.
   return {
-    ...(jersey.clubId ? { clubId: jersey.clubId } : { nationalTeamId: jersey.nationalTeamId }),
+    ...(jersey.clubId
+      ? { clubId: jersey.clubId }
+      : { nationalTeamId: jersey.nationalTeamId ?? undefined }),
     seasonId: jersey.seasonId,
     catalogKitId: jersey.catalogKitId,
     type: jersey.type,
@@ -67,7 +69,7 @@ function fullBody(jersey: CollectionJersey): CollectionJerseyUpdate {
     condition: jersey.condition,
     playerId: jersey.playerId ?? null,
     patchIds: patchesOf(jersey).map((patch) => patch.id),
-  } as CollectionJerseyUpdate;
+  };
 }
 
 function done(optimistic: CollectionJersey, reset: ResetKey[]): JerseyEditOutcome {
@@ -164,12 +166,13 @@ export function applyJerseyEdit(jersey: CollectionJersey, edit: JerseyEdit): Jer
         return { status: "choose-season", reset };
       }
 
+      const national = edit.club.kind === "national_team";
       let next: CollectionJersey = {
         ...withoutPlayer(jersey),
-        clubId: edit.club.id,
-        clubLabel: edit.club.label,
-        nationalTeamId: null,
-        nationalTeamLabel: null,
+        clubId: national ? null : edit.club.id,
+        clubLabel: national ? null : edit.club.label,
+        nationalTeamId: national ? edit.club.id : null,
+        nationalTeamLabel: national ? edit.club.label : null,
         // The squad belongs to club + season; the server answer brings the new one.
         squadPlayers: [],
         catalogKitId: null,

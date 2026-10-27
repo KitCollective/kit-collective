@@ -57,7 +57,7 @@ export type TitleTargetView = {
 };
 
 export type TitleTargetsView = {
-  /** Null on a national-team jersey: the club picker lists clubs only, so the club stays inert. */
+  /** Null when the jersey has no club or national team to name. */
   club: TitleTargetView | null;
   season: TitleTargetView;
 };
@@ -192,9 +192,10 @@ function factRowsFor(jersey: CollectionJersey): FactRowView[] {
 
 function titleTargetsFor(jersey: CollectionJersey): TitleTargetsView {
   return {
-    club: jersey.clubId
-      ? { accessibilityLabel: `Klub, ${jerseyTitle(jersey)}`, accessibilityHint: "Ændrer klub" }
-      : null,
+    club:
+      jersey.clubId || jersey.nationalTeamId
+        ? { accessibilityLabel: `Klub, ${jerseyTitle(jersey)}`, accessibilityHint: "Ændrer klub" }
+        : null,
     season: {
       accessibilityLabel: `Sæson, ${jersey.seasonLabel}`,
       accessibilityHint: "Ændrer sæson",

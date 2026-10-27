@@ -10,6 +10,7 @@ import {
 } from "@/catalog/liveCatalogPicker";
 import { CatalogPickerModal } from "@/components/catalog-picker-modal";
 import { NumberEmblem } from "@/components/number-emblem";
+import { ListDangerRow } from "@/components/profile-ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -109,19 +110,15 @@ export function JerseyPlayerPicker({
       onModalHide={onModalHide}
       listHeader={
         jersey.playerId ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Fjern spiller"
-            accessibilityHint={`Fjerner ${jersey.playerLabel ?? "spilleren"} fra trøjen`}
+          <ListDangerRow
+            title="Fjern spiller"
+            icon="close-circle-outline"
             onPress={() => {
               onRemove();
               onDismiss();
             }}
             testID="jersey-detail-player-remove"
-            style={({ pressed }) => [styles.remove, pressed && { opacity: 0.9 }]}
-          >
-            <Text style={[typography.label, { color: theme.danger }]}>Fjern spiller</Text>
-          </Pressable>
+          />
         ) : null
       }
       renderRow={(item, row) => {
@@ -132,7 +129,7 @@ export function JerseyPlayerPicker({
             accessibilityLabel={number === null ? item.label : `${item.label}, nummer ${number}`}
             accessibilityState={{ selected: row.selected }}
             onPress={row.onPress}
-            testID={`jersey-detail-player-${item.id}`}
+            testID={`jersey-detail-squad-${item.id}`}
             style={({ pressed }) => [
               styles.row,
               (pressed || row.selected) && { backgroundColor: theme.fillSecondary },
@@ -165,9 +162,12 @@ export function JerseyPlayerPicker({
   );
 }
 
+// List row default height (docs/design-system.md -> List row).
+const PLAYER_ROW_MIN_HEIGHT = 56;
+
 const styles = StyleSheet.create({
   row: {
-    minHeight: 60,
+    minHeight: PLAYER_ROW_MIN_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
     gap: space.gapMd,
@@ -180,10 +180,5 @@ const styles = StyleSheet.create({
   },
   nameSelected: {
     fontWeight: "600",
-  },
-  remove: {
-    minHeight: 48,
-    justifyContent: "center",
-    paddingHorizontal: space.insetSm,
   },
 });

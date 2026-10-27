@@ -21,7 +21,6 @@ const PATCH_2 = "00000000-0000-4000-8000-0000000000e2";
 const KIT_1 = "00000000-0000-4000-8000-0000000000c1";
 
 function jersey(overrides: Partial<CollectionJersey> = {}): CollectionJersey {
-  // SAFETY: the fixture lists every field the edit rules read; unrelated response fields are irrelevant here.
   return {
     id: "00000000-0000-4000-8000-000000000001",
     clubId: CLUB_A,
@@ -47,7 +46,7 @@ function jersey(overrides: Partial<CollectionJersey> = {}): CollectionJersey {
     biddingEnabled: false,
     private: false,
     ...overrides,
-  } as CollectionJersey;
+  };
 }
 
 function ok(outcome: JerseyEditOutcome) {
@@ -388,6 +387,27 @@ describe("club", () => {
     expect(body).not.toHaveProperty("nationalTeamId");
     expect(optimistic.nationalTeamId).toBeNull();
     expect(optimistic.nationalTeamLabel).toBeNull();
+  });
+});
+
+describe("club edit toward a national team", () => {
+  const denmark = { id: TEAM_DK, label: "Danmark", kind: "national_team" as const };
+
+  it("sends nationalTeamId, not clubId, and clears the club side", () => {
+    const { body, optimistic } = ok(
+      applyJerseyEdit(jersey(), {
+        kind: "club",
+        club: denmark,
+        seasons: [{ id: SEASON_23, label: "2023/24" }],
+        patches: [],
+      }),
+    );
+
+    expect(body.nationalTeamId).toBe(TEAM_DK);
+    expect(body).not.toHaveProperty("clubId");
+    expect(optimistic.clubId).toBeNull();
+    expect(optimistic.clubLabel).toBeNull();
+    expect(optimistic.nationalTeamLabel).toBe("Danmark");
   });
 });
 
