@@ -31,6 +31,9 @@ engine = "cli"                       # Claude Code CLI, not ACP: loads the repo'
 dangerously_skip_permissions = true  # headless; the repo's hooks are the guard
 timeout_sec = 3600
 max_concurrent_runs = 1              # start with one run at a time on the shared server
+# A run ends when the model sends its last message; a background command or Monitor still running
+# then keeps the CLI alive, Paperclip kills it (exit 143) and the run counts as lost. Waiting is the gates' job.
+env = { CLAUDE_CODE_DISABLE_BACKGROUND_TASKS = "1" }
 
 # ── Agents ─────────────────────────────────────────────────────────────────
 # model: always explicit (an empty model means Opus in claude_local). Never Fable.

@@ -83,8 +83,8 @@ def load_org() -> dict:
     return org
 
 
-def env_bindings(a: dict, secrets: dict[str, str]) -> dict:
-    env = {}
+def env_bindings(a: dict, secrets: dict[str, str], plain: dict | None = None) -> dict:
+    env = {var: {"type": "plain", "value": str(value)} for var, value in (plain or {}).items()}
     for var, name in (a.get("secrets") or {}).items():
         if name not in secrets:
             sys.exit(f"org.toml: {a['id']} needs secret {name}, which is not in the company. Create it in Paperclip first.")
@@ -93,7 +93,8 @@ def env_bindings(a: dict, secrets: dict[str, str]) -> dict:
 
 
 def adapter_config(a: dict, defaults: dict, secrets: dict[str, str]) -> dict:
-    env = env_bindings(a, secrets)
+    plain = {**defaults.get("env", {}), **a.get("env", {})} if a["adapter"] != "process" else a.get("env", {})
+    env = env_bindings(a, secrets, plain)
     if a["adapter"] == "process":
         cfg = {"command": a["command"], "args": a.get("args", []), "timeoutSec": int(a.get("timeout_sec", 600))}
         if env:
