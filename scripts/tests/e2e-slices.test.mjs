@@ -237,9 +237,15 @@ test("an artifact run keeps Maestro's console out of the log and uploads only th
   const uploads = all
     .map((step, index) => ({ step, index }))
     .filter(({ step }) => step.includes("actions/upload-artifact"));
-  assert.equal(uploads.length, 2);
+  assert.equal(uploads.length, 3);
   const artifactUpload = uploads.find(({ step }) => step.includes("== 'artifact'"));
   const otherUpload = uploads.find(({ step }) => step.includes("!= 'artifact'"));
+  // The third is the visual review's, which a slice run on a PR makes and an artifact run never does.
+  const visualUpload = uploads.find(({ step }) => step.includes("visual-review-"));
+  const visual = all.find((step) => /id: visual\n/.test(step));
+  assert.ok(visualUpload && visual, "the visual review uploads its own artifact");
+  assert.match(visualUpload.step, /steps\.visual\.outcome == 'success'/);
+  assert.match(visual, /env\.E2E_FLOWS == 'slice' && env\.STATUS_SHA != ''/);
   assert.ok(artifactUpload && otherUpload, "one upload per kind of run");
   assert.ok(artifactUpload.index > evidenceAt);
   assert.match(artifactUpload.step, /steps\.evidence\.outcome == 'success'/);
