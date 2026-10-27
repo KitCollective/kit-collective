@@ -33,6 +33,16 @@ New Linear issue only. Do not edit issues you did not create. Do not delegate.
 
 A human shapes the ticket, then may apply `ready-for-agent`. Dispatch still requires `dispatch.state` + `ready-for-agent` + unblocked. Never delegate.
 
+## On the Paperclip loop
+
+The sections above describe Linear. When the issue runs on the Paperclip loop, file the signal-up as a Paperclip issue instead.
+
+- New **Paperclip issue** in **Backlog** (not Linear Triage).
+- Label `origin:signal-up`. Never `triage:ready-for-agent`.
+- `origin:*` is its own label group, so a `triage:*` label may sit beside it. The Linear rule against pairing `signal-up` with `needs-triage` does not apply.
+- The loop never takes an `origin:*` issue. A human shapes it first.
+- The cap and the body shape are the same as on Linear.
+
 ## Body shape
 
 ```markdown
