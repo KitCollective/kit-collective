@@ -257,6 +257,7 @@ jobs:
           scripts/tests/e2e-report.test.mjs
           scripts/tests/e2e-review.test.mjs
           scripts/tests/e2e-slices.test.mjs
+          scripts/tests/e2e-visual-review.test.mjs
           scripts/tests/device-lock.test.mjs
           scripts/tests/source-stamp.test.mjs
 
