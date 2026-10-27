@@ -25,6 +25,7 @@ import { applyTestData } from "./test-data.js";
 import { readTestDataConfig, type TestDataConfig } from "./test-data-config.js";
 
 const MIN_TOKEN_LENGTH = 24;
+const SIGN_IN_CODE_SUBJECT = /^\d{6} /;
 
 function testDataToken(): string {
   if (isProductionProcess(process.env.NODE_ENV)) {
@@ -112,13 +113,15 @@ export class E2eController {
   ): { code: string } {
     requireTestDataToken(authorization);
     const wanted = email?.trim().toLowerCase();
-    const mail = [...recordedMails]
+    // The code leads the subject of its mail, so it is read back from there.
+    const code = [...recordedMails]
       .reverse()
-      .find((item) => item.kind === "code" && item.to === wanted);
-    if (!mail || !("code" in mail)) {
+      .find((item) => item.to === wanted && SIGN_IN_CODE_SUBJECT.test(item.subject))
+      ?.subject.slice(0, 6);
+    if (!code) {
       throw new NotFoundException();
     }
-    return { code: mail.code };
+    return { code };
   }
 
   /** Lets the code a flow holds expire now, so the expired state can be shown without waiting. */

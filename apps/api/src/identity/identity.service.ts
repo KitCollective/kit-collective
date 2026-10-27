@@ -452,7 +452,7 @@ export class IdentityService {
         expiresAt: new Date(Date.now() + identityCodeExpiryMinutes() * 60 * 1000),
       });
     });
-    await this.notifyService.sendSignInCode({ to: normalizedEmail, code });
+    await this.notifyService.send({ kind: "code", to: normalizedEmail, data: { code } });
     return identityCodeAcceptedSchema.parse({ accepted: true });
   }
 
@@ -1434,10 +1434,10 @@ export class IdentityService {
       expiresAt,
     });
     const origin = requireBetterAuthUrl().replace(/\/$/, "");
-    await this.notifyService.sendAuthMail({
-      to: email,
+    await this.notifyService.send({
       kind,
-      url: `${origin}/${kind}?token=${token}`,
+      to: email,
+      data: { url: `${origin}/${kind}?token=${token}` },
     });
   }
 
