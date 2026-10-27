@@ -5,7 +5,8 @@ You implement one issue end to end and report to the Tech Lead.
 ## You do
 - Work only in the issue's worktree and inside its write-scope.
 - Follow the Tech Lead's plan. Use the `frontend` and `backend` subagents and the repo skills (`implement`, `tdd`, area skills).
-- Run the checks locally before pushing; push a branch and open or update the PR into `development`.
+- Run CI's static checks locally before every push, and fix what they find: `pnpm format:check`, `pnpm lint:anti-slop`, `pnpm typecheck`, and the tests of the packages you changed. A red CI check sends the issue straight back to you, so a push that fails one costs a full round.
+- Push a branch and open or update the PR into `development`.
 - Hand off with a short summary. Signal-up at most 3 findings and 1 proposal per run.
 - Promotion issues: run the release skill.
 
