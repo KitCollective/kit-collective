@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -17,11 +17,20 @@ test("a step label drops the number and the hyphens", () => {
 test("steps pair by id, in step order, and keep the ones only one side has", () => {
   const steps = pairSteps({
     flow: "kit-509",
-    after: [shot("kit-509", "02-new-sheet"), shot("kit-509", "01-collection"), shot("other", "01-x")],
+    after: [
+      shot("kit-509", "02-new-sheet"),
+      shot("kit-509", "01-collection"),
+      shot("other", "01-x"),
+    ],
     before: [shot("kit-509", "01-collection"), shot("kit-509", "03-gone")],
   });
   assert.deepEqual(steps, [
-    { id: "01-collection", label: "Collection", after: "after/01-collection.png", before: "before/01-collection.png" },
+    {
+      id: "01-collection",
+      label: "Collection",
+      after: "after/01-collection.png",
+      before: "before/01-collection.png",
+    },
     { id: "02-new-sheet", label: "New sheet", after: "after/02-new-sheet.png", before: null },
     { id: "03-gone", label: "Gone", after: null, before: "before/03-gone.png" },
   ]);
@@ -49,19 +58,48 @@ test("the CLI writes the manifest and the files of both passes", () => {
   writeFileSync(join(before, "kc__kit-509__01-collection.png"), "before-1");
   writeFileSync(join(before, "screenshots", "step-003-tapOn.png"), "stopped");
   const out = join(root, "out");
-  const run = spawnSync(process.execPath, [
-    SCRIPT, "--flow", "kit-509", "--after", join(root, "after-run"), "--before", join(root, "before-run"),
-    "--out", out, "--head", "a".repeat(40), "--base", "b".repeat(40), "--run-url", "https://github.com/o/r/actions/runs/1",
-    "--after-status", "passed", "--before-status", "failed", "--before-note", "stopped on the base",
-  ], { encoding: "utf8" });
+  const run = spawnSync(
+    process.execPath,
+    [
+      SCRIPT,
+      "--flow",
+      "kit-509",
+      "--after",
+      join(root, "after-run"),
+      "--before",
+      join(root, "before-run"),
+      "--out",
+      out,
+      "--head",
+      "a".repeat(40),
+      "--base",
+      "b".repeat(40),
+      "--run-url",
+      "https://github.com/o/r/actions/runs/1",
+      "--after-status",
+      "passed",
+      "--before-status",
+      "failed",
+      "--before-note",
+      "stopped on the base",
+    ],
+    { encoding: "utf8" },
+  );
   assert.equal(run.status, 0, run.stderr);
   const manifest = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
   assert.equal(manifest.version, 1);
-  assert.deepEqual(manifest.before, { status: "failed", note: "stopped on the base", failure: "before/failure.png" });
-  assert.deepEqual(manifest.steps.map((s) => [s.id, s.after, s.before]), [
-    ["01-collection", "after/01-collection.png", "before/01-collection.png"],
-    ["02-new-sheet", "after/02-new-sheet.png", null],
-  ]);
+  assert.deepEqual(manifest.before, {
+    status: "failed",
+    note: "stopped on the base",
+    failure: "before/failure.png",
+  });
+  assert.deepEqual(
+    manifest.steps.map((s) => [s.id, s.after, s.before]),
+    [
+      ["01-collection", "after/01-collection.png", "before/01-collection.png"],
+      ["02-new-sheet", "after/02-new-sheet.png", null],
+    ],
+  );
   assert.deepEqual(manifest.videos, {});
   assert.equal(readFileSync(join(out, "before", "01-collection.png"), "utf8"), "before-1");
   assert.equal(readFileSync(join(out, "before", "failure.png"), "utf8"), "stopped");
@@ -69,6 +107,8 @@ test("the CLI writes the manifest and the files of both passes", () => {
 });
 
 test("the CLI refuses an unknown status", () => {
-  const run = spawnSync(process.execPath, [SCRIPT, "--flow", "kit-1", "--after-status", "maybe"], { encoding: "utf8" });
+  const run = spawnSync(process.execPath, [SCRIPT, "--flow", "kit-1", "--after-status", "maybe"], {
+    encoding: "utf8",
+  });
   assert.equal(run.status, 2);
 });

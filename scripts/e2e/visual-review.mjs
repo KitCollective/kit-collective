@@ -61,7 +61,12 @@ export function failureScreenshot(dir) {
     return null;
   }
   const shots = entries
-    .filter((e) => basename(dirname(e)) === "screenshots" && e.endsWith(".png") && !basename(e).startsWith("kc__"))
+    .filter(
+      (e) =>
+        basename(dirname(e)) === "screenshots" &&
+        e.endsWith(".png") &&
+        !basename(e).startsWith("kc__"),
+    )
     .sort();
   return shots.length > 0 ? join(dir, shots[shots.length - 1]) : null;
 }
@@ -71,8 +76,28 @@ function cutVideo(from, to) {
   const ffmpeg = process.env.KC_FFMPEG || "ffmpeg";
   const done = spawnSync(
     ffmpeg,
-    ["-hide_banner", "-loglevel", "error", "-y", "-i", from, "-vf", "scale='min(720,iw)':-2", "-c:v", "libx264",
-      "-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p", "-an", "-movflags", "+faststart", to],
+    [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-i",
+      from,
+      "-vf",
+      "scale='min(720,iw)':-2",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "28",
+      "-pix_fmt",
+      "yuv420p",
+      "-an",
+      "-movflags",
+      "+faststart",
+      to,
+    ],
     { stdio: "inherit", timeout: 300_000 },
   );
   return done.status === 0 ? to : null;
@@ -90,7 +115,17 @@ function parseArgs(argv) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  const required = ["flow", "after", "before", "out", "head", "base", "run-url", "after-status", "before-status"];
+  const required = [
+    "flow",
+    "after",
+    "before",
+    "out",
+    "head",
+    "base",
+    "run-url",
+    "after-status",
+    "before-status",
+  ];
   if (
     !args ||
     required.some((k) => args[k] === undefined) ||
@@ -98,7 +133,9 @@ function main() {
     !STATUSES.has(args["after-status"]) ||
     !STATUSES.has(args["before-status"])
   ) {
-    process.stderr.write(`usage: visual-review.mjs ${required.map((k) => `--${k} <v>`).join(" ")} [--before-note <text>]\n`);
+    process.stderr.write(
+      `usage: visual-review.mjs ${required.map((k) => `--${k} <v>`).join(" ")} [--before-note <text>]\n`,
+    );
     process.exit(2);
   }
   const { flow, out } = args;
@@ -124,7 +161,8 @@ function main() {
   };
 
   const steps = pairSteps({ flow, after, before }).map((step) => {
-    const from = (list) => list.find((a) => a.flow === flow && a.step === step.id && a.kind === "screenshot")?.path;
+    const from = (list) =>
+      list.find((a) => a.flow === flow && a.step === step.id && a.kind === "screenshot")?.path;
     return {
       ...step,
       after: step.after && put(from(after), step.after),
@@ -133,7 +171,10 @@ function main() {
   });
 
   const videos = {};
-  for (const [side, list] of [["after", after], ["before", before]]) {
+  for (const [side, list] of [
+    ["after", after],
+    ["before", before],
+  ]) {
     const video = list.find((a) => a.flow === flow && a.kind === "video");
     if (!video) continue;
     const cut = cutVideo(video.path, join(out, `${side}.cut.mp4`));
