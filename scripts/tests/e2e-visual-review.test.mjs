@@ -106,6 +106,46 @@ test("the CLI writes the manifest and the files of both passes", () => {
   assert.ok(existsSync(join(out, "after", "02-new-sheet.png")));
 });
 
+test("a head run that stopped before any step still shows where it stopped", () => {
+  const root = mkdtempSync(join(tmpdir(), "vr-head-"));
+  mkdirSync(join(root, "after-run", "kit-509", "screenshots"), { recursive: true });
+  writeFileSync(
+    join(root, "after-run", "kit-509", "screenshots", "step-005-tapOn.png"),
+    "head stop",
+  );
+  const out = join(root, "out");
+  const run = spawnSync(
+    process.execPath,
+    [
+      SCRIPT,
+      "--flow",
+      "kit-509",
+      "--after",
+      join(root, "after-run"),
+      "--before",
+      join(root, "none"),
+      "--out",
+      out,
+      "--head",
+      "a".repeat(40),
+      "--base",
+      "b".repeat(40),
+      "--run-url",
+      "https://github.com/o/r/actions/runs/1",
+      "--after-status",
+      "failed",
+      "--before-status",
+      "skipped",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(run.status, 0, run.stderr);
+  const manifest = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
+  assert.deepEqual(manifest.after, { status: "failed", failure: "after/failure.png" });
+  assert.deepEqual(manifest.steps, []);
+  assert.equal(readFileSync(join(out, "after", "failure.png"), "utf8"), "head stop");
+});
+
 test("the CLI refuses an unknown status", () => {
   const run = spawnSync(process.execPath, [SCRIPT, "--flow", "kit-1", "--after-status", "maybe"], {
     encoding: "utf8",
