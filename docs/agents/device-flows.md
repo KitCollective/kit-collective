@@ -97,7 +97,7 @@ After the verdict, a slice run on a PR runs the head's slice flow once more on t
 | --- | --- |
 | `manifest.json` | `{ version: 1, headSha, baseSha, runUrl, flow, after: {status}, before: {status, note?, failure?}, steps: [{ id, label, after, before }], videos: {after?, before?}, dropped }`; paths relative to the folder, `null` for a side without that step |
 | `after/<step>.png`, `before/<step>.png` | the `kc__<flow>__<step>.png` screenshots of each pass |
-| `before/failure.png` | where the base run stopped |
+| `failure.png` in the `before` folder | where the base run stopped |
 | `after.mp4`, `before.mp4` | the recordings, cut to 720 wide H.264 without sound |
 
 A file over 10 MB (Paperclip's attachment cap) or an empty one is left out and named in `dropped`. The software factory's `visual-review` gate step reads the artifact for the PR head and puts the files on the Paperclip task, where the loop card shows them side by side for the visual approval.
