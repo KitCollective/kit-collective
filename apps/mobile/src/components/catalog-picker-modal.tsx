@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from "react";
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CatalogPickerRow } from "@/catalog/catalogPickerRow";
@@ -23,6 +24,18 @@ type CatalogPickerModalProps = {
   searchable?: boolean;
   onSelect: (item: CatalogPickerRow) => void;
   onDismiss: () => void;
+  /**
+   * Replaces the default List row, e.g. to lead with a Number emblem. The picker still owns the
+   * selection: call `onPress` to select the row.
+   */
+  renderRow?: (
+    item: CatalogPickerRow,
+    row: { selected: boolean; onPress: () => void },
+  ) => ReactNode;
+  /** Sits above the rows, under the search, e.g. a way to remove the current choice. */
+  listHeader?: ReactNode;
+  /** iOS: fires once the Modal has left the screen, so the next surface can be presented. */
+  onModalHide?: () => void;
 };
 
 /**
@@ -44,6 +57,9 @@ export function CatalogPickerModal({
   searchable = true,
   onSelect,
   onDismiss,
+  renderRow,
+  listHeader,
+  onModalHide,
 }: CatalogPickerModalProps) {
   const theme = useTheme();
   const typography = useTypography();
@@ -56,6 +72,7 @@ export function CatalogPickerModal({
       visible={visible}
       presentationStyle="fullScreen"
       onRequestClose={onDismiss}
+      onDismiss={onModalHide}
     >
       <View
         style={[
@@ -96,20 +113,31 @@ export function CatalogPickerModal({
             <ActivityIndicator color={theme.fillPrimary} style={styles.loader} />
           ) : (
             <ScrollView keyboardShouldPersistTaps="handled">
+              {listHeader}
               {items.length === 0 ? (
                 <Text style={[typography.caption, { color: theme.contentMuted }]}>
                   {emptyMessage}
                 </Text>
               ) : (
-                items.map((item) => (
-                  <ListRow
-                    key={item.id}
-                    title={item.label}
-                    meta={item.meta}
-                    selected={selectedId === item.id}
-                    onPress={() => onSelect(item)}
-                  />
-                ))
+                items.map((item) =>
+                  renderRow ? (
+                    <Fragment key={item.id}>
+                      {renderRow(item, {
+                        selected: selectedId === item.id,
+                        onPress: () => onSelect(item),
+                      })}
+                    </Fragment>
+                  ) : (
+                    <ListRow
+                      key={item.id}
+                      title={item.label}
+                      meta={item.meta}
+                      testID={`catalog-picker-row-${item.label}`}
+                      selected={selectedId === item.id}
+                      onPress={() => onSelect(item)}
+                    />
+                  ),
+                )
               )}
             </ScrollView>
           )}

@@ -2,7 +2,7 @@ import type { CollectionJersey } from "@kit/api-contract";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { resolvePhotoUrl } from "@/api/collection";
 import { Sheet } from "@/components/catalog-ui";
-import { ListDangerRow, ListNavigateRow } from "@/components/profile-ui";
+import { ListDangerRow } from "@/components/profile-ui";
 import { Button } from "@/components/ui";
 import { jerseyDeleteConfirmCopy } from "@/jersey-detail/jersey-detail-view-model";
 import { THUMB_HEIGHT, THUMB_WIDTH } from "@/jersey-detail/jersey-photos";
@@ -14,26 +14,17 @@ type MoreSheetProps = {
   visible: boolean;
   onDismiss: () => void;
   onModalHide: () => void;
-  onEdit: () => void;
   onDelete: () => void;
 };
 
 /**
- * More: Rediger trøjen (the existing edit screen) and Slet trøjen as a `danger` row. Adding a
- * photo is the thumb strip's tile, not a row here. The edit row has no leading icon (List row:
- * `icon` is for own Profil home rows); the `danger` row keeps its icon because the lock's
- * `danger` variant is "icon + label, never color alone".
+ * More: Slet trøjen as a `danger` row. There is no edit row: every fact is edited where it is
+ * shown. Adding a photo is the thumb strip's tile, not a row here. The `danger` row keeps its icon
+ * because the lock's `danger` variant is "icon + label, never color alone".
  */
-export function JerseyMoreSheet({
-  visible,
-  onDismiss,
-  onModalHide,
-  onEdit,
-  onDelete,
-}: MoreSheetProps) {
+export function JerseyMoreSheet({ visible, onDismiss, onModalHide, onDelete }: MoreSheetProps) {
   return (
     <Sheet visible={visible} title="Mere" onDismiss={onDismiss} onModalHide={onModalHide}>
-      <ListNavigateRow title="Rediger trøjen" onPress={onEdit} testID="jersey-detail-more-edit" />
       <ListDangerRow
         title="Slet trøjen"
         icon="trash-outline"

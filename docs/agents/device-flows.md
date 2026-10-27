@@ -85,7 +85,22 @@ node scripts/request-device-flows.mjs <pr> --issue KIT-<n>
 
 It puts the `run-device-flows` label on the PR, which starts `.github/workflows/device-flows.yml` on a macOS runner: the same `local-api.sh`, `build-local.sh` and `run-local.sh` as below, on a fresh machine. The run sets the `Device flows` commit status on the PR head (pending, then success, failure or error) with a link to itself, and uploads `apps/mobile/.maestro/out` as the artifact `device-flows-<sha>`. The script asks for nothing when the PR has no slice flow for the issue or the head already has a pending, green or red status (an `error` status, a run that stopped before the flow finished, is asked for again); a new commit is a new head and needs a new request. The AFK developer workflow (`afk-developer`) makes the request itself in front of the pre-review gate, so the run starts as soon as the head exists and goes on while the Reviewer reviews; the pre-review gate does not wait for it. The full review gate (`scripts/gate.mjs review`, after the Reviewer) waits for the status with the checks whenever the PR head holds the slice flow, and the workflow repeats the request in front of every slice of it (ADR-0059, amendment of 2026-10-18). A head whose run ended `error` twice (the one re-request failed too), or whose status is still missing or pending when the wait runs out, has no verdict: the gate closes with `device-flows-no-verdict` (or tags the wait `device-flows-pending`) and the workflow ends `blocked needs-human: run device-run.sh on the Mac on <sha>` in `Approval`, with no fix round (KIT-343). A red flow (`failure`) closes the review gate and is the Engineer's next fix round; the new head is reviewed again.
 
-What the hosted run does not do: the upload to the evidence bucket, the before/after comparison, the Claude review, the PR comment and the workpad links. Those need the bucket keys and the approver's logins, and no Actions secret holds them. A hosted run takes about 45 minutes when the native binary has to be built and far less on a cache hit; macOS minutes are billed at ten times the Linux rate.
+A slice run on a PR then runs the **visual review** (below). What the hosted run does not do: the upload to the evidence bucket, the R2 before/after comparison, the Claude review, the PR comment and the workpad links. Those need the bucket keys and the approver's logins, and no Actions secret holds them. A hosted run takes about 45 minutes when the native binary has to be built and far less on a cache hit; macOS minutes are billed at ten times the Linux rate.
+
+### The visual review
+
+After the verdict, a slice run on a PR runs the head's slice flow once more on the PR's **merge base** with `development`, so a person sees each screen before and after the change from one run of one head. The base is checked out in a worktree of its own (`$RUNNER_TEMP/base`) with the head's `apps/mobile/.maestro` copied in, gets its own `pnpm install`, its own local API (the database is recreated) and its JavaScript bundle on the cached native binary; then `run-local.sh` runs the same flow. On the base the flow usually stops where the new screens begin (a `testID` the PR adds is missing): every screen reached before that is the "before", and Maestro's screenshot at the stop is shown as the base's last screen. A base whose native code differs from the head's (another native stamp) would need a full Xcode build and is skipped with a note; so is a base whose API does not start. The base pass is capped at 30 minutes, never touches the `Device flows` status, and its failure fails nothing.
+
+`scripts/e2e/visual-review.mjs` then pairs the two passes by step and writes `$RUNNER_TEMP/visual-review`, uploaded as the artifact **`visual-review-<head sha>`** (14 days):
+
+| File | What |
+| --- | --- |
+| `manifest.json` | `{ version: 1, headSha, baseSha, runUrl, flow, after: {status}, before: {status, note?, failure?}, steps: [{ id, label, after, before }], videos: {after?, before?}, dropped }`; paths relative to the folder, `null` for a side without that step |
+| `after/<step>.png`, `before/<step>.png` | the `kc__<flow>__<step>.png` screenshots of each pass |
+| `failure.png` in the `before` folder | where the base run stopped |
+| `after.mp4`, `before.mp4` | the recordings, cut to 720 wide H.264 without sound |
+
+A file over 10 MB (Paperclip's attachment cap) or an empty one is left out and named in `dropped`. The software factory's `visual-review` gate step reads the artifact for the PR head and puts the files on the Paperclip task, where the loop card shows them side by side for the visual approval.
 
 ### A flow from a run artifact
 

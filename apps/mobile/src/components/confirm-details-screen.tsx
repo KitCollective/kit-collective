@@ -19,13 +19,11 @@ export function ConfirmDetailsScreen() {
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { sessionId, editJerseyId } = useLocalSearchParams<{
+  const { sessionId } = useLocalSearchParams<{
     sessionId: string;
-    editJerseyId?: string;
   }>();
   const { state, isSessionResolved, mutate, draft, handleCommitDrill } = useConfirmSave({
     sessionId,
-    editJerseyId,
   });
   useConfirmExit(sessionId, state, isSessionResolved);
 

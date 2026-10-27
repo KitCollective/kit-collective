@@ -13,6 +13,8 @@ type ClubPickerOverlayProps = {
   catalogMissHint?: string | null;
   onSelect: (club: CatalogPickerRow) => void;
   onDismiss: () => void;
+  /** iOS: fires once the picker has left the screen, so a Sheet can open after a pick. */
+  onModalHide?: () => void;
 };
 
 export function ClubPickerOverlay({
@@ -23,6 +25,7 @@ export function ClubPickerOverlay({
   catalogMissHint = null,
   onSelect,
   onDismiss,
+  onModalHide,
 }: ClubPickerOverlayProps) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -115,6 +118,7 @@ export function ClubPickerOverlay({
         onDismiss();
       }}
       onDismiss={onDismiss}
+      onModalHide={onModalHide}
     />
   );
 }
