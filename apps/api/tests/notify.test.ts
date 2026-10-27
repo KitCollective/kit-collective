@@ -84,9 +84,10 @@ describe("Notify, login code mail (01)", () => {
     for (const fact of [
       "483920",
       "Din kode",
-      "10 minutter",
-      "ignorere",
-      "Den kan ikke slås fra.",
+      "Gælder i 10 minutter.",
+      "Skriv koden i appen for at fortsætte.",
+      "Har du ikke bedt om en kode? Så kan du se bort fra mailen.",
+      "Du får denne mail, fordi nogen bad om en kode til denne adresse.",
     ]) {
       expect(mail.text).toContain(fact);
       expect(shown).toContain(fact);

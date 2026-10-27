@@ -5,22 +5,22 @@ export type CodeMailData = { code: string };
 
 /**
  * Mail 01, the login code (docs/design-system.md → Transactional e-mail): board 2, no button,
- * body Code, Text, Note. The lock fixes subject, headline and parts, not the sentences.
- *
- * PROVISIONAL COPY: the supporting line, Text and Note below are placeholders built only from the
- * spec's facts (how long the code lasts; ignore it if it was not you). They have not been checked
- * against Paper `Lys / 01`. Replace them there, in these three strings, before this mail ships.
+ * body Code, Text, Note. Subject and headline come from the lock; the sentences come from Paper
+ * `Lys / 01 Din kode` (approved by Nicklas on 2026-10-28). The preheader repeats how long the code
+ * lasts, which Paper does not draw. The minutes follow the configured expiry (10 in Paper).
  */
+const lasts = () => `Gælder i ${identityCodeExpiryMinutes()} minutter.`;
+
 export const codeMail: MailDefinition<CodeMailData> = {
   board: 2,
   subject: ({ code }) => `${code} er din kode`,
-  preheader: () => "Brug koden til at logge ind på KitCollective.",
+  preheader: lasts,
   headline: "Din kode",
-  supportingLine: () => "Brug den til at logge ind på KitCollective.",
+  supportingLine: lasts,
   parts: ({ code }) => [
     { part: "code", code },
-    { part: "text", text: `Koden virker i ${identityCodeExpiryMinutes()} minutter.` },
-    { part: "note", text: "Var det ikke dig, kan du bare ignorere denne mail." },
+    { part: "text", text: "Skriv koden i appen for at fortsætte." },
+    { part: "note", text: "Har du ikke bedt om en kode? Så kan du se bort fra mailen." },
   ],
-  footerReason: "Den kan ikke slås fra.",
+  footerReason: "Du får denne mail, fordi nogen bad om en kode til denne adresse.",
 };
