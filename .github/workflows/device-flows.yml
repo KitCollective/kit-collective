@@ -14,7 +14,11 @@ name: Device flows
 # gate waits for that status when the PR holds the issue's slice flow. The status
 # is not a required check: it cannot be limited to mobile PRs (ADR-0048).
 #
-# Not done here: the before/after comparison, the Claude review, the PR comment
+# A slice run on a PR also runs the visual review after the verdict: the same slice
+# flow on the PR's merge base, uploaded with the head's captures as the artifact
+# `visual-review-<head sha>` for the software factory's loop card.
+#
+# Not done here: the R2 comparison, the Claude review, the PR comment
 # and the Linear workpad links of run-evidence.sh. They need the evidence bucket
 # and the approver's logins; a local `device-run.sh` still produces them.
 #
@@ -79,7 +83,8 @@ jobs:
     runs-on: macos-latest
     # A run that has to build the native binary took 41 minutes once and 58 the next time (the
     # second one was cancelled at 60, in the flow step). A cache hit needs a fraction of this.
-    timeout-minutes: 90
+    # A slice run on a PR adds the visual review's base pass (at most 30 minutes) after the verdict.
+    timeout-minutes: 120
     env:
       # Local-only test values (see apps/mobile/.maestro/local.env.sh); the database
       # is disposable and lives on this runner only.
@@ -303,7 +308,8 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-      # Always the last word: a run that stopped before the flows must not leave the head pending.
+      # The last word on the head: a run that stopped before the flows must not leave the head
+      # pending. The visual review below comes after it and never changes or delays it.
       - name: Device flows status, verdict
         if: always() && env.STATUS_SHA != ''
         env:
@@ -316,3 +322,90 @@ jobs:
           esac
           gh api "repos/$GITHUB_REPOSITORY/statuses/$STATUS_SHA" -f context="Device flows" \
             -f state="$state" -f description="$description" -f target_url="$RUN_URL" >/dev/null
+
+      # The visual review (docs/agents/device-flows.md): the head's slice flow once more, on the PR's
+      # merge base, so the task shows before and after from one run of one head. The head's flow and
+      # .maestro scripts drive the base app, in a worktree of its own, against the base's API. On the
+      # base the flow usually stops where the new screens begin; that stop is the "before".
+      # A base with other native code would need a full Xcode build: it is skipped, with a note.
+      - name: Visual review, base pass
+        id: base
+        if: always() && env.E2E_FLOWS == 'slice' && env.STATUS_SHA != '' && steps.build.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 30
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_STAMP: ${{ steps.native.outputs.stamp }}
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000"
+        run: |
+          out() { echo "$1=$2" >> "$GITHUB_OUTPUT"; }
+          # The last line of a key wins: these stand when the pass stops early.
+          out status skipped
+          out note "The base pass stopped before the flow ran."
+          base_sha="$(git merge-base HEAD "origin/$BASE_REF")"
+          out sha "$base_sha"
+          key="$(cd apps/mobile/.maestro && source ./source-stamp.sh && source ./slice-flow.sh && slice_issue_key)"
+          base="$RUNNER_TEMP/base"
+          git worktree add --detach "$base" "$base_sha"
+          git -C "$base" checkout "$STATUS_SHA" -- apps/mobile/.maestro
+          out dir "$base/apps/mobile/.maestro/out"
+          base_stamp="$(cd "$base/apps/mobile/.maestro" && source ./source-stamp.sh && source ./native-cache.sh && native_stamp)"
+          if [[ "$base_stamp" != "$HEAD_STAMP" ]]; then
+            out note "The base has other native code, which needs a full Xcode build: no before."
+            exit 0
+          fi
+          # The head's API goes; the base's takes the port and recreates the database.
+          lsof -ti tcp:3000 -sTCP:LISTEN | xargs kill 2>/dev/null || true
+          for _ in $(seq 1 30); do lsof -ti tcp:3000 -sTCP:LISTEN >/dev/null 2>&1 || break; sleep 1; done
+          (cd "$base" && pnpm install --frozen-lockfile)
+          "$base/apps/mobile/.maestro/local-api.sh" > "$RUNNER_TEMP/local-api-base.log" 2>&1 &
+          healthy=no
+          for _ in $(seq 1 180); do
+            curl -fsS http://localhost:3000/v1/health >/dev/null 2>&1 && { healthy=yes; break; }
+            sleep 2
+          done
+          if [[ "$healthy" != yes ]]; then
+            tail -40 "$RUNNER_TEMP/local-api-base.log" >&2
+            out note "The base API did not start: no before."
+            exit 0
+          fi
+          E2E_ISSUE="$key" "$base/apps/mobile/.maestro/build-local.sh"
+          if E2E_ISSUE="$key" "$base/apps/mobile/.maestro/run-local.sh"; then
+            out status passed
+            out note ""
+          else
+            out status failed
+            out note "The flow stopped on the base: from there on the screens are new in this PR."
+          fi
+
+      - name: Visual review, manifest
+        id: visual
+        if: always() && env.E2E_FLOWS == 'slice' && env.STATUS_SHA != '' && steps.build.outcome == 'success'
+        env:
+          FLOWS: ${{ steps.flows.outcome }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          BASE_DIR: ${{ steps.base.outputs.dir }}
+          BASE_STATUS: ${{ steps.base.outputs.status }}
+          BASE_NOTE: ${{ steps.base.outputs.note }}
+        run: |
+          command -v ffmpeg >/dev/null || brew install ffmpeg || echo "No ffmpeg: recordings are kept uncut when they fit."
+          key="$(cd apps/mobile/.maestro && source ./source-stamp.sh && source ./slice-flow.sh && slice_issue_key)"
+          note=()
+          [[ -n "$BASE_NOTE" ]] && note=(--before-note "$BASE_NOTE")
+          node scripts/e2e/visual-review.mjs \
+            --flow "$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]')" \
+            --after apps/mobile/.maestro/out --before "${BASE_DIR:-$RUNNER_TEMP/no-base}" \
+            --out "$RUNNER_TEMP/visual-review" --head "$STATUS_SHA" --base "${BASE_SHA:-unknown}" \
+            --run-url "$RUN_URL" --after-status "$([[ "$FLOWS" == success ]] && echo passed || echo failed)" \
+            --before-status "${BASE_STATUS:-skipped}" ${note[@]+"${note[@]}"}
+
+      - name: Upload the visual review
+        if: always() && steps.visual.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          # Keyed by the PR head, as the status is: the software factory's visual-review check
+          # finds it by that name.
+          name: visual-review-${{ env.STATUS_SHA }}
+          path: ${{ runner.temp }}/visual-review
+          retention-days: 14
+          if-no-files-found: error
