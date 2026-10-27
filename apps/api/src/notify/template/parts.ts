@@ -80,8 +80,10 @@ export function renderPart(part: BodyPart): PartOutput {
       return textPart(part.text);
     case "note":
       return notePart(part.text);
-    default:
+    default: {
       // A Button smuggled into `parts` (the type forbids it): a mail has at most one, from `button`.
-      throw new Error(`Unsupported body part: ${(part as { part: string }).part}`);
+      const unsupported: never = part;
+      throw new Error(`Unsupported body part: ${typeof unsupported}`);
+    }
   }
 }

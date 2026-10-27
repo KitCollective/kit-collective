@@ -17,7 +17,7 @@ import {
   resetRecordedMails,
 } from "../dist/notify/recording-mailer.adapter.js";
 import { renderMail } from "../dist/notify/template/render.js";
-import type { MailDefinition } from "../dist/notify/template/types.js";
+import type { BodyPart, MailDefinition } from "../dist/notify/template/types.js";
 
 const CONFIG = {
   assetBaseUrl: "https://assets.test/email",
@@ -260,11 +260,13 @@ describe("Template body parts", () => {
   });
 
   it("rejects a definition that carries a button among its parts", () => {
-    const twoButtons = {
-      parts: () => [{ part: "button", label: "Ét", url: "https://app.test/1" }],
-      button: { label: "To", target: () => "https://app.test/2" },
-    } as unknown as Partial<MailDefinition<Data>>;
-    expect(() => render(twoButtons)).toThrow(/Unsupported body part/);
+    // Parsed JSON is untyped, which is how a stray button would reach a definition at runtime.
+    const stray: BodyPart[] = JSON.parse(
+      '[{"part":"button","label":"Ét","url":"https://app.test/1"}]',
+    );
+    expect(() =>
+      render({ parts: () => stray, button: { label: "To", target: () => "https://app.test/2" } }),
+    ).toThrow(/Unsupported body part/);
   });
 
   it("escapes what a caller supplies", () => {
