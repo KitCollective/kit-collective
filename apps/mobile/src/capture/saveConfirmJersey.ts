@@ -1,7 +1,7 @@
 import type { CatalogPickerItem, CollectionJersey, VisionJobResponse } from "@kit/api-contract";
 import { resolveVisionSaveAction } from "@kit/api-contract";
 import type { PhotoRole } from "@kit/domain";
-import { saveUserJersey, updateUserJersey } from "@/api/collection";
+import { saveUserJersey } from "@/api/collection";
 import { fetchVisionJob, logVisionAction } from "@/api/vision";
 import { advanceBulkSessionAfterSave } from "@/capture/bulkSaveAdvance";
 import { clearPersistedCaptureSession } from "@/capture/captureFlow";
@@ -20,7 +20,6 @@ import { markJerseySaved } from "@/session/addSession";
 export type ConfirmSaveOutcome =
   | { status: "blocked"; message: string }
   | { status: "missing-auth" }
-  | { status: "edit-saved"; jerseyId: string }
   | { status: "bulk-continue" }
   /** Saved from the bulk overview: `remaining` jerseys are still unsaved. */
   | { status: "overview-continue"; remaining: number }
@@ -36,7 +35,6 @@ export async function saveConfirmJersey(input: {
   draft: CaptureJerseyDraft;
   sessionId: string;
   accessToken: string | null;
-  editJerseyId?: string;
   visionJobId: string | null;
   selectedSeasonLabel: string | null;
   branch: CaptureBranch;
@@ -61,23 +59,6 @@ export async function saveConfirmJersey(input: {
   }
 
   try {
-    if (input.editJerseyId) {
-      await updateUserJersey(input.accessToken, input.editJerseyId, {
-        ...(input.draft.clubId
-          ? { clubId: input.draft.clubId }
-          : { nationalTeamId: input.draft.nationalTeamId! }),
-        seasonId: input.draft.seasonId,
-        catalogKitId: null,
-        type: input.draft.kitType,
-        size: input.draft.size,
-        condition: input.draft.condition,
-        playerId: input.draft.playerId ?? null,
-        patchIds: input.draft.badgeId ? [input.draft.badgeId] : [],
-      });
-      clearPersistedCaptureSession(input.sessionId);
-      return { status: "edit-saved", jerseyId: input.editJerseyId };
-    }
-
     const photoPayload = await Promise.all(
       input.draft.photos
         .filter((photo): photo is typeof photo & { role: PhotoRole } => photo.role !== null)

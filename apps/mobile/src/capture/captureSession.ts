@@ -54,7 +54,7 @@ export function canAddPhotoToDraft(draft: CaptureJerseyDraft): boolean {
 export const JERSEY_PHOTO_CAP_HELPER_DA = "Du kan højst have 10 fotos på én trøje.";
 
 export function canSave(draft: CaptureJerseyDraft): boolean {
-  if (!draft.editJerseyId && draft.photos.length === 0) {
+  if (draft.photos.length === 0) {
     return false;
   }
   if (!hasCatalogSide(draft) || !draft.seasonId) {
@@ -526,7 +526,7 @@ export function createDraftFromUnbound(
   }
 
   let next = state;
-  let draftId = next.drafts.find((draft) => draft.photos.length === 0 && !draft.editJerseyId)?.id;
+  let draftId = next.drafts.find((draft) => draft.photos.length === 0)?.id;
   if (!draftId) {
     next = addJerseyDraft(next, defaults);
     draftId = next.activeDraftId;
@@ -920,62 +920,6 @@ function serializableState(state: CaptureSessionState): CaptureSessionState {
   return rest;
 }
 
-export function createEditCaptureSession(
-  jersey: {
-    id: string;
-    clubId: string | null;
-    clubLabel: string | null;
-    nationalTeamId?: string | null;
-    nationalTeamLabel?: string | null;
-    seasonId: string;
-    type: KitType;
-    size: JerseySize;
-    condition: JerseyCondition;
-  },
-  sessionId: string,
-  store?: CaptureSessionStore,
-): CaptureSessionState {
-  const draftId = createCaptureSessionId();
-  const draft: CaptureJerseyDraft = {
-    id: draftId,
-    clubId: jersey.clubId,
-    clubLabel: jersey.clubLabel,
-    nationalTeamId: jersey.nationalTeamId ?? null,
-    nationalTeamLabel: jersey.nationalTeamLabel ?? null,
-    seasonId: jersey.seasonId,
-    kitType: jersey.type,
-    size: jersey.size,
-    condition: jersey.condition,
-    kitTypeSelected: true,
-    sizeSelected: true,
-    conditionSelected: true,
-    notes: "",
-    playerName: "",
-    playerId: null,
-    playerNumber: "",
-    seasonLabel: null,
-    badgeEnabled: false,
-    badgeId: null,
-    badgeLabel: null,
-    photos: [],
-    editJerseyId: jersey.id,
-  };
-
-  const state: CaptureSessionState = {
-    sessionId,
-    branch: "single",
-    orderedUris: [],
-    unboundUris: [],
-    photoIdByUri: {},
-    drafts: [draft],
-    activeDraftId: draftId,
-    store,
-  };
-
-  persist(state);
-  return state;
-}
-
 export function createMemoryCaptureSessionStore(): CaptureSessionStore {
   let snapshot: CaptureSessionState | null = null;
   return {
@@ -1187,7 +1131,7 @@ export function applyGroupingSuggestion(
       if (!bindable) {
         continue;
       }
-      const empty = next.drafts.find((draft) => draft.photos.length === 0 && !draft.editJerseyId);
+      const empty = next.drafts.find((draft) => draft.photos.length === 0);
       draftId = empty?.id ?? null;
       if (!draftId) {
         next = addJerseyDraft(next, defaults);

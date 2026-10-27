@@ -13,7 +13,6 @@ import { usePersistedCaptureSession } from "@/capture/usePersistedCaptureSession
 
 export function useConfirmSave(options: {
   sessionId: string | undefined;
-  editJerseyId?: string;
   visionJobId?: string | null;
   afterBulkContinue?: "hub" | "stay";
 }) {
@@ -79,7 +78,6 @@ export function useConfirmSave(options: {
       draft,
       sessionId: options.sessionId,
       accessToken,
-      editJerseyId: options.editJerseyId,
       visionJobId: options.visionJobId ?? null,
       selectedSeasonLabel,
       branch: state.branch,
@@ -96,11 +94,6 @@ export function useConfirmSave(options: {
     if (outcome.status === "error") {
       // Fire-and-forget danger toast with a Prøv igen retry — Save never waits on it.
       showSaveFailureToast(() => void handleSave());
-      return;
-    }
-
-    if (outcome.status === "edit-saved") {
-      router.replace(`/(tabs)/collection/${outcome.jerseyId}`);
       return;
     }
 
@@ -161,7 +154,7 @@ export function useConfirmSave(options: {
   const moreToSave = state?.overview
     ? unsavedDraftCount(state) > 1
     : isBulk && state !== null && state.drafts.length > 1;
-  const saveLabel = options.editJerseyId ? "Gem" : moreToSave ? "Gem og næste" : "Gem";
+  const saveLabel = moreToSave ? "Gem og næste" : "Gem";
 
   return {
     state,

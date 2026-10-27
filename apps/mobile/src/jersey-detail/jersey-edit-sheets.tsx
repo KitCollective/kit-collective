@@ -324,7 +324,7 @@ export function JerseySeasonSheet({
 
   return (
     <Sheet visible={visible} title={title} onDismiss={onDismiss} onModalHide={onModalHide}>
-      {decades.length > 1 ? (
+      {decades.length > 0 ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
