@@ -121,7 +121,7 @@ describe("one fact at a time: type, size, condition", () => {
       nationalTeamId: TEAM_DK,
       nationalTeamLabel: "Danmark",
     });
-    const { body } = ok(applyJerseyEdit(national, { kind: "condition", value: "good" }));
+    const { body } = ok(applyJerseyEdit(national, { kind: "condition", value: "worn" }));
 
     expect(body.nationalTeamId).toBe(TEAM_DK);
     expect(body).not.toHaveProperty("clubId");

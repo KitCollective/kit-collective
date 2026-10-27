@@ -150,6 +150,7 @@ describe("player row", () => {
       number: 1,
       caption: "Spiller på ryggen",
       accessibilityLabel: "Spiller på ryggen, Kasper Schmeichel, nummer 1",
+      accessibilityHint: "Ændrer spiller",
     });
   });
 
@@ -165,7 +166,37 @@ describe("player row", () => {
       kind: "add",
       title: "Tilføj spiller",
       accessibilityLabel: "Spiller på ryggen, Tilføj spiller",
+      accessibilityHint: "Vælger spiller",
     });
+  });
+});
+
+describe("title targets", () => {
+  it("makes the club and the season each a target that says its value and what it does", () => {
+    const targets = view(jersey()).titleTargets;
+
+    expect(targets.club).toEqual({
+      accessibilityLabel: "Klub, Brøndby IF",
+      accessibilityHint: "Ændrer klub",
+    });
+    expect(targets.season).toEqual({
+      accessibilityLabel: "Sæson, 2023/24",
+      accessibilityHint: "Ændrer sæson",
+    });
+  });
+
+  it("has no club target on a national-team jersey: the club picker lists clubs only", () => {
+    const targets = view(
+      jersey({
+        clubId: null,
+        clubLabel: null,
+        nationalTeamId: "00000000-0000-4000-8000-0000000000d1",
+        nationalTeamLabel: "Danmark",
+      }),
+    ).titleTargets;
+
+    expect(targets.club).toBeNull();
+    expect(targets.season.accessibilityLabel).toBe("Sæson, 2023/24");
   });
 });
 
@@ -194,6 +225,12 @@ describe("fact rows", () => {
       "Størrelse, XL",
       "Stand, Ny",
       "Badge, Champions League, Fair Play",
+    ]);
+    expect(rows.map((row) => row.accessibilityHint)).toEqual([
+      "Ændrer type",
+      "Ændrer størrelse",
+      "Ændrer stand",
+      "Ændrer badge",
     ]);
     expect(rows.every((row) => !row.muted)).toBe(true);
   });

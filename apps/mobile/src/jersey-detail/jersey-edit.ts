@@ -247,6 +247,9 @@ export function clubChangeCopy(
   };
 }
 
+/** The danger toast when a save fails and the old value is put back (copy is provisional). */
+export const JERSEY_EDIT_FAILURE_MESSAGE = "Ændringen blev ikke gemt.";
+
 export type JerseyFactKey = "type" | "size" | "condition" | "badge";
 
 export type JerseyFactSheetCopy = {

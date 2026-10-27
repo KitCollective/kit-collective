@@ -34,8 +34,10 @@ export type PlayerRowView =
       number: number | null;
       caption: string;
       accessibilityLabel: string;
+      /** Set on the own detail, where the row opens the picker; the foreign detail has none. */
+      accessibilityHint?: string;
     }
-  | { kind: "add"; title: string; accessibilityLabel: string };
+  | { kind: "add"; title: string; accessibilityLabel: string; accessibilityHint?: string };
 
 export type FactRowView = {
   key: "type" | "size" | "condition" | "badge";
@@ -44,6 +46,20 @@ export type FactRowView = {
   /** An unset optional fact reads Tilføj in content.muted. */
   muted: boolean;
   accessibilityLabel: string;
+  /** Set on the own detail, where the row opens a sheet; the foreign detail has none. */
+  accessibilityHint?: string;
+};
+
+/** The club and the season in the title block are targets of their own. */
+export type TitleTargetView = {
+  accessibilityLabel: string;
+  accessibilityHint: string;
+};
+
+export type TitleTargetsView = {
+  /** Null on a national-team jersey: the club picker lists clubs only, so the club stays inert. */
+  club: TitleTargetView | null;
+  season: TitleTargetView;
 };
 
 export type SettingRowView = {
@@ -63,6 +79,7 @@ export type JerseyDetailView = {
   caption: string;
   title: string;
   season: string;
+  titleTargets: TitleTargetsView;
   bidRow: BidRowView | null;
   playerRow: PlayerRowView;
   factRows: FactRowView[];
@@ -131,6 +148,7 @@ function playerRowFor(jersey: CollectionJersey): PlayerRowView {
       kind: "add",
       title: "Tilføj spiller",
       accessibilityLabel: `${PLAYER_CAPTION}, Tilføj spiller`,
+      accessibilityHint: "Vælger spiller",
     };
   }
 
@@ -145,6 +163,7 @@ function playerRowFor(jersey: CollectionJersey): PlayerRowView {
       number === null
         ? `${PLAYER_CAPTION}, ${name}`
         : `${PLAYER_CAPTION}, ${name}, nummer ${number}`,
+    accessibilityHint: "Ændrer spiller",
   };
 }
 
@@ -156,6 +175,7 @@ function factRow(key: FactRowView["key"], label: string, value: string | null): 
     value: resolved,
     muted: value === null,
     accessibilityLabel: `${label}, ${resolved}`,
+    accessibilityHint: `Ændrer ${label.toLowerCase()}`,
   };
 }
 
@@ -170,6 +190,18 @@ function factRowsFor(jersey: CollectionJersey): FactRowView[] {
   ];
 }
 
+function titleTargetsFor(jersey: CollectionJersey): TitleTargetsView {
+  return {
+    club: jersey.clubId
+      ? { accessibilityLabel: `Klub, ${jerseyTitle(jersey)}`, accessibilityHint: "Ændrer klub" }
+      : null,
+    season: {
+      accessibilityLabel: `Sæson, ${jersey.seasonLabel}`,
+      accessibilityHint: "Ændrer sæson",
+    },
+  };
+}
+
 export function buildJerseyDetailView(input: {
   jersey: CollectionJersey;
   /** The owner's full list, createdAt desc. */
@@ -181,6 +213,7 @@ export function buildJerseyDetailView(input: {
     caption: captionFor(jersey, list),
     title: jerseyTitle(jersey),
     season: jersey.seasonLabel,
+    titleTargets: titleTargetsFor(jersey),
     bidRow: bidRowFor(jersey, formatTime),
     playerRow: playerRowFor(jersey),
     factRows: factRowsFor(jersey),
