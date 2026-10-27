@@ -32,6 +32,10 @@ The script reads the board token over `ssh guapo` (or `PAPERCLIP_BOARD_TOKEN`) a
 ssh -t guapo docker exec -it -u node guapo-paperclip claude auth login
 ```
 
+## Workspace trust
+
+Claude Code ignores the repo's `.claude/settings.json` (permissions and hooks) in a folder it has not been told to trust. The agents run in worktrees under `/paperclip/repos/kit-collective/.paperclip/worktrees/`, so the clone is trusted once in `/paperclip/.claude.json` (`projects["/paperclip/repos/kit-collective"].hasTrustDialogAccepted: true`), set on 2026-10-27 after KIT-509's run logged "Ignoring 2 permissions.allow entries … this workspace has not been trusted". A new clone or a wiped volume needs it again. With it, the repo's hooks apply to the agents as they do to anyone else.
+
 ## Not wired yet
 
 - The software-factory plugin is installed with dispatch off (KitCollective/software-factory). Agents stay paused until a GitHub token and the repo workspace exist.
