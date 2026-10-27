@@ -57,6 +57,7 @@ function patchesOf(jersey: CollectionJersey): Named[] {
 
 /** The full update for `jersey` as it stands; edits override the parts they change. */
 function fullBody(jersey: CollectionJersey): CollectionJerseyUpdate {
+  // SAFETY: a jersey has exactly one side; the spread sends clubId xor nationalTeamId, which the union cannot narrow from a ternary.
   return {
     ...(jersey.clubId ? { clubId: jersey.clubId } : { nationalTeamId: jersey.nationalTeamId }),
     seasonId: jersey.seasonId,

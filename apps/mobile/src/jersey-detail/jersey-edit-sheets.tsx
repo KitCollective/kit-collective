@@ -182,12 +182,14 @@ function optionsFor(
           selected: currentId === null,
           edit: { kind: "badge", patch: null },
         },
-        ...patches.map((patch) => ({
-          key: patch.id,
-          label: patch.label,
-          selected: currentId === patch.id,
-          edit: { kind: "badge", patch } as JerseyEdit,
-        })),
+        ...patches.map(
+          (patch): Option => ({
+            key: patch.id,
+            label: patch.label,
+            selected: currentId === patch.id,
+            edit: { kind: "badge", patch },
+          }),
+        ),
       ];
     }
     default: {
@@ -277,6 +279,7 @@ export function JerseySeasonSheet({
 
   const list = (
     <Animated.ScrollView
+      // SAFETY: Animated.ScrollView forwards its ref to the underlying ScrollView; only scrollTo is called on it.
       ref={listRef as never}
       onScroll={sheetScroll?.scrollHandler}
       scrollEventThrottle={16}
