@@ -94,9 +94,11 @@ import {
 } from "@nestjs/common";
 import { and, asc, count, desc, eq, inArray, ne, notInArray, or, sql } from "drizzle-orm";
 import { BillingService } from "../billing/billing.service.js";
+import { requireBetterAuthUrl } from "../config/better-auth-env.js";
 import { DB } from "../db/db.module.js";
 import { MatchQueueService } from "../match/match-queue.service.js";
 import { ModerationService } from "../moderation/moderation.service.js";
+import { NotifyService } from "../notify/notify.service.js";
 import { VisionService } from "../vision/vision.service.js";
 import { VisionQueueService } from "../vision/vision-queue.service.js";
 import {
@@ -112,7 +114,7 @@ import { PhotoDerivativeQueueService } from "./photo-derivative-queue.service.js
 import { derivativeKeysForPhoto, storeGpsStrippedOriginal } from "./photo-derivatives.js";
 import { gridObjectKeyForNewPhoto, resolveStoredPhotoBytes } from "./photo-variant-resolve.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
-import { declineOtherPendingBudsOnUserJersey } from "./user-jersey-buds.js";
+import { type DeclinedBud, declineOtherPendingBudsOnUserJersey } from "./user-jersey-buds.js";
 import { deleteUserJerseyRows } from "./user-jersey-delete.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");
@@ -137,6 +139,15 @@ type MessageJerseySnapshotRow = {
   jerseySeasonLabel: string | null;
   jerseyType: KitType | null;
   jerseySize: JerseySize | null;
+};
+
+/** The jersey of a Bud, as the row or the Bud's snapshot of it says. */
+type BidMailJersey = {
+  id: string;
+  clubId: string | null;
+  nationalTeamId: string | null;
+  seasonId: string | null;
+  type: KitType | null;
 };
 
 /** What a card shows of a UserJersey that is still there and not private. */
@@ -270,6 +281,7 @@ export class CollectionService {
     private readonly shortcutsService: CollectionShortcutsService,
     private readonly moderationService: ModerationService,
     private readonly photoDerivativeQueueService: PhotoDerivativeQueueService,
+    private readonly notifyService: NotifyService,
   ) {}
 
   static objectStoreFactory(): ObjectStoreAdapter {
@@ -1458,7 +1470,13 @@ export class CollectionService {
 
   async deleteOwnJersey(userId: string, jerseyId: string): Promise<void> {
     const [jerseyRow] = await this.db
-      .select({ id: userJersey.id })
+      .select({
+        id: userJersey.id,
+        clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
+        seasonId: userJersey.seasonId,
+        type: userJersey.type,
+      })
       .from(userJersey)
       .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)))
       .limit(1);
@@ -1512,9 +1530,12 @@ export class CollectionService {
       throw new InternalServerErrorException("Failed to delete photo bytes");
     }
 
-    await this.db.transaction(async (tx) => {
-      await deleteUserJerseyRows(tx, { userJerseyId: jerseyId, userId });
-    });
+    const declined = await this.db.transaction((tx) =>
+      deleteUserJerseyRows(tx, { userJerseyId: jerseyId, userId }),
+    );
+
+    // The jersey is gone, so the mail reads its facts from the row read above and shows no photo.
+    await this.mailBidders(declined, userId, jerseyRow, "jersey-deleted");
   }
 
   private async loadOwnJerseyOrThrow(userId: string, jerseyId: string): Promise<CollectionJersey> {
@@ -2434,6 +2455,15 @@ export class CollectionService {
 
     await this.touchConversation(this.db, conversationId);
 
+    await this.mailOwnerOfBid({
+      bidderId: userId,
+      ownerId: jerseyRow.ownerId,
+      jersey: jerseyRow,
+      amountDkk: body.amountDkk,
+      conversationId,
+      messageId: insertedMessage.id,
+    });
+
     return collectionSendBidResponseSchema.parse({
       conversationId,
       messageId: insertedMessage.id,
@@ -2492,8 +2522,9 @@ export class CollectionService {
 
     const bidStatus = body.decision === "accept" ? "accepted" : "declined";
 
-    await this.db.transaction(async (tx) => {
+    const outcome = await this.db.transaction(async (tx) => {
       const now = new Date();
+      let autoDeclined: DeclinedBud[] = [];
 
       if (bidStatus === "accepted") {
         // First, so the UserJersey row lock orders two accepts on one jersey: the second
@@ -2529,6 +2560,7 @@ export class CollectionService {
         const declined = await declineOtherPendingBudsOnUserJersey(tx, userJerseyId, messageId);
         // One line per Conversation, even if a race left two pending Buds of one bidder.
         const goneByConversation = new Map(declined.map((bud) => [bud.conversationId, bud]));
+        autoDeclined = [...goneByConversation.values()];
         const snapshot = {
           userJerseyId,
           jerseyClubId: answered.jerseyClubId,
@@ -2571,9 +2603,181 @@ export class CollectionService {
         .update(conversation)
         .set({ updatedAt: now })
         .where(inArray(conversation.id, touchedConversationIds));
+
+      return { answered, autoDeclined };
     });
 
+    // After the commit, so no row lock is held while a mail is sent.
+    const jersey = {
+      id: userJerseyId,
+      clubId: outcome.answered.jerseyClubId,
+      nationalTeamId: outcome.answered.jerseyNationalTeamId,
+      seasonId: outcome.answered.jerseySeasonId,
+      type: outcome.answered.jerseyType,
+    };
+    const amountDkk = outcome.answered.bidAmountDkk;
+    await this.mailBidder({
+      bidderId: messageRow.senderId,
+      ownerId: userId,
+      jersey,
+      amountDkk,
+      answer: bidStatus === "accepted" ? { accepted: true, conversationId } : { accepted: false },
+    });
+    await this.mailBidders(outcome.autoDeclined, userId, jersey, "went-to-another");
+
     return collectionRespondBidResponseSchema.parse({ bidStatus });
+  }
+
+  /** Runs mail work after an action has committed. A mail never fails the action that caused it. */
+  private async afterCommit(work: () => Promise<void>): Promise<void> {
+    try {
+      await work();
+    } catch (error) {
+      // The error name alone: nothing of the mail or its people reaches the log.
+      const name = error instanceof Error ? error.name : "unknown error";
+      this.logger.warn(`A bid mail was not prepared (${name}).`);
+    }
+  }
+
+  /** The jersey as a bid mail shows it. Undefined when its facts cannot be read, so no mail goes out. */
+  private async loadBidMailJersey(
+    jersey: BidMailJersey,
+    withPhoto: boolean,
+  ): Promise<{ club: string; meta: string; photoUrl?: string } | undefined> {
+    if (!jersey.seasonId || !jersey.type) {
+      return undefined;
+    }
+    const [seasonRow] = await this.db
+      .select({ label: season.label })
+      .from(season)
+      .where(eq(season.id, jersey.seasonId))
+      .limit(1);
+    const { clubLabels, nationalTeamLabels } = await this.loadSideLabels([jersey], "da");
+    const side = discoverJerseySideFromLabels(jersey, clubLabels, nationalTeamLabels);
+    if (!seasonRow || !side) {
+      return undefined;
+    }
+    // The mail needs the photo as an absolute URL on the API: a mail client has no base to resolve against.
+    const thumbUrl = withPhoto
+      ? (await this.loadMessageJerseysLive([jersey.id])).get(jersey.id)?.thumbUrl
+      : undefined;
+    return {
+      club: side.clubLabel,
+      meta: `${KIT_TYPE_LABELS_DA[jersey.type]} · ${seasonRow.label}`,
+      ...(thumbUrl ? { photoUrl: `${requireBetterAuthUrl()}${thumbUrl}` } : {}),
+    };
+  }
+
+  private async loadMailPerson(userId: string) {
+    const [person] = await this.db
+      .select({ handle: user.handle, city: user.city, showCity: user.showCity })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+    return person;
+  }
+
+  /** Mail 05: a new Bud, to the owner of the jersey. */
+  private async mailOwnerOfBid(input: {
+    bidderId: string;
+    ownerId: string;
+    jersey: BidMailJersey;
+    amountDkk: number;
+    conversationId: string;
+    messageId: string;
+  }): Promise<void> {
+    await this.afterCommit(async () => {
+      const [facts, bidder] = await Promise.all([
+        this.loadBidMailJersey(input.jersey, true),
+        this.loadMailPerson(input.bidderId),
+      ]);
+      if (!facts || !bidder) {
+        return;
+      }
+      await this.notifyService.notifyCollector(
+        {
+          kind: "bid-new",
+          data: {
+            ...facts,
+            amountDkk: input.amountDkk,
+            bidderHandle: bidder.handle,
+            ...(bidder.showCity && bidder.city ? { bidderCity: bidder.city } : {}),
+            conversationId: input.conversationId,
+            messageId: input.messageId,
+          },
+        },
+        { recipientId: input.ownerId, peerId: input.bidderId },
+      );
+    });
+  }
+
+  /** Mail 06 or 07: the owner answered a Bud, to its bidder. */
+  private async mailBidder(input: {
+    bidderId: string;
+    ownerId: string;
+    jersey: BidMailJersey;
+    amountDkk: number | null;
+    answer: { accepted: true; conversationId: string } | { accepted: false };
+  }): Promise<void> {
+    await this.afterCommit(async () => {
+      if (input.amountDkk === null) {
+        return;
+      }
+      const [facts, owner] = await Promise.all([
+        this.loadBidMailJersey(input.jersey, true),
+        this.loadMailPerson(input.ownerId),
+      ]);
+      if (!facts || !owner) {
+        return;
+      }
+      const common = { ...facts, amountDkk: input.amountDkk, ownerHandle: owner.handle };
+      await this.notifyService.notifyCollector(
+        input.answer.accepted
+          ? {
+              kind: "bid-accepted",
+              data: { ...common, conversationId: input.answer.conversationId },
+            }
+          : {
+              kind: "bid-declined",
+              data: { ...common, reason: "declined", userJerseyId: input.jersey.id },
+            },
+        { recipientId: input.bidderId, peerId: input.ownerId },
+      );
+    });
+  }
+
+  /** Mail 07, the variant without a button: Buds declined though their owner never answered them. */
+  private async mailBidders(
+    declined: DeclinedBud[],
+    ownerId: string,
+    jersey: BidMailJersey,
+    reason: "went-to-another" | "jersey-deleted",
+  ): Promise<void> {
+    if (declined.length === 0) {
+      return;
+    }
+    await this.afterCommit(async () => {
+      const [facts, owner] = await Promise.all([
+        // A deleted jersey's photo bytes are gone, so its mail has none.
+        this.loadBidMailJersey(jersey, reason === "went-to-another"),
+        this.loadMailPerson(ownerId),
+      ]);
+      if (!facts || !owner) {
+        return;
+      }
+      for (const bud of declined) {
+        if (bud.bidAmountDkk === null) {
+          continue;
+        }
+        await this.notifyService.notifyCollector(
+          {
+            kind: "bid-declined",
+            data: { ...facts, amountDkk: bud.bidAmountDkk, ownerHandle: owner.handle, reason },
+          },
+          { recipientId: bud.senderId, peerId: ownerId },
+        );
+      }
+    });
   }
 
   async saveJersey(

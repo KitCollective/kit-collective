@@ -1,8 +1,11 @@
 import type { Db } from "@kit/db";
+import { user } from "@kit/db";
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { eq } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
+import { ModerationService } from "../moderation/moderation.service.js";
 import { composeMail } from "./kinds/registry.js";
-import type { MailEvent } from "./mail-event.js";
+import type { CollectorMailEvent, MailEvent } from "./mail-event.js";
 import { type ClassifiedMailKind, MAIL_PREFERENCE } from "./mail-preference.js";
 import type { MailerAdapter } from "./mailer.adapter.js";
 import { MAILER } from "./mailer.token.js";
@@ -16,6 +19,7 @@ export class NotifyService {
   constructor(
     @Inject(MAILER) private readonly mailer: MailerAdapter,
     @Inject(DB) private readonly db: Db,
+    private readonly moderation: ModerationService,
   ) {}
 
   async send(event: MailEvent): Promise<void> {
@@ -53,5 +57,36 @@ export class NotifyService {
     }
     const prefs = await loadNotificationPrefs(this.db, recipientUserId);
     return prefs.email[rule];
+  }
+
+  /**
+   * The one gate a bid or message mail goes through. Sends nothing when either Collector has
+   * blocked the other or the recipient has switched the mail off; otherwise delivers without ever
+   * throwing, so the action that caused the mail succeeds even when the mailer does not.
+   */
+  async notifyCollector(
+    event: CollectorMailEvent,
+    { recipientId, peerId }: { recipientId: string; peerId: string },
+  ): Promise<void> {
+    try {
+      if (await this.moderation.isBlocked(recipientId, peerId)) {
+        return;
+      }
+      if (!(await this.shouldSend(event.kind, recipientId))) {
+        return;
+      }
+      const [recipient] = await this.db
+        .select({ email: user.email })
+        .from(user)
+        .where(eq(user.id, recipientId))
+        .limit(1);
+      if (!recipient) {
+        return;
+      }
+      await this.trySend({ ...event, to: recipient.email });
+    } catch (error) {
+      const name = error instanceof Error ? error.name : "unknown error";
+      this.logger.warn(`Mail of kind ${event.kind} was not sent (${name}).`);
+    }
   }
 }

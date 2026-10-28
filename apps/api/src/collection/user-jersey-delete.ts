@@ -8,19 +8,20 @@ import {
   visionLog,
 } from "@kit/db";
 import { and, eq } from "drizzle-orm";
-import { declinePendingBudsOnUserJersey } from "./user-jersey-buds.js";
+import { type DeclinedBud, declinePendingBudsOnUserJersey } from "./user-jersey-buds.js";
 
 /**
  * Deletes one UserJersey and every row that points at it: its patches, the Favorites other
  * collectors hold on it, its Vision logs, its drafts and its photo rows. Pending Buds on it
  * are declined first. Shared by owner delete and Take-down so neither leaves a blocking row.
  * Call it inside one transaction, after the photo bytes are gone from the object store.
+ * Returns the Buds it declined, so the caller can tell their bidders once the transaction commits.
  */
 export async function deleteUserJerseyRows(
   db: Pick<Db, "update" | "delete">,
   { userJerseyId, userId }: { userJerseyId: string; userId: string },
-): Promise<void> {
-  await declinePendingBudsOnUserJersey(db, userJerseyId);
+): Promise<DeclinedBud[]> {
+  const declined = await declinePendingBudsOnUserJersey(db, userJerseyId);
 
   await db.delete(userJerseyPatch).where(eq(userJerseyPatch.userJerseyId, userJerseyId));
   await db.delete(userJerseyFavorite).where(eq(userJerseyFavorite.userJerseyId, userJerseyId));
@@ -30,4 +31,6 @@ export async function deleteUserJerseyRows(
   await db
     .delete(userJersey)
     .where(and(eq(userJersey.id, userJerseyId), eq(userJersey.userId, userId)));
+
+  return declined;
 }

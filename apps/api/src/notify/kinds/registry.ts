@@ -1,7 +1,11 @@
 import type { MailEvent } from "../mail-event.js";
 import { renderMail } from "../template/render.js";
 import type { RenderedMail } from "../template/types.js";
+import { gap } from "./account-copy.js";
 import { accountDeletedMail } from "./account-deleted.js";
+import { bidAcceptedMail } from "./bid-accepted.js";
+import { bidDeclinedMail, bidGoneMail, WENT_TO_ANOTHER_LINE } from "./bid-declined.js";
+import { bidNewMail } from "./bid-new.js";
 import { codeMail } from "./code.js";
 import { emailChangeCodeMail } from "./email-change-code.js";
 import { emailChangedMail } from "./email-changed.js";
@@ -24,6 +28,23 @@ export function composeMail(event: MailEvent): RenderedMail {
       return renderMail(accountDeletedMail, event.data);
     case "jersey-taken-down":
       return renderMail(jerseyTakenDownMail, event.data);
+    case "bid-new":
+      return renderMail(bidNewMail, event.data);
+    case "bid-accepted":
+      return renderMail(bidAcceptedMail, event.data);
+    case "bid-declined": {
+      const { data } = event;
+      if (data.reason === "declined") {
+        return renderMail(bidDeclinedMail, data);
+      }
+      return renderMail(bidGoneMail, {
+        ...data,
+        line:
+          data.reason === "went-to-another"
+            ? WENT_TO_ANOTHER_LINE
+            : gap("underlinje, trøjen er slettet"),
+      });
+    }
     case "verify":
       return verifyMail(event.data);
     case "reset":

@@ -7,6 +7,7 @@ import { Logger } from "@nestjs/common";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ModerationService } from "../dist/moderation/moderation.service.js";
 import { asset } from "../dist/notify/assets.js";
 import { EmailAssetsController } from "../dist/notify/email-assets.controller.js";
 import { LEGAL_PLACEHOLDER, SUPPORT_PLACEHOLDER } from "../dist/notify/email-config.js";
@@ -40,6 +41,11 @@ function visibleText(html: string): string {
 const DATABASE_URL =
   process.env.API_TEST_DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_api_test";
 
+function notifyService(mailer: ConstructorParameters<typeof NotifyService>[0]): NotifyService {
+  const { db } = createDb(DATABASE_URL);
+  return new NotifyService(mailer, db, new ModerationService(db));
+}
+
 describe("Notify, login code mail (01)", () => {
   const env = { ...process.env };
 
@@ -57,7 +63,7 @@ describe("Notify, login code mail (01)", () => {
   });
 
   async function sendCode(code = "483920") {
-    await new NotifyService(new RecordingMailerAdapter(), createDb(DATABASE_URL).db).send({
+    await notifyService(new RecordingMailerAdapter()).send({
       kind: "code",
       to: "collector@example.com",
       data: { code },
@@ -327,7 +333,7 @@ describe("Notify, trySend and prepare", () => {
 
   it("resolves when the mailer throws and logs the kind but no address", async () => {
     const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
-    const service = new NotifyService(throwingMailer, createDb(DATABASE_URL).db);
+    const service = notifyService(throwingMailer);
 
     await expect(
       service.trySend({ kind: "account-deleted", to: "secret@example.com", data: {} }),
@@ -339,7 +345,7 @@ describe("Notify, trySend and prepare", () => {
   });
 
   it("composes at prepare and sends at deliver", async () => {
-    const service = new NotifyService(new RecordingMailerAdapter(), createDb(DATABASE_URL).db);
+    const service = notifyService(new RecordingMailerAdapter());
 
     const deliver = service.prepare({ kind: "account-deleted", to: "gone@example.com", data: {} });
     expect(recordedMails).toHaveLength(0);
@@ -349,7 +355,7 @@ describe("Notify, trySend and prepare", () => {
   });
 
   it("still fails loudly on send, for the code mails", async () => {
-    const service = new NotifyService(throwingMailer, createDb(DATABASE_URL).db);
+    const service = notifyService(throwingMailer);
     await expect(
       service.send({ kind: "code", to: "a@example.com", data: { code: "123456" } }),
     ).rejects.toThrow();
