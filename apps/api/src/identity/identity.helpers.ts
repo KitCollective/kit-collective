@@ -52,3 +52,14 @@ export function avatarUrlForUser(): string {
 export function avatarUrlForPeer(userId: string): string {
   return `/v1/identity/peers/${userId}/avatar`;
 }
+
+function errorCode(value: unknown): unknown {
+  return typeof value === "object" && value !== null && "code" in value ? value.code : undefined;
+}
+
+/** Postgres 23505, whether the driver error is thrown as is or wrapped as a `cause`. */
+export function isUniqueViolation(error: unknown): boolean {
+  const cause =
+    typeof error === "object" && error !== null && "cause" in error ? error.cause : null;
+  return errorCode(error) === "23505" || errorCode(cause) === "23505";
+}

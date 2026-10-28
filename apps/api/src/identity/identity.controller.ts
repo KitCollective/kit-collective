@@ -130,11 +130,26 @@ export class IdentityController {
     return this.identityService.changePassword(user.sub, body);
   }
 
-  @Post("identity/email")
+  @Post("identity/email/code")
   @HttpCode(200)
   @UseGuards(JwtAuthGuard)
-  changeEmail(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
-    return this.identityService.changeEmail(user.sub, body);
+  requestEmailChange(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    return this.identityService.requestEmailChange(user.sub, body, requestAttribution(request));
+  }
+
+  @Post("identity/email/verify")
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  confirmEmailChange(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    return this.identityService.confirmEmailChange(user.sub, body, requestAttribution(request));
   }
 
   @Get("identity/auth-events")

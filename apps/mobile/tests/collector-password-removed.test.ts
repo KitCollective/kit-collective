@@ -22,11 +22,9 @@ function walkSourceFiles(dir: string): string[] {
 }
 
 describe("No password in the collector app (KIT-276)", () => {
-  it("has no login, register, reset, reset-complete, verify or change-password screen", () => {
+  it("has no login, register, reset, reset-complete, verify or change-password screen (the e-mail change is by code, KIT-510)", () => {
     expect(existsSync(join(mobileRoot, "app/(auth)"))).toBe(false);
-    for (const file of ["skift-adgangskode.tsx", "skift-email.tsx"]) {
-      expect(existsSync(join(mobileRoot, "app/(tabs)/profile", file))).toBe(false);
-    }
+    expect(existsSync(join(mobileRoot, "app/(tabs)/profile/skift-adgangskode.tsx"))).toBe(false);
   });
 
   it("carries no password field, copy or password client call in app or src", () => {

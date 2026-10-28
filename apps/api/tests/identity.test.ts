@@ -839,44 +839,6 @@ describe("Identity /v1", () => {
     ]);
   });
 
-  it("changes email on the email+password path", async () => {
-    const session = await registerSession(app, "email-change@example.com");
-
-    const change = await app.inject({
-      method: "POST",
-      url: "/v1/identity/email",
-      headers: { authorization: `Bearer ${session.accessToken}` },
-      payload: {
-        email: "new-email@example.com",
-        password: "password123",
-      },
-    });
-
-    expect(change.statusCode).toBe(200);
-    const body = identityMeSchema.parse(JSON.parse(change.body));
-    expect(body.email).toBe("new-email@example.com");
-
-    const oldLogin = await app.inject({
-      method: "POST",
-      url: "/v1/identity/login",
-      payload: {
-        email: "email-change@example.com",
-        password: "password123",
-      },
-    });
-    expect(oldLogin.statusCode).toBe(401);
-
-    const newLogin = await app.inject({
-      method: "POST",
-      url: "/v1/identity/login",
-      payload: {
-        email: "new-email@example.com",
-        password: "password123",
-      },
-    });
-    expect(newLogin.statusCode).toBe(200);
-  });
-
   it("revokes the Auth session so the same Bearer is 401 on GET me", async () => {
     const session = await registerSession(app, "logout@example.com");
 

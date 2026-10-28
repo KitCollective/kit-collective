@@ -2,6 +2,7 @@ import type { MailEvent } from "../mail-event.js";
 import { renderMail } from "../template/render.js";
 import type { RenderedMail } from "../template/types.js";
 import { codeMail } from "./code.js";
+import { emailChangeCodeMail } from "./email-change-code.js";
 import { resetMail, verifyMail } from "./legacy.js";
 
 /**
@@ -12,6 +13,8 @@ export function composeMail(event: MailEvent): RenderedMail {
   switch (event.kind) {
     case "code":
       return renderMail(codeMail, event.data);
+    case "email-change-code":
+      return renderMail(emailChangeCodeMail, event.data);
     case "verify":
       return verifyMail(event.data);
     case "reset":

@@ -28,10 +28,21 @@ test("checkMobileProfileSettingsHub fails when a prefs drill uses factory jargon
   assert.ok(violations.some((v) => v.includes("factory jargon")));
 });
 
-test("checkMobileProfileSettingsHub fails when Konto brings back a password or e-mail change row", () => {
+test("checkMobileProfileSettingsHub fails when Konto brings back a change-password row", () => {
   const kontoSource = readFileSync("apps/mobile/app/(tabs)/profile/kontoindstillinger.tsx", "utf8");
   const violations = checkMobileProfileSettingsHub({
     kontoSource: `${kontoSource}\n<ListValueRow title="Skift adgangskode" />`,
   });
   assert.ok(violations.some((v) => v.includes("change-password")));
+});
+
+test("checkMobileProfileSettingsHub fails when the e-mail row loses its Skift action", () => {
+  const kontoSource = readFileSync("apps/mobile/app/(tabs)/profile/kontoindstillinger.tsx", "utf8");
+  const mutated = kontoSource.replace(
+    /(title="E-mail"(?:(?!<ListValueRow)[\s\S])*?)actionLabel="Skift"/,
+    '$1actionLabel="Ret"',
+  );
+  assert.notEqual(mutated, kontoSource);
+  const violations = checkMobileProfileSettingsHub({ kontoSource: mutated });
+  assert.ok(violations.some((v) => v.includes("e-mail row must use trailing Skift")));
 });

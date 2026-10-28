@@ -70,6 +70,44 @@ export async function verifySignInCode(email: string, code: string): Promise<Ide
   return identitySessionSchema.parse(await response.json());
 }
 
+/** Mails a six-digit code to the new address. The answer is the same for a free and a taken one. */
+export async function requestEmailChangeCode(accessToken: string, email: string): Promise<void> {
+  const response = await requestJson("/v1/identity/email/code", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    throw identityAuthErrorFromResponse(response, {
+      fallbackMessage: "Kunne ikke sende koden",
+    });
+  }
+
+  identityCodeAcceptedSchema.parse(await response.json());
+}
+
+/** A correct code switches the address. 401 wrong, 409 taken, 410 expired, 429 too many attempts. */
+export async function confirmEmailChange(
+  accessToken: string,
+  email: string,
+  code: string,
+): Promise<IdentityMe> {
+  const response = await requestJson("/v1/identity/email/verify", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ email, code }),
+  });
+
+  if (!response.ok) {
+    throw identityAuthErrorFromResponse(response, {
+      fallbackMessage: "Kunne ikke bekræfte koden",
+    });
+  }
+
+  return identityMeSchema.parse(await response.json());
+}
+
 export async function loginSocial(
   provider: IdentityLinkedProvider,
   idToken: string,

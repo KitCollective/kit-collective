@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   identityAccountUpdateSchema,
-  identityEmailChangeSchema,
+  identityEmailChangeRequestSchema,
+  identityEmailChangeVerifySchema,
   identityLinkedAccountSchema,
   identityMeSchema,
   identityPasswordChangeSchema,
@@ -30,23 +31,39 @@ describe("identityPasswordChangeSchema", () => {
   });
 });
 
-describe("identityEmailChangeSchema", () => {
-  it("accepts email and password", () => {
-    expect(
-      identityEmailChangeSchema.parse({
-        email: "new@example.com",
-        password: "password123",
-      }),
-    ).toEqual({
+describe("identityEmailChangeRequestSchema", () => {
+  it("accepts just the new address", () => {
+    expect(identityEmailChangeRequestSchema.parse({ email: "new@example.com" })).toEqual({
       email: "new@example.com",
-      password: "password123",
     });
   });
 
-  it("rejects invalid email", () => {
+  it("rejects an invalid address and a password", () => {
+    expect(() => identityEmailChangeRequestSchema.parse({ email: "not-an-email" })).toThrow();
     expect(() =>
-      identityEmailChangeSchema.parse({
-        email: "not-an-email",
+      identityEmailChangeRequestSchema.parse({ email: "new@example.com", password: "password123" }),
+    ).toThrow();
+  });
+});
+
+describe("identityEmailChangeVerifySchema", () => {
+  it("accepts the address with a six-digit code", () => {
+    expect(
+      identityEmailChangeVerifySchema.parse({ email: "new@example.com", code: "048213" }),
+    ).toEqual({ email: "new@example.com", code: "048213" });
+  });
+
+  it("rejects a code that is not six digits and extra keys", () => {
+    expect(() =>
+      identityEmailChangeVerifySchema.parse({ email: "new@example.com", code: "12345" }),
+    ).toThrow();
+    expect(() =>
+      identityEmailChangeVerifySchema.parse({ email: "new@example.com", code: "12ab56" }),
+    ).toThrow();
+    expect(() =>
+      identityEmailChangeVerifySchema.parse({
+        email: "new@example.com",
+        code: "048213",
         password: "password123",
       }),
     ).toThrow();

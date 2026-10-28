@@ -162,6 +162,39 @@ describe("Notify, login code mail (01)", () => {
   });
 });
 
+describe("Notify, confirm new e-mail mail (02)", () => {
+  const env = { ...process.env };
+
+  beforeEach(() => {
+    process.env.EMAIL_ASSET_BASE_URL = CONFIG.assetBaseUrl;
+    process.env.IDENTITY_CODE_EXPIRY_MINUTES = "10";
+  });
+
+  afterEach(() => {
+    process.env = { ...env };
+  });
+
+  const compose = () =>
+    composeMail({ kind: "email-change-code", to: "new@example.com", data: { code: "620417" } });
+
+  it("leads the subject with the code and keeps the preheader free of it", () => {
+    const mail = compose();
+    expect(mail.subject).toBe("620417 bekræfter din nye e-mail");
+    expect(mail.preheader).not.toContain("620417");
+  });
+
+  it("shows the locked headline, the code and the expiry in the text and the HTML, with no button", () => {
+    const mail = compose();
+    const shown = visibleText(mail.html);
+    for (const fact of ["Bekræft din nye e-mail", "620417", "Gælder i 10 minutter."]) {
+      expect(mail.text).toContain(fact);
+      expect(shown).toContain(fact);
+    }
+    expect(mail.html).toContain(`${CONFIG.assetBaseUrl}/${asset.board(2, "light", false)}`);
+    expect(mail.html).not.toContain(`class="btn-link"`);
+  });
+});
+
 describe("Notify, legacy verify and reset mails", () => {
   it("keep the old subject and carry the link as the text body", () => {
     const url = "https://api.test/verify?token=abc";

@@ -4,6 +4,7 @@
  */
 export type MailEvent =
   | { kind: "code"; to: string; data: { code: string } }
+  | { kind: "email-change-code"; to: string; data: { code: string } }
   /** @deprecated Password-era mail, kept only while the admin app signs in through the API. */
   | { kind: "verify"; to: string; data: { url: string } }
   /** @deprecated Password-era mail, kept only while the admin app signs in through the API. */
