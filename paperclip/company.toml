@@ -1,0 +1,37 @@
+# KitCollective's company in Paperclip. The team itself (agents, instructions, skills) is Optio's
+# software-team template: eskobar95/optio, templates/software-team. This file holds only what is
+# KitCollective's own; paperclip/agents/<id>.md adds product-specific instructions to an agent.
+# Push: python3 <optio>/templates/software-team/sync.py paperclip/company.toml plan|apply
+
+[company]
+name = "KitCollective"
+issue_prefix = "KIT"
+description = "Collector app for football kits. Software built by an agent loop on KitCollective's factory principles."
+# Monthly cap for the whole company in cents. 0 = no cap. Subscription runs book 0 anyway.
+budget_monthly_cents = 0
+
+# Filled into the team's instructions.
+[vars]
+approver = "Nicklas"
+repo = "KitCollective/kit-collective"
+base_branch = "development"
+
+# The repo the loop works on. Every issue gets its own git worktree from origin/development.
+# The checkout lives in Paperclip's volume; git authenticates with the agents' GH_TOKEN through gh.
+[project]
+name = "kit-collective"
+description = "KitCollective app, API and site. Integration lane: development."
+cwd = "/paperclip/repos/kit-collective"
+repo_url = "https://github.com/KitCollective/kit-collective"
+base_ref = "origin/development"
+branch_template = "factory/{{issue.identifier}}"
+# Each issue's own Postgres: an empty kit_api_test and kit_mirror, a fresh copy of development.
+# Paperclip runs provision when it creates the worktree and teardown when it closes it after land.
+provision_command = "bash ./scripts/factory-db.sh up"
+teardown_command = "bash ./scripts/factory-db.sh down"
+
+[agents.fullstack]
+capabilities = "Implements one issue end to end in its own worktree: app, API, database and tests, with frontend and backend subagents. Pushes a branch and opens the PR. Also runs release promotions with the release skill."
+
+[agents.devops]
+capabilities = "Infrastructure issues only: GitHub Actions, lanes and rulesets, Coolify, EAS channels and secrets. Every change goes to Approval."

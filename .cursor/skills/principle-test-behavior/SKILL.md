@@ -16,4 +16,4 @@ Judge every test against two imagined edits:
 
 Keep tests that catch the first edit and survive the second. Derive the expected value from the issue, not from a run of the code.
 
-In KitCollective: a test that reads a source file and matches a regex survives no refactor and catches no runtime bug. Use it only for wiring with no other seam, and say so.
+A test that reads a source file and matches a regex survives no refactor and catches no runtime bug. Use it only for wiring with no other seam, and say so.
