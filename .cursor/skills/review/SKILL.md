@@ -19,7 +19,9 @@ Copy steps A to E into your todo list, with every checkbox, before you start.
 
 Run every line from the repo root. Any red line is a proven finding.
 
-- [ ] `git diff --name-only <base>..HEAD` lists only files inside the issue's `write-scope:`.
+- [ ] `git diff --name-only <base>..HEAD` lists only files inside the issue's `write-scope:`, or under the handoff's **Scope additions** with a reason that holds (the gate applies the same scope policy and widens the scope on its own).
+- [ ] API or database code changed: load the issue's own database first, `set -a; . .factory/db.env; set +a`.
+- [ ] The diff adds a migration: `bash scripts/factory-db.sh migrate` runs clean on the copy of development, and `bash scripts/factory-db.sh report` shows only the schema change the issue asks for.
 - [ ] `git diff <base>..HEAD -- '*test*'` deletes or loosens no existing assertion, unless the issue changes that behavior.
 - [ ] The touched package's whole suite: `cd apps/mobile && pnpm exec vitest run` (other areas: [verify](../verify/SKILL.md)).
 - [ ] Typecheck: `cd apps/mobile && pnpm exec tsc -p tsconfig.json --noEmit` (other areas: [verify](../verify/SKILL.md)).

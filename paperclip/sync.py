@@ -162,7 +162,13 @@ def sync_project(org: dict, cid: str, token: str, apply: bool) -> str | None:
         "enabled": True,
         "defaultMode": "isolated_workspace",
         "allowIssueOverride": False,
-        "workspaceStrategy": {"type": "git_worktree", "baseRef": p["base_ref"], "branchTemplate": p["branch_template"]},
+        "workspaceStrategy": {
+            "type": "git_worktree",
+            "baseRef": p["base_ref"],
+            "branchTemplate": p["branch_template"],
+            **({"provisionCommand": p["provision_command"]} if p.get("provision_command") else {}),
+            **({"teardownCommand": p["teardown_command"]} if p.get("teardown_command") else {}),
+        },
     }
     projects = as_list(api("GET", f"/api/companies/{cid}/projects", token), "projects")
     cur = next((x for x in projects if x.get("name") == p["name"]), None)

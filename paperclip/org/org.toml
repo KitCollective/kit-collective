@@ -24,6 +24,10 @@ cwd = "/paperclip/repos/kit-collective"
 repo_url = "https://github.com/KitCollective/kit-collective"
 base_ref = "origin/development"
 branch_template = "factory/{{issue.identifier}}"
+# Each issue's own Postgres: an empty kit_api_test and kit_mirror, a fresh copy of development.
+# Paperclip runs provision when it creates the worktree and teardown when it closes it after land.
+provision_command = "bash ./scripts/factory-db.sh up"
+teardown_command = "bash ./scripts/factory-db.sh down"
 
 # Defaults for every claude_local agent. An agent may override any of them.
 [defaults.claude]
