@@ -33,7 +33,7 @@ No code yet.
 
 - [ ] For each mapped behavior, write the test first, through the seam's public interface.
 - [ ] Cover the whole criterion: every field it names, and the reverse case when it says one thing must not affect another. State that spans items (two jerseys, two tabs) is tested by switching between them and coming back.
-- [ ] Run only that file: `cd apps/mobile && pnpm exec vitest run tests/<file>` (other areas: [verify](../verify/SKILL.md)).
+- [ ] Run only that file, with the one-file command for its area from the repo's [verify](../verify/SKILL.md) skill.
 - [ ] It fails on the assertion, for the reason the issue describes. An import error or a missing export is not red: fix the test until the assertion is what fails.
 - [ ] Paste the failing assertion line into your notes. **No production code before this line exists.**
 
@@ -42,20 +42,18 @@ No fast test can see the behavior (pure styling, copy, a native-only effect): sa
 ## C. Green
 
 - [ ] Write the smallest code that turns the red tests green. No abstraction, option or layer the issue does not need.
-- [ ] A file you need is outside `write-scope:`. The loop's scope policy adds it on its own when it is a test or fixture, or a source file, in a package the scope already touches (`apps/mobile`, `packages/api-contract`, …), it is not a high-risk path (`.github`, `.cursor`, `.claude`, `scripts`, `paperclip`, migrations, Docker files), and no other live issue holds it, up to 8 files. Then change it and list it under **Scope additions** in the handoff, with why. Any other file: do not edit it. Hand off `blocked`, naming the file and why.
+- [ ] A file you need is outside `write-scope:`. The loop's scope policy adds it on its own when it is a test or fixture, or a source file, in a package the scope already touches (for example `apps/web` or `packages/api`), it is not a high-risk path (`.github`, `.cursor`, `.claude`, `scripts`, `paperclip`, migrations, Docker files), and no other live issue holds it, up to 8 files. Then change it and list it under **Scope additions** in the handoff, with why. Any other file: do not edit it. Hand off `blocked`, naming the file and why.
 
 ## D. Prove
 
 Run every line from the repo root. All must pass before you hand off.
 
-- [ ] `git diff --name-only $(git merge-base HEAD origin/development)` lists only files inside `write-scope:` or under **Scope additions**.
-- [ ] API or database code changed: load this issue's own database first, `set -a; . .factory/db.env; set +a` ([verify](../verify/SKILL.md)).
-- [ ] The diff adds a migration: `bash scripts/factory-db.sh migrate`, then `bash scripts/factory-db.sh report`. Paste the report in the handoff.
-- [ ] The touched package's whole suite: `cd apps/mobile && pnpm exec vitest run` (other areas: [verify](../verify/SKILL.md)).
-- [ ] Typecheck: `cd apps/mobile && pnpm exec tsc -p tsconfig.json --noEmit` (other areas: [verify](../verify/SKILL.md)).
-- [ ] `pnpm format:check`
-- [ ] `pnpm lint:anti-slop`
-- [ ] `pnpm check:review-gate`
+- [ ] `git diff --name-only $(git merge-base HEAD <base>)` lists only files inside `write-scope:` or under **Scope additions**. `<base>` is the loop's base ref, named in [verify](../verify/SKILL.md).
+- [ ] API or database code changed: load this issue's own database first, as [verify](../verify/SKILL.md) says.
+- [ ] The diff adds a migration: prove it on the issue's database with the migration commands in [verify](../verify/SKILL.md). Paste their report in the handoff.
+- [ ] The touched package's whole suite ([verify](../verify/SKILL.md)).
+- [ ] The touched package's typecheck ([verify](../verify/SKILL.md)).
+- [ ] Every repo-wide check [verify](../verify/SKILL.md) lists before a push.
 
 A red line you did not cause: show it is red on the base commit too, and name it in the handoff. A red line you caused: fix it and run the whole list again.
 

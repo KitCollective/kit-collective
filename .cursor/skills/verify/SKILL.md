@@ -7,6 +7,8 @@ description: How to prove a change works in KitCollective, per area. The command
 
 Proof is a command you ran and its output. "It compiles" and "the test file exists" are not proof.
 
+The loop's base ref is `origin/development`: every issue branches from it and its PR goes into `development`.
+
 ## Before any test
 
 The agents' container runs with `NODE_ENV=production`, which skips dev dependencies.
@@ -34,6 +36,8 @@ Every issue's worktree has its own Postgres, started when the worktree was made 
 The test runner is vitest everywhere. There is no jest.
 
 Repo-wide, before every push: `pnpm format:check`, `pnpm lint:anti-slop` and `pnpm check:review-gate`.
+
+UI is reviewed against `docs/design-system.md`.
 
 ## What counts as proof
 
