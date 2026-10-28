@@ -1,8 +1,11 @@
 import type { MailEvent } from "../mail-event.js";
 import { renderMail } from "../template/render.js";
 import type { RenderedMail } from "../template/types.js";
+import { accountDeletedMail } from "./account-deleted.js";
 import { codeMail } from "./code.js";
 import { emailChangeCodeMail } from "./email-change-code.js";
+import { emailChangedMail } from "./email-changed.js";
+import { jerseyTakenDownMail } from "./jersey-taken-down.js";
 import { resetMail, verifyMail } from "./legacy.js";
 
 /**
@@ -15,6 +18,12 @@ export function composeMail(event: MailEvent): RenderedMail {
       return renderMail(codeMail, event.data);
     case "email-change-code":
       return renderMail(emailChangeCodeMail, event.data);
+    case "email-changed":
+      return renderMail(emailChangedMail, event.data);
+    case "account-deleted":
+      return renderMail(accountDeletedMail, event.data);
+    case "jersey-taken-down":
+      return renderMail(jerseyTakenDownMail, event.data);
     case "verify":
       return verifyMail(event.data);
     case "reset":

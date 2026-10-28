@@ -5,6 +5,7 @@ import {
   adminCollectorQuerySchema,
   adminCollectorUserIdParamSchema,
   adminRoleUpdateRequestSchema,
+  adminTakeDownRequestSchema,
   grantCompRequestSchema,
 } from "@kit/api-contract";
 import {
@@ -136,7 +137,7 @@ export class AdminCollectionController {
 
   @Delete(":userId/jerseys/:jerseyId")
   @HttpCode(204)
-  async takeDownJersey(@Param() params: Record<string, string>) {
+  async takeDownJersey(@Param() params: Record<string, string>, @Body() body: unknown) {
     const parsed = adminCollectorJerseyParamsSchema.safeParse({
       userId: params.userId,
       jerseyId: params.jerseyId,
@@ -144,7 +145,15 @@ export class AdminCollectionController {
     if (!parsed.success) {
       throw new BadRequestException("Invalid jersey id");
     }
-    await this.adminCollectionService.takeDownJersey(parsed.data.userId, parsed.data.jerseyId);
+    const parsedBody = adminTakeDownRequestSchema.safeParse(body ?? {});
+    if (!parsedBody.success) {
+      throw new BadRequestException("Invalid take-down reason");
+    }
+    await this.adminCollectionService.takeDownJersey(
+      parsed.data.userId,
+      parsed.data.jerseyId,
+      parsedBody.data.reason,
+    );
   }
 
   @Patch(":userId/role")

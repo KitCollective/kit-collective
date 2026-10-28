@@ -109,6 +109,11 @@ export const adminCollectorJerseyParamsSchema = z
 
 export type AdminCollectorJerseyParams = z.infer<typeof adminCollectorJerseyParamsSchema>;
 
+/** The operator's reason, printed in the take-down mail. Optional: there is no reason list yet. */
+export const adminTakeDownRequestSchema = z
+  .object({ reason: z.string().trim().min(1).max(500).optional() })
+  .strict();
+
 export const adminCollectorJerseyPhotoSchema = z
   .object({
     id: z.string().uuid(),

@@ -11,6 +11,7 @@ import { asset } from "../dist/notify/assets.js";
 import { EmailAssetsController } from "../dist/notify/email-assets.controller.js";
 import { LEGAL_PLACEHOLDER, SUPPORT_PLACEHOLDER } from "../dist/notify/email-config.js";
 import { composeMail } from "../dist/notify/kinds/registry.js";
+import { maskEmail } from "../dist/notify/mask-email.js";
 import { NotifyService } from "../dist/notify/notify.service.js";
 import {
   RecordingMailerAdapter,
@@ -196,6 +197,162 @@ describe("Notify, confirm new e-mail mail (02)", () => {
     }
     expect(mail.html).toContain(`${CONFIG.assetBaseUrl}/${asset.board(2, "light", false)}`);
     expect(mail.html).not.toContain(`class="btn-link"`);
+  });
+});
+
+describe("Notify, account mails without a button (03, 04, 12)", () => {
+  const env = { ...process.env };
+
+  beforeEach(() => {
+    resetRecordedMails();
+    process.env.EMAIL_ASSET_BASE_URL = CONFIG.assetBaseUrl;
+    process.env.EMAIL_SUPPORT_ADDRESS = CONFIG.supportAddress;
+    delete process.env.EMAIL_LEGAL_LINE;
+  });
+
+  afterEach(() => {
+    process.env = { ...env };
+    vi.restoreAllMocks();
+  });
+
+  const changed = () =>
+    composeMail({
+      kind: "email-changed",
+      to: "old@example.com",
+      data: { newEmail: "nicklas@example.com" },
+    });
+  const deleted = () => composeMail({ kind: "account-deleted", to: "gone@example.com", data: {} });
+  const takenDown = (reason = "Billedet viser en anden persons ansigt") =>
+    composeMail({
+      kind: "jersey-taken-down",
+      to: "owner@example.com",
+      data: { club: "FC København", meta: "Hjemme · 2023/24", reason },
+    });
+
+  /** The mail above its footer: the footer prints the support address in every mail, the Note must too. */
+  const aboveFooter = (mail: ReturnType<typeof composeMail>) => ({
+    text: mail.text.slice(0, mail.text.lastIndexOf("\n\n")),
+    shown: visibleText(mail.html.split('class="hairline"')[0] ?? ""),
+  });
+
+  const expectNoteNamesSupport = (mail: ReturnType<typeof composeMail>) => {
+    const body = aboveFooter(mail);
+    expect(body.text).toContain(CONFIG.supportAddress);
+    expect(body.shown).toContain(CONFIG.supportAddress);
+  };
+
+  it("masks an address down to its first character and its domain", () => {
+    expect(maskEmail("nicklas@example.com")).toBe("n•••@example.com");
+    expect(maskEmail("a@b.dk")).toBe("a•••@b.dk");
+  });
+
+  it("e-mail changed: locked subject and headline, the masked new address, the support address", () => {
+    const mail = changed();
+    expect(mail.subject).toBe("Din e-mail er ændret");
+    const shown = visibleText(mail.html);
+    for (const fact of ["Din e-mail er ændret", "Ny e-mail", "n•••@example.com"]) {
+      expect(mail.text).toContain(fact);
+      expect(shown).toContain(fact);
+    }
+    expectNoteNamesSupport(mail);
+    for (const where of [mail.text, mail.html, mail.subject, mail.preheader]) {
+      expect(where).not.toContain("nicklas@example.com");
+    }
+  });
+
+  it("account deleted: locked subject and headline, the support address, nothing else of the account", () => {
+    const mail = deleted();
+    expect(mail.subject).toBe("Din konto er slettet");
+    const shown = visibleText(mail.html);
+    expect(mail.text).toContain("Din konto er slettet");
+    expect(shown).toContain("Din konto er slettet");
+    expectNoteNamesSupport(mail);
+    expect(mail.text).not.toMatch(/trøje|besked|handle/i);
+  });
+
+  it("jersey taken down: locked subject and headline, club, type · season, the operator's reason, the support address", () => {
+    const mail = takenDown();
+    expect(mail.subject).toBe("Din trøje er fjernet");
+    const shown = visibleText(mail.html);
+    for (const fact of [
+      "Din trøje er fjernet",
+      "FC København",
+      "Hjemme · 2023/24",
+      "Årsag",
+      "Billedet viser en anden persons ansigt",
+    ]) {
+      expect(mail.text).toContain(fact);
+      expect(shown).toContain(fact);
+    }
+    expectNoteNamesSupport(mail);
+  });
+
+  it("jersey taken down: escapes the operator's reason in the HTML", () => {
+    const mail = takenDown("<b>x</b>");
+    expect(mail.html).not.toContain("<b>x</b>");
+    expect(mail.text).toContain("<b>x</b>");
+  });
+
+  it("all three use board 2, have no button, say the footer cannot be switched off and never say reply", () => {
+    for (const mail of [changed(), deleted(), takenDown()]) {
+      expect(mail.html).toContain(`${CONFIG.assetBaseUrl}/${asset.board(2, "light", false)}`);
+      expect(mail.html).not.toContain(`class="btn-link"`);
+      expect(mail.text).toContain("Den kan ikke slås fra.");
+      expect(visibleText(mail.html)).toContain("Den kan ikke slås fra.");
+      expect(`${mail.text} ${visibleText(mail.html)}`).not.toMatch(/svar på|reply/i);
+    }
+  });
+
+  it("send of a flagged placeholder shows the gap when no support address is configured", () => {
+    delete process.env.EMAIL_SUPPORT_ADDRESS;
+    expect(changed().text).toContain(SUPPORT_PLACEHOLDER);
+  });
+});
+
+describe("Notify, trySend and prepare", () => {
+  beforeEach(() => {
+    resetRecordedMails();
+    process.env.EMAIL_ASSET_BASE_URL = CONFIG.assetBaseUrl;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const throwingMailer = {
+    send: async () => {
+      throw new Error("ses is down for secret@example.com");
+    },
+  };
+
+  it("resolves when the mailer throws and logs the kind but no address", async () => {
+    const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
+    const service = new NotifyService(throwingMailer, createDb(DATABASE_URL).db);
+
+    await expect(
+      service.trySend({ kind: "account-deleted", to: "secret@example.com", data: {} }),
+    ).resolves.toBeUndefined();
+
+    const logged = warn.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(logged).toContain("account-deleted");
+    expect(logged).not.toContain("secret@example.com");
+  });
+
+  it("composes at prepare and sends at deliver", async () => {
+    const service = new NotifyService(new RecordingMailerAdapter(), createDb(DATABASE_URL).db);
+
+    const deliver = service.prepare({ kind: "account-deleted", to: "gone@example.com", data: {} });
+    expect(recordedMails).toHaveLength(0);
+    await deliver();
+
+    expect(recordedMails.map((mail) => mail.to)).toEqual(["gone@example.com"]);
+  });
+
+  it("still fails loudly on send, for the code mails", async () => {
+    const service = new NotifyService(throwingMailer, createDb(DATABASE_URL).db);
+    await expect(
+      service.send({ kind: "code", to: "a@example.com", data: { code: "123456" } }),
+    ).rejects.toThrow();
   });
 });
 

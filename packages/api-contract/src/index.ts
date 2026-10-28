@@ -100,6 +100,7 @@ export {
   adminCollectorRowSchema,
   adminCollectorUserIdParamSchema,
   adminCollectorUserSchema,
+  adminTakeDownRequestSchema,
 } from "./admin/collectors.js";
 export {
   type AdminVisionImproveApplyResponse,
