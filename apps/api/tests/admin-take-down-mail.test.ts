@@ -35,6 +35,15 @@ const migrationsFolder = path.join(
 const DATABASE_URL =
   process.env.API_TEST_DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_api_test";
 
+/** The one row an insert returned. */
+function first<T>(rows: T[]): T {
+  const [row] = rows;
+  if (!row) {
+    throw new Error("expected one inserted row");
+  }
+  return row;
+}
+
 const objectStore = createMemoryObjectStore();
 const mailer = {
   failing: false,
@@ -93,32 +102,37 @@ describe("Admin take-down: jersey taken down mail (12)", () => {
     await app.getHttpAdapter().getInstance().ready();
 
     ({ db, pool } = createDb(DATABASE_URL));
-    const [dk] = await db.insert(country).values({ iso3166: "DK" }).returning({ id: country.id });
-    const [lg] = await db.insert(league).values({ countryId: dk!.id }).returning({ id: league.id });
-    const [fc] = await db
-      .insert(club)
-      .values({ countryId: dk!.id, kind: "club" })
-      .returning({ id: club.id });
+    const dk = first(
+      await db.insert(country).values({ iso3166: "DK" }).returning({ id: country.id }),
+    );
+    const lg = first(
+      await db.insert(league).values({ countryId: dk.id }).returning({ id: league.id }),
+    );
+    const fc = first(
+      await db.insert(club).values({ countryId: dk.id, kind: "club" }).returning({ id: club.id }),
+    );
     await db.insert(catalogLabel).values({
       entityType: "club",
-      entityId: fc!.id,
+      entityId: fc.id,
       locale: "en",
       kind: "label",
       text: "FC Copenhagen",
       source: "seed",
     });
-    const [sn] = await db
-      .insert(season)
-      .values({
-        leagueId: lg!.id,
-        label: "2024/25",
-        startsOn: "2024-07-01",
-        endsOn: "2025-06-30",
-        calendarKind: "split_year",
-      })
-      .returning({ id: season.id });
-    await db.insert(teamSeason).values({ clubId: fc!.id, seasonId: sn!.id });
-    fixture = { clubId: fc!.id, seasonId: sn!.id };
+    const sn = first(
+      await db
+        .insert(season)
+        .values({
+          leagueId: lg.id,
+          label: "2024/25",
+          startsOn: "2024-07-01",
+          endsOn: "2025-06-30",
+          calendarKind: "split_year",
+        })
+        .returning({ id: season.id }),
+    );
+    await db.insert(teamSeason).values({ clubId: fc.id, seasonId: sn.id });
+    fixture = { clubId: fc.id, seasonId: sn.id };
 
     await register("takedown-staff@example.com");
     await db
@@ -148,30 +162,32 @@ describe("Admin take-down: jersey taken down mail (12)", () => {
     counter += 1;
     const email = `takedown-owner-${counter}@example.com`;
     const owner = await register(email);
-    const [jersey] = await db
-      .insert(userJersey)
-      .values({
-        userId: owner.user.id,
-        clubId: fixture.clubId,
-        seasonId: fixture.seasonId,
-        type: "away",
-        size: "m",
-        condition: "used",
-      })
-      .returning({ id: userJersey.id });
+    const jersey = first(
+      await db
+        .insert(userJersey)
+        .values({
+          userId: owner.user.id,
+          clubId: fixture.clubId,
+          seasonId: fixture.seasonId,
+          type: "away",
+          size: "m",
+          condition: "used",
+        })
+        .returning({ id: userJersey.id }),
+    );
     const photoId = crypto.randomUUID();
-    const key = `user/${owner.user.id}/${jersey!.id}/${photoId}.jpg`;
+    const key = `user/${owner.user.id}/${jersey.id}/${photoId}.jpg`;
     await objectStore.putObject(key, Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]));
     await db.insert(userJerseyPhoto).values({
       id: photoId,
-      userJerseyId: jersey!.id,
+      userJerseyId: jersey.id,
       objectKey: key,
       role: "front",
       source: "camera",
       ocrStatus: "none",
     });
     resetRecordedMails();
-    return { email, userId: owner.user.id, jerseyId: jersey!.id };
+    return { email, userId: owner.user.id, jerseyId: jersey.id };
   }
 
   function takeDown(owner: { userId: string; jerseyId: string }, body?: unknown) {
