@@ -6,9 +6,9 @@
  * The hosted Device flows run writes both passes, then calls this to put them in one folder that
  * it uploads as the artifact `visual-review-<head sha>`:
  *
- *   manifest.json   { version: 1, headSha, baseSha, runUrl, flow, after: {status}, before: {status, note?, failure?},
+ *   manifest.json   { version: 1, headSha, baseSha, runUrl, flow, after: {status, failure?}, before: {status, note?, failure?},
  *                     steps: [{ id, label, after, before }], videos: { after?, before? }, dropped: [...] }
- *   after/<step>.png, before/<step>.png, before/failure.png, after.mp4, before.mp4
+ *   after/<step>.png, before/<step>.png, after/failure.png, before/failure.png, after.mp4, before.mp4
  *
  * Paths in the manifest are relative to the folder. A reader (the software factory's `visual-review`
  * gate check) needs nothing else: no Maestro names, no flow text.
@@ -183,13 +183,19 @@ function main() {
     if (path) videos[side] = path;
   }
 
-  const beforeSide = { status: args["before-status"] };
-  if (args["before-note"]) beforeSide.note = args["before-note"];
-  if (args["before-status"] === "failed") {
-    const shot = failureScreenshot(args.before);
-    const path = shot && put(shot, "before/failure.png");
-    if (path) beforeSide.failure = path;
-  }
+  // A pass that stopped shows where: on the head that is a bug in the PR, on the base the new screens.
+  const sideOf = (side, dir) => {
+    const out = { status: args[`${side}-status`] };
+    if (side === "before" && args["before-note"]) out.note = args["before-note"];
+    if (out.status === "failed") {
+      const shot = failureScreenshot(dir);
+      const path = shot && put(shot, `${side}/failure.png`);
+      if (path) out.failure = path;
+    }
+    return out;
+  };
+  const afterSide = sideOf("after", args.after);
+  const beforeSide = sideOf("before", args.before);
 
   const manifest = {
     version: 1,
@@ -197,7 +203,7 @@ function main() {
     baseSha: args.base,
     runUrl: args["run-url"],
     flow,
-    after: { status: args["after-status"] },
+    after: afterSide,
     before: beforeSide,
     steps,
     videos,
