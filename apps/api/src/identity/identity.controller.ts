@@ -87,6 +87,18 @@ export class IdentityController {
     return this.identityService.updatePrefs(user.sub, body);
   }
 
+  @Get("identity/notification-prefs")
+  @UseGuards(JwtAuthGuard)
+  getNotificationPrefs(@CurrentUser() user: JwtPayload) {
+    return this.identityService.getNotificationPrefs(user.sub);
+  }
+
+  @Patch("identity/notification-prefs")
+  @UseGuards(JwtAuthGuard)
+  updateNotificationPrefs(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+    return this.identityService.updateNotificationPrefs(user.sub, body);
+  }
+
   @Get("identity/cookie-consent")
   @UseGuards(JwtAuthGuard)
   getCookieConsent(@CurrentUser() user: JwtPayload) {

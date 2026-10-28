@@ -44,7 +44,7 @@ describe("cookieConsentSchema", () => {
 });
 
 describe("identityExportSchema", () => {
-  it("accepts profile fields and jersey ids", () => {
+  it("accepts profile fields, jersey ids and notification prefs", () => {
     const payload = {
       id: "550e8400-e29b-41d4-a716-446655440000",
       email: "collector@example.com",
@@ -54,6 +54,10 @@ describe("identityExportSchema", () => {
       phone: null,
       birthday: null,
       userJerseyIds: ["660e8400-e29b-41d4-a716-446655440001"],
+      notificationPrefs: {
+        email: { bidsAndMessages: true, wishMatches: true, news: false },
+        push: { bids: true, messages: true, wishMatches: true },
+      },
     };
     expect(identityExportSchema.parse(payload)).toEqual(payload);
   });
