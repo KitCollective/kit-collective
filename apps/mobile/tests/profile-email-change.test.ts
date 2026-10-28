@@ -165,7 +165,7 @@ describe("e-mail change client", () => {
 
     expect(call).toContain('"/v1/identity/email/code"');
     expect(call).toContain('method: "POST"');
-    expect(call).toContain("Authorization: `Bearer ${accessToken}`");
+    expect(call).toMatch(/Authorization: `Bearer \$\{accessToken\}`/);
     expect(call).toContain("JSON.stringify({ email })");
     expect(call).toContain("identityAuthErrorFromResponse(response");
   });
@@ -174,7 +174,7 @@ describe("e-mail change client", () => {
     const call = clientCall("confirmEmailChange");
 
     expect(call).toContain('"/v1/identity/email/verify"');
-    expect(call).toContain("Authorization: `Bearer ${accessToken}`");
+    expect(call).toMatch(/Authorization: `Bearer \$\{accessToken\}`/);
     expect(call).toContain("JSON.stringify({ email, code })");
     expect(call).toContain("identityAuthErrorFromResponse(response");
     expect(call).toContain("identityMeSchema.parse");
