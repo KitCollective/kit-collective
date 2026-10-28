@@ -153,29 +153,26 @@ describe("e-mail change flow: the code step", () => {
 });
 
 describe("e-mail change client", () => {
-  // identity.ts reaches expo-constants through ./config, which vitest cannot load, so the client
+  // email-change-api.ts reaches expo-constants through @/api/config, which vitest cannot load, so the client
   // is read as source (as vision-request-error.test.ts does). The status it keeps is tested
   // through identityAuthErrorFromResponse in first-session-code.test.ts.
-  const identityApi = readFileSync(join(__dirname, "../src/api/identity.ts"), "utf8");
+  const clientSource = readFileSync(join(__dirname, "../src/profile/email-change-api.ts"), "utf8");
   const clientCall = (name: string) =>
-    identityApi.slice(identityApi.indexOf(`export async function ${name}(`)).split("\n}\n")[0];
+    clientSource.slice(clientSource.indexOf(`export async function ${name}(`)).split("\n}\n")[0];
 
   it("asks for a code with the signed-in token and the new address only", () => {
     const call = clientCall("requestEmailChangeCode");
 
-    expect(call).toContain('"/v1/identity/email/code"');
-    expect(call).toContain('method: "POST"');
-    expect(call).toMatch(/Authorization: `Bearer \$\{accessToken\}`/);
-    expect(call).toContain("JSON.stringify({ email })");
+    expect(call).toContain('postJson("/v1/identity/email/code", accessToken, { email })');
+    expect(clientSource).toContain('method: "POST"');
+    expect(clientSource).toMatch(/Authorization: `Bearer \$\{accessToken\}`/);
     expect(call).toContain("identityAuthErrorFromResponse(response");
   });
 
   it("confirms with the address and the code only, and keeps the refusal's status", () => {
     const call = clientCall("confirmEmailChange");
 
-    expect(call).toContain('"/v1/identity/email/verify"');
-    expect(call).toMatch(/Authorization: `Bearer \$\{accessToken\}`/);
-    expect(call).toContain("JSON.stringify({ email, code })");
+    expect(call).toContain('postJson("/v1/identity/email/verify", accessToken, { email, code })');
     expect(call).toContain("identityAuthErrorFromResponse(response");
     expect(call).toContain("identityMeSchema.parse");
   });

@@ -3,7 +3,6 @@ import { useRef, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
-import { confirmEmailChange, requestEmailChangeCode } from "@/api/identity";
 import { useAuth } from "@/auth/AuthProvider";
 import { DrillHeader, ProfileSurfaceGroup, TextField } from "@/components/profile-ui";
 import { Button } from "@/components/ui";
@@ -25,6 +24,7 @@ import {
   submitAddress,
   typeCode,
 } from "@/profile/email-change";
+import { confirmEmailChange, requestEmailChangeCode } from "@/profile/email-change-api";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
