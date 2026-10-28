@@ -2,11 +2,16 @@ import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { NotificationPrefsUpdate } from "@kit/api-contract";
-import { createDb, resetDatabase, user } from "@kit/db";
+import { createDb, moderationBlock, resetDatabase, user } from "@kit/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { ModerationService } from "../dist/moderation/moderation.service.js";
 import { saveNotificationPrefs } from "../dist/notify/notification-prefs.js";
 import { NotifyService } from "../dist/notify/notify.service.js";
-import { RecordingMailerAdapter } from "../dist/notify/recording-mailer.adapter.js";
+import {
+  RecordingMailerAdapter,
+  recordedMails,
+  resetRecordedMails,
+} from "../dist/notify/recording-mailer.adapter.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -40,7 +45,7 @@ describe("Notify decides whether a mail is sent to a Collector", () => {
   beforeAll(async () => {
     await resetDatabase(DATABASE_URL, migrationsFolder);
     db = createDb(DATABASE_URL);
-    notify = new NotifyService(new RecordingMailerAdapter(), db.db);
+    notify = new NotifyService(new RecordingMailerAdapter(), db.db, new ModerationService(db.db));
   });
 
   afterAll(async () => {
@@ -114,5 +119,115 @@ describe("Notify decides whether a mail is sent to a Collector", () => {
 
   it("sends account-deleted to a Collector who has no row and no user", async () => {
     expect(await notify.shouldSend("account-deleted", crypto.randomUUID())).toBe(true);
+  });
+});
+
+describe("Notify gates a bid mail to a Collector", () => {
+  let db: ReturnType<typeof createDb>;
+  let recipientId: string;
+  let peerId: string;
+  let counter = 0;
+
+  const accepted = {
+    kind: "bid-accepted" as const,
+    data: {
+      club: "FC København",
+      meta: "Hjemme · 2023/24",
+      amountDkk: 400,
+      ownerHandle: "ejer",
+      conversationId: "0b6c2f0e-6a52-4c53-8f7e-2f6d1a9a1c11",
+    },
+  };
+
+  const serviceWith = (mailer: ConstructorParameters<typeof NotifyService>[0]) =>
+    new NotifyService(mailer, db.db, new ModerationService(db.db));
+
+  async function createCollector(label: string): Promise<string> {
+    counter += 1;
+    const [created] = await db.db
+      .insert(user)
+      .values({
+        email: `notify-gate-${label}-${counter}@example.com`,
+        passwordHash: "x",
+        handle: `notify-gate-${label}-${counter}`,
+      })
+      .returning({ id: user.id });
+    if (!created) {
+      throw new Error("The test Collector was not created");
+    }
+    return created.id;
+  }
+
+  beforeAll(async () => {
+    await resetDatabase(DATABASE_URL, migrationsFolder);
+    db = createDb(DATABASE_URL);
+  });
+
+  afterAll(async () => {
+    await db.pool.end();
+  });
+
+  beforeEach(async () => {
+    resetRecordedMails();
+    process.env.EMAIL_ASSET_BASE_URL = "https://assets.test/email";
+    recipientId = await createCollector("recipient");
+    peerId = await createCollector("peer");
+  });
+
+  it("sends to the recipient's address", async () => {
+    await serviceWith(new RecordingMailerAdapter()).notifyCollector(accepted, {
+      recipientId,
+      peerId,
+    });
+
+    expect(recordedMails.map((mail) => mail.subject)).toEqual(["Dit bud er accepteret"]);
+    expect(recordedMails[0]?.to).toMatch(/^notify-gate-recipient-/);
+  });
+
+  it.each([
+    ["the recipient blocked the peer", () => [recipientId, peerId] as const],
+    ["the peer blocked the recipient", () => [peerId, recipientId] as const],
+  ])("sends nothing when %s", async (_name, pair) => {
+    const [blockerId, blockedId] = pair();
+    await db.db.insert(moderationBlock).values({ blockerId, blockedId });
+
+    await serviceWith(new RecordingMailerAdapter()).notifyCollector(accepted, {
+      recipientId,
+      peerId,
+    });
+
+    expect(recordedMails).toHaveLength(0);
+  });
+
+  it("sends nothing when the recipient has Bud og beskeder off", async () => {
+    await saveNotificationPrefs(db.db, recipientId, { email: { bidsAndMessages: false } });
+
+    await serviceWith(new RecordingMailerAdapter()).notifyCollector(accepted, {
+      recipientId,
+      peerId,
+    });
+
+    expect(recordedMails).toHaveLength(0);
+  });
+
+  it("resolves when the mailer throws", async () => {
+    const throwing = {
+      send: async () => {
+        throw new Error("ses is down");
+      },
+    };
+
+    await expect(
+      serviceWith(throwing).notifyCollector(accepted, { recipientId, peerId }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("sends nothing when the recipient no longer exists", async () => {
+    await serviceWith(new RecordingMailerAdapter()).notifyCollector(accepted, {
+      recipientId: crypto.randomUUID(),
+      peerId,
+    });
+
+    expect(recordedMails).toHaveLength(0);
   });
 });
