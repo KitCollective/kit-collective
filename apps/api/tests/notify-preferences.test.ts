@@ -57,7 +57,10 @@ describe("Notify decides whether a mail is sent to a Collector", () => {
         handle: `notify-pref-${counter}`,
       })
       .returning({ id: user.id });
-    userId = created!.id;
+    if (!created) {
+      throw new Error("The test Collector was not created");
+    }
+    userId = created.id;
   });
 
   it.each(BIDS_AND_MESSAGES)(
