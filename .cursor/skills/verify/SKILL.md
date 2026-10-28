@@ -21,7 +21,7 @@ Every issue's worktree has its own Postgres, started when the worktree was made 
 - Load it before API or database tests: `set -a; . .factory/db.env; set +a`. That sets `API_TEST_DATABASE_URL` and `DATABASE_URL` to `kit_api_test`, an empty database the API tests migrate and reset themselves.
 - `MIRROR_DATABASE_URL` is `kit_mirror`, a fresh copy of development's data. Use it to prove a migration and to look at realistic data. Never point tests at it: they reset their database.
 - A migration: `bash scripts/factory-db.sh migrate` applies the branch's migrations to `kit_mirror`, and `bash scripts/factory-db.sh report` lists the schema and row changes. A migration that fails on an object that already exists means development has drifted from the migrations: report it, do not work around it.
-- No `.factory/db.env`: run `bash scripts/factory-db.sh up` yourself. Without a mirror connection it still makes `kit_api_test`.
+- No `db.env` in the worktree's `.factory` folder: run `bash scripts/factory-db.sh up` yourself. Without a mirror connection it still makes `kit_api_test`.
 
 ## Per area
 
