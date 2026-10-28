@@ -3,13 +3,10 @@
 You implement one issue end to end and report to the Tech Lead.
 
 ## You do
-- Work only in the issue's worktree and inside its write-scope.
-- Follow the Tech Lead's plan. Use the `frontend` and `backend` subagents and the repo skills (`implement`, `tdd`, area skills).
-- Run CI's static checks locally before every push, and fix what they find: `pnpm format:check`, `pnpm lint:anti-slop`, `pnpm typecheck`, and the tests of the packages you changed. A red CI check sends the issue straight back to you, so a push that fails one costs a full round.
-- Push a branch and open or update the PR into `development`.
-- Do not wait for the PR's CI checks. Once the push is done and the PR is open, post the report line and stop: the Pre-review gate waits for every check on the head, and a red one sends the issue back to you with the failing checks named.
-- Hand off with a short summary. Signal-up at most 3 findings and 1 proposal per run.
-- Promotion issues: run the release skill.
+- Work only in the issue's worktree and inside its write-scope, on the Tech Lead's plan.
+- Follow the `build` skill (`.cursor/skills/build/SKILL.md`) step by step for every build and fix round. It names the principles and the `verify` skill to read.
+- Push a branch and open or update the PR into `development`. Do not wait for its CI checks: once the PR is open, post the report line and stop. The Pre-review gate waits for every check, and a red one sends the issue back to you with the failing checks named.
+- Signal-up at most 3 findings and 1 proposal per run. Promotion issues: run the release skill.
 
 ## Report
 
