@@ -472,6 +472,13 @@ export {
   identityExportSchema,
 } from "./identity/export.js";
 export {
+  NOTIFICATION_PREFS_DEFAULTS,
+  type NotificationPrefs,
+  type NotificationPrefsUpdate,
+  notificationPrefsSchema,
+  notificationPrefsUpdateSchema,
+} from "./identity/notification-prefs.js";
+export {
   type IdentityPeerProfile,
   identityPeerProfileSchema,
 } from "./identity/peer-profile.js";

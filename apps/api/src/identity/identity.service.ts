@@ -51,6 +51,9 @@ import {
   identitySocialLoginSchema,
   identityVerifyRequestSchema,
   identityVerifyResponseSchema,
+  type NotificationPrefs,
+  notificationPrefsSchema,
+  notificationPrefsUpdateSchema,
 } from "@kit/api-contract";
 import {
   account,
@@ -64,6 +67,7 @@ import {
   country,
   identityProvider,
   jerseyDraft,
+  notificationPreference,
   session,
   user,
   userJersey,
@@ -94,6 +98,7 @@ import { requireBetterAuthSecret, requireBetterAuthUrl } from "../config/better-
 import { identityCodeExpiryMinutes, identityCodeMaxAttempts } from "../config/identity-code-env.js";
 import { DB, type DbToken } from "../db/db.module.js";
 import { ModerationService } from "../moderation/moderation.service.js";
+import { loadNotificationPrefs, saveNotificationPrefs } from "../notify/notification-prefs.js";
 import { NotifyService } from "../notify/notify.service.js";
 import { AUTH, type AuthInstance } from "./auth.js";
 import { AuthThrottleService, tooManyLoginAttempts } from "./auth-throttle.service.js";
@@ -937,6 +942,18 @@ export class IdentityService {
     return identityPrefsSchema.parse(updated);
   }
 
+  async getNotificationPrefs(userId: string): Promise<NotificationPrefs> {
+    return notificationPrefsSchema.parse(await loadNotificationPrefs(this.db, userId));
+  }
+
+  async updateNotificationPrefs(userId: string, rawBody: unknown): Promise<NotificationPrefs> {
+    const parsed = notificationPrefsUpdateSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid notification preferences");
+    }
+    return notificationPrefsSchema.parse(await saveNotificationPrefs(this.db, userId, parsed.data));
+  }
+
   async getCookieConsent(userId: string): Promise<CookieConsent> {
     const [found] = await this.db
       .select(USER_COOKIE_SELECT)
@@ -1011,6 +1028,7 @@ export class IdentityService {
       phone: found.phone,
       birthday,
       userJerseyIds: jerseys.map((row) => row.id),
+      notificationPrefs: await loadNotificationPrefs(this.db, userId),
     });
   }
 
@@ -1106,6 +1124,7 @@ export class IdentityService {
 
       await tx.delete(collectionShortcut).where(eq(collectionShortcut.userId, userId));
       await tx.delete(identityProvider).where(eq(identityProvider.userId, userId));
+      await tx.delete(notificationPreference).where(eq(notificationPreference.userId, userId));
       await tx.delete(user).where(eq(user.id, userId));
     });
   }

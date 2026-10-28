@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { createDb } from "@kit/db";
 import { Logger } from "@nestjs/common";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
@@ -35,6 +36,9 @@ function visibleText(html: string): string {
     .replace(/\s+/g, " ");
 }
 
+const DATABASE_URL =
+  process.env.API_TEST_DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_api_test";
+
 describe("Notify, login code mail (01)", () => {
   const env = { ...process.env };
 
@@ -52,7 +56,7 @@ describe("Notify, login code mail (01)", () => {
   });
 
   async function sendCode(code = "483920") {
-    await new NotifyService(new RecordingMailerAdapter()).send({
+    await new NotifyService(new RecordingMailerAdapter(), createDb(DATABASE_URL).db).send({
       kind: "code",
       to: "collector@example.com",
       data: { code },

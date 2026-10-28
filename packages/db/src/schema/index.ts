@@ -499,6 +499,20 @@ export const user = pgTable(
   ],
 );
 
+/** One row per Collector once they change a switch; no row means the defaults in api-contract. */
+export const notificationPreference = pgTable("notification_preference", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  emailBidsAndMessages: boolean("email_bids_and_messages").notNull(),
+  emailWishMatches: boolean("email_wish_matches").notNull(),
+  emailNews: boolean("email_news").notNull(),
+  pushBids: boolean("push_bids").notNull(),
+  pushMessages: boolean("push_messages").notNull(),
+  pushWishMatches: boolean("push_wish_matches").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const identityProvider = pgTable(
   "identity_provider",
   {

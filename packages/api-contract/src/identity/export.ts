@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { notificationPrefsSchema } from "./notification-prefs.js";
 import { handleSchema } from "./profile.js";
 
 export const identityExportSchema = z
@@ -11,6 +12,7 @@ export const identityExportSchema = z
     phone: z.string().nullable(),
     birthday: z.string().date().nullable(),
     userJerseyIds: z.array(z.string().uuid()),
+    notificationPrefs: notificationPrefsSchema,
   })
   .strict();
 
