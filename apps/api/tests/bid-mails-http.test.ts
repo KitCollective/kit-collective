@@ -54,6 +54,14 @@ const mailer = {
   },
 };
 
+/** The one row a query returned. */
+function one<T>(row: T | undefined): T {
+  if (!row) {
+    throw new Error("expected one row");
+  }
+  return row;
+}
+
 async function insertClubSeasonFixture(): Promise<Fixture> {
   const { db, pool } = createDb(DATABASE_URL);
   const [insertedCountry] = await db
@@ -62,31 +70,33 @@ async function insertClubSeasonFixture(): Promise<Fixture> {
     .returning({ id: country.id });
   const [insertedLeague] = await db
     .insert(league)
-    .values({ countryId: insertedCountry!.id })
+    .values({ countryId: one(insertedCountry).id })
     .returning({ id: league.id });
   const [insertedClub] = await db
     .insert(club)
-    .values({ countryId: insertedCountry!.id, kind: "club" })
+    .values({ countryId: one(insertedCountry).id, kind: "club" })
     .returning({ id: club.id });
   const [insertedSeason] = await db
     .insert(season)
     .values({
-      leagueId: insertedLeague!.id,
+      leagueId: one(insertedLeague).id,
       label: "2023/24",
       startsOn: "2023-07-01",
       endsOn: "2024-06-30",
       calendarKind: "split_year",
     })
     .returning({ id: season.id });
-  await db.insert(teamSeason).values({ clubId: insertedClub!.id, seasonId: insertedSeason!.id });
+  await db
+    .insert(teamSeason)
+    .values({ clubId: one(insertedClub).id, seasonId: one(insertedSeason).id });
   const label = { locale: "da", kind: "label", source: "seed" } as const;
   await db.insert(catalogLabel).values([
-    { ...label, entityType: "country", entityId: insertedCountry!.id, text: "Danmark" },
-    { ...label, entityType: "league", entityId: insertedLeague!.id, text: "Superligaen" },
-    { ...label, entityType: "club", entityId: insertedClub!.id, text: "F.C. København" },
+    { ...label, entityType: "country", entityId: one(insertedCountry).id, text: "Danmark" },
+    { ...label, entityType: "league", entityId: one(insertedLeague).id, text: "Superligaen" },
+    { ...label, entityType: "club", entityId: one(insertedClub).id, text: "F.C. København" },
   ]);
   await pool.end();
-  return { clubId: insertedClub!.id, seasonId: insertedSeason!.id };
+  return { clubId: one(insertedClub).id, seasonId: one(insertedSeason).id };
 }
 
 describe("Bid mails (05, 06, 07) are sent by the bid actions /v1", () => {
@@ -346,7 +356,7 @@ describe("Bid mails (05, 06, 07) are sent by the bid actions /v1", () => {
     const { owner, jersey } = await openJersey("pref-owner");
     const { db, pool } = createDb(DATABASE_URL);
     const [row] = await db.select({ id: user.id }).from(user).where(eq(user.email, owner.email));
-    await saveNotificationPrefs(db, row!.id, { email: { bidsAndMessages: false } });
+    await saveNotificationPrefs(db, one(row).id, { email: { bidsAndMessages: false } });
     await pool.end();
 
     const bidder = await register("bidder-pref-owner");
@@ -380,7 +390,7 @@ describe("Bid mails (05, 06, 07) are sent by the bid actions /v1", () => {
     const { owner, first, secondBid } = await twoBidders("pref-bidder");
     const { db, pool } = createDb(DATABASE_URL);
     const [row] = await db.select({ id: user.id }).from(user).where(eq(user.email, first.email));
-    await saveNotificationPrefs(db, row!.id, { email: { bidsAndMessages: false } });
+    await saveNotificationPrefs(db, one(row).id, { email: { bidsAndMessages: false } });
     await pool.end();
 
     expect((await respond(owner, secondBid, "accept")).statusCode).toBe(200);
