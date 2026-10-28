@@ -663,6 +663,12 @@ export class IdentityService {
       throw new ConflictException("Email already registered");
     }
 
+    const [previous] = await this.db
+      .select({ email: user.email })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
     const [updated] = await this.db
       .update(user)
       .set({ email: newEmail, emailVerified: true })
@@ -677,6 +683,14 @@ export class IdentityService {
       });
     if (!updated) {
       throw new UnauthorizedException();
+    }
+
+    if (previous) {
+      await this.notifyService.trySend({
+        kind: "email-changed",
+        to: previous.email,
+        data: { newEmail },
+      });
     }
 
     const linkedAccounts = await this.loadLinkedAccounts(userId);
@@ -1076,6 +1090,16 @@ export class IdentityService {
   }
 
   async deleteAccount(userId: string): Promise<void> {
+    const [account] = await this.db
+      .select({ email: user.email })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+    // Composed before the data is removed; it carries the address and nothing else.
+    const deliverConfirmation = account
+      ? this.notifyService.prepare({ kind: "account-deleted", to: account.email, data: {} })
+      : undefined;
+
     const ownedJerseys = await this.db
       .select({ id: userJersey.id })
       .from(userJersey)
@@ -1127,6 +1151,8 @@ export class IdentityService {
       await tx.delete(notificationPreference).where(eq(notificationPreference.userId, userId));
       await tx.delete(user).where(eq(user.id, userId));
     });
+
+    await deliverConfirmation?.();
   }
 
   async getHandleAvailability(

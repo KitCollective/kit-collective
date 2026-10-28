@@ -27,7 +27,7 @@ import {
   userJersey,
   userJerseyPhoto,
 } from "@kit/db";
-import { photoObjectKeysForDeletion } from "@kit/domain";
+import { KIT_TYPE_LABELS_DA, photoObjectKeysForDeletion } from "@kit/domain";
 import {
   HttpException,
   HttpStatus,
@@ -43,6 +43,7 @@ import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { resolveStoredPhotoBytes } from "../collection/photo-variant-resolve.js";
 import { deleteUserJerseyRows } from "../collection/user-jersey-delete.js";
 import { DB } from "../db/db.module.js";
+import { NotifyService } from "../notify/notify.service.js";
 
 function pickAdminLabel(
   rows: Array<{ locale: string | null; kind: string | null; label: string | null }>,
@@ -83,6 +84,7 @@ export class AdminCollectionService {
     @Inject(DB) private readonly db: Db,
     @Inject(OBJECT_STORE) private readonly objectStore: ObjectStoreAdapter,
     private readonly billingService: BillingService,
+    private readonly notifyService: NotifyService,
   ) {}
 
   async listCollectors(query: AdminCollectorQuery): Promise<AdminCollectorList> {
@@ -381,16 +383,28 @@ export class AdminCollectionService {
     return bytes;
   }
 
-  async takeDownJersey(userId: string, jerseyId: string): Promise<void> {
+  async takeDownJersey(userId: string, jerseyId: string, reason?: string): Promise<void> {
     const [jerseyRow] = await this.db
-      .select({ id: userJersey.id })
+      .select({
+        id: userJersey.id,
+        clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
+        seasonLabel: season.label,
+        type: userJersey.type,
+        ownerEmail: user.email,
+      })
       .from(userJersey)
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .innerJoin(user, eq(userJersey.userId, user.id))
       .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)))
       .limit(1);
 
     if (!jerseyRow) {
       throw new NotFoundException("Jersey not found");
     }
+
+    // Read before the delete: the mail names a jersey that is gone by the time it is sent.
+    const clubLabel = (await this.resolveJerseySideLabels([jerseyRow])).get(jerseyRow.id);
 
     const photoRows = await this.db
       .select({
@@ -440,6 +454,18 @@ export class AdminCollectionService {
     await this.db.transaction(async (tx) => {
       await deleteUserJerseyRows(tx, { userJerseyId: jerseyId, userId });
     });
+
+    if (clubLabel) {
+      await this.notifyService.trySend({
+        kind: "jersey-taken-down",
+        to: jerseyRow.ownerEmail,
+        data: {
+          club: clubLabel,
+          meta: `${KIT_TYPE_LABELS_DA[jerseyRow.type]} · ${jerseyRow.seasonLabel}`,
+          reason,
+        },
+      });
+    }
   }
 
   async updateUserRole(
