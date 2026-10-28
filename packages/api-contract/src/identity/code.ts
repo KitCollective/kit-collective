@@ -28,3 +28,19 @@ export const identityCodeVerifySchema = z
   .strict();
 
 export type IdentityCodeVerify = z.infer<typeof identityCodeVerifySchema>;
+
+/** Step one of an e-mail change: the new address the code is mailed to. */
+export const identityEmailChangeRequestSchema = z
+  .object({
+    email: z.string().email().max(320),
+  })
+  .strict();
+
+export type IdentityEmailChangeRequest = z.infer<typeof identityEmailChangeRequestSchema>;
+
+/** Step two: the new address again with the code that was mailed to it. */
+export const identityEmailChangeVerifySchema = identityCodeVerifySchema
+  .extend({ email: z.string().email().max(320) })
+  .strict();
+
+export type IdentityEmailChangeVerify = z.infer<typeof identityEmailChangeVerifySchema>;

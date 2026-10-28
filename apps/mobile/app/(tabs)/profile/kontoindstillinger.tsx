@@ -26,7 +26,7 @@ export default function AccountSettingsScreen() {
   const typography = useTypography();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { accessToken, refreshUser, signOut } = useAuth();
+  const { accessToken, user, refreshUser, signOut } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,6 +65,14 @@ export default function AccountSettingsScreen() {
   useEffect(() => {
     void loadAccount();
   }, [loadAccount]);
+
+  // A changed e-mail comes back through the signed-in user once the change screen has refreshed it.
+  useEffect(() => {
+    if (user) {
+      setEmail(user.email);
+      setEmailVerified(user.emailVerified);
+    }
+  }, [user]);
 
   const saveAccount = async () => {
     if (!accessToken) {
@@ -131,6 +139,8 @@ export default function AccountSettingsScreen() {
             title="E-mail"
             value={email}
             meta={emailVerified ? "Bekræftet" : "Ikke bekræftet"}
+            actionLabel="Skift"
+            onAction={() => router.push("/(tabs)/profile/skift-email")}
           />
           <ProfileRowDivider />
           {editingPhone ? (

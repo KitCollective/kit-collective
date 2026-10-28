@@ -16,7 +16,6 @@ import {
   type IdentityAccountUpdate,
   type IdentityAvatarUpload,
   type IdentityCodeAccepted,
-  type IdentityEmailChange,
   type IdentityExport,
   type IdentityLinkedAccount,
   type IdentityLinkedProvider,
@@ -36,7 +35,8 @@ import {
   identityCodeRequestSchema,
   identityCodeVerifySchema,
   identityCredentialsSchema,
-  identityEmailChangeSchema,
+  identityEmailChangeRequestSchema,
+  identityEmailChangeVerifySchema,
   identityExportSchema,
   identityMeSchema,
   identityPasswordChangeSchema,
@@ -105,6 +105,7 @@ import {
   avatarUrlForUser,
   baseHandleFromEmail,
   isHandleEmail,
+  isUniqueViolation,
   nextHandleCandidate,
 } from "./identity.helpers.js";
 import { bearerTokenFromAuthorization, type RequestAttribution } from "./request-headers.js";
@@ -117,6 +118,7 @@ const { hash, compare } = bcrypt;
 const UNKNOWN_EMAIL_DUMMY_HASH = "$2a$12$JVlUVacTaWZV1JKt5IGZdu3XbtkBe8srPl74IyGfJhM0LWsQiamwG";
 const INVALID_EMAIL_OR_PASSWORD = "Invalid email or password";
 const CODE_IDENTIFIER_PREFIX = "code:";
+const EMAIL_CHANGE_IDENTIFIER_PREFIX = "email-change:";
 
 const USER_ME_SELECT = {
   id: user.id,
@@ -530,6 +532,158 @@ export class IdentityService {
     return await this.buildSession(collector, accessToken);
   }
 
+  /**
+   * Mails a six-digit code to the NEW address of a signed-in collector. The answer is the same
+   * whether or not that address belongs to someone else: the clash is only reported once the
+   * correct code proves the person owns the mailbox. A new code replaces the previous one.
+   */
+  async requestEmailChange(
+    userId: string,
+    rawBody: unknown,
+    attribution: RequestAttribution,
+  ): Promise<IdentityCodeAccepted> {
+    const parsed = identityEmailChangeRequestSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid email");
+    }
+    const newEmail = parsed.data.email.toLowerCase();
+
+    const [current] = await this.db
+      .select({ email: user.email })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+    if (!current) {
+      throw new UnauthorizedException();
+    }
+    if (current.email === newEmail) {
+      throw new BadRequestException("Email is already the account address");
+    }
+
+    if (!(await this.authThrottle.consumePublicWriteFamily(attribution.ipAddress, newEmail))) {
+      await this.rejectAuthThrottle(newEmail, attribution);
+    }
+
+    const code = randomInt(0, 10 ** IDENTITY_CODE_LENGTH)
+      .toString()
+      .padStart(IDENTITY_CODE_LENGTH, "0");
+    const identifier = `${EMAIL_CHANGE_IDENTIFIER_PREFIX}${userId}`;
+    await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${identifier}))`);
+      await tx.delete(verification).where(eq(verification.identifier, identifier));
+      await tx.insert(verification).values({
+        id: randomBytes(16).toString("hex"),
+        identifier,
+        value: this.hashEmailChangeCode(userId, newEmail, code),
+        expiresAt: new Date(Date.now() + identityCodeExpiryMinutes() * 60 * 1000),
+      });
+    });
+    await this.notifyService.send({ kind: "email-change-code", to: newEmail, data: { code } });
+    return identityCodeAcceptedSchema.parse({ accepted: true });
+  }
+
+  /**
+   * A correct code switches the account to the new address and marks it verified; the session
+   * stays. 401 wrong code, 410 expired or none, 429 too many guesses, 409 the address belongs to
+   * another account.
+   */
+  async confirmEmailChange(
+    userId: string,
+    rawBody: unknown,
+    attribution: RequestAttribution,
+  ): Promise<IdentityMe> {
+    const parsed = identityEmailChangeVerifySchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid code");
+    }
+    const newEmail = parsed.data.email.toLowerCase();
+    if (!(await this.authThrottle.consumeLoginFamily(attribution.ipAddress))) {
+      await this.rejectAuthThrottle(newEmail, attribution);
+    }
+
+    const identifier = `${EMAIL_CHANGE_IDENTIFIER_PREFIX}${userId}`;
+    const [row] = await this.db
+      .select()
+      .from(verification)
+      .where(eq(verification.identifier, identifier))
+      .orderBy(desc(verification.createdAt))
+      .limit(1);
+
+    if (!row || row.expiresAt.getTime() <= Date.now()) {
+      if (row) {
+        await this.db.delete(verification).where(eq(verification.id, row.id));
+      }
+      throw new GoneException("Code expired");
+    }
+
+    await this.authThrottle.recordCodeAttempt(row.id);
+    if ((await this.authThrottle.countCodeAttempts(row.id)) > identityCodeMaxAttempts()) {
+      await this.db.delete(verification).where(eq(verification.id, row.id));
+      await this.recordAuthEvent({
+        kind: "lockout",
+        userId,
+        ipAddress: attribution.ipAddress,
+        userAgent: attribution.userAgent,
+      });
+      throw tooManyLoginAttempts();
+    }
+
+    const given = Buffer.from(this.hashEmailChangeCode(userId, newEmail, parsed.data.code));
+    const expected = Buffer.from(row.value);
+    if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+      await this.recordAuthEvent({
+        kind: "failure",
+        userId,
+        ipAddress: attribution.ipAddress,
+        userAgent: attribution.userAgent,
+      });
+      throw new UnauthorizedException("Invalid code");
+    }
+
+    const consumed = await this.db
+      .delete(verification)
+      .where(eq(verification.identifier, identifier))
+      .returning({ id: verification.id });
+    if (consumed.length === 0) {
+      throw new GoneException("Code expired");
+    }
+
+    // Only now, with the mailbox proven, may the answer say the address is taken.
+    const [owner] = await this.db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.email, newEmail))
+      .limit(1);
+    if (owner && owner.id !== userId) {
+      throw new ConflictException("Email already registered");
+    }
+
+    const [updated] = await this.db
+      .update(user)
+      .set({ email: newEmail, emailVerified: true })
+      .where(eq(user.id, userId))
+      .returning(USER_ME_SELECT)
+      .catch((error: unknown) => {
+        // Lost a race against another account taking the address: the unique index decides.
+        if (isUniqueViolation(error)) {
+          throw new ConflictException("Email already registered");
+        }
+        throw error;
+      });
+    if (!updated) {
+      throw new UnauthorizedException();
+    }
+
+    const linkedAccounts = await this.loadLinkedAccounts(userId);
+    return this.toIdentityMe(updated, linkedAccounts);
+  }
+
+  private hashEmailChangeCode(userId: string, email: string, code: string): string {
+    return createHmac("sha256", requireBetterAuthSecret())
+      .update(`${EMAIL_CHANGE_IDENTIFIER_PREFIX}${userId}:${email}:${code}`)
+      .digest("hex");
+  }
+
   private hashSignInCode(email: string, code: string): string {
     return createHmac("sha256", requireBetterAuthSecret()).update(`${email}:${code}`).digest("hex");
   }
@@ -901,55 +1055,6 @@ export class IdentityService {
 
     const passwordHash = await hash(body.newPassword, 12);
     await this.db.update(user).set({ passwordHash }).where(eq(user.id, userId));
-  }
-
-  async changeEmail(userId: string, rawBody: unknown): Promise<IdentityMe> {
-    const body: IdentityEmailChange = identityEmailChangeSchema.parse(rawBody);
-    const normalizedEmail = body.email.toLowerCase();
-
-    const [found] = await this.db
-      .select({
-        email: user.email,
-        passwordHash: user.passwordHash,
-      })
-      .from(user)
-      .where(eq(user.id, userId))
-      .limit(1);
-
-    if (!found) {
-      throw new UnauthorizedException();
-    }
-
-    const valid = await compare(body.password, found.passwordHash);
-    if (!valid) {
-      throw new UnauthorizedException("Current password is incorrect");
-    }
-
-    if (normalizedEmail !== found.email) {
-      const [existing] = await this.db
-        .select({ id: user.id })
-        .from(user)
-        .where(eq(user.email, normalizedEmail))
-        .limit(1);
-
-      if (existing) {
-        throw new ConflictException("Email already registered");
-      }
-    }
-
-    const [updated] = await this.db
-      .update(user)
-      .set({ email: normalizedEmail, emailVerified: false })
-      .where(eq(user.id, userId))
-      .returning(USER_ME_SELECT);
-
-    if (!updated) {
-      throw new UnauthorizedException();
-    }
-
-    await this.sendAuthMail(userId, updated.email, "verify");
-    const linkedAccounts = await this.loadLinkedAccounts(userId);
-    return this.toIdentityMe(updated, linkedAccounts);
   }
 
   async deleteAccount(userId: string): Promise<void> {

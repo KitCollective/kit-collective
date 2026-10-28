@@ -56,10 +56,15 @@ export function checkMobileProfileSettingsHub(overrides = {}) {
     }
   }
 
-  // No password after First session 1.0: the e-mail row is a read-only fact until a code-confirmed
-  // change exists, and there is no change-password row.
-  if (/skift-email|skift-adgangskode|Skift adgangskode/.test(konto)) {
-    violations.push(`${kontoPath}: no e-mail change screen or change-password row on Konto`);
+  // No password after First session 1.0: there is no change-password row. The e-mail row changes
+  // by a code (KIT-510), so it has its Skift action.
+  if (/skift-adgangskode|Skift adgangskode/.test(konto)) {
+    violations.push(`${kontoPath}: no change-password row on Konto`);
+  }
+
+  // Stops at the next row so another row's Skift cannot satisfy it.
+  if (!/title="E-mail"(?:(?!<ListValueRow)[\s\S])*?actionLabel="Skift"/.test(konto)) {
+    violations.push(`${kontoPath}: e-mail row must use trailing Skift action`);
   }
 
   if (!/title="Telefon"[\s\S]*actionLabel="Skift"/.test(konto)) {

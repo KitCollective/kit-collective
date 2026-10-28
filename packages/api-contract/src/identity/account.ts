@@ -54,12 +54,3 @@ export const identityPasswordChangeSchema = z
   .strict();
 
 export type IdentityPasswordChange = z.infer<typeof identityPasswordChangeSchema>;
-
-export const identityEmailChangeSchema = z
-  .object({
-    email: z.string().email().max(320),
-    password: z.string().min(8).max(128),
-  })
-  .strict();
-
-export type IdentityEmailChange = z.infer<typeof identityEmailChangeSchema>;
