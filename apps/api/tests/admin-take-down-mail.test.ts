@@ -222,10 +222,12 @@ describe("Admin take-down: jersey taken down mail (12)", () => {
       "Ude · 2024/25",
       "Årsag",
       "Billedet viser en anden persons ansigt",
-      "hjaelp@example.test",
     ]) {
       expect(mail?.text).toContain(fact);
     }
+    // The footer prints the support address in every mail; the Note must name it above the footer.
+    const aboveFooter = mail?.text.slice(0, mail.text.lastIndexOf("\n\n"));
+    expect(aboveFooter).toContain("hjaelp@example.test");
   });
 
   it("takes the jersey down and shows a flagged gap when the operator gave no reason", async () => {

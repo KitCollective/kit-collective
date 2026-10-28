@@ -229,6 +229,18 @@ describe("Notify, account mails without a button (03, 04, 12)", () => {
       data: { club: "FC København", meta: "Hjemme · 2023/24", reason },
     });
 
+  /** The mail above its footer: the footer prints the support address in every mail, the Note must too. */
+  const aboveFooter = (mail: ReturnType<typeof composeMail>) => ({
+    text: mail.text.slice(0, mail.text.lastIndexOf("\n\n")),
+    shown: visibleText(mail.html.split('class="hairline"')[0] ?? ""),
+  });
+
+  const expectNoteNamesSupport = (mail: ReturnType<typeof composeMail>) => {
+    const body = aboveFooter(mail);
+    expect(body.text).toContain(CONFIG.supportAddress);
+    expect(body.shown).toContain(CONFIG.supportAddress);
+  };
+
   it("masks an address down to its first character and its domain", () => {
     expect(maskEmail("nicklas@example.com")).toBe("n•••@example.com");
     expect(maskEmail("a@b.dk")).toBe("a•••@b.dk");
@@ -238,15 +250,11 @@ describe("Notify, account mails without a button (03, 04, 12)", () => {
     const mail = changed();
     expect(mail.subject).toBe("Din e-mail er ændret");
     const shown = visibleText(mail.html);
-    for (const fact of [
-      "Din e-mail er ændret",
-      "Ny e-mail",
-      "n•••@example.com",
-      CONFIG.supportAddress,
-    ]) {
+    for (const fact of ["Din e-mail er ændret", "Ny e-mail", "n•••@example.com"]) {
       expect(mail.text).toContain(fact);
       expect(shown).toContain(fact);
     }
+    expectNoteNamesSupport(mail);
     for (const where of [mail.text, mail.html, mail.subject, mail.preheader]) {
       expect(where).not.toContain("nicklas@example.com");
     }
@@ -256,10 +264,9 @@ describe("Notify, account mails without a button (03, 04, 12)", () => {
     const mail = deleted();
     expect(mail.subject).toBe("Din konto er slettet");
     const shown = visibleText(mail.html);
-    for (const fact of ["Din konto er slettet", CONFIG.supportAddress]) {
-      expect(mail.text).toContain(fact);
-      expect(shown).toContain(fact);
-    }
+    expect(mail.text).toContain("Din konto er slettet");
+    expect(shown).toContain("Din konto er slettet");
+    expectNoteNamesSupport(mail);
     expect(mail.text).not.toMatch(/trøje|besked|handle/i);
   });
 
@@ -273,11 +280,11 @@ describe("Notify, account mails without a button (03, 04, 12)", () => {
       "Hjemme · 2023/24",
       "Årsag",
       "Billedet viser en anden persons ansigt",
-      CONFIG.supportAddress,
     ]) {
       expect(mail.text).toContain(fact);
       expect(shown).toContain(fact);
     }
+    expectNoteNamesSupport(mail);
   });
 
   it("jersey taken down: escapes the operator's reason in the HTML", () => {
