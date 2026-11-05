@@ -47,6 +47,8 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
   requestPremiumAccess: () => Promise<boolean>;
+  /** Opens the KitCollective+ sheet directly (a mail link), without the entitlement check. */
+  openPaywall: () => Promise<void>;
   closePaywall: () => void;
 };
 
@@ -283,6 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       refreshUser,
       requestPremiumAccess,
+      openPaywall,
       closePaywall,
     }),
     [
@@ -294,6 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       refreshUser,
       requestPremiumAccess,
+      openPaywall,
       closePaywall,
     ],
   );

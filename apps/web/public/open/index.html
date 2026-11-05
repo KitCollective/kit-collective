@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="da">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="color-scheme" content="light dark" />
+    <title>KitCollective</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --canvas: #ffffff;
+        --ink: #0a0a0a;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --canvas: #0a0a0a;
+          --ink: #ffffff;
+        }
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        padding: 24px;
+        box-sizing: border-box;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: Archivo, "Helvetica Neue", Arial, sans-serif;
+        text-align: center;
+      }
+      .wordmark {
+        width: 220px;
+        max-width: 70vw;
+        height: auto;
+        fill: var(--ink);
+      }
+      p {
+        margin: 0;
+        max-width: 28em;
+        font-size: 17px;
+        line-height: 1.4;
+      }
+      .stores {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: center;
+      }
+      .stores a {
+        display: inline-block;
+        padding: 14px 20px;
+        border: 1px solid var(--ink);
+        border-radius: 4px;
+        color: var(--ink);
+        font-weight: 600;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Wordmark: brand kit v1.0 (apps/admin/public/assets/kitcollective-wordmark-black.svg). -->
+    <svg
+      class="wordmark"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 2434 353"
+      role="img"
+      aria-label="KitCollective"
+    >
+      <text
+        x="0"
+        y="353"
+        font-family="Archivo, 'Archivo Semi Expanded', 'Helvetica Neue', Arial, sans-serif"
+        font-size="480"
+        letter-spacing="-23.04"
+      >
+        <tspan font-weight="400">Kit</tspan><tspan font-weight="600">Collective</tspan>
+      </text>
+    </svg>
+    <!-- Provisional copy: the web surface has no locked strings in docs/design-system.md. -->
+    <p>Linket åbner i appen KitCollective. Har du ikke appen endnu, kan du hente den her.</p>
+    <div class="stores">
+      <!-- APP_STORE_ID: replace with the App Store id once the app is listed. -->
+      <a href="https://apps.apple.com/app/id<APP_STORE_ID>">Hent til iPhone</a>
+      <a href="https://play.google.com/store/apps/details?id=app.kitcollective.mobile"
+        >Hent til Android</a
+      >
+    </div>
+  </body>
+</html>

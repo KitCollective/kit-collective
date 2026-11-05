@@ -19,6 +19,7 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { CaptureChooserProvider } from "@/capture/capture-chooser";
 import { toastConfig } from "@/components/toast-config";
 import { LoadingScreen } from "@/first-session/splash-loading";
+import { MailLinkGate } from "@/links/mail-link-gate";
 import { StickySizeBinding } from "@/prefs/sticky-size-binding";
 import { AppearanceProvider } from "@/theme/appearance";
 import { BrandFontsProvider } from "@/theme/brand-fonts";
@@ -67,6 +68,7 @@ export default function RootLayout() {
         <AppearanceProvider>
           <AuthProvider>
             <StickySizeBinding />
+            <MailLinkGate />
             <CaptureChooserProvider>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />
