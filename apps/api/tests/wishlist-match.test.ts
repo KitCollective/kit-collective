@@ -1,13 +1,17 @@
 import "reflect-metadata";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   collectionSaveResponseSchema,
   identitySessionSchema,
+  WISHLIST_MATCH_CAP,
   wishlistEntriesSchema,
   wishlistEntrySchema,
+  wishlistUnseenCountSchema,
 } from "@kit/api-contract";
 import {
+  authThrottleHit,
   catalogLabel,
   club,
   country,
@@ -19,13 +23,14 @@ import {
   season,
   teamSeason,
   userJersey,
+  wishlistMatch,
 } from "@kit/db";
-import { isWishlistMatchCandidate, type WishlistMatchJersey } from "@kit/domain";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
-import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq, sql } from "drizzle-orm";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
+import { MatchService } from "../dist/match/match.service.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -177,7 +182,7 @@ async function saveJersey(
   app: NestFastifyApplication,
   accessToken: string,
   fixture: Fixture,
-  options: { catalogKitId?: string | null } = {},
+  options: { catalogKitId?: string | null; size?: string } = {},
 ) {
   const response = await app.inject({
     method: "POST",
@@ -190,7 +195,7 @@ async function saveJersey(
       clubId: fixture.clubId,
       seasonId: fixture.seasonId,
       type: "home",
-      size: "m",
+      size: options.size ?? "m",
       condition: "used",
       catalogKitId: options.catalogKitId,
       photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
@@ -216,6 +221,80 @@ async function patchPrivate(
   expect(response.statusCode).toBe(200);
 }
 
+function auth(accessToken: string) {
+  return { authorization: `Bearer ${accessToken}`, "accept-language": "da" };
+}
+
+async function createWish(
+  app: NestFastifyApplication,
+  accessToken: string,
+  payload: Record<string, unknown>,
+) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/wishlist/entries",
+    headers: auth(accessToken),
+    payload,
+  });
+  expect(response.statusCode).toBe(201);
+  return wishlistEntrySchema.parse(JSON.parse(response.body));
+}
+
+async function listWishes(app: NestFastifyApplication, accessToken: string) {
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/wishlist/entries",
+    headers: auth(accessToken),
+  });
+  expect(response.statusCode).toBe(200);
+  return wishlistEntriesSchema.parse(JSON.parse(response.body));
+}
+
+async function unseenCount(app: NestFastifyApplication, accessToken: string) {
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/wishlist/matches/unseen-count",
+    headers: auth(accessToken),
+  });
+  expect(response.statusCode).toBe(200);
+  return wishlistUnseenCountSchema.parse(JSON.parse(response.body)).unseenCount;
+}
+
+async function setBidding(
+  app: NestFastifyApplication,
+  accessToken: string,
+  jerseyId: string,
+  biddingEnabled: boolean,
+) {
+  const response = await app.inject({
+    method: "PATCH",
+    url: `/v1/collection/jerseys/${jerseyId}/bidding`,
+    headers: { authorization: `Bearer ${accessToken}` },
+    payload: { biddingEnabled },
+  });
+  expect(response.statusCode).toBe(200);
+}
+
+async function saveOpenJersey(
+  app: NestFastifyApplication,
+  accessToken: string,
+  fixture: Fixture,
+  options: { size?: string } = {},
+) {
+  const jersey = await saveJersey(app, accessToken, fixture, options);
+  await setBidding(app, accessToken, jersey.id, true);
+  return jersey;
+}
+
+async function block(app: NestFastifyApplication, accessToken: string, peerId: string) {
+  const response = await app.inject({
+    method: "POST",
+    url: `/v1/moderation/peers/${peerId}/block`,
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  expect(response.statusCode).toBe(201);
+}
+
 describe("Wishlist Match /v1", () => {
   let app: NestFastifyApplication;
 
@@ -236,292 +315,349 @@ describe("Wishlist Match /v1", () => {
     await app.getHttpAdapter().getInstance().ready();
   });
 
+  beforeEach(async () => {
+    const { db, pool } = createDb(DATABASE_URL);
+    await db.delete(authThrottleHit);
+    await pool.end();
+  });
+
   afterAll(async () => {
     await app.close();
     const { pool } = createDb(DATABASE_URL);
     await pool.end();
   });
 
-  it("returns matchedJerseyId when a peer bidding-enabled jersey matches AND facets", async () => {
+  it("returns every Match of a wish, newest first, with Handle, thumb, found time and the totals", async () => {
     const fixture = await insertFixture();
-    const watcher = await registerSession(app, "match-watcher@example.com");
-    const peer = await registerSession(app, "match-peer@example.com");
+    const watcher = await registerSession(app, "match-all-watcher@example.com");
+    const peerA = await registerSession(app, "match-all-a@example.com");
+    const peerB = await registerSession(app, "match-all-b@example.com");
     await startTrial(app, watcher.accessToken);
+    await createWish(app, watcher.accessToken, { clubId: fixture.clubId, type: "home" });
 
-    await app.inject({
-      method: "POST",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${watcher.accessToken}` },
-      payload: {
-        clubId: fixture.clubId,
-        seasonId: fixture.seasonId,
-        type: "home",
-        size: "m",
-      },
-    });
+    const first = await saveOpenJersey(app, peerA.accessToken, fixture);
+    await listWishes(app, watcher.accessToken);
+    const second = await saveOpenJersey(app, peerB.accessToken, fixture, { size: "l" });
 
-    const peerJersey = await saveJersey(app, peer.accessToken, fixture);
-    const enableResponse = await app.inject({
-      method: "PATCH",
-      url: `/v1/collection/jerseys/${peerJersey.id}/bidding`,
-      headers: { authorization: `Bearer ${peer.accessToken}` },
-      payload: { biddingEnabled: true },
-    });
-    expect(enableResponse.statusCode).toBe(200);
-
-    const listResponse = await app.inject({
-      method: "GET",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${watcher.accessToken}` },
-    });
-
-    const listed = wishlistEntriesSchema.parse(JSON.parse(listResponse.body));
-    expect(listed.entries[0]?.matchedJerseyId).toBe(peerJersey.id);
+    const listed = await listWishes(app, watcher.accessToken);
+    const entry = listed.entries[0];
+    expect(entry?.matchCount).toBe(2);
+    expect(entry?.unseenCount).toBe(1);
+    expect(listed.unseenCount).toBe(1);
+    expect(entry?.matches.map((match) => match.jerseyId)).toEqual([second.id, first.id]);
+    expect(entry?.matches.map((match) => match.ownerHandle)).toEqual([
+      peerB.user.handle,
+      peerA.user.handle,
+    ]);
+    expect(entry?.matches.map((match) => match.seen)).toEqual([false, true]);
+    expect(entry?.matches[0]?.thumbUrl).toMatch(/^\/v1\/collection\/showcase\/photos\//);
+    expect(Number.isNaN(Date.parse(entry?.matches[0]?.foundAt ?? ""))).toBe(false);
+    expect(Date.parse(entry?.matches[0]?.foundAt ?? "")).toBeGreaterThan(
+      Date.parse(entry?.matches[1]?.foundAt ?? ""),
+    );
   });
 
-  it("never matches the owner's own Save", async () => {
+  it("caps the Matches of a wish and still reports the total", async () => {
+    const fixture = await insertFixture();
+    const watcher = await registerSession(app, "match-cap-watcher@example.com");
+    const peer = await registerSession(app, "match-cap-peer@example.com");
+    await startTrial(app, watcher.accessToken);
+    await createWish(app, watcher.accessToken, { clubId: fixture.clubId });
+
+    const total = WISHLIST_MATCH_CAP + 2;
+    for (let n = 0; n < total; n += 1) {
+      await saveOpenJersey(app, peer.accessToken, fixture);
+    }
+
+    const listed = await listWishes(app, watcher.accessToken);
+    expect(listed.entries[0]?.matches).toHaveLength(WISHLIST_MATCH_CAP);
+    expect(listed.entries[0]?.matchCount).toBe(total);
+    expect(listed.entries[0]?.unseenCount).toBe(total);
+    expect(listed.unseenCount).toBe(total);
+  });
+
+  it("adds a Match when a peer opens a jersey for bids and drops it when it closes again", async () => {
+    const fixture = await insertFixture();
+    const watcher = await registerSession(app, "match-toggle-watcher@example.com");
+    const peer = await registerSession(app, "match-toggle-peer@example.com");
+    await startTrial(app, watcher.accessToken);
+    await createWish(app, watcher.accessToken, { clubId: fixture.clubId, type: "home" });
+
+    const jersey = await saveJersey(app, peer.accessToken, fixture);
+    expect((await listWishes(app, watcher.accessToken)).entries[0]?.matchCount).toBe(0);
+
+    await setBidding(app, peer.accessToken, jersey.id, true);
+    const opened = await listWishes(app, watcher.accessToken);
+    expect(opened.entries[0]?.matches.map((match) => match.jerseyId)).toEqual([jersey.id]);
+
+    await setBidding(app, peer.accessToken, jersey.id, false);
+    const closed = await listWishes(app, watcher.accessToken);
+    expect(closed.entries[0]?.matchCount).toBe(0);
+    expect(closed.entries[0]?.matches).toEqual([]);
+  });
+
+  it("drops a Match when the jersey goes private and when it is deleted", async () => {
+    const fixture = await insertFixture();
+    const watcher = await registerSession(app, "match-gone-watcher@example.com");
+    const peer = await registerSession(app, "match-gone-peer@example.com");
+    await startTrial(app, watcher.accessToken);
+    await createWish(app, watcher.accessToken, { clubId: fixture.clubId });
+
+    const privateJersey = await saveOpenJersey(app, peer.accessToken, fixture);
+    const deletedJersey = await saveOpenJersey(app, peer.accessToken, fixture);
+    expect((await listWishes(app, watcher.accessToken)).entries[0]?.matchCount).toBe(2);
+
+    await patchPrivate(app, peer.accessToken, privateJersey.id, true);
+    const afterPrivate = await listWishes(app, watcher.accessToken);
+    expect(afterPrivate.entries[0]?.matches.map((match) => match.jerseyId)).toEqual([
+      deletedJersey.id,
+    ]);
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/v1/collection/jerseys/${deletedJersey.id}`,
+      headers: { authorization: `Bearer ${peer.accessToken}` },
+    });
+    expect(deleteResponse.statusCode).toBeLessThan(300);
+    const afterDelete = await listWishes(app, watcher.accessToken);
+    expect(afterDelete.entries[0]?.matchCount).toBe(0);
+    expect(afterDelete.unseenCount).toBe(0);
+  });
+
+  it("drops a Match when the owner blocks the Collector, and when the Collector blocks the owner", async () => {
+    const fixture = await insertFixture();
+    const watcher = await registerSession(app, "match-block-watcher@example.com");
+    const blockedByOwner = await registerSession(app, "match-block-owner@example.com");
+    const blockedByWatcher = await registerSession(app, "match-block-watcher-side@example.com");
+    await startTrial(app, watcher.accessToken);
+    await createWish(app, watcher.accessToken, { clubId: fixture.clubId });
+
+    await saveOpenJersey(app, blockedByOwner.accessToken, fixture);
+    await saveOpenJersey(app, blockedByWatcher.accessToken, fixture);
+    expect((await listWishes(app, watcher.accessToken)).entries[0]?.matchCount).toBe(2);
+
+    await block(app, blockedByOwner.accessToken, watcher.user.id);
+    const afterOwnerBlock = await listWishes(app, watcher.accessToken);
+    expect(afterOwnerBlock.entries[0]?.matches.map((match) => match.ownerHandle)).toEqual([
+      blockedByWatcher.user.handle,
+    ]);
+
+    await block(app, watcher.accessToken, blockedByWatcher.user.id);
+    expect((await listWishes(app, watcher.accessToken)).entries[0]?.matchCount).toBe(0);
+  });
+
+  it("never matches the Collector's own jerseys", async () => {
     const fixture = await insertFixture();
     const owner = await registerSession(app, "match-own-save@example.com");
     await startTrial(app, owner.accessToken);
+    await createWish(app, owner.accessToken, { clubId: fixture.clubId, type: "home" });
 
-    await app.inject({
-      method: "POST",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${owner.accessToken}` },
-      payload: { clubId: fixture.clubId, type: "home" },
-    });
+    await saveOpenJersey(app, owner.accessToken, fixture);
 
-    const ownJersey = await saveJersey(app, owner.accessToken, fixture);
-    await app.inject({
-      method: "PATCH",
-      url: `/v1/collection/jerseys/${ownJersey.id}/bidding`,
-      headers: { authorization: `Bearer ${owner.accessToken}` },
-      payload: { biddingEnabled: true },
-    });
-
-    const listResponse = await app.inject({
-      method: "GET",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${owner.accessToken}` },
-    });
-
-    const listed = wishlistEntriesSchema.parse(JSON.parse(listResponse.body));
-    expect(listed.entries[0]?.matchedJerseyId).toBeNull();
+    const listed = await listWishes(app, owner.accessToken);
+    expect(listed.entries[0]?.matchCount).toBe(0);
+    expect(await unseenCount(app, owner.accessToken)).toBe(0);
   });
 
-  it("excludes closed copies (bidding disabled)", async () => {
+  it("excludes closed copies and seed Kits linked on a UserJersey", async () => {
     const fixture = await insertFixture();
-    const watcher = await registerSession(app, "match-closed@example.com");
-    const peer = await registerSession(app, "match-closed-peer@example.com");
+    const watcher = await registerSession(app, "match-excluded-watcher@example.com");
+    const peer = await registerSession(app, "match-excluded-peer@example.com");
     await startTrial(app, watcher.accessToken);
-
-    await app.inject({
-      method: "POST",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${watcher.accessToken}` },
-      payload: { clubId: fixture.clubId, type: "home" },
-    });
+    await createWish(app, watcher.accessToken, { clubId: fixture.clubId, type: "home" });
 
     await saveJersey(app, peer.accessToken, fixture);
-
-    const listResponse = await app.inject({
-      method: "GET",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${watcher.accessToken}` },
-    });
-
-    const listed = wishlistEntriesSchema.parse(JSON.parse(listResponse.body));
-    expect(listed.entries[0]?.matchedJerseyId).toBeNull();
-  });
-
-  it("excludes seed Kits linked on UserJersey", async () => {
-    const fixture = await insertFixture();
-    const watcher = await registerSession(app, "match-seed-kit@example.com");
-    const peer = await registerSession(app, "match-seed-kit-peer@example.com");
-    await startTrial(app, watcher.accessToken);
-
-    await app.inject({
-      method: "POST",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${watcher.accessToken}` },
-      payload: { clubId: fixture.clubId, type: "home" },
-    });
-
-    const peerJersey = await saveJersey(app, peer.accessToken, fixture, {
+    const seedJersey = await saveJersey(app, peer.accessToken, fixture, {
       catalogKitId: fixture.catalogKitId,
     });
-    await app.inject({
-      method: "PATCH",
-      url: `/v1/collection/jerseys/${peerJersey.id}/bidding`,
-      headers: { authorization: `Bearer ${peer.accessToken}` },
-      payload: { biddingEnabled: true },
-    });
+    await setBidding(app, peer.accessToken, seedJersey.id, true);
 
-    const listResponse = await app.inject({
-      method: "GET",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${watcher.accessToken}` },
-    });
-
-    const listed = wishlistEntriesSchema.parse(JSON.parse(listResponse.body));
-    expect(listed.entries[0]?.matchedJerseyId).toBeNull();
+    expect((await listWishes(app, watcher.accessToken)).entries[0]?.matchCount).toBe(0);
   });
 
-  it("hides match hits after entitlement lapse while rows remain", async () => {
+  it("marks the returned Matches seen after the list responds, so the badge goes from n to 0", async () => {
+    const fixture = await insertFixture();
+    const watcher = await registerSession(app, "match-seen-watcher@example.com");
+    const peer = await registerSession(app, "match-seen-peer@example.com");
+    await startTrial(app, watcher.accessToken);
+    await createWish(app, watcher.accessToken, { clubId: fixture.clubId });
+    await saveOpenJersey(app, peer.accessToken, fixture);
+    await saveOpenJersey(app, peer.accessToken, fixture);
+
+    expect(await unseenCount(app, watcher.accessToken)).toBe(2);
+
+    const first = await listWishes(app, watcher.accessToken);
+    expect(first.entries[0]?.matches.map((match) => match.seen)).toEqual([false, false]);
+    expect(first.entries[0]?.unseenCount).toBe(2);
+    expect(first.unseenCount).toBe(2);
+
+    const second = await listWishes(app, watcher.accessToken);
+    expect(second.entries[0]?.matches.map((match) => match.seen)).toEqual([true, true]);
+    expect(second.entries[0]?.unseenCount).toBe(0);
+    expect(second.unseenCount).toBe(0);
+    expect(await unseenCount(app, watcher.accessToken)).toBe(0);
+  });
+
+  it("never marks anything seen on the badge request alone", async () => {
+    const fixture = await insertFixture();
+    const watcher = await registerSession(app, "match-badge-watcher@example.com");
+    const peer = await registerSession(app, "match-badge-peer@example.com");
+    await startTrial(app, watcher.accessToken);
+    await createWish(app, watcher.accessToken, { clubId: fixture.clubId });
+    await saveOpenJersey(app, peer.accessToken, fixture);
+
+    expect(await unseenCount(app, watcher.accessToken)).toBe(1);
+    expect(await unseenCount(app, watcher.accessToken)).toBe(1);
+
+    const listed = await listWishes(app, watcher.accessToken);
+    expect(listed.entries[0]?.matches[0]?.seen).toBe(false);
+  });
+
+  it("requires a session for the badge request", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/wishlist/matches/unseen-count",
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("recomputes the Matches of an edited wish and returns them unseen", async () => {
+    const fixture = await insertFixture();
+    const watcher = await registerSession(app, "match-edit-watcher@example.com");
+    const peer = await registerSession(app, "match-edit-peer@example.com");
+    await startTrial(app, watcher.accessToken);
+    const wish = await createWish(app, watcher.accessToken, {
+      clubId: fixture.clubId,
+      size: "m",
+    });
+    await saveOpenJersey(app, peer.accessToken, fixture, { size: "m" });
+    const large = await saveOpenJersey(app, peer.accessToken, fixture, { size: "l" });
+    expect((await listWishes(app, watcher.accessToken)).entries[0]?.matchCount).toBe(1);
+
+    const patchResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/wishlist/entries/${wish.id}`,
+      headers: auth(watcher.accessToken),
+      payload: { clubId: fixture.clubId, size: "l" },
+    });
+    expect(patchResponse.statusCode).toBe(200);
+    const updated = wishlistEntrySchema.parse(JSON.parse(patchResponse.body));
+    expect(updated.matches.map((match) => match.jerseyId)).toEqual([large.id]);
+    expect(updated.matches[0]?.seen).toBe(false);
+    expect(await unseenCount(app, watcher.accessToken)).toBe(1);
+  });
+
+  it("shows a new wish its existing Matches without marking them seen", async () => {
+    const fixture = await insertFixture();
+    const watcher = await registerSession(app, "match-create-watcher@example.com");
+    const peer = await registerSession(app, "match-create-peer@example.com");
+    await startTrial(app, watcher.accessToken);
+    const jersey = await saveOpenJersey(app, peer.accessToken, fixture);
+
+    const created = await createWish(app, watcher.accessToken, { clubId: fixture.clubId });
+
+    expect(created.matches.map((match) => match.jerseyId)).toEqual([jersey.id]);
+    expect(created.unseenCount).toBe(1);
+    expect(await unseenCount(app, watcher.accessToken)).toBe(1);
+  });
+
+  it("keeps the rows but shows no Matches and a zero badge after the entitlement lapses", async () => {
     const fixture = await insertFixture();
     const watcher = await registerSession(app, "match-lapse@example.com");
     const peer = await registerSession(app, "match-lapse-peer@example.com");
     await startTrial(app, watcher.accessToken);
-
-    const createResponse = await app.inject({
-      method: "POST",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${watcher.accessToken}` },
-      payload: { clubId: fixture.clubId, type: "home" },
-    });
-    const created = wishlistEntrySchema.parse(JSON.parse(createResponse.body));
-
-    const peerJersey = await saveJersey(app, peer.accessToken, fixture);
-    await app.inject({
-      method: "PATCH",
-      url: `/v1/collection/jerseys/${peerJersey.id}/bidding`,
-      headers: { authorization: `Bearer ${peer.accessToken}` },
-      payload: { biddingEnabled: true },
-    });
+    const created = await createWish(app, watcher.accessToken, { clubId: fixture.clubId });
+    await saveOpenJersey(app, peer.accessToken, fixture);
+    expect(await unseenCount(app, watcher.accessToken)).toBe(1);
 
     const { db, pool } = createDb(DATABASE_URL);
     await db.delete(entitlement).where(eq(entitlement.userId, watcher.user.id));
     await pool.end();
 
-    const listResponse = await app.inject({
-      method: "GET",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${watcher.accessToken}` },
-    });
-
-    const listed = wishlistEntriesSchema.parse(JSON.parse(listResponse.body));
+    const listed = await listWishes(app, watcher.accessToken);
     expect(listed.entries).toHaveLength(1);
     expect(listed.entries[0]?.id).toBe(created.id);
-    expect(listed.entries[0]?.matchedJerseyId).toBeNull();
+    expect(listed.entries[0]?.matches).toEqual([]);
+    expect(listed.entries[0]?.matchCount).toBe(0);
+    expect(listed.unseenCount).toBe(0);
+    expect(await unseenCount(app, watcher.accessToken)).toBe(0);
   });
 
-  it("does not expose another collector's wishlist hits", async () => {
+  it("does not expose another collector's Matches", async () => {
     const fixture = await insertFixture();
     const owner = await registerSession(app, "match-owner@example.com");
     const stranger = await registerSession(app, "match-stranger@example.com");
+    const peer = await registerSession(app, "match-owner-peer@example.com");
     await startTrial(app, owner.accessToken);
+    await createWish(app, owner.accessToken, { clubId: fixture.clubId });
+    await saveOpenJersey(app, peer.accessToken, fixture);
 
-    await app.inject({
-      method: "POST",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${owner.accessToken}` },
-      payload: { clubId: fixture.clubId, type: "home" },
-    });
-
-    const strangerList = await app.inject({
-      method: "GET",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${stranger.accessToken}` },
-    });
-
-    expect(strangerList.statusCode).toBe(200);
-    expect(wishlistEntriesSchema.parse(JSON.parse(strangerList.body)).entries).toHaveLength(0);
+    const strangerList = await listWishes(app, stranger.accessToken);
+    expect(strangerList.entries).toHaveLength(0);
+    expect(strangerList.unseenCount).toBe(0);
+    expect(await unseenCount(app, stranger.accessToken)).toBe(0);
   });
 
-  it("enqueues match processing on Collection Save without blocking the response", async () => {
+  it("stores the Matches of a saved jersey that is already open for bids", async () => {
     const fixture = await insertFixture();
-    const saver = await registerSession(app, "match-save-enqueue@example.com");
-    const started = Date.now();
+    const watcher = await registerSession(app, "match-save-watcher@example.com");
+    const saver = await registerSession(app, "match-save-saver@example.com");
+    await startTrial(app, watcher.accessToken);
+    const wish = await createWish(app, watcher.accessToken, { clubId: fixture.clubId });
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/v1/collection/jerseys/save",
-      headers: { authorization: `Bearer ${saver.accessToken}` },
-      payload: {
-        clubId: fixture.clubId,
-        seasonId: fixture.seasonId,
-        type: "home",
-        size: "m",
-        condition: "used",
-        photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
-      },
-    });
+    const jersey = await saveJersey(app, saver.accessToken, fixture);
+    const { db, pool } = createDb(DATABASE_URL);
+    await db.update(userJersey).set({ biddingEnabled: true }).where(eq(userJersey.id, jersey.id));
 
-    expect(response.statusCode).toBe(201);
-    expect(Date.now() - started).toBeLessThan(5_000);
+    await app
+      .get(MatchService, { strict: false })
+      .processSaveMatchJob({ savedUserJerseyId: jersey.id, saverUserId: saver.user.id });
+
+    const rows = await db
+      .select({ userJerseyId: wishlistMatch.userJerseyId, seen: wishlistMatch.seen })
+      .from(wishlistMatch)
+      .where(eq(wishlistMatch.wishlistEntryId, wish.id));
+    await pool.end();
+    expect(rows).toEqual([{ userJerseyId: jersey.id, seen: false }]);
+  });
+
+  it("carries over every pair the rule gives today as unseen, and nothing else", async () => {
+    const fixture = await insertFixture();
+    const watcher = await registerSession(app, "match-migrate-watcher@example.com");
+    const open = await registerSession(app, "match-migrate-open@example.com");
+    const closed = await registerSession(app, "match-migrate-closed@example.com");
+    const hidden = await registerSession(app, "match-migrate-private@example.com");
+    const blocked = await registerSession(app, "match-migrate-blocked@example.com");
+    await startTrial(app, watcher.accessToken);
+    const wish = await createWish(app, watcher.accessToken, { clubId: fixture.clubId });
+
+    const matching = await saveOpenJersey(app, open.accessToken, fixture);
+    await saveJersey(app, closed.accessToken, fixture);
+    const privateJersey = await saveOpenJersey(app, hidden.accessToken, fixture);
+    await patchPrivate(app, hidden.accessToken, privateJersey.id, true);
+    await saveOpenJersey(app, blocked.accessToken, fixture);
+    await block(app, blocked.accessToken, watcher.user.id);
+    await saveOpenJersey(app, watcher.accessToken, fixture);
 
     const { db, pool } = createDb(DATABASE_URL);
-    const [row] = await db
-      .select({ id: userJersey.id })
-      .from(userJersey)
-      .where(eq(userJersey.userId, saver.user.id))
-      .limit(1);
+    await db.execute(sql`DELETE FROM wishlist_match`);
+    const migrationSql = readFileSync(
+      path.join(migrationsFolder, "0041_wishlist_match.sql"),
+      "utf8",
+    );
+    for (const statement of migrationSql.split("--> statement-breakpoint")) {
+      await db.execute(sql.raw(statement));
+    }
+    const rows = await db
+      .select({
+        userJerseyId: wishlistMatch.userJerseyId,
+        wishlistEntryId: wishlistMatch.wishlistEntryId,
+        seen: wishlistMatch.seen,
+      })
+      .from(wishlistMatch)
+      .where(eq(wishlistMatch.wishlistEntryId, wish.id));
     await pool.end();
 
-    expect(row?.id).toBeDefined();
-  });
-
-  it("drops a peer jersey as a match hit once it is set private", async () => {
-    const fixture = await insertFixture();
-    const watcher = await registerSession(app, "match-private-watcher@example.com");
-    const peer = await registerSession(app, "match-private-peer@example.com");
-    await startTrial(app, watcher.accessToken);
-
-    await app.inject({
-      method: "POST",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${watcher.accessToken}` },
-      payload: {
-        clubId: fixture.clubId,
-        seasonId: fixture.seasonId,
-        type: "home",
-        size: "m",
-      },
-    });
-
-    const peerJersey = await saveJersey(app, peer.accessToken, fixture);
-    const enableResponse = await app.inject({
-      method: "PATCH",
-      url: `/v1/collection/jerseys/${peerJersey.id}/bidding`,
-      headers: { authorization: `Bearer ${peer.accessToken}` },
-      payload: { biddingEnabled: true },
-    });
-    expect(enableResponse.statusCode).toBe(200);
-
-    const beforeResponse = await app.inject({
-      method: "GET",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${watcher.accessToken}` },
-    });
-    const before = wishlistEntriesSchema.parse(JSON.parse(beforeResponse.body));
-    expect(before.entries[0]?.matchedJerseyId).toBe(peerJersey.id);
-
-    await patchPrivate(app, peer.accessToken, peerJersey.id, true);
-
-    const afterResponse = await app.inject({
-      method: "GET",
-      url: "/v1/wishlist/entries",
-      headers: { authorization: `Bearer ${watcher.accessToken}` },
-    });
-    const after = wishlistEntriesSchema.parse(JSON.parse(afterResponse.body));
-    expect(after.entries[0]?.matchedJerseyId).toBeNull();
-  });
-
-  it("isWishlistMatchCandidate rejects private: true", () => {
-    const base: WishlistMatchJersey = {
-      ownerUserId: "owner-1",
-      clubId: "00000000-0000-0000-0000-000000000001",
-      nationalTeamId: null,
-      seasonId: "00000000-0000-0000-0000-000000000002",
-      type: "home",
-      size: "m",
-      biddingEnabled: true,
-      private: false,
-      catalogKitId: null,
-    };
-
-    expect(isWishlistMatchCandidate(base, "watcher-1")).toBe(true);
-    expect(isWishlistMatchCandidate({ ...base, private: true }, "watcher-1")).toBe(false);
-    expect(isWishlistMatchCandidate(base, base.ownerUserId)).toBe(false);
+    expect(rows).toEqual([{ userJerseyId: matching.id, wishlistEntryId: wish.id, seen: false }]);
   });
 });

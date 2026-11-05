@@ -1,9 +1,18 @@
 import type { WishlistEntry } from "@kit/api-contract";
 import { JERSEY_SIZES, KIT_TYPES } from "@kit/domain";
 import { type Href, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { fetchClubSeasons } from "@/api/catalog";
+import { resolvePhotoUrl } from "@/api/collection";
 import {
   createWishlistEntry,
   deleteWishlistEntry,
@@ -22,20 +31,19 @@ import { useIsPlaceHomeLive } from "@/navigation/place-homes";
 import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
 import { usePlaceOverview } from "@/navigation/use-place-overview";
 import { useTypography } from "@/theme/brand-fonts";
-import { space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
 import { useStableSafeAreaInsets } from "@/theme/use-stable-safe-area-insets";
 import { useTheme } from "@/theme/use-theme";
+import { useWishlistBadge } from "@/wishlist/wishlist-badge";
+import { buildWishlistViewModel } from "@/wishlist/wishlist-view-model";
 import {
   applyWishlistSideSelection,
   buildWishlistWritePayload,
   canSaveWishlistEntry,
   emptyWishlistCriteria,
-  hasWishlistHit,
-  hitRowAccessibilityLabel,
-  manageRowAccessibilityLabel,
+  resolveWishlistEmptyActionLabel,
   resolveWishlistEmptyBody,
   resolveWishlistEmptyTitle,
-  resolveWishlistHitRoute,
   resolveWishlistSheetTitle,
   seedCriteriaForEdit,
   WISHLIST_AND_HELPER_COPY,
@@ -50,6 +58,7 @@ export function WishlistScreen() {
   const theme = useTheme();
   const typography = useTypography();
   const router = useRouter();
+  const { refreshUnseenCount } = useWishlistBadge();
   const insets = useStableSafeAreaInsets();
   const { accessToken, requestPremiumAccess, closePaywall } = useAuth();
 
@@ -65,6 +74,7 @@ export function WishlistScreen() {
   const [seasonPickerOpen, setSeasonPickerOpen] = useState(false);
   const [seasonOptions, setSeasonOptions] = useState<Array<{ id: string; label: string }>>([]);
   const [loadingSeasons, setLoadingSeasons] = useState(false);
+  const viewModel = useMemo(() => buildWishlistViewModel(entries), [entries]);
 
   useEffect(() => {
     if (!cachedWishlist) {
@@ -87,10 +97,12 @@ export function WishlistScreen() {
       const response = await fetchWishlistEntries(accessToken);
       setEntries(response.entries);
       writePlaceOverview("wishlist", { entries: response.entries });
+      // Reading the list marked its Matches seen on the server; the tab badge follows.
+      void refreshUnseenCount();
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, refreshUnseenCount]);
 
   const loadSeasonOptions = useCallback(
     async (clubId: string) => {
@@ -210,13 +222,9 @@ export function WishlistScreen() {
     await loadEntries();
   };
 
-  const handleHitPress = (entry: WishlistEntry) => {
-    if (!hasWishlistHit(entry) || !entry.matchedJerseyId) {
-      return;
-    }
-    // SAFETY: handleHitPress already required a hit + matchedJerseyId; the helper
-    // returns `/search/${id}`, which is a typed Expo Router Href.
-    router.push(resolveWishlistHitRoute(entry.matchedJerseyId) as Href);
+  const handleThumbPress = (route: string) => {
+    // SAFETY: the view-model builds `/search/${jerseyId}`, a typed Expo Router Href.
+    router.push(route as Href);
   };
 
   const sheetTitle = resolveWishlistSheetTitle(mode);
@@ -237,13 +245,13 @@ export function WishlistScreen() {
           <View style={styles.listBody}>
             {loading ? (
               <ActivityIndicator color={theme.fillPrimary} />
-            ) : entries.length === 0 ? (
+            ) : viewModel.page === "empty" ? (
               <EmptyState
                 title={resolveWishlistEmptyTitle()}
                 body={resolveWishlistEmptyBody()}
                 action={
                   <Button
-                    label="Tilføj"
+                    label={resolveWishlistEmptyActionLabel()}
                     testID="wishlist-add"
                     variant="primary"
                     width="fill"
@@ -254,55 +262,121 @@ export function WishlistScreen() {
             ) : (
               <>
                 <ScrollView>
-                  {entries.map((entry, index) => {
-                    const isHit = hasWishlistHit(entry);
-                    const rowLabel = isHit
-                      ? hitRowAccessibilityLabel(entry.name, entry.meta)
-                      : manageRowAccessibilityLabel(entry.name, entry.meta);
-
+                  {viewModel.rows.map((row, index) => {
+                    const entry = entries[index];
                     return (
                       <View
-                        key={entry.id}
+                        key={row.id}
                         style={[
-                          styles.manageRow,
-                          isHit && { backgroundColor: theme.fillSecondary },
-                          index < entries.length - 1 && {
+                          styles.wishRow,
+                          index < viewModel.rows.length - 1 && {
                             borderBottomWidth: StyleSheet.hairlineWidth,
                             borderBottomColor: theme.borderSubtle,
                           },
                         ]}
                       >
-                        <Pressable
-                          style={styles.manageMain}
-                          accessible
-                          accessibilityRole="button"
-                          accessibilityLabel={rowLabel}
-                          disabled={!isHit}
-                          onPress={() => handleHitPress(entry)}
-                        >
-                          <Text
-                            style={[typography.body, { color: theme.contentPrimary }]}
-                            importantForAccessibility="no-hide-descendants"
+                        <View style={styles.manageRow}>
+                          <View
+                            style={styles.manageMain}
+                            accessible
+                            accessibilityLabel={row.accessibilityLabel}
                           >
-                            {entry.name}
+                            <Text
+                              style={[typography.label, { color: theme.contentPrimary }]}
+                              importantForAccessibility="no-hide-descendants"
+                            >
+                              {row.title}
+                            </Text>
+                            <Text
+                              style={[typography.mono, { color: theme.contentMuted }]}
+                              importantForAccessibility="no-hide-descendants"
+                            >
+                              {row.facetLine}
+                            </Text>
+                          </View>
+                          {row.badge.kind === "new" ? (
+                            <View style={[styles.newPill, { backgroundColor: theme.fillPrimary }]}>
+                              <Text
+                                style={[typography.captionSm, { color: theme.contentInverse }]}
+                                importantForAccessibility="no-hide-descendants"
+                              >
+                                {row.badge.label}
+                              </Text>
+                            </View>
+                          ) : row.badge.kind === "count" ? (
+                            <Text
+                              style={[typography.mono, { color: theme.contentMuted }]}
+                              importantForAccessibility="no-hide-descendants"
+                            >
+                              {row.badge.label}
+                            </Text>
+                          ) : null}
+                          {entry ? (
+                            <>
+                              <IconButton
+                                name="Rediger"
+                                icon="create-outline"
+                                onPress={() => void openEditForm(entry)}
+                              />
+                              <IconButton
+                                name="Slet"
+                                icon="trash-outline"
+                                onPress={() => void handleDelete(entry.id)}
+                              />
+                            </>
+                          ) : null}
+                        </View>
+                        {row.emptyLabel ? (
+                          <Text style={[typography.caption, { color: theme.contentMuted }]}>
+                            {row.emptyLabel}
                           </Text>
-                          <Text
-                            style={[typography.mono, { color: theme.contentMuted }]}
-                            importantForAccessibility="no-hide-descendants"
+                        ) : (
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.thumbRow}
                           >
-                            {entry.meta}
-                          </Text>
-                        </Pressable>
-                        <IconButton
-                          name="Rediger"
-                          icon="create-outline"
-                          onPress={() => void openEditForm(entry)}
-                        />
-                        <IconButton
-                          name="Slet"
-                          icon="trash-outline"
-                          onPress={() => void handleDelete(entry.id)}
-                        />
+                            {row.thumbs.map((thumb) => (
+                              <Pressable
+                                key={thumb.jerseyId}
+                                style={styles.thumb}
+                                accessibilityRole="button"
+                                accessibilityLabel={thumb.accessibilityLabel}
+                                onPress={() => handleThumbPress(thumb.route)}
+                              >
+                                {thumb.thumbUrl ? (
+                                  <Image
+                                    source={{
+                                      uri: resolvePhotoUrl(thumb.thumbUrl),
+                                      headers: accessToken
+                                        ? { Authorization: `Bearer ${accessToken}` }
+                                        : undefined,
+                                    }}
+                                    style={[
+                                      styles.thumbImage,
+                                      { backgroundColor: theme.fillSecondary },
+                                    ]}
+                                    resizeMode="cover"
+                                  />
+                                ) : (
+                                  <View
+                                    style={[
+                                      styles.thumbImage,
+                                      { backgroundColor: theme.fillSecondary },
+                                    ]}
+                                  />
+                                )}
+                                <Text
+                                  style={[typography.captionSm, { color: theme.contentSecondary }]}
+                                  numberOfLines={1}
+                                  importantForAccessibility="no-hide-descendants"
+                                >
+                                  {thumb.handle}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </ScrollView>
+                        )}
                       </View>
                     );
                   })}
@@ -449,11 +523,31 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: space.gapSm,
   },
+  wishRow: {
+    gap: space.gapSm,
+    paddingVertical: space.insetSm,
+  },
+  newPill: {
+    borderRadius: radius.pill,
+    paddingHorizontal: space.insetSm,
+    paddingVertical: 2,
+  },
+  thumbRow: {
+    gap: space.gapSm,
+  },
+  thumb: {
+    width: 84,
+    gap: 4,
+  },
+  thumbImage: {
+    width: 84,
+    height: 105,
+    borderRadius: radius.sm,
+  },
   manageRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.gapSm,
-    paddingVertical: space.insetSm,
   },
   manageMain: {
     flex: 1,

@@ -3,6 +3,7 @@ import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { useCallback, useEffect, useState } from "react";
 import { DynamicColorIOS, Platform } from "react-native";
 import { fetchConversations } from "@/api/conversations";
+import { fetchWishlistUnseenCount } from "@/api/wishlist";
 import { useAuth } from "@/auth/AuthProvider";
 import { useTabBarIconSrc } from "@/components/tab-bar-icon";
 import { InboxChromeProvider } from "@/inbox/inbox-chrome";
@@ -15,6 +16,7 @@ import {
 import { PlaceSwipeProvider } from "@/navigation/place-swipe-context";
 import { useAppearanceOptional } from "@/theme/appearance";
 import { getThemeColors, type ThemeColors } from "@/theme/tokens";
+import { WishlistBadgeProvider } from "@/wishlist/wishlist-badge";
 
 /**
  * Bottom navigation (docs/design-system.md → Tab bar). Five native tabs so iOS 26
@@ -25,6 +27,7 @@ export default function TabsLayout() {
   const { accessToken } = useAuth();
   const appearance = useAppearanceOptional();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [wishlistUnseenCount, setWishlistUnseenCount] = useState(0);
 
   const refreshUnreadCount = useCallback(async () => {
     if (!accessToken) {
@@ -40,10 +43,24 @@ export default function TabsLayout() {
     }
   }, [accessToken]);
 
+  const refreshWishlistUnseenCount = useCallback(async () => {
+    if (!accessToken) {
+      setWishlistUnseenCount(0);
+      return;
+    }
+
+    try {
+      setWishlistUnseenCount(await fetchWishlistUnseenCount(accessToken));
+    } catch {
+      setWishlistUnseenCount(0);
+    }
+  }, [accessToken]);
+
   useFocusEffect(
     useCallback(() => {
       void refreshUnreadCount();
-    }, [refreshUnreadCount]),
+      void refreshWishlistUnseenCount();
+    }, [refreshUnreadCount, refreshWishlistUnseenCount]),
   );
 
   useEffect(() => {
@@ -76,57 +93,62 @@ export default function TabsLayout() {
 
   return (
     <InboxChromeProvider refreshUnreadCount={refreshUnreadCount}>
-      <PlaceSwipeProvider>
-        <NativeTabs tintColor={tint} labelStyle={{ color: label }}>
-          <NativeTabs.Trigger
-            name="collection"
-            disableAutomaticContentInsets
-            contentStyle={tabContentStyle}
-          >
-            <NativeTabs.Trigger.Label>Samling</NativeTabs.Trigger.Label>
-            <NativeTabs.Trigger.Icon renderingMode="template" src={collectionIcon} />
-          </NativeTabs.Trigger>
+      <WishlistBadgeProvider refreshUnseenCount={refreshWishlistUnseenCount}>
+        <PlaceSwipeProvider>
+          <NativeTabs tintColor={tint} labelStyle={{ color: label }}>
+            <NativeTabs.Trigger
+              name="collection"
+              disableAutomaticContentInsets
+              contentStyle={tabContentStyle}
+            >
+              <NativeTabs.Trigger.Label>Samling</NativeTabs.Trigger.Label>
+              <NativeTabs.Trigger.Icon renderingMode="template" src={collectionIcon} />
+            </NativeTabs.Trigger>
 
-          <NativeTabs.Trigger
-            name="inbox"
-            disableAutomaticContentInsets
-            contentStyle={tabContentStyle}
-          >
-            <NativeTabs.Trigger.Label>Indbakke</NativeTabs.Trigger.Label>
-            <NativeTabs.Trigger.Icon renderingMode="template" src={inboxIcon} />
-            {unreadCount > 0 ? (
-              <NativeTabs.Trigger.Badge>{String(unreadCount)}</NativeTabs.Trigger.Badge>
-            ) : null}
-          </NativeTabs.Trigger>
+            <NativeTabs.Trigger
+              name="inbox"
+              disableAutomaticContentInsets
+              contentStyle={tabContentStyle}
+            >
+              <NativeTabs.Trigger.Label>Indbakke</NativeTabs.Trigger.Label>
+              <NativeTabs.Trigger.Icon renderingMode="template" src={inboxIcon} />
+              {unreadCount > 0 ? (
+                <NativeTabs.Trigger.Badge>{String(unreadCount)}</NativeTabs.Trigger.Badge>
+              ) : null}
+            </NativeTabs.Trigger>
 
-          <NativeTabs.Trigger
-            name="search"
-            disableAutomaticContentInsets
-            contentStyle={tabContentStyle}
-          >
-            <NativeTabs.Trigger.Label>Søg</NativeTabs.Trigger.Label>
-            <NativeTabs.Trigger.Icon renderingMode="template" src={searchIcon} />
-          </NativeTabs.Trigger>
+            <NativeTabs.Trigger
+              name="search"
+              disableAutomaticContentInsets
+              contentStyle={tabContentStyle}
+            >
+              <NativeTabs.Trigger.Label>Søg</NativeTabs.Trigger.Label>
+              <NativeTabs.Trigger.Icon renderingMode="template" src={searchIcon} />
+            </NativeTabs.Trigger>
 
-          <NativeTabs.Trigger
-            name="wishlist"
-            disableAutomaticContentInsets
-            contentStyle={tabContentStyle}
-          >
-            <NativeTabs.Trigger.Label>Ønsker</NativeTabs.Trigger.Label>
-            <NativeTabs.Trigger.Icon renderingMode="template" src={wishlistIcon} />
-          </NativeTabs.Trigger>
+            <NativeTabs.Trigger
+              name="wishlist"
+              disableAutomaticContentInsets
+              contentStyle={tabContentStyle}
+            >
+              <NativeTabs.Trigger.Label>Ønsker</NativeTabs.Trigger.Label>
+              <NativeTabs.Trigger.Icon renderingMode="template" src={wishlistIcon} />
+              {wishlistUnseenCount > 0 ? (
+                <NativeTabs.Trigger.Badge>{String(wishlistUnseenCount)}</NativeTabs.Trigger.Badge>
+              ) : null}
+            </NativeTabs.Trigger>
 
-          <NativeTabs.Trigger
-            name="profile"
-            disableAutomaticContentInsets
-            contentStyle={tabContentStyle}
-          >
-            <NativeTabs.Trigger.Label>Profil</NativeTabs.Trigger.Label>
-            <NativeTabs.Trigger.Icon renderingMode="template" src={profileIcon} />
-          </NativeTabs.Trigger>
-        </NativeTabs>
-      </PlaceSwipeProvider>
+            <NativeTabs.Trigger
+              name="profile"
+              disableAutomaticContentInsets
+              contentStyle={tabContentStyle}
+            >
+              <NativeTabs.Trigger.Label>Profil</NativeTabs.Trigger.Label>
+              <NativeTabs.Trigger.Icon renderingMode="template" src={profileIcon} />
+            </NativeTabs.Trigger>
+          </NativeTabs>
+        </PlaceSwipeProvider>
+      </WishlistBadgeProvider>
     </InboxChromeProvider>
   );
 }

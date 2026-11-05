@@ -528,12 +528,17 @@ export {
   identitySocialLoginSchema,
 } from "./identity/social.js";
 export {
+  WISHLIST_MATCH_CAP,
   type WishlistEntries,
   type WishlistEntry,
   type WishlistEntryIdParam,
   type WishlistEntryWrite,
+  type WishlistMatch,
+  type WishlistUnseenCount,
   wishlistEntriesSchema,
   wishlistEntryIdParamSchema,
   wishlistEntrySchema,
   wishlistEntryWriteSchema,
+  wishlistMatchSchema,
+  wishlistUnseenCountSchema,
 } from "./wishlist/entries.js";

@@ -127,20 +127,12 @@ export function manageRowAccessibilityLabel(name: string, meta: string): string 
   return `${name}, ${meta}`;
 }
 
-export function hasWishlistHit(entry: WishlistEntry): boolean {
-  return entry.matchedJerseyId != null;
-}
-
-export function hitRowAccessibilityLabel(name: string, meta: string): string {
-  return `${name}, ${meta}. Match — tryk for at se trøjen.`;
-}
-
-export function resolveWishlistHitRoute(matchedJerseyId: string): string {
-  return `/search/${matchedJerseyId}`;
-}
-
 export function resolveWishlistEmptyTitle(): string {
   return "Ingen ønsker endnu";
+}
+
+export function resolveWishlistEmptyActionLabel(): string {
+  return "Nyt ønske";
 }
 
 export function resolveWishlistEmptyBody(): string {

@@ -1,10 +1,13 @@
 import {
+  WISHLIST_MATCH_CAP,
   type WishlistEntries,
   type WishlistEntry,
   type WishlistEntryWrite,
+  type WishlistUnseenCount,
   wishlistEntriesSchema,
   wishlistEntrySchema,
   wishlistEntryWriteSchema,
+  wishlistUnseenCountSchema,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import { catalogLabel, club, nationalTeam, season, wishlistEntry } from "@kit/db";
@@ -27,7 +30,7 @@ import {
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { BillingService } from "../billing/billing.service.js";
 import { DB } from "../db/db.module.js";
-import { MatchService } from "../match/match.service.js";
+import { type EntryMatches, MatchService } from "../match/match.service.js";
 
 type WishlistRow = {
   id: string;
@@ -54,6 +57,9 @@ export class WishlistService {
 
   async listEntries(userId: string, locale: LabelLocale = "da"): Promise<WishlistEntries> {
     const entitlement = await this.billingService.getEntitlementForUser(userId);
+    if (entitlement.live) {
+      await this.matchService.syncMatchesForOwner(userId);
+    }
 
     const rows = await this.db
       .select({
@@ -69,11 +75,38 @@ export class WishlistService {
       .where(eq(wishlistEntry.userId, userId))
       .orderBy(asc(wishlistEntry.createdAt));
 
+    const { byEntry, returnedMatchIds } = entitlement.live
+      ? await this.matchService.loadMatchesForEntries(
+          rows.map((row) => row.id),
+          WISHLIST_MATCH_CAP,
+        )
+      : { byEntry: new Map<string, EntryMatches>(), returnedMatchIds: [] };
+
     const entries: WishlistEntry[] = await Promise.all(
-      rows.map((row) => this.toEntryResponse(row, locale, entitlement.live)),
+      rows.map((row) => this.toEntryResponse(row, locale, byEntry.get(row.id))),
     );
 
-    return wishlistEntriesSchema.parse({ entries });
+    const response = wishlistEntriesSchema.parse({
+      entries,
+      unseenCount: entitlement.live ? await this.matchService.countUnseenForOwner(userId) : 0,
+    });
+
+    // Seen only once the response is built, so this response still reports them as new.
+    await this.matchService.markSeen(returnedMatchIds);
+
+    return response;
+  }
+
+  async unseenMatchCount(userId: string): Promise<WishlistUnseenCount> {
+    const entitlement = await this.billingService.getEntitlementForUser(userId);
+    if (!entitlement.live) {
+      return wishlistUnseenCountSchema.parse({ unseenCount: 0 });
+    }
+
+    await this.matchService.syncMatchesForOwner(userId);
+    return wishlistUnseenCountSchema.parse({
+      unseenCount: await this.matchService.countUnseenForOwner(userId),
+    });
   }
 
   async createEntry(userId: string, rawBody: unknown, locale: LabelLocale): Promise<WishlistEntry> {
@@ -106,7 +139,7 @@ export class WishlistService {
       throw new BadRequestException("Could not create wishlist entry");
     }
 
-    return this.toEntryResponse(inserted, locale, true);
+    return this.toEntryResponseWithMatches(inserted, locale);
   }
 
   async updateEntry(
@@ -120,6 +153,7 @@ export class WishlistService {
     await this.validateCatalogIds(body);
 
     const values = this.writeToValues(body);
+    await this.matchService.deleteMatchesOfEntry(entryId);
 
     const [updated] = await this.db
       .update(wishlistEntry)
@@ -146,7 +180,7 @@ export class WishlistService {
       throw new NotFoundException("Wishlist entry not found");
     }
 
-    return this.toEntryResponse(updated, locale, true);
+    return this.toEntryResponseWithMatches(updated, locale);
   }
 
   async deleteEntry(userId: string, entryId: string): Promise<void> {
@@ -241,10 +275,20 @@ export class WishlistService {
     }
   }
 
+  /** Create and update: the row with the Matches it finds now. Nothing is marked seen. */
+  private async toEntryResponseWithMatches(
+    row: WishlistRow,
+    locale: LabelLocale,
+  ): Promise<WishlistEntry> {
+    await this.matchService.syncMatchesForOwner(row.userId);
+    const { byEntry } = await this.matchService.loadMatchesForEntries([row.id], WISHLIST_MATCH_CAP);
+    return this.toEntryResponse(row, locale, byEntry.get(row.id));
+  }
+
   private async toEntryResponse(
     row: WishlistRow,
     locale: LabelLocale,
-    entitlementLive: boolean,
+    entryMatches: EntryMatches = { matches: [], matchCount: 0, unseenCount: 0 },
   ): Promise<WishlistEntry> {
     const clubLabel = row.clubId ? await this.resolveEntityLabel("club", row.clubId, locale) : null;
     const nationalTeamLabel = row.nationalTeamId
@@ -269,18 +313,6 @@ export class WishlistService {
       throw new BadRequestException("Wishlist entry has no criteria");
     }
 
-    const matchedJerseyId = await this.matchService.resolveMatchedJerseyId(
-      row.userId,
-      {
-        clubId: row.clubId,
-        nationalTeamId: row.nationalTeamId,
-        seasonId: row.seasonId,
-        type: row.type,
-        size: row.size,
-      },
-      entitlementLive,
-    );
-
     return wishlistEntrySchema.parse({
       id: row.id,
       name,
@@ -295,7 +327,7 @@ export class WishlistService {
       typeLabel,
       size: row.size,
       sizeLabel,
-      matchedJerseyId,
+      ...entryMatches,
     });
   }
 

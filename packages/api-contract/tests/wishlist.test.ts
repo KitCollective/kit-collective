@@ -50,7 +50,9 @@ describe("wishlistEntrySchema", () => {
       typeLabel: "Hjemme",
       size: "m" as const,
       sizeLabel: "M",
-      matchedJerseyId: null,
+      matches: [],
+      matchCount: 0,
+      unseenCount: 0,
     };
     expect(wishlistEntrySchema.parse(payload)).toEqual(payload);
   });
@@ -74,9 +76,12 @@ describe("wishlistEntriesSchema", () => {
           typeLabel: null,
           size: null,
           sizeLabel: null,
-          matchedJerseyId: null,
+          matches: [],
+          matchCount: 0,
+          unseenCount: 0,
         },
       ],
+      unseenCount: 0,
     };
     expect(wishlistEntriesSchema.parse(payload)).toEqual(payload);
   });
