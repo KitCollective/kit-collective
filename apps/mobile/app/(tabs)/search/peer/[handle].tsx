@@ -23,7 +23,7 @@ import {
 import { useAuth } from "@/auth/AuthProvider";
 import { Sheet } from "@/components/catalog-ui";
 import { JerseyTile } from "@/components/jersey-tile";
-import { DrillHeader, PeerIdentityCard, ProfileSurfaceGroup } from "@/components/profile-ui";
+import { DrillHeader, PeerIdentityCard } from "@/components/profile-ui";
 import { Button, EmptyState, IconButton } from "@/components/ui";
 import { peerThreadHref } from "@/inbox/thread-view-model";
 import { sitsAboveForeignJersey } from "@/search/foreign-jersey-route";
@@ -95,6 +95,10 @@ export default function PeerProfileScreen() {
     [profile],
   );
 
+  // Se som andre: the Collector looks at their own Peer Profil. No Rapportér, Blokér or Skriv besked,
+  // and the tiles do not open the foreign jersey route, which reads their own jersey as not found.
+  const isOwnView = profile !== null && user?.id === profile.id;
+
   const photoHeaders = accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined;
 
   const avatarHeaders =
@@ -165,7 +169,7 @@ export default function PeerProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.fillSecondary }]}>
+      <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
         <ActivityIndicator color={theme.fillPrimary} />
       </View>
     );
@@ -173,7 +177,7 @@ export default function PeerProfileScreen() {
 
   if (!profile) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+      <View style={[styles.container, { backgroundColor: theme.canvas }]}>
         <View style={{ paddingTop: insets.top }}>
           <DrillHeader title="Profil" onBack={() => router.back()} />
         </View>
@@ -187,17 +191,19 @@ export default function PeerProfileScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader
           title="Profil"
           onBack={() => router.back()}
           trailing={
-            <IconButton
-              name="Flere handlinger"
-              icon="ellipsis-horizontal"
-              onPress={() => setOverflowOpen(true)}
-            />
+            isOwnView ? undefined : (
+              <IconButton
+                name="Flere handlinger"
+                icon="ellipsis-horizontal"
+                onPress={() => setOverflowOpen(true)}
+              />
+            )
           }
         />
       </View>
@@ -213,16 +219,14 @@ export default function PeerProfileScreen() {
         ]}
         ListHeaderComponent={
           <View style={styles.header}>
-            <ProfileSurfaceGroup>
-              <PeerIdentityCard
-                handle={profile.handle}
-                locationCaption={locationCaption}
-                aboutMe={profile.aboutMe}
-                avatarUri={resolvePeerAvatarUrl(profile.avatarUrl)}
-                avatarHeaders={avatarHeaders}
-              />
-            </ProfileSurfaceGroup>
-            {user?.id === profile.id ? null : (
+            <PeerIdentityCard
+              handle={profile.handle}
+              locationCaption={locationCaption}
+              aboutMe={profile.aboutMe}
+              avatarUri={resolvePeerAvatarUrl(profile.avatarUrl)}
+              avatarHeaders={avatarHeaders}
+            />
+            {isOwnView ? null : (
               <Button
                 label="Skriv besked"
                 testID="peer-profile-write"
@@ -246,30 +250,32 @@ export default function PeerProfileScreen() {
               clubLabel={item.clubLabel}
               seasonLabel={item.seasonLabel}
               typeLabel={KIT_TYPE_LABELS_DA[item.type]}
-              onPress={() => router.push(`/(tabs)/search/${item.id}`)}
+              onPress={isOwnView ? undefined : () => router.push(`/(tabs)/search/${item.id}`)}
             />
           </View>
         )}
       />
 
-      <Sheet visible={overflowOpen} title="Handlinger" onDismiss={() => setOverflowOpen(false)}>
-        <View style={styles.overflowActions}>
-          <Button
-            label="Rapportér"
-            variant="secondary"
-            width="fill"
-            disabled={moderationBusy}
-            onPress={handleReport}
-          />
-          <Button
-            label="Blokér"
-            variant="destructive"
-            width="fill"
-            disabled={moderationBusy}
-            onPress={handleBlock}
-          />
-        </View>
-      </Sheet>
+      {isOwnView ? null : (
+        <Sheet visible={overflowOpen} title="Handlinger" onDismiss={() => setOverflowOpen(false)}>
+          <View style={styles.overflowActions}>
+            <Button
+              label="Rapportér"
+              variant="secondary"
+              width="fill"
+              disabled={moderationBusy}
+              onPress={handleReport}
+            />
+            <Button
+              label="Blokér"
+              variant="destructive"
+              width="fill"
+              disabled={moderationBusy}
+              onPress={handleBlock}
+            />
+          </View>
+        </Sheet>
+      )}
     </View>
   );
 }

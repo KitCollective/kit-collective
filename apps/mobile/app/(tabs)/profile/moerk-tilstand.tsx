@@ -7,8 +7,8 @@ import { useAuth } from "@/auth/AuthProvider";
 import {
   DrillHeader,
   ListSelectRow,
+  ProfileFlatSection,
   ProfileRowDivider,
-  ProfileSurfaceGroup,
 } from "@/components/profile-ui";
 import { appearanceLabel } from "@/prefs/labels";
 import { useIdentityPrefs } from "@/prefs/use-identity-prefs";
@@ -30,7 +30,7 @@ export default function DarkModeScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader title="Mørk tilstand" onBack={() => router.back()} />
       </View>
@@ -38,7 +38,7 @@ export default function DarkModeScreen() {
         <ActivityIndicator style={styles.loader} color={theme.fillPrimary} />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          <ProfileSurfaceGroup>
+          <ProfileFlatSection>
             {APPEARANCE_MODES.map((mode, index) => (
               <View key={mode}>
                 {index > 0 ? <ProfileRowDivider /> : null}
@@ -49,7 +49,7 @@ export default function DarkModeScreen() {
                 />
               </View>
             ))}
-          </ProfileSurfaceGroup>
+          </ProfileFlatSection>
         </ScrollView>
       )}
     </View>

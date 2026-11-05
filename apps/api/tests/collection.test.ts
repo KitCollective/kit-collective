@@ -2065,6 +2065,45 @@ describe("Collection /v1", () => {
     expect(grid.jerseys.some((jersey) => jersey.id === privateJersey.id)).toBe(false);
   });
 
+  it("a Collector reads their own peer view: public fields and the grid without private copies (owner)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "own-peer-view-owner@example.com");
+    const visibleJersey = await saveJerseyForUser(app, owner, fixture);
+    const privateJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const privatePatch = await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/jerseys/${privateJersey.id}/private`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { private: true },
+    });
+    expect(privatePatch.statusCode).toBe(200);
+
+    const profileResponse = await app.inject({
+      method: "GET",
+      url: `/v1/identity/peers/by-handle/${owner.user.handle}`,
+      headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+    });
+    expect(profileResponse.statusCode).toBe(200);
+    const profileBody = JSON.parse(profileResponse.body);
+    const profile = identityPeerProfileSchema.parse(profileBody);
+    expect(profile.id).toBe(owner.user.id);
+    expect(profile.handle).toBe(owner.user.handle);
+    expect(Object.keys(profileBody).sort()).toEqual(
+      Object.keys(identityPeerProfileSchema.shape).sort(),
+    );
+
+    const gridResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/peers/${profile.id}/jerseys`,
+      headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+    });
+    expect(gridResponse.statusCode).toBe(200);
+    const grid = collectionPeerJerseysSchema.parse(JSON.parse(gridResponse.body));
+    expect(grid.jerseys.some((jersey) => jersey.id === visibleJersey.id)).toBe(true);
+    expect(grid.jerseys.some((jersey) => jersey.id === privateJersey.id)).toBe(false);
+  });
+
   it("blocked peer profile returns 404 (peer)", async () => {
     const fixture = await insertClubSeasonFixture();
     const owner = await registerSession(app, "peer-block-profile-owner@example.com");

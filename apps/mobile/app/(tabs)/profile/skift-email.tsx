@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import { useAuth } from "@/auth/AuthProvider";
-import { DrillHeader, ProfileSurfaceGroup, TextField } from "@/components/profile-ui";
+import { DrillHeader, ProfileFlatSection, TextField } from "@/components/profile-ui";
 import { Button } from "@/components/ui";
 import {
   CODE_REQUEST_FAILED,
@@ -142,12 +142,12 @@ export default function EmailChangeScreen() {
 
   const sending = state.step === "sending";
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader title="Skift e-mail" onBack={() => router.back()} />
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <ProfileSurfaceGroup>
+        <ProfileFlatSection>
           <View style={styles.fieldBlock}>
             <TextField
               label="Ny e-mail"
@@ -157,7 +157,7 @@ export default function EmailChangeScreen() {
               helperTone={state.problem ? "danger" : "secondary"}
             />
           </View>
-        </ProfileSurfaceGroup>
+        </ProfileFlatSection>
         <Button
           label="Send kode"
           variant="primary"

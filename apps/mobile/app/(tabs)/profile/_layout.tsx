@@ -12,14 +12,12 @@ export default function ProfileLayout() {
       screenOptions={{
         headerShown: false,
         animation: stackScreenMotion(reduceMotion),
-        contentStyle: { backgroundColor: theme.fillSecondary },
+        contentStyle: { backgroundColor: theme.canvas },
       }}
     >
-      <Stack.Screen
-        name="index"
-        options={{ animation: "none", contentStyle: { backgroundColor: theme.canvas } }}
-      />
+      <Stack.Screen name="index" options={{ animation: "none" }} />
       <Stack.Screen name="edit" />
+      <Stack.Screen name="se-som-andre" />
       <Stack.Screen name="min-lokation" />
       <Stack.Screen name="favoritter" />
       <Stack.Screen name="indstillinger" />

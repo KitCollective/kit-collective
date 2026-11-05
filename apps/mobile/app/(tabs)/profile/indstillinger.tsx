@@ -11,8 +11,8 @@ import {
   ListDangerRow,
   ListMetaRow,
   ListNavigateRow,
+  ProfileFlatSection,
   ProfileRowDivider,
-  ProfileSurfaceGroup,
 } from "@/components/profile-ui";
 import { appearanceLabel, localeLabel } from "@/prefs/labels";
 import { space } from "@/theme/tokens";
@@ -127,14 +127,14 @@ export default function SettingsScreen() {
   const eventRows = authEvents?.events ?? [];
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader title="Indstillinger" onBack={() => router.back()} />
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.section}>
           <SettingsSectionLabel>Profiloplysninger / Kontoindstillinger</SettingsSectionLabel>
-          <ProfileSurfaceGroup>
+          <ProfileFlatSection>
             <ListNavigateRow
               title="Profiloplysninger"
               icon="person-outline"
@@ -146,12 +146,12 @@ export default function SettingsScreen() {
               icon="key-outline"
               onPress={() => router.push("/(tabs)/profile/kontoindstillinger")}
             />
-          </ProfileSurfaceGroup>
+          </ProfileFlatSection>
         </View>
 
         <View style={styles.section}>
           <SettingsSectionLabel>Push-notifikationer / E-mail-notifikationer</SettingsSectionLabel>
-          <ProfileSurfaceGroup>
+          <ProfileFlatSection>
             <ListNavigateRow
               title="Push-notifikationer"
               icon="notifications-outline"
@@ -163,12 +163,12 @@ export default function SettingsScreen() {
               icon="mail-outline"
               onPress={() => router.push("/(tabs)/profile/email-notifikationer")}
             />
-          </ProfileSurfaceGroup>
+          </ProfileFlatSection>
         </View>
 
         <View style={styles.section}>
           <SettingsSectionLabel>Sprog / Mørk tilstand</SettingsSectionLabel>
-          <ProfileSurfaceGroup>
+          <ProfileFlatSection>
             <ListNavigateRow
               title="Sprog"
               meta={localeMeta}
@@ -182,12 +182,12 @@ export default function SettingsScreen() {
               icon="moon-outline"
               onPress={() => router.push("/(tabs)/profile/moerk-tilstand")}
             />
-          </ProfileSurfaceGroup>
+          </ProfileFlatSection>
         </View>
 
         <View style={styles.section}>
           <SettingsSectionLabel>Privatlivsindstillinger</SettingsSectionLabel>
-          <ProfileSurfaceGroup>
+          <ProfileFlatSection>
             {eventRows.length === 0 ? (
               <ListMetaRow title="Login-historik" meta="Ingen hændelser" />
             ) : (
@@ -219,7 +219,7 @@ export default function SettingsScreen() {
               icon="log-out-outline"
               onPress={() => setRevokeVisible(true)}
             />
-          </ProfileSurfaceGroup>
+          </ProfileFlatSection>
         </View>
       </ScrollView>
 

@@ -64,7 +64,7 @@ export default function FavoritesScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader title="Favoritter" onBack={() => router.back()} />
       </View>

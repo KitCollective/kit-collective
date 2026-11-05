@@ -13,8 +13,8 @@ import {
 import {
   DrillHeader,
   ListValueRow,
+  ProfileFlatSection,
   ProfileRowDivider,
-  ProfileSurfaceGroup,
   TextField,
 } from "@/components/profile-ui";
 import { useTypography } from "@/theme/brand-fonts";
@@ -112,7 +112,7 @@ export default function AccountSettingsScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader
           title="Kontoindstillinger"
@@ -134,7 +134,7 @@ export default function AccountSettingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {error ? <Text style={[typography.caption, { color: theme.danger }]}>{error}</Text> : null}
 
-        <ProfileSurfaceGroup>
+        <ProfileFlatSection>
           <ListValueRow
             title="E-mail"
             value={email}
@@ -161,9 +161,9 @@ export default function AccountSettingsScreen() {
               onAction={() => setEditingPhone(true)}
             />
           )}
-        </ProfileSurfaceGroup>
+        </ProfileFlatSection>
 
-        <ProfileSurfaceGroup>
+        <ProfileFlatSection>
           <View style={styles.fieldBlock}>
             <TextField
               label="Fulde navn"
@@ -179,9 +179,9 @@ export default function AccountSettingsScreen() {
             value={formatBirthday(birthday) ?? "Ikke angivet"}
             chevron
           />
-        </ProfileSurfaceGroup>
+        </ProfileFlatSection>
 
-        <ProfileSurfaceGroup>
+        <ProfileFlatSection>
           {linkedAccounts.map((account, index) => (
             <View key={account.provider}>
               {index > 0 ? <ProfileRowDivider /> : null}
@@ -193,7 +193,7 @@ export default function AccountSettingsScreen() {
           ))}
           <ProfileRowDivider />
           <ListValueRow title="Slet min konto" onPress={() => setDeleteVisible(true)} />
-        </ProfileSurfaceGroup>
+        </ProfileFlatSection>
       </ScrollView>
 
       <ConfirmSheet

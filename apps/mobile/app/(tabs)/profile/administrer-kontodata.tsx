@@ -53,7 +53,7 @@ export default function AdministrerKontodataScreen() {
   }, [accessToken]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader title="Administrer kontodata" onBack={() => router.back()} />
       </View>
