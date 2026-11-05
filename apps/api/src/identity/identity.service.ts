@@ -1300,11 +1300,8 @@ export class IdentityService {
   }
 
   async getPeerProfile(viewerId: string, peerUserId: string): Promise<IdentityPeerProfile> {
-    if (peerUserId === viewerId) {
-      throw new NotFoundException("Peer not found");
-    }
-
-    if (await this.moderationService.isBlocked(viewerId, peerUserId)) {
+    // A Collector reads their own peer view (Se som andre); blocks are between two Collectors.
+    if (peerUserId !== viewerId && (await this.moderationService.isBlocked(viewerId, peerUserId))) {
       throw new NotFoundException("Peer not found");
     }
 

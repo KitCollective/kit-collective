@@ -11,8 +11,8 @@ import {
   DrillHeader,
   ListSelectRow,
   ListValueRow,
+  ProfileFlatSection,
   ProfileRowDivider,
-  ProfileSurfaceGroup,
 } from "@/components/profile-ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
@@ -125,20 +125,20 @@ export default function LocationScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.fillSecondary }]}>
+      <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
         <ActivityIndicator color={theme.contentPrimary} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader title="Min lokation" onBack={() => router.back()} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <ProfileSurfaceGroup>
+        <ProfileFlatSection>
           {countries.map((entry, index) => (
             <View key={entry.id}>
               {index > 0 ? <ProfileRowDivider /> : null}
@@ -150,7 +150,7 @@ export default function LocationScreen() {
               />
             </View>
           ))}
-        </ProfileSurfaceGroup>
+        </ProfileFlatSection>
 
         {countryId ? (
           <>
@@ -167,7 +167,7 @@ export default function LocationScreen() {
               Populære byer · {countryLabel ?? ""}
             </Text>
 
-            <ProfileSurfaceGroup>
+            <ProfileFlatSection>
               {filteredPopularCities.map((entry, index) => (
                 <View key={entry}>
                   {index > 0 ? <ProfileRowDivider /> : null}
@@ -190,7 +190,7 @@ export default function LocationScreen() {
                   />
                 </>
               ) : null}
-            </ProfileSurfaceGroup>
+            </ProfileFlatSection>
           </>
         ) : null}
 

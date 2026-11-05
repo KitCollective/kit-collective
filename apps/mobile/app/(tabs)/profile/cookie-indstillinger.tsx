@@ -14,8 +14,8 @@ import {
   DrillHeader,
   ListMetaRow,
   ListSwitchRow,
+  ProfileFlatSection,
   ProfileRowDivider,
-  ProfileSurfaceGroup,
 } from "@/components/profile-ui";
 import { Button, ButtonDock } from "@/components/ui";
 import { loadAnalysisIfConsented } from "@/consent/analysis-loader";
@@ -79,7 +79,7 @@ export default function CookieSettingsScreen() {
   }, [accessToken]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader title="Cookie-indstillinger" onBack={() => router.back()} />
       </View>
@@ -88,7 +88,7 @@ export default function CookieSettingsScreen() {
       ) : (
         <>
           <ScrollView contentContainerStyle={styles.content}>
-            <ProfileSurfaceGroup>
+            <ProfileFlatSection>
               <ListMetaRow title="Nødvendige" meta="Altid aktive" />
               <ProfileRowDivider />
               <ListSwitchRow
@@ -106,7 +106,7 @@ export default function CookieSettingsScreen() {
                 disabled={saving}
                 onValueChange={(value) => void applyConsent({ ...consent, marketing: value })}
               />
-            </ProfileSurfaceGroup>
+            </ProfileFlatSection>
           </ScrollView>
           <ButtonDock>
             <Button

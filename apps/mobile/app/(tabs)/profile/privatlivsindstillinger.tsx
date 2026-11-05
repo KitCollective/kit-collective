@@ -6,8 +6,8 @@ import {
   DrillHeader,
   ListNavigateRow,
   ListSwitchRow,
+  ProfileFlatSection,
   ProfileRowDivider,
-  ProfileSurfaceGroup,
 } from "@/components/profile-ui";
 import { useIdentityPrefs } from "@/prefs/use-identity-prefs";
 import { space } from "@/theme/tokens";
@@ -31,7 +31,7 @@ export default function PrivacySettingsScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader title="Privatlivsindstillinger" onBack={() => router.back()} />
       </View>
@@ -39,7 +39,7 @@ export default function PrivacySettingsScreen() {
         <ActivityIndicator style={styles.loader} color={theme.fillPrimary} />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          <ProfileSurfaceGroup>
+          <ProfileFlatSection>
             <ListSwitchRow
               title="Personligt indhold"
               helper="Anbefalinger baseret på din samling."
@@ -66,7 +66,7 @@ export default function PrivacySettingsScreen() {
               icon="download-outline"
               onPress={() => router.push("/(tabs)/profile/administrer-kontodata")}
             />
-          </ProfileSurfaceGroup>
+          </ProfileFlatSection>
         </ScrollView>
       )}
     </View>

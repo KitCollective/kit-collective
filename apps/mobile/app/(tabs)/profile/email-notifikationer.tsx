@@ -5,8 +5,8 @@ import { useAuth } from "@/auth/AuthProvider";
 import {
   DrillHeader,
   ListSwitchRow,
+  ProfileFlatSection,
   ProfileRowDivider,
-  ProfileSurfaceGroup,
 } from "@/components/profile-ui";
 import { useIdentityPrefs } from "@/prefs/use-identity-prefs";
 import { space } from "@/theme/tokens";
@@ -27,7 +27,7 @@ export default function EmailNotificationsScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader title="E-mail-notifikationer" onBack={() => router.back()} />
       </View>
@@ -35,7 +35,7 @@ export default function EmailNotificationsScreen() {
         <ActivityIndicator style={styles.loader} color={theme.fillPrimary} />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          <ProfileSurfaceGroup>
+          <ProfileFlatSection>
             <ListSwitchRow
               title="Nyheder"
               helper="Nyheder og tips fra KitCollective."
@@ -49,7 +49,7 @@ export default function EmailNotificationsScreen() {
               value={prefs.emailHighPriority}
               onValueChange={(value) => toggle("emailHighPriority", value)}
             />
-          </ProfileSurfaceGroup>
+          </ProfileFlatSection>
         </ScrollView>
       )}
     </View>

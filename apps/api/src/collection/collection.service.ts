@@ -1223,11 +1223,7 @@ export class CollectionService {
     peerUserId: string,
     locale: LabelLocale = "da",
   ): Promise<CollectionPeerJerseys> {
-    if (peerUserId === userId) {
-      throw new NotFoundException("Peer not found");
-    }
-
-    if (await this.moderationService.isBlocked(userId, peerUserId)) {
+    if (peerUserId !== userId && (await this.moderationService.isBlocked(userId, peerUserId))) {
       throw new NotFoundException("Peer not found");
     }
 

@@ -5,8 +5,8 @@ import { useAuth } from "@/auth/AuthProvider";
 import {
   DrillHeader,
   ListSwitchRow,
+  ProfileFlatSection,
   ProfileRowDivider,
-  ProfileSurfaceGroup,
 } from "@/components/profile-ui";
 import { useIdentityPrefs } from "@/prefs/use-identity-prefs";
 import { space } from "@/theme/tokens";
@@ -29,7 +29,7 @@ export default function PushNotificationsScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader title="Push-notifikationer" onBack={() => router.back()} />
       </View>
@@ -38,7 +38,7 @@ export default function PushNotificationsScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.section}>
-            <ProfileSurfaceGroup>
+            <ProfileFlatSection>
               <ListSwitchRow
                 title="Høj prioritet"
                 helper="Bud, beskeder og vigtige hændelser."
@@ -54,17 +54,17 @@ export default function PushNotificationsScreen() {
                 disabled={masterOff}
                 onValueChange={(value) => toggle("pushOther", value)}
               />
-            </ProfileSurfaceGroup>
+            </ProfileFlatSection>
           </View>
 
           <View style={styles.section}>
-            <ProfileSurfaceGroup>
+            <ProfileFlatSection>
               <ListSwitchRow
                 title="Slå push til"
                 value={prefs.pushEnabled}
                 onValueChange={(value) => toggle("pushEnabled", value)}
               />
-            </ProfileSurfaceGroup>
+            </ProfileFlatSection>
           </View>
         </ScrollView>
       )}

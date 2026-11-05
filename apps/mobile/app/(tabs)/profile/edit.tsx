@@ -27,8 +27,8 @@ import {
   DrillHeader,
   ListNavigateRow,
   ListSwitchRow,
+  ProfileFlatSection,
   ProfileRowDivider,
-  ProfileSurfaceGroup,
   TextField,
 } from "@/components/profile-ui";
 import { useTypography } from "@/theme/brand-fonts";
@@ -221,14 +221,14 @@ export default function EditProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.fillSecondary }]}>
+      <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
         <ActivityIndicator color={theme.contentPrimary} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader
           title="Rediger profil"
@@ -260,14 +260,14 @@ export default function EditProfileScreen() {
         style={styles.flex}
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <ProfileSurfaceGroup>
+          <ProfileFlatSection>
             <AvatarChangeRow
               handle={handle}
               avatarUri={resolveAvatarUrl(avatarUrl)}
               avatarHeaders={avatarHeaders}
               onPress={() => void handlePickPhoto()}
             />
-          </ProfileSurfaceGroup>
+          </ProfileFlatSection>
 
           <TextField
             label="Brugernavn"
@@ -285,7 +285,7 @@ export default function EditProfileScreen() {
             autoCapitalize="sentences"
           />
 
-          <ProfileSurfaceGroup>
+          <ProfileFlatSection>
             <ListNavigateRow
               title="Min lokation"
               meta={locationMeta ?? undefined}
@@ -299,7 +299,7 @@ export default function EditProfileScreen() {
               value={showCity}
               onValueChange={(value) => void handleShowCityChange(value)}
             />
-          </ProfileSurfaceGroup>
+          </ProfileFlatSection>
 
           {error ? (
             <Text style={[typography.caption, { color: theme.danger }]}>{error}</Text>

@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps, ReactNode } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Avatar } from "@/components/avatar";
-import { Button, IconButton } from "@/components/ui";
+import { IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -240,49 +240,80 @@ export function ListValueRow({
   return <View style={styles.row}>{body}</View>;
 }
 
-export function ProfileRowDivider() {
+export function ProfileRowDivider({ inset = true }: { inset?: boolean }) {
   const theme = useTheme();
-  return <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />;
-}
-
-type IdentityCardProps = {
-  handle: string;
-  locationCaption?: string | null;
-  avatarUri?: string | null;
-  avatarHeaders?: Record<string, string>;
-  onEditPress: () => void;
-};
-
-export function IdentityCard({
-  handle,
-  locationCaption,
-  avatarUri,
-  avatarHeaders,
-  onEditPress,
-}: IdentityCardProps) {
-  const theme = useTheme();
-  const typography = useTypography();
-
   return (
     <View
       style={[
-        styles.identityCard,
-        { backgroundColor: theme.surface, borderColor: theme.borderSubtle },
+        styles.divider,
+        !inset && styles.dividerFlush,
+        { backgroundColor: theme.borderSubtle },
       ]}
-    >
-      <View style={styles.identityRow}>
-        <Avatar handle={handle} uri={avatarUri} uriHeaders={avatarHeaders} size="lg" />
-        <View style={styles.identityTextColumn}>
-          <Text style={[typography.headingSm, { color: theme.contentPrimary, flexShrink: 1 }]}>
-            {handle}
-          </Text>
-          {locationCaption ? (
-            <Text style={[typography.mono, { color: theme.contentMuted }]}>{locationCaption}</Text>
-          ) : null}
-        </View>
+    />
+  );
+}
+
+type ProfileHomeRowProps = {
+  label: string;
+  value: string;
+  accessibilityLabel: string;
+  /** Favoritter sets the count in `mono`; the KitCollective+ status stays `body`. */
+  monoValue?: boolean;
+  /** Without a target the row is read-only and has no chevron. */
+  onPress?: () => void;
+};
+
+/** A flat Profil home row: label left, value right, announced as one phrase. */
+export function ProfileHomeRow({
+  label,
+  value,
+  accessibilityLabel,
+  monoValue = false,
+  onPress,
+}: ProfileHomeRowProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+
+  const chevron = onPress !== undefined;
+
+  const body = (
+    <>
+      <Text style={[typography.body, styles.selectTitle, { color: theme.contentPrimary }]}>
+        {label}
+      </Text>
+      <Text
+        style={[monoValue ? typography.mono : typography.body, { color: theme.contentSecondary }]}
+      >
+        {value}
+      </Text>
+      {chevron ? (
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={theme.contentMuted}
+          accessibilityElementsHidden
+        />
+      ) : null}
+    </>
+  );
+
+  if (!onPress) {
+    return (
+      <View accessible accessibilityLabel={accessibilityLabel} style={[styles.row, styles.flatRow]}>
+        {body}
       </View>
-      <Button label="Rediger profil" variant="secondary" width="fill" onPress={onEditPress} />
-    </View>
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, styles.flatRow, pressed && styles.pressed]}
+    >
+      {body}
+    </Pressable>
   );
 }
 
@@ -305,12 +336,7 @@ export function PeerIdentityCard({
   const typography = useTypography();
 
   return (
-    <View
-      style={[
-        styles.identityCard,
-        { backgroundColor: theme.surface, borderColor: theme.borderSubtle },
-      ]}
-    >
+    <View style={styles.identityCard}>
       <View style={styles.identityRow}>
         <Avatar handle={handle} uri={avatarUri} uriHeaders={avatarHeaders} size="lg" />
         <View style={styles.identityTextColumn}>
@@ -384,6 +410,11 @@ export function ProfileSurfaceGroup({ children }: { children: ReactNode }) {
       {children}
     </View>
   );
+}
+
+/** A run of flat rows on the canvas: no card, no border. Rows separate with `ProfileRowDivider`. */
+export function ProfileFlatSection({ children }: { children: ReactNode }) {
+  return <View>{children}</View>;
 }
 
 type ListPeerStubRowProps = {
@@ -622,6 +653,10 @@ const styles = StyleSheet.create({
   avatarRow: {
     borderBottomWidth: 1,
   },
+  /** Rows on the padded canvas take the screen's inset, not their own. */
+  flatRow: {
+    paddingHorizontal: 0,
+  },
   rowBody: {
     flex: 1,
     gap: 2,
@@ -630,9 +665,6 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   identityCard: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: space.insetMd,
     gap: space.gapMd,
   },
   identityRow: {
@@ -652,6 +684,9 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     marginHorizontal: space.insetMd,
+  },
+  dividerFlush: {
+    marginHorizontal: 0,
   },
   actionTarget: {
     minWidth: 44,

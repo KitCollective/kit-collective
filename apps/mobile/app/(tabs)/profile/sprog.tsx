@@ -7,8 +7,8 @@ import { useAuth } from "@/auth/AuthProvider";
 import {
   DrillHeader,
   ListSelectRow,
+  ProfileFlatSection,
   ProfileRowDivider,
-  ProfileSurfaceGroup,
 } from "@/components/profile-ui";
 import { localeLabel } from "@/prefs/labels";
 import { useIdentityPrefs } from "@/prefs/use-identity-prefs";
@@ -30,7 +30,7 @@ export default function LanguageScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={{ paddingTop: insets.top }}>
         <DrillHeader title="Sprog" onBack={() => router.back()} />
       </View>
@@ -38,7 +38,7 @@ export default function LanguageScreen() {
         <ActivityIndicator style={styles.loader} color={theme.fillPrimary} />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          <ProfileSurfaceGroup>
+          <ProfileFlatSection>
             {USER_LOCALES.map((locale, index) => (
               <View key={locale}>
                 {index > 0 ? <ProfileRowDivider /> : null}
@@ -49,7 +49,7 @@ export default function LanguageScreen() {
                 />
               </View>
             ))}
-          </ProfileSurfaceGroup>
+          </ProfileFlatSection>
         </ScrollView>
       )}
     </View>
