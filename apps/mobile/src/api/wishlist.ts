@@ -5,6 +5,7 @@ import {
   type WishlistEntryWrite,
   wishlistEntriesSchema,
   wishlistEntrySchema,
+  wishlistUnseenCountSchema,
 } from "@kit/api-contract";
 import { getApiBaseUrl } from "./config";
 
@@ -55,6 +56,17 @@ export async function fetchWishlistEntries(accessToken: string): Promise<Wishlis
   }
 
   return wishlistEntriesSchema.parse(await response.json());
+}
+
+/** The light badge request: counts unseen Matches and marks nothing. */
+export async function fetchWishlistUnseenCount(accessToken: string): Promise<number> {
+  const response = await requestJson("/v1/wishlist/matches/unseen-count", accessToken);
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke hente nye matches");
+  }
+
+  return wishlistUnseenCountSchema.parse(await response.json()).unseenCount;
 }
 
 export async function createWishlistEntry(

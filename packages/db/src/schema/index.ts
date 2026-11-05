@@ -947,6 +947,24 @@ export const wishlistEntry = pgTable(
   ],
 );
 
+export const wishlistMatch = pgTable(
+  "wishlist_match",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    wishlistEntryId: uuid("wishlist_entry_id")
+      .notNull()
+      .references(() => wishlistEntry.id, { onDelete: "cascade" }),
+    userJerseyId: uuid("user_jersey_id")
+      .notNull()
+      .references(() => userJersey.id, { onDelete: "cascade" }),
+    foundAt: timestamp("found_at", { withTimezone: true }).notNull().defaultNow(),
+    seen: boolean("seen").notNull().default(false),
+  },
+  (table) => [
+    uniqueIndex("wishlist_match_pair_unique").on(table.wishlistEntryId, table.userJerseyId),
+  ],
+);
+
 export const entitlement = pgTable(
   "entitlement",
   {
@@ -1148,6 +1166,17 @@ export const wishlistEntryRelations = relations(wishlistEntry, ({ one }) => ({
     references: [nationalTeam.id],
   }),
   season: one(season, { fields: [wishlistEntry.seasonId], references: [season.id] }),
+}));
+
+export const wishlistMatchRelations = relations(wishlistMatch, ({ one }) => ({
+  wishlistEntry: one(wishlistEntry, {
+    fields: [wishlistMatch.wishlistEntryId],
+    references: [wishlistEntry.id],
+  }),
+  userJersey: one(userJersey, {
+    fields: [wishlistMatch.userJerseyId],
+    references: [userJersey.id],
+  }),
 }));
 
 export const userJerseyRelations = relations(userJersey, ({ one, many }) => ({

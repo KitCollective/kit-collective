@@ -17,9 +17,6 @@ const REQUIRED_LOGIC_EXPORTS = [
   "buildWishlistWritePayload",
   "seedCriteriaForEdit",
   "manageRowAccessibilityLabel",
-  "hasWishlistHit",
-  "hitRowAccessibilityLabel",
-  "resolveWishlistHitRoute",
 ];
 
 const REQUIRED_TEST_MARKERS = [
@@ -28,9 +25,6 @@ const REQUIRED_TEST_MARKERS = [
   "canSaveWishlistEntry",
   "hasWishlistCriterion",
   "manageRowAccessibilityLabel",
-  "hasWishlistHit",
-  "hitRowAccessibilityLabel",
-  "fillSecondary",
   "Ønske",
   "Ny ønskerække",
 ];
@@ -99,14 +93,8 @@ export function checkMobileWishlistUiEvidence(overrides: WishlistUiEvidenceOverr
     );
   }
 
-  if (!sheetSource.includes("fillSecondary")) {
-    violations.push(
-      `${wishlistSheetPath}: Match hit rows must use fillSecondary background per design lock`,
-    );
-  }
-
-  if (!sheetSource.includes("hasWishlistHit")) {
-    violations.push(`${wishlistSheetPath}: Match hit rows must use hasWishlistHit from logic`);
+  if (!sheetSource.includes("buildWishlistViewModel")) {
+    violations.push(`${wishlistSheetPath}: row content must come from buildWishlistViewModel`);
   }
 
   if (!sheetSource.includes("ClubPickerOverlay")) {

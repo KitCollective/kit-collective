@@ -3,6 +3,21 @@ import { z } from "zod";
 
 const facetUuid = z.string().uuid();
 
+/** Most Matches one Wish row carries in the list response; `matchCount` is the total. */
+export const WISHLIST_MATCH_CAP = 10;
+
+export const wishlistMatchSchema = z
+  .object({
+    jerseyId: z.string().uuid(),
+    thumbUrl: z.string().min(1).nullable(),
+    ownerHandle: z.string().min(1),
+    foundAt: z.string().datetime(),
+    seen: z.boolean(),
+  })
+  .strict();
+
+export type WishlistMatch = z.infer<typeof wishlistMatchSchema>;
+
 export const wishlistEntrySchema = z
   .object({
     id: z.string().uuid(),
@@ -18,7 +33,9 @@ export const wishlistEntrySchema = z
     typeLabel: z.string().min(1).nullable(),
     size: z.enum(JERSEY_SIZES).nullable(),
     sizeLabel: z.string().min(1).nullable(),
-    matchedJerseyId: z.string().uuid().nullable(),
+    matches: z.array(wishlistMatchSchema).max(WISHLIST_MATCH_CAP),
+    matchCount: z.number().int().nonnegative(),
+    unseenCount: z.number().int().nonnegative(),
   })
   .strict();
 
@@ -27,10 +44,19 @@ export type WishlistEntry = z.infer<typeof wishlistEntrySchema>;
 export const wishlistEntriesSchema = z
   .object({
     entries: z.array(wishlistEntrySchema),
+    unseenCount: z.number().int().nonnegative(),
   })
   .strict();
 
 export type WishlistEntries = z.infer<typeof wishlistEntriesSchema>;
+
+export const wishlistUnseenCountSchema = z
+  .object({
+    unseenCount: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type WishlistUnseenCount = z.infer<typeof wishlistUnseenCountSchema>;
 
 const wishlistEntryWriteFields = {
   clubId: facetUuid.optional(),

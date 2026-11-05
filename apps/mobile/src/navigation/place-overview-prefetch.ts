@@ -3,7 +3,6 @@ import { fetchCollectionJerseys } from "@/api/collection";
 import { fetchConversations } from "@/api/conversations";
 import { fetchFavorites } from "@/api/favorites";
 import { fetchCollectionShortcuts } from "@/api/shortcuts";
-import { fetchWishlistEntries } from "@/api/wishlist";
 import { writePlaceOverview } from "./place-overview-cache";
 
 let inflight: Promise<void> | null = null;
@@ -11,7 +10,8 @@ let inflightToken: string | null = null;
 
 /**
  * Warm every parent overview so a swipe (or first tap) does not cold-start
- * a spinner. Homes still refresh in the background after they mount.
+ * a spinner. Homes still refresh in the background after they mount. Ønsker is not
+ * warmed: reading the wishlist marks its Matches seen, which only opening the tab may do.
  */
 export function prefetchPlaceOverviews(accessToken: string): Promise<void> {
   if (inflight && inflightToken === accessToken) {
@@ -23,7 +23,6 @@ export function prefetchPlaceOverviews(accessToken: string): Promise<void> {
     prefetchCollection(accessToken),
     prefetchInbox(accessToken),
     prefetchSearch(accessToken),
-    prefetchWishlist(accessToken),
     prefetchProfile(accessToken),
   ]).then(() => undefined);
 
@@ -55,11 +54,6 @@ async function prefetchInbox(accessToken: string): Promise<void> {
 async function prefetchSearch(accessToken: string): Promise<void> {
   const home = await fetchDiscoverHome(accessToken);
   writePlaceOverview("search", { home });
-}
-
-async function prefetchWishlist(accessToken: string): Promise<void> {
-  const response = await fetchWishlistEntries(accessToken);
-  writePlaceOverview("wishlist", { entries: response.entries });
 }
 
 async function prefetchProfile(accessToken: string): Promise<void> {

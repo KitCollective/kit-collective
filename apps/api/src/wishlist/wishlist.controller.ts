@@ -42,6 +42,12 @@ export class WishlistController {
     return this.wishlistService.listEntries(user.sub, resolveLocale(acceptLanguage));
   }
 
+  @Get("wishlist/matches/unseen-count")
+  @UseGuards(JwtAuthGuard)
+  unseenMatchCount(@CurrentUser() user: JwtPayload) {
+    return this.wishlistService.unseenMatchCount(user.sub);
+  }
+
   @Post("wishlist/entries")
   @UseGuards(JwtAuthGuard, LiveEntitlementGuard)
   createEntry(

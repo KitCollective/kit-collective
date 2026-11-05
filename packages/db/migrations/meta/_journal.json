@@ -288,6 +288,13 @@
       "when": 1789120000000,
       "tag": "0040_notification_preference",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1789200000000,
+      "tag": "0041_wishlist_match",
+      "breakpoints": true
     }
   ]
 }
