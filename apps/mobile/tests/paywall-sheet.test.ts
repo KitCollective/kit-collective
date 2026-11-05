@@ -43,10 +43,20 @@ describe("PaywallSheet", () => {
     expect(source).not.toContain("29 kr");
   });
 
-  it("titles the Sheet KitCollective+ with a Danish Plus body", () => {
+  it("titles the Sheet KitCollective+ with the two benefits and no internal names", () => {
     const source = readFileSync(paywallPath, "utf8");
     expect(source).toContain('title="KitCollective+"');
-    expect(source).toContain("Plus er ubegrænset Vision Matcher og ønskeliste.");
+    expect(source).toContain("PAYWALL_BENEFITS");
+    expect(source).not.toContain("Vision Matcher");
+    expect(source).not.toContain("Plus er");
+    expect(source).not.toContain('"…"');
     expect(source).not.toMatch(/Premium/);
+  });
+
+  it("has Gendan køb, Vilkår and Privatliv as tertiary links", () => {
+    const source = readFileSync(paywallPath, "utf8");
+    for (const label of ["Gendan køb", "Vilkår", "Privatliv"]) {
+      expect(source).toMatch(new RegExp(`label="${label}"[\\s\\S]*?variant="tertiary"`));
+    }
   });
 });

@@ -19,14 +19,14 @@ describe("Confirm identity 402 maps to startTrial-or-paywall", () => {
     expect(visionApi).toContain("response.status !== 402");
   });
 
-  it("retries identity suggest after the existing startTrial-or-paywall path", () => {
+  it("retries identity suggest after the paywall path, which never starts a trial by itself", () => {
     expect(confirmVision).toContain("VisionPremiumRequiredError");
     expect(confirmVision).toContain("onPremiumRequired");
     expect(confirmVision).toContain("startVisionSuggest");
     expect(confirmScreen).toContain("requestPremiumAccess");
     expect(confirmScreen).toContain("onPremiumRequired: requestPremiumAccess");
-    expect(auth).toContain("resolvePremiumAccessIntent");
-    expect(auth).toContain("startNestTrial");
+    expect(auth).toContain("resolvePlusAccessState");
+    expect(auth).toContain("startTrialFromPaywall");
   });
 
   it("keeps collector-facing Vision errors in Danish", () => {

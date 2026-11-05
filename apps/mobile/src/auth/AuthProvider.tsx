@@ -3,6 +3,7 @@ import type {
   IdentityLinkedProvider,
   IdentityMe,
   IdentitySession,
+  Offer,
 } from "@kit/api-contract";
 import { OFFER_PRODUCT_IDS } from "@kit/domain";
 import {
@@ -12,9 +13,10 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import { startNestTrial } from "@/api/billing";
+import { fetchBillingOffer, startNestTrial } from "@/api/billing";
 import {
   fetchCookieConsent,
   fetchCurrentUser,
@@ -32,7 +34,13 @@ import {
   purchasePaywallProduct,
   restorePaywallPurchases,
 } from "@/premium/paywall-offer";
-import { resolvePremiumAccessIntent } from "@/premium/premium-access";
+import {
+  type PlusAccessState,
+  resolvePaywallBody,
+  resolvePlusAccessState,
+  type TrialTerms,
+} from "@/premium/plus-view-model";
+import { startTrialFromPaywall } from "@/premium/start-trial";
 import { resetAddSession } from "@/session/addSession";
 import { useAppearanceOptional } from "@/theme/appearance";
 
@@ -46,8 +54,18 @@ type AuthContextValue = {
   signInWithCode: (email: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /** `true` only when the Collector already has Plus. Otherwise it opens the paywall Sheet and never starts a trial. */
   requestPremiumAccess: () => Promise<boolean>;
   closePaywall: () => void;
+  plus: {
+    accessState: PlusAccessState;
+    offer: TrialTerms | null;
+    /** The monthly store price, `null` until the store answers. */
+    monthPrice: string | null;
+    /** Loads Offer and the store prices, for a screen that shows them before any tap. */
+    loadTerms: () => void;
+    openPaywall: () => Promise<void>;
+  };
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -76,6 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     monthPrice: null,
     yearPrice: null,
   });
+  const [paywallError, setPaywallError] = useState<string | null>(null);
+  const [billingOffer, setBillingOffer] = useState<Offer | null>(null);
+  const offerRequest = useRef<Promise<Offer | null> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const appearance = useAppearanceOptional();
 
@@ -172,15 +193,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(profile);
   }, [session]);
 
+  const accessToken = session?.accessToken ?? null;
+
   const closePaywall = useCallback(() => {
     setPaywallOpen(false);
+    setPaywallError(null);
   }, []);
 
-  const openPaywall = useCallback(async () => {
-    setPaywallOpen(true);
+  // A new session starts without the last Collector's Offer.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the token is the trigger, not a value read.
+  useEffect(() => {
+    offerRequest.current = null;
+    setBillingOffer(null);
+  }, [accessToken]);
+
+  const loadBillingOffer = useCallback((): Promise<Offer | null> => {
+    if (!accessToken) {
+      return Promise.resolve(null);
+    }
+    offerRequest.current ??= fetchBillingOffer(accessToken)
+      .then((loaded) => {
+        setBillingOffer(loaded);
+        return loaded;
+      })
+      .catch(() => {
+        // Without Offer the trial counts as used; the next ask tries again.
+        offerRequest.current = null;
+        return null;
+      });
+    return offerRequest.current;
+  }, [accessToken]);
+
+  const loadStorePrices = useCallback(async () => {
     try {
-      const offer = await loadPaywallOfferState();
-      setPaywallOffer(offer);
+      setPaywallOffer(await loadPaywallOfferState());
     } catch {
       setPaywallOffer({
         iapAvailable: false,
@@ -190,6 +236,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     }
   }, []);
+
+  const loadTerms = useCallback(() => {
+    void loadBillingOffer();
+    void loadStorePrices();
+  }, [loadBillingOffer, loadStorePrices]);
+
+  /** Offer decides the body (trial or buy), so it is read before the Sheet shows. Prices follow. */
+  const openPaywall = useCallback(async () => {
+    await loadBillingOffer();
+    setPaywallOpen(true);
+    await loadStorePrices();
+  }, [loadBillingOffer, loadStorePrices]);
 
   const refreshEntitlementAfterPurchase = useCallback(async () => {
     if (!session) {
@@ -245,32 +303,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session, refreshEntitlementAfterPurchase]);
 
+  const handleStartTrial = useCallback(async () => {
+    if (!session) {
+      return;
+    }
+
+    setPaywallBusy(true);
+    setPaywallError(null);
+    const result = await startTrialFromPaywall({
+      startTrial: () => startNestTrial(session.accessToken),
+      refreshProfile: () => fetchCurrentUser(session.accessToken),
+    });
+    setPaywallBusy(false);
+
+    if (result.status === "started") {
+      setUser(result.profile);
+      setPaywallOpen(false);
+      return;
+    }
+    setPaywallError(result.message);
+  }, [session]);
+
+  const accessState: PlusAccessState = user
+    ? resolvePlusAccessState(user.entitlement, billingOffer)
+    : "none-trial-used";
+
   const requestPremiumAccess = useCallback(async (): Promise<boolean> => {
-    if (!session || !user) {
-      await openPaywall();
-      return false;
-    }
-
-    const intent = resolvePremiumAccessIntent(user.entitlement);
-    if (intent === "live") {
+    if (accessState === "live") {
       return true;
-    }
-
-    if (intent === "trial_eligible") {
-      try {
-        await startNestTrial(session.accessToken);
-        const profile = await fetchCurrentUser(session.accessToken);
-        setUser(profile);
-        return profile.entitlement.live;
-      } catch {
-        await openPaywall();
-        return false;
-      }
     }
 
     await openPaywall();
     return false;
-  }, [session, user, openPaywall]);
+  }, [accessState, openPaywall]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -284,6 +349,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshUser,
       requestPremiumAccess,
       closePaywall,
+      plus: {
+        accessState,
+        offer: billingOffer,
+        monthPrice: paywallOffer.monthPrice,
+        loadTerms,
+        openPaywall,
+      },
     }),
     [
       user,
@@ -295,6 +367,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshUser,
       requestPremiumAccess,
       closePaywall,
+      accessState,
+      billingOffer,
+      paywallOffer.monthPrice,
+      loadTerms,
+      openPaywall,
     ],
   );
 
@@ -308,6 +385,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         webUnavailableMessage={paywallOffer.webUnavailableMessage}
         monthPrice={paywallOffer.monthPrice}
         yearPrice={paywallOffer.yearPrice}
+        body={resolvePaywallBody(accessState, billingOffer, paywallOffer.monthPrice)}
+        error={paywallError}
+        onStartTrial={() => {
+          void handleStartTrial();
+        }}
         onBuyMonth={() => {
           void handleBuyMonth();
         }}
