@@ -40,11 +40,13 @@
     ],
     "collection": [
       "Collection grid",
-      "Collection shortcuts (genveje)",
       "Jersey tile",
       "Chip",
-      "Switch",
-      "Tab bar"
+      "Own UserJersey detail",
+      "Number emblem",
+      "Sheet",
+      "List row",
+      "Conversation"
     ],
     "search-bid": [
       "Søg home and typeahead",

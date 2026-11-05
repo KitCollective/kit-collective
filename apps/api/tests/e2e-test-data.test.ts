@@ -387,6 +387,35 @@ describe("device-flow test data", () => {
     );
   });
 
+  it("restores the Collector's own jerseys after the collection flow edited one", async () => {
+    await applyTestData({ db, objectStore, credentials: CREDENTIALS });
+    const before = await snapshot(db, TEST_IDS);
+    const ownTypeOf = async (id: string) =>
+      (await db.select({ type: userJersey.type }).from(userJersey).where(eq(userJersey.id, id)))[0]
+        ?.type;
+
+    // regression/collection.yaml changes the type of the FC København jersey from its sheet.
+    const edited = TEST_JERSEYS[0]!;
+    expect(edited.type).toBe("home");
+    await db
+      .update(userJersey)
+      .set({ type: "away", updatedAt: new Date() })
+      .where(eq(userJersey.id, edited.id));
+    expect(await ownTypeOf(edited.id)).toBe("away");
+
+    await applyTestData({ db, objectStore, credentials: CREDENTIALS });
+    const after = await snapshot(db, TEST_IDS);
+
+    for (const key of SNAPSHOT_KEYS) {
+      expect(stable(after[key])).toEqual(stable(before[key]));
+    }
+    expect(await ownTypeOf(edited.id)).toBe("home");
+    // Samling's lock needs the one private jersey back as it was.
+    expect(after.jerseys.filter((row) => row.private).map((row) => row.id)).toEqual([
+      TEST_JERSEYS[3]!.id,
+    ]);
+  });
+
   it("restores the incoming pending Bud after the inbox flow accepted it", async () => {
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });
     const before = await snapshot(db, TEST_IDS);
