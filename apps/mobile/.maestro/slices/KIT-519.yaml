@@ -1,0 +1,172 @@
+# KIT-519: the device flow for Samling and the own jersey detail, on the fixed test data.
+#
+# design-sections: Collection grid, Jersey tile, Chip, Own UserJersey detail, Number emblem, Sheet, List row, Conversation
+#
+# The same eleven steps as regression/collection.yaml, which is the regression copy of this path
+# (screenshots there are kc__collection__NN). A slice flow cannot only runFlow that file: the
+# evidence run keys screenshots by flow name (kc__kit-519__NN, ADR-0049), so the steps are copied.
+# Keep the two in step.
+#
+# FIXTURE THIS FLOW READS (apps/api/src/e2e/test-data.fixture.ts), all owned by the Test Collector:
+# - FC København (...0101): home, with one unanswered Bud from e2e_peer in Conversation ...0501, so
+#   the tile has a bid badge and the detail a bid row that opens that thread.
+# - Brøndby IF (...0102): two unanswered Buds from two bidders, so its tile reads 2.
+# - AGF (...0104): the one private jersey, so its tile shows the lock.
+# - OB holds no part of this flow except as the club the change is offered for.
+#
+# The type change saves on the API; the next flow resets the test data first. The thread comes last
+# so the flow never has to go back on iOS.
+appId: app.kitcollective.mobile
+name: kit-519
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- startRecording: kc__kit-519
+# Samling: the facts block, the bid badge on FC København and Brøndby IF, the lock on AGF.
+- extendedWaitUntil:
+    visible:
+      id: collection-facts
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-519__01-samling
+# Vis og sortér.
+- tapOn:
+    id: collection-view-control
+- extendedWaitUntil:
+    visible:
+      id: collection-view-option-bids
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-519__02-view-sort-sheet
+# Med bud: the two jerseys with an unanswered Bud.
+- tapOn:
+    id: collection-view-option-bids
+- extendedWaitUntil:
+    notVisible:
+      id: collection-view-option-bids
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: collection-view-clear
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-519__03-med-bud
+# Clearing the view brings every jersey back.
+- tapOn:
+    id: collection-view-clear
+- extendedWaitUntil:
+    notVisible:
+      id: collection-view-clear
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-519__04-view-cleared
+# Sortér: by club, the grouped grid.
+- tapOn:
+    id: collection-view-control
+- extendedWaitUntil:
+    visible:
+      id: collection-sort-option-club
+    timeout: 10000
+- tapOn:
+    id: collection-sort-option-club
+- extendedWaitUntil:
+    notVisible:
+      id: collection-sort-option-club
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-519__05-sorted-by-club
+# Put the order back, so the steps below do not depend on the grouping. Not screenshotted.
+- tapOn:
+    id: collection-view-control
+- extendedWaitUntil:
+    visible:
+      id: collection-sort-option-latest
+    timeout: 10000
+- tapOn:
+    id: collection-sort-option-latest
+- extendedWaitUntil:
+    notVisible:
+      id: collection-sort-option-latest
+    timeout: 10000
+# The own detail of the jersey with the Bud: the bid row sits above the facts.
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000101
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-bid-row
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-519__06-own-detail-bid-row
+# Type: a small Sheet for that fact only, a tap saves and closes.
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-fact-type
+- tapOn:
+    id: jersey-detail-fact-type
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-sheet-type
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-519__07-type-sheet
+- tapOn:
+    id: jersey-detail-option-type-away
+- extendedWaitUntil:
+    notVisible:
+      id: jersey-detail-sheet-type
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-fact-type
+      text: "Type, Ude"
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-519__08-type-changed
+# Club: a different club asks first. Behold saves nothing.
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-club
+    direction: UP
+- tapOn:
+    id: jersey-detail-club
+- extendedWaitUntil:
+    visible:
+      id: catalog-picker-row-OB
+    timeout: 15000
+- tapOn:
+    id: catalog-picker-row-OB
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-club-change
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-519__09-club-change-sheet
+- tapOn:
+    id: jersey-detail-club-change-keep
+- extendedWaitUntil:
+    notVisible:
+      id: jersey-detail-club-change
+    timeout: 10000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-519__10-club-kept
+# The bid row opens the thread (one bidder: the Conversation itself).
+- scrollUntilVisible:
+    element:
+      id: jersey-detail-bid-row
+    direction: UP
+- tapOn:
+    id: jersey-detail-bid-row
+- extendedWaitUntil:
+    visible:
+      id: conversation-header
+    timeout: 15000
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__kit-519__11-thread-from-bid-row
+- stopRecording
