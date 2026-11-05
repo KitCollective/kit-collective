@@ -21,10 +21,12 @@ import { Button, EmptyState, IconButton } from "@/components/ui";
 import { useIsPlaceHomeLive } from "@/navigation/place-homes";
 import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
 import { usePlaceOverview } from "@/navigation/use-place-overview";
+import { resolveSellPage, resolveWishlistPage } from "@/premium/plus-view-model";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useStableSafeAreaInsets } from "@/theme/use-stable-safe-area-insets";
 import { useTheme } from "@/theme/use-theme";
+import { WishlistSellPage } from "@/wishlist/wishlist-sell-page";
 import {
   applyWishlistSideSelection,
   buildWishlistWritePayload,
@@ -51,7 +53,8 @@ export function WishlistScreen() {
   const typography = useTypography();
   const router = useRouter();
   const insets = useStableSafeAreaInsets();
-  const { accessToken, requestPremiumAccess, closePaywall } = useAuth();
+  const { accessToken, requestPremiumAccess, closePaywall, plus } = useAuth();
+  const page = resolveWishlistPage(plus.accessState);
 
   const cachedWishlist = usePlaceOverview("wishlist");
   const isLive = useIsPlaceHomeLive("wishlist");
@@ -124,11 +127,18 @@ export function WishlistScreen() {
   };
 
   useEffect(() => {
-    if (!isLive) {
+    if (!isLive || page === "sell") {
       return;
     }
     void loadEntries();
-  }, [isLive, loadEntries]);
+  }, [isLive, page, loadEntries]);
+
+  const loadPlusTerms = plus.loadTerms;
+  useEffect(() => {
+    if (page === "sell") {
+      loadPlusTerms();
+    }
+  }, [page, loadPlusTerms]);
 
   const openPaywallOnPremiumError = async (error: unknown): Promise<boolean> => {
     if (error instanceof WishlistPremiumRequiredError) {
@@ -221,6 +231,15 @@ export function WishlistScreen() {
 
   const sheetTitle = resolveWishlistSheetTitle(mode);
   const canSave = canSaveWishlistEntry(criteria, saving);
+
+  if (page === "sell") {
+    return (
+      <WishlistSellPage
+        sell={resolveSellPage(plus.accessState, plus.offer, plus.monthPrice)}
+        onPressPlus={() => void plus.openPaywall()}
+      />
+    );
+  }
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.canvas }]}>

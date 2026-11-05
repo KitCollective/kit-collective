@@ -4,6 +4,8 @@ import {
   type Entitlement,
   type IapRestoreRequest,
   type IapVerifyRequest,
+  type Offer,
+  offerSchema,
 } from "@kit/api-contract";
 import { getApiBaseUrl } from "./config";
 
@@ -17,6 +19,20 @@ async function requestJson(path: string, init: RequestInit = {}): Promise<Respon
     ...init,
     headers,
   });
+}
+
+export async function fetchBillingOffer(accessToken: string): Promise<Offer> {
+  const response = await requestJson("/v1/billing/offer", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke hente tilbuddet");
+  }
+
+  return offerSchema.parse(await response.json());
 }
 
 export async function startNestTrial(accessToken: string): Promise<Entitlement> {

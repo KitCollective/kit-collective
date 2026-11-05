@@ -7,8 +7,9 @@ import {
   entitlementSchema,
   identityMeSchema,
   identitySessionSchema,
+  offerSchema,
 } from "@kit/api-contract";
-import { createDb, resetDatabase, user } from "@kit/db";
+import { createDb, offer, resetDatabase, user } from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { eq } from "drizzle-orm";
@@ -251,5 +252,90 @@ describe("entitlement and Nest-trial", () => {
     });
 
     expect(response.statusCode).toBe(401);
+  });
+
+  it("lets a signed-in Collector read the Offer's trial terms", async () => {
+    const session = await registerSession(app, "entitlement-offer@example.com");
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/billing/offer",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = offerSchema.parse(JSON.parse(response.body));
+    expect(body.trialEnabled).toBe(true);
+    expect(body.trialDays).toBeGreaterThan(0);
+  });
+
+  it("returns 401 for reading the Offer without session", async () => {
+    const response = await app.inject({ method: "GET", url: "/v1/billing/offer" });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("starts the Nest-trial only from the trial request", async () => {
+    const session = await registerSession(app, "entitlement-only-trial@example.com");
+    const headers = { authorization: `Bearer ${session.accessToken}` };
+    const meEntitlement = async () => {
+      const me = await app.inject({ method: "GET", url: "/v1/identity/me", headers });
+      return identityMeSchema.parse(JSON.parse(me.body)).entitlement;
+    };
+
+    expect(
+      (await app.inject({ method: "GET", url: "/v1/billing/offer", headers })).statusCode,
+    ).toBe(200);
+    expect(
+      (await app.inject({ method: "GET", url: "/v1/wishlist/entries", headers })).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/v1/wishlist/entries",
+          headers,
+          payload: {},
+        })
+      ).statusCode,
+    ).toBe(402);
+
+    const before = await meEntitlement();
+    expect(before.live).toBe(false);
+    expect(before.source).toBeNull();
+    expect(before.trialUsed).toBe(false);
+
+    const started = await app.inject({ method: "POST", url: "/v1/billing/trial", headers });
+    expect(started.statusCode).toBe(200);
+
+    const after = await meEntitlement();
+    expect(after.live).toBe(true);
+    expect(after.source).toBe("trial");
+    expect(after.trialUsed).toBe(true);
+  });
+
+  it("refuses the trial request and changes nothing when Offer has the trial off", async () => {
+    const session = await registerSession(app, "entitlement-trial-off@example.com");
+    const headers = { authorization: `Bearer ${session.accessToken}` };
+    const { db, pool } = createDb(DATABASE_URL);
+    const [original] = await db.select().from(offer).limit(1);
+    if (!original) {
+      throw new Error("Offer is not configured");
+    }
+
+    try {
+      await db.update(offer).set({ trialEnabled: false });
+
+      const response = await app.inject({ method: "POST", url: "/v1/billing/trial", headers });
+      expect(response.statusCode).toBe(409);
+
+      const me = await app.inject({ method: "GET", url: "/v1/identity/me", headers });
+      const entitlement = identityMeSchema.parse(JSON.parse(me.body)).entitlement;
+      expect(entitlement.live).toBe(false);
+      expect(entitlement.trialUsed).toBe(false);
+    } finally {
+      await db.update(offer).set({ trialEnabled: original.trialEnabled });
+      await pool.end();
+    }
   });
 });
