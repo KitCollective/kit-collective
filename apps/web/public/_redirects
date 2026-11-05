@@ -1,0 +1,4 @@
+# Mail links (apps/mobile/src/links/mail-link.ts). Without the app, each path shows the store page.
+/c/* /open/ 200
+/j/* /open/ 200
+/plus /open/ 200

@@ -1,0 +1,10 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["<APPLE_TEAM_ID>.app.kitcollective.mobile"],
+        "components": [{ "/": "/c/*" }, { "/": "/j/*" }, { "/": "/plus" }]
+      }
+    ]
+  }
+}
